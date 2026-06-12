@@ -43,6 +43,8 @@ class Command(BaseCommand):
 
         sincronizar_turmas = not options["somente_alunos"]
         sincronizar_alunos = not options["somente_turmas"]
+        turma_codigos = options["turma_codigo"]
+        intervalo_consultas = options["intervalo_consultas"]
 
         try:
             with transaction.atomic():
@@ -50,8 +52,8 @@ class Command(BaseCommand):
                     client=EduqClient(),
                     sincronizar_turmas=sincronizar_turmas,
                     sincronizar_alunos=sincronizar_alunos,
-                    turma_codigos=options["turma_codigo"],
-                    intervalo_consultas=options["intervalo_consultas"],
+                    turma_codigos=turma_codigos,
+                    intervalo_consultas=intervalo_consultas,
                 )
                 if options["dry_run"]:
                     transaction.set_rollback(True)

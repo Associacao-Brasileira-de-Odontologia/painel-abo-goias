@@ -21,13 +21,13 @@ Campos reais observados na API:
 Para consultar a API e gravar turmas/alunos no banco local:
 
 ```powershell
-python gestao_cme\manage.py sincronizar_eduq
+python gestao_cme\manage.py sincronizar_eduq --somente-turmas
 ```
 
 Para simular a sincronizacao sem salvar alteracoes:
 
 ```powershell
-python gestao_cme\manage.py sincronizar_eduq --dry-run
+python gestao_cme\manage.py sincronizar_eduq --somente-turmas --dry-run
 ```
 
 Para sincronizar alunos de uma turma especifica:
@@ -36,4 +36,27 @@ Para sincronizar alunos de uma turma especifica:
 python gestao_cme\manage.py sincronizar_eduq --somente-alunos --turma-codigo 50057
 ```
 
-A API pode limitar consultas personalizadas repetidas a intervalos minimos de 5 minutos. Para sincronizar alunos de varias turmas em sequencia, use `--intervalo-consultas 300`.
+Para sincronizar alunos de todas as turmas ja cadastradas:
+
+```powershell
+python gestao_cme\manage.py sincronizar_eduq --somente-alunos
+```
+
+Nos testes reais, chamadas sequenciais para turmas diferentes funcionaram sem intervalo. A API so retornou limite minimo quando o mesmo payload foi repetido imediatamente com o mesmo token.
+
+## Dados de exemplo
+
+A fixture `dados_exemplo` mantem apenas dados operacionais de exemplo:
+
+- materiais
+- kits
+- armarios
+- estoques
+
+Ela nao cria `Turma`, `Aluno`, `Emprestimo` ou `ItemEmprestimo`, pois turmas e alunos devem vir do Eduq e emprestimos dependem desses registros reais.
+
+Para carregar os dados operacionais de exemplo:
+
+```powershell
+python gestao_cme\manage.py loaddata dados_exemplo
+```

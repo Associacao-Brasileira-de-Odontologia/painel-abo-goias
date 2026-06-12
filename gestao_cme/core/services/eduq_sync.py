@@ -3,9 +3,17 @@ from time import sleep
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
-from core.integrations.eduq import AlunoEduq, EduqClient, TurmaEduq, normalizar_aluno, normalizar_turma
-from core.models import Aluno, Turma
+from core.integrations.eduq import (
+    AlunoEduq,
+    EduqAPIError,
+    EduqClient,
+    TurmaEduq,
+    normalizar_aluno,
+    normalizar_turma,
+)
+from core.models import Aluno, OrigemDados, Turma
 
 
 @dataclass
@@ -48,21 +56,32 @@ def sincronizar_eduq(
                 codigos_para_alunos = [turma.codigo for turma in turmas_eduq]
             else:
                 codigos_para_alunos = list(
-                    Turma.objects.filter(ativo=True).values_list("codigo", flat=True)
+                    Turma.objects.filter(ativo=True, origem=OrigemDados.EDUQ).values_list(
+                        "codigo",
+                        flat=True,
+                    )
                 )
 
             alunos_eduq = []
             for index, codigo_turma in enumerate(codigos_para_alunos):
-                alunos_eduq.extend(client.listar_alunos(codigo_turma))
+                try:
+                    alunos_eduq.extend(client.listar_alunos(codigo_turma))
+                except EduqAPIError as exc:
+                    resultado.alunos.erros.append(f"Turma {codigo_turma}: {exc}")
                 if intervalo_consultas and index < len(codigos_para_alunos) - 1:
                     sleep(intervalo_consultas)
-            resultado.alunos = sincronizar_alunos_eduq(alunos_eduq)
+            resumo_alunos = sincronizar_alunos_eduq(alunos_eduq)
+            resultado.alunos.criados += resumo_alunos.criados
+            resultado.alunos.atualizados += resumo_alunos.atualizados
+            resultado.alunos.ignorados += resumo_alunos.ignorados
+            resultado.alunos.erros.extend(resumo_alunos.erros)
 
     return resultado
 
 
 def sincronizar_turmas_eduq(turmas_raw: list[dict[str, Any] | TurmaEduq]) -> SyncResumo:
     resumo = SyncResumo()
+    sincronizado_em = timezone.now()
 
     for index, raw in enumerate(turmas_raw, start=1):
         try:
@@ -78,6 +97,8 @@ def sincronizar_turmas_eduq(turmas_raw: list[dict[str, Any] | TurmaEduq]) -> Syn
                     "data_fim": turma.data_fim,
                     "observacoes": turma.observacoes,
                     "ativo": turma.ativo,
+                    "origem": OrigemDados.EDUQ,
+                    "ultima_sincronizacao": sincronizado_em,
                 },
             )
         except ValueError as exc:
@@ -94,6 +115,7 @@ def sincronizar_turmas_eduq(turmas_raw: list[dict[str, Any] | TurmaEduq]) -> Syn
 
 def sincronizar_alunos_eduq(alunos_raw: list[dict[str, Any] | AlunoEduq]) -> SyncResumo:
     resumo = SyncResumo()
+    sincronizado_em = timezone.now()
     turmas_por_codigo = {turma.codigo: turma for turma in Turma.objects.all()}
 
     for index, raw in enumerate(alunos_raw, start=1):
@@ -123,6 +145,8 @@ def sincronizar_alunos_eduq(alunos_raw: list[dict[str, Any] | AlunoEduq]) -> Syn
                 "telefone": aluno.telefone,
                 "turma": turma,
                 "ativo": aluno.ativo,
+                "origem": OrigemDados.EDUQ,
+                "ultima_sincronizacao": sincronizado_em,
             },
         )
 

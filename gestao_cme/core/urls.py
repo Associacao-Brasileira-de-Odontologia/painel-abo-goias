@@ -57,6 +57,11 @@ urlpatterns = [
     ),
     path('', views.home, name='home'),
     path('alunos-por-turma/', views.alunos_por_turma, name='alunos_por_turma'),
+    path(
+        'alunos-por-turma/sincronizar-turmas/',
+        views.sincronizar_turmas_eduq,
+        name='sincronizar_turmas_eduq',
+    ),
     path('armarios/', views.armarios, name='armarios'),
     path('materiais/', views.materiais, name='materiais'),
 ]

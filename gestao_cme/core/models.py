@@ -12,6 +12,12 @@ class ModeloBase(models.Model):
         abstract = True
 
 
+class OrigemDados(models.TextChoices):
+    MANUAL = "MANUAL", "Manual"
+    EDUQ = "EDUQ", "Eduq"
+    EXEMPLO = "EXEMPLO", "Exemplo"
+
+
 class Turma(ModeloBase):
     nome = models.CharField(max_length=120)
     codigo = models.CharField(max_length=30, unique=True)
@@ -19,6 +25,12 @@ class Turma(ModeloBase):
     data_inicio = models.DateField(null=True, blank=True)
     data_fim = models.DateField(null=True, blank=True)
     observacoes = models.TextField(blank=True)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.MANUAL,
+    )
+    ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["nome"]
@@ -32,9 +44,15 @@ class Turma(ModeloBase):
 class Aluno(ModeloBase):
     nome = models.CharField(max_length=150)
     matricula = models.CharField(max_length=40, unique=True)
-    cpf = models.CharField(max_length=14, unique=True, null=True, blank=True)
+    cpf = models.CharField(max_length=14, null=True, blank=True)
     email = models.EmailField(blank=True)
     telefone = models.CharField(max_length=20, blank=True)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.MANUAL,
+    )
+    ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
     turma = models.ForeignKey(
         Turma,
         on_delete=models.PROTECT,

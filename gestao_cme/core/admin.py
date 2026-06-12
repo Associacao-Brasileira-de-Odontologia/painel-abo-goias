@@ -15,15 +15,33 @@ from .models import (
 
 @admin.register(Turma)
 class TurmaAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "nome", "curso", "data_inicio", "data_fim", "ativo")
-    list_filter = ("ativo", "curso")
+    list_display = (
+        "codigo",
+        "nome",
+        "curso",
+        "origem",
+        "ultima_sincronizacao",
+        "data_inicio",
+        "data_fim",
+        "ativo",
+    )
+    list_filter = ("ativo", "origem", "curso")
     search_fields = ("codigo", "nome", "curso")
 
 
 @admin.register(Aluno)
 class AlunoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "matricula", "turma", "email", "telefone", "ativo")
-    list_filter = ("ativo", "turma")
+    list_display = (
+        "nome",
+        "matricula",
+        "turma",
+        "email",
+        "telefone",
+        "origem",
+        "ultima_sincronizacao",
+        "ativo",
+    )
+    list_filter = ("ativo", "origem", "turma")
     search_fields = ("nome", "matricula", "cpf", "email")
 
 

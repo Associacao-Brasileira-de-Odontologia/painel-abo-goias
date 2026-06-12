@@ -84,8 +84,24 @@
                         <p class="section-label">{{ section_label }}</p>
                         <h2>{{ titulo }}</h2>
                     </div>
-                    <a class="button secondary admin-link" href="/admin/core/">Abrir admin</a>
+                    <div class="topbar-actions">
+                        {% if sync_action_url %}
+                            <form class="sync-form" method="post" action="{% url sync_action_url %}">
+                                {% csrf_token %}
+                                <button class="button primary admin-link" type="submit">Sincronizar turmas</button>
+                            </form>
+                        {% endif %}
+                        <a class="button secondary admin-link" href="/admin/core/">Abrir admin</a>
+                    </div>
                 </div>
+
+                {% if messages %}
+                    <div class="messages">
+                        {% for message in messages %}
+                            <div class="message {{ message.tags }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
 
                 <div class="selection-summary">
                     <div class="info-chip">

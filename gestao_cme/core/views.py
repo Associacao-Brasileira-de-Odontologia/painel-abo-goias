@@ -1,9 +1,14 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.shortcuts import render
+from django.http import HttpResponseForbidden
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
-from .models import Aluno, Armario, Emprestimo, Material, Turma
+from .integrations.eduq import EduqAPIError
+from .models import Aluno, Armario, Emprestimo, Material, OrigemDados, Turma
+from .services.eduq_sync import sincronizar_eduq
 
 
 REGISTROS_POR_PAGINA = 10
@@ -19,7 +24,10 @@ def paginar_queryset(request, queryset):
 
 
 def emprestimos_visiveis(request):
-    queryset = Emprestimo.objects.all()
+    queryset = Emprestimo.objects.exclude(
+        Q(aluno__origem=OrigemDados.EXEMPLO)
+        | Q(aluno__turma__origem=OrigemDados.EXEMPLO)
+    )
     if request.user.is_superuser:
         return queryset
     return queryset.filter(coordenador_usuario=request.user)
@@ -92,7 +100,12 @@ def alunos_por_turma(request):
     busca = request.GET.get("q", "").strip()
     turma_id = request.GET.get("turma", "").strip()
 
-    alunos = Aluno.objects.select_related("turma").order_by("turma__nome", "nome")
+    alunos = (
+        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .exclude(turma__origem=OrigemDados.EXEMPLO)
+        .select_related("turma")
+        .order_by("turma__nome", "nome")
+    )
     if not request.user.is_superuser:
         alunos = alunos.filter(emprestimos__coordenador_usuario=request.user).distinct()
     if turma_id.isdigit():
@@ -125,12 +138,12 @@ def alunos_por_turma(request):
         for aluno in page_obj.object_list
     ]
 
-    turmas = Turma.objects.order_by("nome")
+    turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
     if not request.user.is_superuser:
         turmas = turmas.filter(alunos__emprestimos__coordenador_usuario=request.user).distinct()
 
-    alunos_base = Aluno.objects.all()
-    turmas_base = Turma.objects.all()
+    alunos_base = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
+    turmas_base = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
     if not request.user.is_superuser:
         alunos_base = alunos_base.filter(emprestimos__coordenador_usuario=request.user).distinct()
         turmas_base = turmas_base.filter(alunos__emprestimos__coordenador_usuario=request.user).distinct()
@@ -158,6 +171,7 @@ def alunos_por_turma(request):
             "page_obj": page_obj,
             "query_string": query_string,
             "empty_message": "Nenhum aluno encontrado.",
+            "sync_action_url": "sincronizar_turmas_eduq",
             "filter_select": {
                 "name": "turma",
                 "label": "Turma",
@@ -169,6 +183,31 @@ def alunos_por_turma(request):
             },
         },
     )
+
+
+@login_required
+@require_POST
+def sincronizar_turmas_eduq(request):
+    if not request.user.is_staff:
+        return HttpResponseForbidden("Usuario sem permissao para sincronizar turmas.")
+
+    try:
+        resultado = sincronizar_eduq(
+            sincronizar_turmas=True,
+            sincronizar_alunos=False,
+        )
+    except EduqAPIError as exc:
+        messages.error(request, f"Nao foi possivel sincronizar turmas: {exc}")
+    else:
+        messages.success(
+            request,
+            "Turmas sincronizadas: "
+            f"{resultado.turmas.criados} criadas, "
+            f"{resultado.turmas.atualizados} atualizadas, "
+            f"{len(resultado.turmas.erros)} erro(s).",
+        )
+
+    return redirect("alunos_por_turma")
 
 
 @login_required
