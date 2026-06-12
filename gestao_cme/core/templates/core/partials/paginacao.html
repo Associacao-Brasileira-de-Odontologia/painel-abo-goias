@@ -5,7 +5,7 @@
 {% endif %}
 
 {% if page_obj.paginator.num_pages > 1 %}
-    <nav class="pagination" aria-label="Paginacao">
+    <nav class="pagination" aria-label="Paginação">
         {% if page_obj.has_previous %}
             <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
         {% else %}
@@ -21,9 +21,9 @@
         {% endfor %}
 
         {% if page_obj.has_next %}
-            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Proxima</a>
+            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
         {% else %}
-            <span class="page-link disabled">Proxima</span>
+            <span class="page-link disabled">Próxima</span>
         {% endif %}
     </nav>
 {% endif %}

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestao CME | Materiais</title>
+    <title>Gestão CME | Materiais</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
@@ -14,9 +14,9 @@
     <header class="app-header">
         <div class="header-inner">
             <div class="brand">
-                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goias">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
                 <div>
-                    <p class="eyebrow">Dados reais migrados</p>
+                    <p class="eyebrow">Controle de materiais</p>
                     <h1>Materiais</h1>
                 </div>
             </div>
@@ -33,14 +33,14 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Catalogo</p>
-                <h2>Materiais legados</h2>
-                <p class="panel-copy">Consulte os materiais migrados das planilhas, com identificacao, kit de origem e disponibilidade.</p>
+                <p class="section-label">Catálogo</p>
+                <h2>Materiais</h2>
+                <p class="panel-copy">Consulte os materiais cadastrados, com identificação, kit relacionado e disponibilidade.</p>
 
                 <nav class="side-nav" aria-label="Listagens do sistema">
-                    <a class="side-link" href="{% url 'home' %}">Emprestimos</a>
+                    <a class="side-link" href="{% url 'home' %}">Empréstimos</a>
                     <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
-                    <a class="side-link" href="{% url 'armarios' %}">Armarios</a>
+                    <a class="side-link" href="{% url 'armarios' %}">Armários</a>
                     <a class="side-link active" href="{% url 'materiais' %}">Materiais</a>
                     <a class="side-link" href="{% url 'kits' %}">Kits</a>
                 </nav>
@@ -50,15 +50,15 @@
                         <label for="disponibilidade">Disponibilidade</label>
                         <select id="disponibilidade" name="disponibilidade">
                             <option value="">Todos</option>
-                            <option value="disponivel" {% if disponibilidade_atual == "disponivel" %}selected{% endif %}>Disponiveis</option>
-                            <option value="indisponivel" {% if disponibilidade_atual == "indisponivel" %}selected{% endif %}>Indisponiveis</option>
+                            <option value="disponivel" {% if disponibilidade_atual == "disponivel" %}selected{% endif %}>Disponíveis</option>
+                            <option value="indisponivel" {% if disponibilidade_atual == "indisponivel" %}selected{% endif %}>Indisponíveis</option>
                         </select>
                     </div>
 
                     <div class="field">
                         <label for="q">Buscar</label>
                         <div class="search-control">
-                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Material, identificacao, kit...">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Material, identificação, kit...">
                         </div>
                     </div>
 
@@ -72,7 +72,7 @@
                         <strong>{{ metricas.total }}</strong>
                     </div>
                     <div class="metric-card">
-                        <span class="metric-label">Disponiveis</span>
+                        <span class="metric-label">Disponíveis</span>
                         <strong>{{ metricas.disponiveis }}</strong>
                     </div>
                     <div class="metric-card">
@@ -89,8 +89,8 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Catalogo da migracao</p>
-                        <h2>Materiais importados para o banco</h2>
+                        <p class="section-label">Catálogo</p>
+                        <h2>Materiais cadastrados</h2>
                     </div>
                     <a class="button secondary admin-link" href="/admin/core/material/">Abrir materiais</a>
                 </div>
@@ -115,8 +115,8 @@
                         <thead>
                             <tr>
                                 <th>Material</th>
-                                <th>Identificacao</th>
-                                <th>Kit legado</th>
+                                <th>Identificação</th>
+                                <th>Kit relacionado</th>
                                 <th>Kits vinculados</th>
                                 <th>Origem</th>
                                 <th>Status</th>
@@ -135,9 +135,9 @@
                                     <td>{{ material.get_origem_display }}</td>
                                     <td>
                                         {% if material.disponivel %}
-                                            <span class="badge badge-devolvido">Disponivel</span>
+                                            <span class="badge badge-devolvido">Disponível</span>
                                         {% else %}
-                                            <span class="badge badge-atrasado">Indisponivel</span>
+                                            <span class="badge badge-atrasado">Indisponível</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -155,6 +155,6 @@
         </div>
     </main>
 
-    <footer class="footer">Associacao Brasileira de Odontologia de Goias</footer>
+    <footer class="footer">Associação Brasileira de Odontologia de Goiás</footer>
 </body>
 </html>

@@ -1,6 +1,6 @@
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from core.integrations.eduq import AlunoEduq, EduqAPIError, TurmaEduq
+from core.integrations.eduq import AlunoEduq, ConfigEduq, EduqAPIError, EduqClient, TurmaEduq
 from core.models import (
     Abrigo,
     Aluno,
@@ -120,8 +120,32 @@ class RotasIniciaisTests(TestCase):
         )
 
         self.assertContains(response, "Aluno Pendente")
-        self.assertContains(response, "Nao retirado")
+        self.assertContains(response, "Não retirado")
         self.assertNotContains(response, "Aluno Retirado")
+
+    @patch("core.integrations.eduq.build_opener")
+    def test_cliente_eduq_ignora_proxy_por_padrao(self, build_opener_mock):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read = lambda: b'{"sucesso": true}'
+        build_opener_mock.return_value.open.return_value = response
+        config = ConfigEduq(
+            dominio="dominio",
+            usuario="usuario",
+            senha="senha",
+            auth_url="https://eduq.test/auth",
+            data_url="https://eduq.test/data",
+            consulta_turmas_id=4,
+            consulta_detalhes_turma_id=5,
+            verify_tls=False,
+            timeout=30,
+            use_proxy=False,
+        )
+
+        EduqClient(config)._post_json("https://eduq.test/auth", {})
+
+        handlers = build_opener_mock.call_args.args
+        self.assertEqual(handlers[0].proxies, {})
 
     def test_listagem_de_alunos_nao_exibe_academicos_de_exemplo(self):
         turma_exemplo = Turma.objects.create(
@@ -192,7 +216,7 @@ class RotasIniciaisTests(TestCase):
         self.assertTemplateUsed(response, "core/materiais.html")
         self.assertContains(response, "KIT CIRURGICO")
         self.assertContains(response, "KIT 1")
-        self.assertContains(response, "Disponivel")
+        self.assertContains(response, "Disponível")
 
     def test_armarios_exibe_abrigos_reais_e_filtra_ocupacao(self):
         usuario = get_user_model().objects.create_user(
@@ -282,7 +306,7 @@ class RotasIniciaisTests(TestCase):
 
         response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
 
-        self.assertContains(response, "Nao foi possivel sincronizar turmas")
+        self.assertContains(response, "Não foi possível sincronizar turmas")
         self.assertContains(response, "API indisponivel")
 
     @patch("core.views.sincronizar_eduq")

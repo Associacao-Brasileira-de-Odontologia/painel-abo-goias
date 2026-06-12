@@ -15,7 +15,7 @@ REGISTROS_POR_PAGINA = 10
 
 STATUS_MOVIMENTACAO_OPCOES = (
     ("retirado", "Retirado"),
-    ("pendente", "Nao retirado"),
+    ("pendente", "Não retirado"),
     ("sem_status", "Sem status"),
 )
 
@@ -82,12 +82,12 @@ def home(request):
             registro.status_label = "Retirado"
             registro.status_classe = "devolvido"
         elif registro.retirado is False:
-            registro.status_label = "Nao retirado"
+            registro.status_label = "Não retirado"
             registro.status_classe = "atrasado"
         else:
             registro.status_label = "Sem status"
             registro.status_classe = "emprestado"
-        registro.material_resumo = registro.material.nome if registro.material else "Pacote legado"
+        registro.material_resumo = registro.material.nome if registro.material else "Pacote"
 
     metricas = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO).aggregate(
         total=Count("id"),
@@ -210,7 +210,7 @@ def alunos_por_turma(request):
 @require_POST
 def sincronizar_turmas_eduq(request):
     if not request.user.is_staff:
-        return HttpResponseForbidden("Usuario sem permissao para sincronizar turmas.")
+        return HttpResponseForbidden("Usuário sem permissão para sincronizar turmas.")
 
     try:
         resultado = sincronizar_eduq(
@@ -218,7 +218,7 @@ def sincronizar_turmas_eduq(request):
             sincronizar_alunos=False,
         )
     except EduqAPIError as exc:
-        messages.error(request, f"Nao foi possivel sincronizar turmas: {exc}")
+        messages.error(request, f"Não foi possível sincronizar turmas: {exc}")
     else:
         messages.success(
             request,
@@ -312,8 +312,8 @@ def materiais(request):
             "busca": busca,
             "disponibilidade_atual": disponibilidade,
             "disponibilidade_label": {
-                "disponivel": "Disponiveis",
-                "indisponivel": "Indisponiveis",
+                "disponivel": "Disponíveis",
+                "indisponivel": "Indisponíveis",
             }.get(disponibilidade, "Todos"),
             "metricas": metricas,
             "materiais": page_obj.object_list,

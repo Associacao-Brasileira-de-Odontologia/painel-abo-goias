@@ -143,3 +143,10 @@ EDUQ_VERIFY_TLS = os.environ.get('EDUQ_VERIFY_TLS', '').strip().lower() in {
     'on',
 }
 EDUQ_TIMEOUT = int(os.environ.get('EDUQ_TIMEOUT', '30'))
+EDUQ_USE_PROXY = os.environ.get('EDUQ_USE_PROXY', '').strip().lower() in {
+    '1',
+    'true',
+    'yes',
+    'sim',
+    'on',
+}

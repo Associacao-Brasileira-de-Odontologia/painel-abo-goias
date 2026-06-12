@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestao CME | Kits</title>
+    <title>Gestão CME | Kits</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
@@ -14,9 +14,9 @@
     <header class="app-header">
         <div class="header-inner">
             <div class="brand">
-                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goias">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
                 <div>
-                    <p class="eyebrow">Dados reais migrados</p>
+                    <p class="eyebrow">Controle de materiais</p>
                     <h1>Kits</h1>
                 </div>
             </div>
@@ -33,14 +33,14 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Catalogo</p>
-                <h2>Kits legados</h2>
-                <p class="panel-copy">Consulte os kits migrados e os materiais reais vinculados a cada conjunto.</p>
+                <p class="section-label">Catálogo</p>
+                <h2>Kits</h2>
+                <p class="panel-copy">Consulte os kits cadastrados e os materiais vinculados a cada conjunto.</p>
 
                 <nav class="side-nav" aria-label="Listagens do sistema">
-                    <a class="side-link" href="{% url 'home' %}">Emprestimos</a>
+                    <a class="side-link" href="{% url 'home' %}">Empréstimos</a>
                     <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
-                    <a class="side-link" href="{% url 'armarios' %}">Armarios</a>
+                    <a class="side-link" href="{% url 'armarios' %}">Armários</a>
                     <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
                     <a class="side-link active" href="{% url 'kits' %}">Kits</a>
                 </nav>
@@ -49,7 +49,7 @@
                     <div class="field">
                         <label for="q">Buscar</label>
                         <div class="search-control">
-                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Kit, codigo, material...">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Kit, código, material...">
                         </div>
                     </div>
 
@@ -80,8 +80,8 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Composicao dos kits</p>
-                        <h2>Kits importados para o banco</h2>
+                        <p class="section-label">Composição dos kits</p>
+                        <h2>Kits cadastrados</h2>
                     </div>
                     <a class="button secondary admin-link" href="/admin/core/kit/">Abrir kits</a>
                 </div>
@@ -104,7 +104,7 @@
                                 <th>Kit</th>
                                 <th>Quantidade</th>
                                 <th>Materiais</th>
-                                <th>Disponiveis</th>
+                                <th>Disponíveis</th>
                                 <th>Resumo</th>
                                 <th>Origem</th>
                                 <th>Status</th>
@@ -144,6 +144,6 @@
         </div>
     </main>
 
-    <footer class="footer">Associacao Brasileira de Odontologia de Goias</footer>
+    <footer class="footer">Associação Brasileira de Odontologia de Goiás</footer>
 </body>
 </html>

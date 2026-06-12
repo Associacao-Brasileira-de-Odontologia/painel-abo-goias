@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestao CME | Armarios</title>
+    <title>Gestão CME | Armários</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
@@ -14,10 +14,10 @@
     <header class="app-header">
         <div class="header-inner">
             <div class="brand">
-                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goias">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
                 <div>
-                    <p class="eyebrow">Dados reais migrados</p>
-                    <h1>Armarios</h1>
+                    <p class="eyebrow">Controle físico</p>
+                    <h1>Armários</h1>
                 </div>
             </div>
             <div class="user-menu">
@@ -33,21 +33,21 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Controle fisico</p>
-                <h2>Abrigos migrados</h2>
-                <p class="panel-copy">Visualize os identificadores migrados da planilha de abrigos e sua ocupacao atual.</p>
+                <p class="section-label">Controle físico</p>
+                <h2>Armários</h2>
+                <p class="panel-copy">Visualize os identificadores dos armários e sua ocupação atual.</p>
 
                 <nav class="side-nav" aria-label="Listagens do sistema">
-                    <a class="side-link" href="{% url 'home' %}">Emprestimos</a>
+                    <a class="side-link" href="{% url 'home' %}">Empréstimos</a>
                     <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
-                    <a class="side-link active" href="{% url 'armarios' %}">Armarios</a>
+                    <a class="side-link active" href="{% url 'armarios' %}">Armários</a>
                     <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
                     <a class="side-link" href="{% url 'kits' %}">Kits</a>
                 </nav>
 
                 <form class="form-stack" method="get">
                     <div class="field">
-                        <label for="ocupacao">Ocupacao</label>
+                        <label for="ocupacao">Ocupação</label>
                         <select id="ocupacao" name="ocupacao">
                             <option value="">Todos</option>
                             <option value="ocupado" {% if ocupacao_atual == "ocupado" %}selected{% endif %}>Ocupados</option>
@@ -58,17 +58,17 @@
                     <div class="field">
                         <label for="q">Buscar</label>
                         <div class="search-control">
-                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Identificador do armario...">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Identificador do armário...">
                         </div>
                     </div>
 
-                    <button class="button primary update-first" type="submit">Filtrar armarios</button>
+                    <button class="button primary update-first" type="submit">Filtrar armários</button>
                     <a class="button secondary" href="{% url 'armarios' %}">Limpar filtros</a>
                 </form>
 
                 <div class="metric-grid">
                     <div class="metric-card">
-                        <span class="metric-label">Armarios</span>
+                        <span class="metric-label">Armários</span>
                         <strong>{{ metricas.total }}</strong>
                     </div>
                     <div class="metric-card danger-metric">
@@ -89,8 +89,8 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Estoque fisico</p>
-                        <h2>Mapa dos armarios</h2>
+                        <p class="section-label">Estoque físico</p>
+                        <h2>Mapa dos armários</h2>
                     </div>
                     <a class="button secondary admin-link" href="/admin/core/abrigo/">Abrir abrigos</a>
                 </div>
@@ -101,7 +101,7 @@
                         <strong>{{ busca|default:"Todos os registros" }}</strong>
                     </div>
                     <div class="info-chip">
-                        <span>Ocupacao</span>
+                        <span>Ocupação</span>
                         <strong>{{ ocupacao_label }}</strong>
                     </div>
                     <div class="info-chip">
@@ -115,7 +115,7 @@
                         <thead>
                             <tr>
                                 <th>Identificador</th>
-                                <th>Ocupacao</th>
+                                <th>Ocupação</th>
                                 <th>Origem</th>
                                 <th>Ultima sincronizacao</th>
                                 <th>Status</th>
@@ -144,7 +144,7 @@
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="5">Nenhum armario encontrado.</td>
+                                    <td colspan="5">Nenhum armário encontrado.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -156,6 +156,6 @@
         </div>
     </main>
 
-    <footer class="footer">Associacao Brasileira de Odontologia de Goias</footer>
+    <footer class="footer">Associação Brasileira de Odontologia de Goiás</footer>
 </body>
 </html>
