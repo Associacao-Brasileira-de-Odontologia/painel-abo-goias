@@ -1,0 +1,149 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestao CME | Kits</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goias">
+                <div>
+                    <p class="eyebrow">Dados reais migrados</p>
+                    <h1>Kits</h1>
+                </div>
+            </div>
+            <div class="user-menu">
+                <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="button secondary compact-button" type="submit">Sair</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Catalogo</p>
+                <h2>Kits legados</h2>
+                <p class="panel-copy">Consulte os kits migrados e os materiais reais vinculados a cada conjunto.</p>
+
+                <nav class="side-nav" aria-label="Listagens do sistema">
+                    <a class="side-link" href="{% url 'home' %}">Emprestimos</a>
+                    <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
+                    <a class="side-link" href="{% url 'armarios' %}">Armarios</a>
+                    <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
+                    <a class="side-link active" href="{% url 'kits' %}">Kits</a>
+                </nav>
+
+                <form class="form-stack" method="get">
+                    <div class="field">
+                        <label for="q">Buscar</label>
+                        <div class="search-control">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Kit, codigo, material...">
+                        </div>
+                    </div>
+
+                    <button class="button primary update-first" type="submit">Filtrar kits</button>
+                    <a class="button secondary" href="{% url 'kits' %}">Limpar filtros</a>
+                </form>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Kits</span>
+                        <strong>{{ metricas.total }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Ativos</span>
+                        <strong>{{ metricas.ativos }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Quantidade</span>
+                        <strong>{{ metricas.quantidade }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Filtrados</span>
+                        <strong>{{ metricas.filtrados }}</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Composicao dos kits</p>
+                        <h2>Kits importados para o banco</h2>
+                    </div>
+                    <a class="button secondary admin-link" href="/admin/core/kit/">Abrir kits</a>
+                </div>
+
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Resultado</span>
+                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Kit</th>
+                                <th>Quantidade</th>
+                                <th>Materiais</th>
+                                <th>Disponiveis</th>
+                                <th>Resumo</th>
+                                <th>Origem</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for kit in kits %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ kit.nome }}</strong>
+                                        <span class="cell-muted">{{ kit.codigo }}</span>
+                                    </td>
+                                    <td>{{ kit.quantidade }}</td>
+                                    <td>{{ kit.total_materiais }}</td>
+                                    <td>{{ kit.materiais_disponiveis }}</td>
+                                    <td>{{ kit.materiais_resumo|default:"Sem materiais vinculados" }}</td>
+                                    <td>{{ kit.get_origem_display }}</td>
+                                    <td>
+                                        {% if kit.ativo %}
+                                            <span class="badge badge-devolvido">Ativo</span>
+                                        {% else %}
+                                            <span class="badge badge-atrasado">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr class="empty-row">
+                                    <td colspan="7">Nenhum kit encontrado.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% include "core/partials/paginacao.html" %}
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">Associacao Brasileira de Odontologia de Goias</footer>
+</body>
+</html>

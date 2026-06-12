@@ -7,7 +7,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from .integrations.eduq import EduqAPIError
-from .models import Aluno, Armario, Emprestimo, Material, Movimentacao, OrigemDados, Turma
+from .models import Abrigo, Aluno, Armario, Emprestimo, Kit, Material, Movimentacao, OrigemDados, Turma
 from .services.eduq_sync import sincronizar_eduq
 
 
@@ -234,84 +234,39 @@ def sincronizar_turmas_eduq(request):
 @login_required
 def armarios(request):
     busca = request.GET.get("q", "").strip()
+    ocupacao = request.GET.get("ocupacao", "").strip()
 
-    armarios_queryset = Armario.objects.prefetch_related("estoques__material").order_by(
-        "identificacao"
-    )
-    if not request.user.is_superuser:
-        armarios_queryset = armarios_queryset.filter(
-            itens_emprestados__emprestimo__coordenador_usuario=request.user
-        ).distinct()
+    abrigos = Abrigo.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("identificador")
+    if ocupacao == "ocupado":
+        abrigos = abrigos.filter(ocupado=True)
+    elif ocupacao == "livre":
+        abrigos = abrigos.filter(ocupado=False)
     if busca:
-        armarios_queryset = armarios_queryset.filter(
-            Q(identificacao__icontains=busca)
-            | Q(localizacao__icontains=busca)
-            | Q(descricao__icontains=busca)
-            | Q(estoques__material__nome__icontains=busca)
-            | Q(estoques__material__codigo__icontains=busca)
-        ).distinct()
+        abrigos = abrigos.filter(identificador__icontains=busca)
 
-    armarios_lista = list(armarios_queryset)
-    page_obj, query_string = paginar_queryset(request, armarios_lista)
-    rows = []
-    total_unidades = 0
-    for armario in armarios_lista:
-        estoques = list(armario.estoques.all())
-        total_unidades += sum(estoque.quantidade for estoque in estoques)
-
-    for armario in page_obj.object_list:
-        estoques = list(armario.estoques.all())
-        quantidade_total = sum(estoque.quantidade for estoque in estoques)
-        materiais_resumo = ", ".join(estoque.material.nome for estoque in estoques[:3])
-        if len(estoques) > 3:
-            materiais_resumo += f" +{len(estoques) - 3}"
-
-        rows.append(
-            {
-                "cells": [
-                    {"primary": armario.identificacao, "secondary": armario.localizacao},
-                    {"primary": len(estoques), "secondary": "materiais distintos"},
-                    {"primary": quantidade_total, "secondary": "unidades em estoque"},
-                    {"primary": materiais_resumo or "-", "secondary": armario.descricao},
-                    {
-                        "badge": "Ativo" if armario.ativo else "Inativo",
-                        "badge_class": "badge-devolvido"
-                        if armario.ativo
-                        else "badge-atrasado",
-                    },
-                ]
-            }
-        )
-
-    armarios_base = Armario.objects.all()
-    if not request.user.is_superuser:
-        armarios_base = armarios_base.filter(
-            itens_emprestados__emprestimo__coordenador_usuario=request.user
-        ).distinct()
-
-    metricas = [
-        {"label": "Armários", "value": armarios_base.count()},
-        {"label": "Ativos", "value": armarios_base.filter(ativo=True).count()},
-        {"label": "Unidades", "value": total_unidades},
-        {"label": "Filtrados", "value": page_obj.paginator.count},
-    ]
+    page_obj, query_string = paginar_queryset(request, abrigos)
+    abrigos_base = Abrigo.objects.exclude(origem=OrigemDados.EXEMPLO)
+    metricas = {
+        "total": abrigos_base.count(),
+        "ocupados": abrigos_base.filter(ocupado=True).count(),
+        "livres": abrigos_base.filter(ocupado=False).count(),
+        "filtrados": page_obj.paginator.count,
+    }
 
     return render(
         request,
-        "core/listagem.html",
+        "core/armarios.html",
         {
             "usuario_logado": request.user,
-            "titulo": "Armários",
-            "subtitulo": "Veja os locais de guarda e o resumo de materiais disponíveis.",
-            "section_label": "Estoque físico",
-            "active_page": "armarios",
             "busca": busca,
+            "ocupacao_atual": ocupacao,
+            "ocupacao_label": {"ocupado": "Ocupados", "livre": "Livres"}.get(
+                ocupacao, "Todos"
+            ),
             "metricas": metricas,
-            "table_headers": ["Armário", "Materiais", "Quantidade", "Resumo", "Status"],
-            "rows": rows,
+            "abrigos": page_obj.object_list,
             "page_obj": page_obj,
             "query_string": query_string,
-            "empty_message": "Nenhum armário encontrado.",
         },
     )
 
@@ -319,79 +274,101 @@ def armarios(request):
 @login_required
 def materiais(request):
     busca = request.GET.get("q", "").strip()
+    disponibilidade = request.GET.get("disponibilidade", "").strip()
 
-    materiais_queryset = Material.objects.prefetch_related("kits", "armarios").order_by("nome")
-    if not request.user.is_superuser:
-        materiais_queryset = materiais_queryset.filter(
-            itememprestimo__emprestimo__coordenador_usuario=request.user
-        ).distinct()
+    materiais_queryset = (
+        Material.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .prefetch_related("kits")
+        .order_by("nome", "identificacao")
+    )
+    if disponibilidade == "disponivel":
+        materiais_queryset = materiais_queryset.filter(disponivel=True)
+    elif disponibilidade == "indisponivel":
+        materiais_queryset = materiais_queryset.filter(disponivel=False)
     if busca:
         materiais_queryset = materiais_queryset.filter(
             Q(nome__icontains=busca)
             | Q(codigo__icontains=busca)
             | Q(descricao__icontains=busca)
+            | Q(identificacao__icontains=busca)
+            | Q(rotulo_kit__icontains=busca)
             | Q(kits__nome__icontains=busca)
-            | Q(armarios__identificacao__icontains=busca)
         ).distinct()
 
     page_obj, query_string = paginar_queryset(request, materiais_queryset)
-    rows = []
-    for material in page_obj.object_list:
-        kits_material = list(material.kits.all())
-        rows.append(
-            {
-                "cells": [
-                    {"primary": material.nome, "secondary": material.codigo},
-                    {
-                        "primary": material.identificacao or material.get_unidade_medida_display(),
-                        "secondary": material.rotulo_kit or f"minimo: {material.quantidade_minima}",
-                    },
-                    {
-                        "primary": "Disponivel" if material.disponivel else "Indisponivel",
-                        "secondary": "item emprestavel",
-                    },
-                    {
-                        "primary": len(kits_material),
-                        "secondary": "kits vinculados",
-                    },
-                    {
-                        "badge": "Ativo" if material.ativo else "Inativo",
-                        "badge_class": "badge-devolvido"
-                        if material.ativo
-                        else "badge-atrasado",
-                    },
-                ]
-            }
-        )
-
-    materiais_base = Material.objects.all()
-    if not request.user.is_superuser:
-        materiais_base = materiais_base.filter(
-            itememprestimo__emprestimo__coordenador_usuario=request.user
-        ).distinct()
-
-    metricas = [
-        {"label": "Materiais", "value": materiais_base.count()},
-        {"label": "Ativos", "value": materiais_base.filter(ativo=True).count()},
-        {"label": "Disponiveis", "value": materiais_base.filter(disponivel=True).count()},
-        {"label": "Filtrados", "value": page_obj.paginator.count},
-    ]
+    materiais_base = Material.objects.exclude(origem=OrigemDados.EXEMPLO)
+    metricas = {
+        "total": materiais_base.count(),
+        "ativos": materiais_base.filter(ativo=True).count(),
+        "disponiveis": materiais_base.filter(disponivel=True).count(),
+        "filtrados": page_obj.paginator.count,
+    }
 
     return render(
         request,
-        "core/listagem.html",
+        "core/materiais.html",
         {
             "usuario_logado": request.user,
-            "titulo": "Materiais",
-            "subtitulo": "Consulte todos os materiais cadastrados para uso nas clínicas e laboratórios.",
-            "section_label": "Catálogo da faculdade",
-            "active_page": "materiais",
             "busca": busca,
+            "disponibilidade_atual": disponibilidade,
+            "disponibilidade_label": {
+                "disponivel": "Disponiveis",
+                "indisponivel": "Indisponiveis",
+            }.get(disponibilidade, "Todos"),
             "metricas": metricas,
-            "table_headers": ["Material", "Identificacao", "Disponibilidade", "Kits", "Status"],
-            "rows": rows,
+            "materiais": page_obj.object_list,
             "page_obj": page_obj,
             "query_string": query_string,
-            "empty_message": "Nenhum material encontrado.",
+        },
+    )
+
+
+@login_required
+def kits(request):
+    busca = request.GET.get("q", "").strip()
+
+    kits_queryset = (
+        Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .prefetch_related("itens__material")
+        .order_by("nome")
+    )
+    if busca:
+        kits_queryset = kits_queryset.filter(
+            Q(nome__icontains=busca)
+            | Q(codigo__icontains=busca)
+            | Q(descricao__icontains=busca)
+            | Q(itens__material__nome__icontains=busca)
+            | Q(itens__material__identificacao__icontains=busca)
+        ).distinct()
+
+    page_obj, query_string = paginar_queryset(request, kits_queryset)
+    for kit in page_obj.object_list:
+        itens = list(kit.itens.all())
+        kit.total_materiais = len(itens)
+        kit.materiais_disponiveis = sum(1 for item in itens if item.material.disponivel)
+        kit.materiais_resumo = ", ".join(
+            item.material.identificacao or item.material.nome for item in itens[:4]
+        )
+        if len(itens) > 4:
+            kit.materiais_resumo += f" +{len(itens) - 4}"
+
+    kits_base = Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
+    metricas = {
+        "total": kits_base.count(),
+        "ativos": kits_base.filter(ativo=True).count(),
+        "quantidade": sum(kit.quantidade for kit in kits_base),
+        "filtrados": page_obj.paginator.count,
+    }
+
+    return render(
+        request,
+        "core/kits.html",
+        {
+            "usuario_logado": request.user,
+            "busca": busca,
+            "metricas": metricas,
+            "kits": page_obj.object_list,
+            "page_obj": page_obj,
+            "query_string": query_string,
         },
     )

@@ -1,0 +1,29 @@
+{% if page_obj.paginator.count %}
+    <div class="pagination-summary">
+        Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ page_obj.paginator.count }} registros
+    </div>
+{% endif %}
+
+{% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="Paginacao">
+        {% if page_obj.has_previous %}
+            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% else %}
+            <span class="page-link disabled">Anterior</span>
+        {% endif %}
+
+        {% for numero in page_obj.paginator.page_range %}
+            {% if numero == page_obj.number %}
+                <span class="page-link active">{{ numero }}</span>
+            {% elif numero >= page_obj.number|add:"-2" and numero <= page_obj.number|add:"2" %}
+                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ numero }}">{{ numero }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Proxima</a>
+        {% else %}
+            <span class="page-link disabled">Proxima</span>
+        {% endif %}
+    </nav>
+{% endif %}

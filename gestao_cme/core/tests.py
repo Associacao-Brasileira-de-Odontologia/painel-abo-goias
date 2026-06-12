@@ -10,7 +10,17 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.integrations.eduq import AlunoEduq, EduqAPIError, TurmaEduq
-from core.models import Abrigo, Aluno, Armario, Kit, Material, Movimentacao, OrigemDados, Turma
+from core.models import (
+    Abrigo,
+    Aluno,
+    Armario,
+    Kit,
+    KitMaterial,
+    Material,
+    Movimentacao,
+    OrigemDados,
+    Turma,
+)
 from core.services.migracao_legado import migrar_dados_legado
 from core.services.eduq_sync import sincronizar_alunos_eduq, sincronizar_eduq, sincronizar_turmas_eduq
 
@@ -160,6 +170,84 @@ class RotasIniciaisTests(TestCase):
 
         self.assertContains(response, "Sincronizar turmas")
         self.assertContains(response, reverse("sincronizar_turmas_eduq"))
+
+    def test_materiais_exibe_dados_reais_migrados(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Material.objects.create(
+            nome="KIT CIRURGICO",
+            codigo="MATLEG-1",
+            identificacao="KIT 1",
+            rotulo_kit="KIT 1 - KIT CIRURGICO",
+            disponivel=True,
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("materiais"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/materiais.html")
+        self.assertContains(response, "KIT CIRURGICO")
+        self.assertContains(response, "KIT 1")
+        self.assertContains(response, "Disponivel")
+
+    def test_armarios_exibe_abrigos_reais_e_filtra_ocupacao(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Abrigo.objects.create(
+            identificador="150",
+            ocupado=True,
+            origem=OrigemDados.LEGADO,
+        )
+        Abrigo.objects.create(
+            identificador="151",
+            ocupado=False,
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("armarios"), {"ocupacao": "ocupado"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/armarios.html")
+        self.assertContains(response, "150")
+        self.assertContains(response, "Ocupado")
+        self.assertNotContains(response, "151")
+
+    def test_kits_exibe_dados_reais_e_materiais_vinculados(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        kit = Kit.objects.create(
+            nome="KIT CIRURGICO",
+            codigo="KITLEG-1",
+            quantidade=2,
+            origem=OrigemDados.LEGADO,
+        )
+        material = Material.objects.create(
+            nome="KIT CIRURGICO",
+            codigo="MATLEG-1",
+            identificacao="KIT 1",
+            rotulo_kit="KIT 1 - KIT CIRURGICO",
+            disponivel=True,
+            origem=OrigemDados.LEGADO,
+        )
+        KitMaterial.objects.create(kit=kit, material=material, quantidade=1)
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("kits"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/kits.html")
+        self.assertContains(response, "KIT CIRURGICO")
+        self.assertContains(response, "KITLEG-1")
+        self.assertContains(response, "KIT 1")
 
     @patch("core.views.sincronizar_eduq")
     def test_botao_sincroniza_turmas_sem_sincronizar_alunos(self, sync_mock):
