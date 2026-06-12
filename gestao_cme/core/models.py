@@ -15,6 +15,7 @@ class ModeloBase(models.Model):
 class OrigemDados(models.TextChoices):
     MANUAL = "MANUAL", "Manual"
     EDUQ = "EDUQ", "Eduq"
+    LEGADO = "LEGADO", "Legado"
     EXEMPLO = "EXEMPLO", "Exemplo"
 
 
@@ -81,12 +82,21 @@ class Material(ModeloBase):
     nome = models.CharField(max_length=120)
     codigo = models.CharField(max_length=40, unique=True)
     descricao = models.TextField(blank=True)
+    identificacao = models.CharField(max_length=30, blank=True)
+    rotulo_kit = models.CharField(max_length=120, blank=True)
+    disponivel = models.BooleanField(default=True)
     unidade_medida = models.CharField(
         max_length=5,
         choices=UnidadeMedida.choices,
         default=UnidadeMedida.UNIDADE,
     )
     quantidade_minima = models.PositiveIntegerField(default=0)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.MANUAL,
+    )
+    ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["nome"]
@@ -101,6 +111,13 @@ class Kit(ModeloBase):
     nome = models.CharField(max_length=120)
     codigo = models.CharField(max_length=40, unique=True)
     descricao = models.TextField(blank=True)
+    quantidade = models.PositiveIntegerField(default=0)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.MANUAL,
+    )
+    ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
     materiais = models.ManyToManyField(
         Material,
         through="KitMaterial",
@@ -155,6 +172,25 @@ class Armario(ModeloBase):
 
     def __str__(self):
         return self.identificacao
+
+
+class Abrigo(ModeloBase):
+    identificador = models.CharField(max_length=30, unique=True)
+    ocupado = models.BooleanField(default=False)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.MANUAL,
+    )
+    ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["identificador"]
+        verbose_name = "abrigo"
+        verbose_name_plural = "abrigos"
+
+    def __str__(self):
+        return self.identificador
 
 
 class EstoqueArmario(models.Model):
@@ -252,3 +288,54 @@ class ItemEmprestimo(models.Model):
 
     def __str__(self):
         return f"{self.quantidade} x {self.material}"
+
+
+class Movimentacao(ModeloBase):
+    class Tipo(models.TextChoices):
+        SAIDA = "SAIDA", "Saida"
+        ENTRADA = "ENTRADA", "Entrada"
+
+    data_hora = models.DateTimeField()
+    tipo = models.CharField(max_length=10, choices=Tipo.choices)
+    aluno = models.ForeignKey(
+        Aluno,
+        on_delete=models.SET_NULL,
+        related_name="movimentacoes",
+        null=True,
+        blank=True,
+    )
+    turma = models.ForeignKey(
+        Turma,
+        on_delete=models.SET_NULL,
+        related_name="movimentacoes",
+        null=True,
+        blank=True,
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.SET_NULL,
+        related_name="movimentacoes",
+        null=True,
+        blank=True,
+    )
+    aluno_codigo_externo = models.CharField(max_length=40, blank=True)
+    aluno_nome = models.CharField(max_length=150)
+    turma_nome = models.CharField(max_length=150, blank=True)
+    pacote_codigo = models.CharField(max_length=40)
+    retirado = models.BooleanField(null=True, blank=True)
+    arquivo_origem = models.CharField(max_length=80)
+    row_hash = models.CharField(max_length=64, unique=True)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.LEGADO,
+    )
+    observacoes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data_hora", "-id"]
+        verbose_name = "movimentacao"
+        verbose_name_plural = "movimentacoes"
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.pacote_codigo} - {self.aluno_nome}"

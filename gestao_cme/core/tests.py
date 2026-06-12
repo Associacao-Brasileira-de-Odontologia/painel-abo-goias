@@ -7,9 +7,11 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from core.integrations.eduq import AlunoEduq, EduqAPIError, TurmaEduq
-from core.models import Aluno, Armario, Material, OrigemDados, Turma
+from core.models import Abrigo, Aluno, Armario, Kit, Material, Movimentacao, OrigemDados, Turma
+from core.services.migracao_legado import migrar_dados_legado
 from core.services.eduq_sync import sincronizar_alunos_eduq, sincronizar_eduq, sincronizar_turmas_eduq
 
 
@@ -46,6 +48,70 @@ class RotasIniciaisTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/home.html")
+
+    def test_home_exibe_movimentacoes_migradas(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.SAIDA,
+            aluno_nome="Aluno Legado",
+            aluno_codigo_externo="817",
+            turma_nome="Turma Legada",
+            pacote_codigo="4801",
+            retirado=True,
+            arquivo_origem="Relatorio.csv",
+            row_hash="hash-home-saida",
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "Aluno Legado")
+        self.assertContains(response, "Turma Legada")
+        self.assertContains(response, "4801")
+        self.assertContains(response, "Retirado")
+
+    def test_home_filtra_movimentacoes_por_status_e_tipo(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.SAIDA,
+            aluno_nome="Aluno Retirado",
+            turma_nome="Turma A",
+            pacote_codigo="100",
+            retirado=True,
+            arquivo_origem="Relatorio.csv",
+            row_hash="hash-retirado",
+            origem=OrigemDados.LEGADO,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Pendente",
+            turma_nome="Turma B",
+            pacote_codigo="200",
+            retirado=False,
+            arquivo_origem="Itens.csv",
+            row_hash="hash-pendente",
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(
+            reverse("home"),
+            {"status": "pendente", "movimentacao": Movimentacao.Tipo.ENTRADA},
+        )
+
+        self.assertContains(response, "Aluno Pendente")
+        self.assertContains(response, "Nao retirado")
+        self.assertNotContains(response, "Aluno Retirado")
 
     def test_listagem_de_alunos_nao_exibe_academicos_de_exemplo(self):
         turma_exemplo = Turma.objects.create(
@@ -364,3 +430,85 @@ class DadosExemploTests(TestCase):
         self.assertFalse(Aluno.objects.exists())
         self.assertTrue(Material.objects.exists())
         self.assertTrue(Armario.objects.exists())
+
+
+class MigracaoLegadoTests(TestCase):
+    def test_migra_dados_operacionais_legados_para_o_banco(self):
+        with patch("core.services.migracao_legado._ler_csv", side_effect=self._ler_csv_mock):
+            resultado = migrar_dados_legado("csvs")
+
+        self.assertEqual(resultado.abrigos.criados, 2)
+        self.assertEqual(resultado.kits.criados, 1)
+        self.assertEqual(resultado.materiais.criados, 2)
+        self.assertEqual(resultado.movimentacoes.criados, 2)
+        self.assertEqual(Abrigo.objects.filter(ocupado=True).count(), 1)
+        self.assertEqual(Kit.objects.get().quantidade, 2)
+        self.assertEqual(Material.objects.filter(disponivel=True).count(), 1)
+        self.assertEqual(Material.objects.filter(disponivel=False).count(), 1)
+        self.assertTrue(Movimentacao.objects.filter(tipo=Movimentacao.Tipo.SAIDA).exists())
+        self.assertTrue(Movimentacao.objects.filter(tipo=Movimentacao.Tipo.ENTRADA).exists())
+
+    def test_migracao_legado_e_idempotente(self):
+        with patch("core.services.migracao_legado._ler_csv", side_effect=self._ler_csv_mock):
+            migrar_dados_legado("csvs")
+            resultado = migrar_dados_legado("csvs")
+
+        self.assertEqual(resultado.abrigos.atualizados, 2)
+        self.assertEqual(resultado.kits.atualizados, 1)
+        self.assertEqual(resultado.materiais.atualizados, 2)
+        self.assertEqual(resultado.movimentacoes.atualizados, 2)
+        self.assertEqual(Abrigo.objects.count(), 2)
+        self.assertEqual(Kit.objects.count(), 1)
+        self.assertEqual(Material.objects.count(), 2)
+        self.assertEqual(Movimentacao.objects.count(), 2)
+
+    def _ler_csv_mock(self, path):
+        dados = {
+            "Abrigos.csv": [
+                {"Identificador": "1", "Ocupado": "true"},
+                {"Identificador": "2", "Ocupado": "false"},
+            ],
+            "Kits.csv": [
+                {"Kit": "KIT CIRURGICO", "Quantidade": "2", "Apagar": "system"},
+            ],
+            "Materiais para empréstimo.csv": [
+                {
+                    "Material": "KIT CIRURGICO",
+                    "Identificação": "KIT 1",
+                    "Kit": "KIT 1 - KIT CIRURGICO",
+                    "Ativo": "true",
+                    "Disponivel": "true",
+                    "Apagar": "model",
+                },
+                {
+                    "Material": "KIT CIRURGICO",
+                    "Identificação": "KIT 2",
+                    "Kit": "KIT 2 - KIT CIRURGICO",
+                    "Ativo": "true",
+                    "Disponivel": "false",
+                    "Apagar": "model",
+                },
+            ],
+            "Relatório de movimentação.csv": [
+                {
+                    "Data": "29/05/2026, 07:58",
+                    "Nome": "817 - Maria Eduarda",
+                    "Turma": "Turma Real",
+                    "Movimentação": "Saída",
+                    "Pacote": "4801",
+                    "Retirado": "true",
+                    "Apagar": "model",
+                },
+            ],
+            "Itens não retirados.csv": [
+                {
+                    "Data": "25/03/2024, 15:26",
+                    "Nome": "- Maria Eduarda",
+                    "Turma": "Turma Real",
+                    "Movimentação": "Entrada",
+                    "Pacote": "4801",
+                    "Entregar": "model",
+                },
+            ],
+        }
+        return dados[path.name]

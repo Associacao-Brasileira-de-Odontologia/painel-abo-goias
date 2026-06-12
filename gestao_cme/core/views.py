@@ -7,11 +7,17 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from .integrations.eduq import EduqAPIError
-from .models import Aluno, Armario, Emprestimo, Material, OrigemDados, Turma
+from .models import Aluno, Armario, Emprestimo, Material, Movimentacao, OrigemDados, Turma
 from .services.eduq_sync import sincronizar_eduq
 
 
 REGISTROS_POR_PAGINA = 10
+
+STATUS_MOVIMENTACAO_OPCOES = (
+    ("retirado", "Retirado"),
+    ("pendente", "Nao retirado"),
+    ("sem_status", "Sem status"),
+)
 
 
 def paginar_queryset(request, queryset):
@@ -37,47 +43,57 @@ def emprestimos_visiveis(request):
 def home(request):
     busca = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
+    movimentacao = request.GET.get("movimentacao", "").strip()
 
-    emprestimos = (
-        emprestimos_visiveis(request)
-        .select_related("aluno", "aluno__turma", "kit")
-        .prefetch_related("itens__material", "itens__armario")
-        .all()
+    movimentacoes = (
+        Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .select_related("aluno", "turma", "material")
+        .order_by("-data_hora", "-id")
     )
 
-    if status in Emprestimo.Status.values:
-        emprestimos = emprestimos.filter(status=status)
+    if status == "retirado":
+        movimentacoes = movimentacoes.filter(retirado=True)
+    elif status == "pendente":
+        movimentacoes = movimentacoes.filter(retirado=False)
+    elif status == "sem_status":
+        movimentacoes = movimentacoes.filter(retirado__isnull=True)
+
+    if movimentacao in Movimentacao.Tipo.values:
+        movimentacoes = movimentacoes.filter(tipo=movimentacao)
 
     if busca:
-        emprestimos = emprestimos.filter(
-            Q(aluno__nome__icontains=busca)
+        movimentacoes = movimentacoes.filter(
+            Q(aluno_nome__icontains=busca)
+            | Q(aluno_codigo_externo__icontains=busca)
+            | Q(turma_nome__icontains=busca)
+            | Q(pacote_codigo__icontains=busca)
+            | Q(arquivo_origem__icontains=busca)
+            | Q(material__nome__icontains=busca)
+            | Q(material__codigo__icontains=busca)
             | Q(aluno__matricula__icontains=busca)
-            | Q(aluno__turma__nome__icontains=busca)
-            | Q(kit__nome__icontains=busca)
-            | Q(kit__codigo__icontains=busca)
-            | Q(coordenador__icontains=busca)
-            | Q(itens__material__nome__icontains=busca)
-            | Q(itens__material__codigo__icontains=busca)
         ).distinct()
 
-    emprestimos = list(emprestimos[:15])
-    status_label = dict(Emprestimo.Status.choices).get(status, "Todos")
+    page_obj, query_string = paginar_queryset(request, movimentacoes)
+    status_label = dict(STATUS_MOVIMENTACAO_OPCOES).get(status, "Todos")
+    movimentacao_label = dict(Movimentacao.Tipo.choices).get(movimentacao, "Todas")
 
-    for emprestimo in emprestimos:
-        itens = list(emprestimo.itens.all())
-        emprestimo.total_itens = sum(item.quantidade for item in itens)
-        emprestimo.materiais_resumo = ", ".join(
-            f"{item.quantidade}x {item.material.nome}" for item in itens[:3]
-        )
-        if len(itens) > 3:
-            emprestimo.materiais_resumo += f" +{len(itens) - 3}"
-        emprestimo.status_classe = emprestimo.status.lower()
+    for registro in page_obj.object_list:
+        if registro.retirado is True:
+            registro.status_label = "Retirado"
+            registro.status_classe = "devolvido"
+        elif registro.retirado is False:
+            registro.status_label = "Nao retirado"
+            registro.status_classe = "atrasado"
+        else:
+            registro.status_label = "Sem status"
+            registro.status_classe = "emprestado"
+        registro.material_resumo = registro.material.nome if registro.material else "Pacote legado"
 
-    metricas = emprestimos_visiveis(request).aggregate(
+    metricas = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO).aggregate(
         total=Count("id"),
-        emprestados=Count("id", filter=Q(status=Emprestimo.Status.EMPRESTADO)),
-        atrasados=Count("id", filter=Q(status=Emprestimo.Status.ATRASADO)),
-        devolvidos=Count("id", filter=Q(status=Emprestimo.Status.DEVOLVIDO)),
+        saidas=Count("id", filter=Q(tipo=Movimentacao.Tipo.SAIDA)),
+        entradas=Count("id", filter=Q(tipo=Movimentacao.Tipo.ENTRADA)),
+        pendentes=Count("id", filter=Q(retirado=False)),
     )
 
     return render(
@@ -88,9 +104,14 @@ def home(request):
             "busca": busca,
             "status_atual": status,
             "status_label": status_label,
-            "status_opcoes": Emprestimo.Status.choices,
-            "emprestimos": emprestimos,
+            "status_opcoes": STATUS_MOVIMENTACAO_OPCOES,
+            "movimentacao_atual": movimentacao,
+            "movimentacao_label": movimentacao_label,
+            "movimentacao_opcoes": Movimentacao.Tipo.choices,
+            "movimentacoes": page_obj.object_list,
             "metricas": metricas,
+            "page_obj": page_obj,
+            "query_string": query_string,
         },
     )
 
@@ -316,19 +337,18 @@ def materiais(request):
     page_obj, query_string = paginar_queryset(request, materiais_queryset)
     rows = []
     for material in page_obj.object_list:
-        armarios_material = list(material.armarios.all())
         kits_material = list(material.kits.all())
         rows.append(
             {
                 "cells": [
                     {"primary": material.nome, "secondary": material.codigo},
                     {
-                        "primary": material.get_unidade_medida_display(),
-                        "secondary": f"mínimo: {material.quantidade_minima}",
+                        "primary": material.identificacao or material.get_unidade_medida_display(),
+                        "secondary": material.rotulo_kit or f"minimo: {material.quantidade_minima}",
                     },
                     {
-                        "primary": len(armarios_material),
-                        "secondary": "armários com estoque",
+                        "primary": "Disponivel" if material.disponivel else "Indisponivel",
+                        "secondary": "item emprestavel",
                     },
                     {
                         "primary": len(kits_material),
@@ -353,7 +373,7 @@ def materiais(request):
     metricas = [
         {"label": "Materiais", "value": materiais_base.count()},
         {"label": "Ativos", "value": materiais_base.filter(ativo=True).count()},
-        {"label": "Kits", "value": materiais_base.filter(kits__isnull=False).distinct().count()},
+        {"label": "Disponiveis", "value": materiais_base.filter(disponivel=True).count()},
         {"label": "Filtrados", "value": page_obj.paginator.count},
     ]
 
@@ -368,7 +388,7 @@ def materiais(request):
             "active_page": "materiais",
             "busca": busca,
             "metricas": metricas,
-            "table_headers": ["Material", "Unidade", "Armários", "Kits", "Status"],
+            "table_headers": ["Material", "Identificacao", "Disponibilidade", "Kits", "Status"],
             "rows": rows,
             "page_obj": page_obj,
             "query_string": query_string,
