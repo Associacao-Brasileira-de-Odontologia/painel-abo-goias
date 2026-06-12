@@ -1,0 +1,1339 @@
+[
+  {
+    "model": "core.turma",
+    "pk": 1,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Implantodontia 2026.1",
+      "codigo": "IMP-2026-1",
+      "curso": "Especializacao em Implantodontia",
+      "data_inicio": "2026-02-03",
+      "data_fim": "2027-12-18",
+      "observacoes": "Turma de pos-graduacao com aulas clinicas quinzenais."
+    }
+  },
+  {
+    "model": "core.turma",
+    "pk": 2,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Endodontia 2026.1",
+      "codigo": "END-2026-1",
+      "curso": "Especializacao em Endodontia",
+      "data_inicio": "2026-03-06",
+      "data_fim": "2027-11-27",
+      "observacoes": "Turma com foco em atendimento laboratorial e clinico."
+    }
+  },
+  {
+    "model": "core.turma",
+    "pk": 3,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Periodontia 2026.1",
+      "codigo": "PER-2026-1",
+      "curso": "Especializacao em Periodontia",
+      "data_inicio": "2026-04-10",
+      "data_fim": "2027-10-22",
+      "observacoes": "Turma com consumo recorrente de kits cirurgicos."
+    }
+  },
+  {
+    "model": "core.turma",
+    "pk": 4,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Protese Dentaria 2026.1",
+      "codigo": "PRO-2026-1",
+      "curso": "Especializacao em Protese Dentaria",
+      "data_inicio": "2026-02-20",
+      "data_fim": "2027-12-04",
+      "observacoes": "Turma com alto uso de moldagem e acabamento."
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 1,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Ana Clara Ribeiro",
+      "matricula": "20260001",
+      "cpf": "101.222.333-44",
+      "email": "ana.ribeiro@example.com",
+      "telefone": "(62) 99901-0001",
+      "turma": 1
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 2,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Bruno Henrique Almeida",
+      "matricula": "20260002",
+      "cpf": "102.222.333-44",
+      "email": "bruno.almeida@example.com",
+      "telefone": "(62) 99901-0002",
+      "turma": 1
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 3,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Carolina Martins Sousa",
+      "matricula": "20260003",
+      "cpf": "103.222.333-44",
+      "email": "carolina.sousa@example.com",
+      "telefone": "(62) 99901-0003",
+      "turma": 1
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 4,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Diego Araujo Lima",
+      "matricula": "20260004",
+      "cpf": "104.222.333-44",
+      "email": "diego.lima@example.com",
+      "telefone": "(62) 99901-0004",
+      "turma": 2
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 5,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Eduarda Naves Costa",
+      "matricula": "20260005",
+      "cpf": "105.222.333-44",
+      "email": "eduarda.costa@example.com",
+      "telefone": "(62) 99901-0005",
+      "turma": 2
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 6,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Felipe Moraes Rocha",
+      "matricula": "20260006",
+      "cpf": "106.222.333-44",
+      "email": "felipe.rocha@example.com",
+      "telefone": "(62) 99901-0006",
+      "turma": 2
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 7,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Gabriela Teixeira Prado",
+      "matricula": "20260007",
+      "cpf": "107.222.333-44",
+      "email": "gabriela.prado@example.com",
+      "telefone": "(62) 99901-0007",
+      "turma": 3
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 8,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Henrique Batista Freitas",
+      "matricula": "20260008",
+      "cpf": "108.222.333-44",
+      "email": "henrique.freitas@example.com",
+      "telefone": "(62) 99901-0008",
+      "turma": 3
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 9,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Isabela Fernandes Melo",
+      "matricula": "20260009",
+      "cpf": "109.222.333-44",
+      "email": "isabela.melo@example.com",
+      "telefone": "(62) 99901-0009",
+      "turma": 3
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 10,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Joao Pedro Carvalho",
+      "matricula": "20260010",
+      "cpf": "110.222.333-44",
+      "email": "joao.carvalho@example.com",
+      "telefone": "(62) 99901-0010",
+      "turma": 4
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 11,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Larissa Andrade Pires",
+      "matricula": "20260011",
+      "cpf": "111.222.333-44",
+      "email": "larissa.pires@example.com",
+      "telefone": "(62) 99901-0011",
+      "turma": 4
+    }
+  },
+  {
+    "model": "core.aluno",
+    "pk": 12,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Marcos Vinicius Torres",
+      "matricula": "20260012",
+      "cpf": "112.222.333-44",
+      "email": "marcos.torres@example.com",
+      "telefone": "(62) 99901-0012",
+      "turma": 4
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 1,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Luva de procedimento P",
+      "codigo": "MAT-001",
+      "descricao": "Luva de procedimento tamanho P.",
+      "unidade_medida": "CX",
+      "quantidade_minima": 5
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 2,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Luva de procedimento M",
+      "codigo": "MAT-002",
+      "descricao": "Luva de procedimento tamanho M.",
+      "unidade_medida": "CX",
+      "quantidade_minima": 5
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 3,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Mascara cirurgica descartavel",
+      "codigo": "MAT-003",
+      "descricao": "Caixa com mascaras cirurgicas descartaveis.",
+      "unidade_medida": "CX",
+      "quantidade_minima": 10
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 4,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Gaze esteril",
+      "codigo": "MAT-004",
+      "descricao": "Pacote de gaze esteril para uso clinico.",
+      "unidade_medida": "PC",
+      "quantidade_minima": 20
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 5,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Sugador descartavel",
+      "codigo": "MAT-005",
+      "descricao": "Pacote de sugadores descartaveis.",
+      "unidade_medida": "PC",
+      "quantidade_minima": 15
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 6,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Seringa carpule",
+      "codigo": "MAT-006",
+      "descricao": "Seringa carpule reutilizavel.",
+      "unidade_medida": "UN",
+      "quantidade_minima": 4
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 7,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Espelho clinico",
+      "codigo": "MAT-007",
+      "descricao": "Espelho clinico odontologico.",
+      "unidade_medida": "UN",
+      "quantidade_minima": 12
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 8,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Sonda exploradora",
+      "codigo": "MAT-008",
+      "descricao": "Sonda exploradora odontologica.",
+      "unidade_medida": "UN",
+      "quantidade_minima": 12
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 9,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Pinca clinica",
+      "codigo": "MAT-009",
+      "descricao": "Pinca clinica odontologica.",
+      "unidade_medida": "UN",
+      "quantidade_minima": 12
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 10,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Broca diamantada 1014",
+      "codigo": "MAT-010",
+      "descricao": "Broca diamantada modelo 1014.",
+      "unidade_medida": "UN",
+      "quantidade_minima": 20
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 11,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Lima endodontica K 25mm",
+      "codigo": "MAT-011",
+      "descricao": "Lima endodontica tipo K com 25mm.",
+      "unidade_medida": "CX",
+      "quantidade_minima": 6
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 12,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Cone de papel absorvente",
+      "codigo": "MAT-012",
+      "descricao": "Caixa de cones de papel absorvente.",
+      "unidade_medida": "CX",
+      "quantidade_minima": 6
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 13,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Campo cirurgico descartavel",
+      "codigo": "MAT-013",
+      "descricao": "Campo cirurgico descartavel para procedimentos.",
+      "unidade_medida": "PC",
+      "quantidade_minima": 10
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 14,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Fio de sutura seda 4-0",
+      "codigo": "MAT-014",
+      "descricao": "Caixa com fio de sutura seda 4-0.",
+      "unidade_medida": "CX",
+      "quantidade_minima": 4
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 15,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Silicone de condensacao",
+      "codigo": "MAT-015",
+      "descricao": "Material para moldagem em protese.",
+      "unidade_medida": "FR",
+      "quantidade_minima": 3
+    }
+  },
+  {
+    "model": "core.material",
+    "pk": 16,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Moldeira metalica adulto",
+      "codigo": "MAT-016",
+      "descricao": "Moldeira metalica para atendimento adulto.",
+      "unidade_medida": "UN",
+      "quantidade_minima": 8
+    }
+  },
+  {
+    "model": "core.kit",
+    "pk": 1,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Kit Clinico Basico",
+      "codigo": "KIT-001",
+      "descricao": "Kit padrao para triagem e atendimento clinico inicial."
+    }
+  },
+  {
+    "model": "core.kit",
+    "pk": 2,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Kit Endodontia",
+      "codigo": "KIT-002",
+      "descricao": "Kit de apoio para procedimentos endodonticos."
+    }
+  },
+  {
+    "model": "core.kit",
+    "pk": 3,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Kit Cirurgico Periodontal",
+      "codigo": "KIT-003",
+      "descricao": "Kit para procedimentos cirurgicos periodontais."
+    }
+  },
+  {
+    "model": "core.kit",
+    "pk": 4,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "nome": "Kit Protese e Moldagem",
+      "codigo": "KIT-004",
+      "descricao": "Kit para procedimentos de moldagem e protese."
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 1,
+    "fields": {
+      "kit": 1,
+      "material": 7,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 2,
+    "fields": {
+      "kit": 1,
+      "material": 8,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 3,
+    "fields": {
+      "kit": 1,
+      "material": 9,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 4,
+    "fields": {
+      "kit": 1,
+      "material": 4,
+      "quantidade": 2
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 5,
+    "fields": {
+      "kit": 1,
+      "material": 5,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 6,
+    "fields": {
+      "kit": 2,
+      "material": 7,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 7,
+    "fields": {
+      "kit": 2,
+      "material": 8,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 8,
+    "fields": {
+      "kit": 2,
+      "material": 9,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 9,
+    "fields": {
+      "kit": 2,
+      "material": 11,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 10,
+    "fields": {
+      "kit": 2,
+      "material": 12,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 11,
+    "fields": {
+      "kit": 3,
+      "material": 4,
+      "quantidade": 3
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 12,
+    "fields": {
+      "kit": 3,
+      "material": 6,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 13,
+    "fields": {
+      "kit": 3,
+      "material": 13,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 14,
+    "fields": {
+      "kit": 3,
+      "material": 14,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 15,
+    "fields": {
+      "kit": 3,
+      "material": 5,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 16,
+    "fields": {
+      "kit": 4,
+      "material": 15,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 17,
+    "fields": {
+      "kit": 4,
+      "material": 16,
+      "quantidade": 2
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 18,
+    "fields": {
+      "kit": 4,
+      "material": 4,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.kitmaterial",
+    "pk": 19,
+    "fields": {
+      "kit": 4,
+      "material": 7,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.armario",
+    "pk": 1,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "identificacao": "ARM-CLINICA-01",
+      "localizacao": "Clinica 1 - Sala de apoio",
+      "descricao": "Armario principal para materiais de atendimento clinico."
+    }
+  },
+  {
+    "model": "core.armario",
+    "pk": 2,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "identificacao": "ARM-ENDO-01",
+      "localizacao": "Laboratorio de Endodontia",
+      "descricao": "Armario reservado para materiais de endodontia."
+    }
+  },
+  {
+    "model": "core.armario",
+    "pk": 3,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "identificacao": "ARM-CIRURGIA-01",
+      "localizacao": "Centro Cirurgico Odontologico",
+      "descricao": "Armario para kits cirurgicos e descartaveis."
+    }
+  },
+  {
+    "model": "core.armario",
+    "pk": 4,
+    "fields": {
+      "criado_em": "2026-06-11T21:00:00Z",
+      "atualizado_em": "2026-06-11T21:00:00Z",
+      "ativo": true,
+      "identificacao": "ARM-PROTESE-01",
+      "localizacao": "Laboratorio de Protese",
+      "descricao": "Armario para materiais de moldagem e protese."
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 1,
+    "fields": {
+      "armario": 1,
+      "material": 1,
+      "quantidade": 12,
+      "observacoes": "Reposicao semanal."
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 2,
+    "fields": {
+      "armario": 1,
+      "material": 2,
+      "quantidade": 18,
+      "observacoes": "Uso compartilhado entre turmas."
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 3,
+    "fields": {
+      "armario": 1,
+      "material": 3,
+      "quantidade": 24,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 4,
+    "fields": {
+      "armario": 1,
+      "material": 4,
+      "quantidade": 32,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 5,
+    "fields": {
+      "armario": 1,
+      "material": 5,
+      "quantidade": 40,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 6,
+    "fields": {
+      "armario": 1,
+      "material": 7,
+      "quantidade": 16,
+      "observacoes": "Materiais instrumentais identificados por lote interno."
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 7,
+    "fields": {
+      "armario": 1,
+      "material": 8,
+      "quantidade": 16,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 8,
+    "fields": {
+      "armario": 1,
+      "material": 9,
+      "quantidade": 16,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 9,
+    "fields": {
+      "armario": 2,
+      "material": 3,
+      "quantidade": 12,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 10,
+    "fields": {
+      "armario": 2,
+      "material": 4,
+      "quantidade": 20,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 11,
+    "fields": {
+      "armario": 2,
+      "material": 11,
+      "quantidade": 10,
+      "observacoes": "Controlar por reposicao ao fim de cada modulo."
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 12,
+    "fields": {
+      "armario": 2,
+      "material": 12,
+      "quantidade": 8,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 13,
+    "fields": {
+      "armario": 2,
+      "material": 7,
+      "quantidade": 6,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 14,
+    "fields": {
+      "armario": 2,
+      "material": 8,
+      "quantidade": 6,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 15,
+    "fields": {
+      "armario": 3,
+      "material": 4,
+      "quantidade": 24,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 16,
+    "fields": {
+      "armario": 3,
+      "material": 5,
+      "quantidade": 30,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 17,
+    "fields": {
+      "armario": 3,
+      "material": 6,
+      "quantidade": 5,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 18,
+    "fields": {
+      "armario": 3,
+      "material": 13,
+      "quantidade": 18,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 19,
+    "fields": {
+      "armario": 3,
+      "material": 14,
+      "quantidade": 6,
+      "observacoes": "Estoque minimo revisado antes de aulas cirurgicas."
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 20,
+    "fields": {
+      "armario": 3,
+      "material": 1,
+      "quantidade": 8,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 21,
+    "fields": {
+      "armario": 3,
+      "material": 2,
+      "quantidade": 8,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 22,
+    "fields": {
+      "armario": 4,
+      "material": 3,
+      "quantidade": 10,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 23,
+    "fields": {
+      "armario": 4,
+      "material": 4,
+      "quantidade": 18,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 24,
+    "fields": {
+      "armario": 4,
+      "material": 7,
+      "quantidade": 8,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 25,
+    "fields": {
+      "armario": 4,
+      "material": 15,
+      "quantidade": 7,
+      "observacoes": "Validade deve ser conferida mensalmente."
+    }
+  },
+  {
+    "model": "core.estoquearmario",
+    "pk": 26,
+    "fields": {
+      "armario": 4,
+      "material": 16,
+      "quantidade": 14,
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 1,
+    "fields": {
+      "criado_em": "2026-06-11T08:30:00Z",
+      "atualizado_em": "2026-06-11T08:30:00Z",
+      "ativo": true,
+      "aluno": 1,
+      "kit": 1,
+      "coordenador": "Mariana Lopes",
+      "data_emprestimo": "2026-06-11T08:30:00Z",
+      "data_prevista_devolucao": "2026-06-11",
+      "data_devolucao": null,
+      "status": "EMPRESTADO",
+      "observacoes": "Emprestimo para atendimento clinico supervisionado."
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 2,
+    "fields": {
+      "criado_em": "2026-06-11T09:10:00Z",
+      "atualizado_em": "2026-06-11T09:10:00Z",
+      "ativo": true,
+      "aluno": 4,
+      "kit": 2,
+      "coordenador": "Ricardo Silveira",
+      "data_emprestimo": "2026-06-11T09:10:00Z",
+      "data_prevista_devolucao": "2026-06-12",
+      "data_devolucao": null,
+      "status": "EMPRESTADO",
+      "observacoes": "Kit retirado para aula pratica de endodontia."
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 3,
+    "fields": {
+      "criado_em": "2026-06-10T14:20:00Z",
+      "atualizado_em": "2026-06-10T17:45:00Z",
+      "ativo": true,
+      "aluno": 10,
+      "kit": 4,
+      "coordenador": "Patricia Rezende",
+      "data_emprestimo": "2026-06-10T14:20:00Z",
+      "data_prevista_devolucao": "2026-06-10",
+      "data_devolucao": "2026-06-10T17:45:00Z",
+      "status": "DEVOLVIDO",
+      "observacoes": "Materiais conferidos no retorno."
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 4,
+    "fields": {
+      "criado_em": "2026-06-09T13:00:00Z",
+      "atualizado_em": "2026-06-11T08:00:00Z",
+      "ativo": true,
+      "aluno": 7,
+      "kit": 3,
+      "coordenador": "Mariana Lopes",
+      "data_emprestimo": "2026-06-09T13:00:00Z",
+      "data_prevista_devolucao": "2026-06-10",
+      "data_devolucao": null,
+      "status": "ATRASADO",
+      "observacoes": "Aluno avisado sobre pendencia de devolucao."
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 5,
+    "fields": {
+      "criado_em": "2026-06-08T10:40:00Z",
+      "atualizado_em": "2026-06-08T12:30:00Z",
+      "ativo": true,
+      "aluno": 2,
+      "kit": null,
+      "coordenador": "Fernanda Moura",
+      "data_emprestimo": "2026-06-08T10:40:00Z",
+      "data_prevista_devolucao": "2026-06-08",
+      "data_devolucao": "2026-06-08T12:30:00Z",
+      "status": "DEVOLVIDO",
+      "observacoes": "Emprestimo avulso para reposicao de material em bancada."
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 6,
+    "fields": {
+      "criado_em": "2026-06-07T15:15:00Z",
+      "atualizado_em": "2026-06-11T08:00:00Z",
+      "ativo": true,
+      "aluno": 11,
+      "kit": 4,
+      "coordenador": "Patricia Rezende",
+      "data_emprestimo": "2026-06-07T15:15:00Z",
+      "data_prevista_devolucao": "2026-06-07",
+      "data_devolucao": null,
+      "status": "ATRASADO",
+      "observacoes": "Aguardando devolucao de moldeiras."
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 7,
+    "fields": {
+      "criado_em": "2026-06-06T09:30:00Z",
+      "atualizado_em": "2026-06-06T11:10:00Z",
+      "ativo": true,
+      "aluno": 5,
+      "kit": 2,
+      "coordenador": "Ricardo Silveira",
+      "data_emprestimo": "2026-06-06T09:30:00Z",
+      "data_prevista_devolucao": "2026-06-06",
+      "data_devolucao": "2026-06-06T11:10:00Z",
+      "status": "DEVOLVIDO",
+      "observacoes": ""
+    }
+  },
+  {
+    "model": "core.emprestimo",
+    "pk": 8,
+    "fields": {
+      "criado_em": "2026-06-05T08:50:00Z",
+      "atualizado_em": "2026-06-05T08:50:00Z",
+      "ativo": true,
+      "aluno": 8,
+      "kit": null,
+      "coordenador": "Fernanda Moura",
+      "data_emprestimo": "2026-06-05T08:50:00Z",
+      "data_prevista_devolucao": "2026-06-12",
+      "data_devolucao": null,
+      "status": "EMPRESTADO",
+      "observacoes": "Materiais adicionais para pratica periodontal."
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 1,
+    "fields": {
+      "emprestimo": 1,
+      "material": 7,
+      "armario": 1,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 2,
+    "fields": {
+      "emprestimo": 1,
+      "material": 8,
+      "armario": 1,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 3,
+    "fields": {
+      "emprestimo": 1,
+      "material": 9,
+      "armario": 1,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 4,
+    "fields": {
+      "emprestimo": 1,
+      "material": 4,
+      "armario": 1,
+      "quantidade": 2
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 5,
+    "fields": {
+      "emprestimo": 2,
+      "material": 11,
+      "armario": 2,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 6,
+    "fields": {
+      "emprestimo": 2,
+      "material": 12,
+      "armario": 2,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 7,
+    "fields": {
+      "emprestimo": 2,
+      "material": 7,
+      "armario": 2,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 8,
+    "fields": {
+      "emprestimo": 3,
+      "material": 15,
+      "armario": 4,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 9,
+    "fields": {
+      "emprestimo": 3,
+      "material": 16,
+      "armario": 4,
+      "quantidade": 2
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 10,
+    "fields": {
+      "emprestimo": 3,
+      "material": 4,
+      "armario": 4,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 11,
+    "fields": {
+      "emprestimo": 4,
+      "material": 13,
+      "armario": 3,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 12,
+    "fields": {
+      "emprestimo": 4,
+      "material": 14,
+      "armario": 3,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 13,
+    "fields": {
+      "emprestimo": 4,
+      "material": 6,
+      "armario": 3,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 14,
+    "fields": {
+      "emprestimo": 5,
+      "material": 1,
+      "armario": 1,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 15,
+    "fields": {
+      "emprestimo": 5,
+      "material": 3,
+      "armario": 1,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 16,
+    "fields": {
+      "emprestimo": 6,
+      "material": 15,
+      "armario": 4,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 17,
+    "fields": {
+      "emprestimo": 6,
+      "material": 16,
+      "armario": 4,
+      "quantidade": 2
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 18,
+    "fields": {
+      "emprestimo": 7,
+      "material": 11,
+      "armario": 2,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 19,
+    "fields": {
+      "emprestimo": 7,
+      "material": 12,
+      "armario": 2,
+      "quantidade": 1
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 20,
+    "fields": {
+      "emprestimo": 8,
+      "material": 4,
+      "armario": 3,
+      "quantidade": 3
+    }
+  },
+  {
+    "model": "core.itememprestimo",
+    "pk": 21,
+    "fields": {
+      "emprestimo": 8,
+      "material": 5,
+      "armario": 3,
+      "quantidade": 1
+    }
+  }
+]
