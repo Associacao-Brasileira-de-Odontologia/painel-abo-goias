@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -178,6 +179,13 @@ class Emprestimo(ModeloBase):
         blank=True,
     )
     coordenador = models.CharField(max_length=120, blank=True)
+    coordenador_usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="emprestimos_realizados",
+        null=True,
+        blank=True,
+    )
     data_emprestimo = models.DateTimeField(default=timezone.now)
     data_prevista_devolucao = models.DateField(null=True, blank=True)
     data_devolucao = models.DateTimeField(null=True, blank=True)
