@@ -1,0 +1,150 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestão CME | Empréstimos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
+                <div>
+                    <p class="eyebrow">Controle de materiais</p>
+                    <h1>Empréstimos aos alunos</h1>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Painel do coordenador</p>
+                <h2>Últimos registros</h2>
+                <p class="panel-copy">Acompanhe os materiais retirados, devoluções previstas e pendências de cada turma.</p>
+
+                <form class="form-stack" method="get">
+                    <div class="field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option value="">Todos</option>
+                            {% for valor, rotulo in status_opcoes %}
+                                <option value="{{ valor }}" {% if status_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="q">Buscar</label>
+                        <div class="search-control">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Aluno, turma, material...">
+                        </div>
+                    </div>
+
+                    <button class="button primary update-first" type="submit">Filtrar registros</button>
+                    <a class="button secondary" href="{% url 'home' %}">Limpar filtros</a>
+                </form>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Em aberto</span>
+                        <strong>{{ metricas.emprestados|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card danger-metric">
+                        <span class="metric-label">Atrasados</span>
+                        <strong>{{ metricas.atrasados|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Devolvidos</span>
+                        <strong>{{ metricas.devolvidos|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Total</span>
+                        <strong>{{ metricas.total|default:0 }}</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Movimentações recentes</p>
+                        <h2>Histórico de empréstimos</h2>
+                    </div>
+                    <a class="button secondary admin-link" href="/admin/core/emprestimo/add/">Novo empréstimo</a>
+                </div>
+
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Filtro</span>
+                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Status</span>
+                        <strong>{{ status_label }}</strong>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Aluno</th>
+                                <th>Turma</th>
+                                <th>Materiais</th>
+                                <th>Kit</th>
+                                <th>Coordenador</th>
+                                <th>Previsão</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for emprestimo in emprestimos %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ emprestimo.data_emprestimo|date:"d/m/Y" }}</strong>
+                                        <span class="cell-muted">{{ emprestimo.data_emprestimo|date:"H:i" }}</span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ emprestimo.aluno.nome }}</strong>
+                                        <span class="cell-muted">{{ emprestimo.aluno.matricula }}</span>
+                                    </td>
+                                    <td>{{ emprestimo.aluno.turma.nome|default:"-" }}</td>
+                                    <td>
+                                        <strong>{{ emprestimo.total_itens }} item(ns)</strong>
+                                        <span class="cell-muted">{{ emprestimo.materiais_resumo|default:"Sem itens" }}</span>
+                                    </td>
+                                    <td>{{ emprestimo.kit.nome|default:"Avulso" }}</td>
+                                    <td>{{ emprestimo.coordenador|default:"-" }}</td>
+                                    <td>{{ emprestimo.data_prevista_devolucao|date:"d/m/Y"|default:"-" }}</td>
+                                    <td>
+                                        <span class="badge badge-{{ emprestimo.status_classe }}">
+                                            {{ emprestimo.get_status_display }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr class="empty-row">
+                                    <td colspan="8">Nenhum empréstimo encontrado.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        Associação Brasileira de Odontologia de Goiás
+    </footer>
+</body>
+</html>
