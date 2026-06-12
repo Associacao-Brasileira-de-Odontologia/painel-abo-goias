@@ -23,3 +23,5 @@ rad.json
 TestResults.xml
 #Cache
 __pycache__/
+#credentials
+*.env

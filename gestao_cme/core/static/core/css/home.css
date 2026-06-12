@@ -147,6 +147,43 @@ h2 {
     gap: 16px;
 }
 
+.topbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.sync-form {
+    margin: 0;
+}
+
+.messages {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 18px;
+}
+
+.message {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    color: var(--muted-strong);
+    font-weight: 800;
+}
+
+.message.success {
+    border-color: rgba(57, 217, 138, 0.28);
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.message.error {
+    border-color: rgba(255, 94, 94, 0.28);
+    background: rgba(255, 94, 94, 0.12);
+    color: #ffb8b8;
+}
+
 .form-stack {
     display: grid;
     gap: 16px;

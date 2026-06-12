@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -123,3 +124,22 @@ LOGOUT_REDIRECT_URL = 'login'
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'noreply@abogoias.local'
+
+EDUQ_AUTH_URL = os.environ.get(
+    'EDUQ_AUTH_URL',
+    'https://apisistema.eduqtecnologia.com.br/autenticacao/logar',
+)
+EDUQ_DATA_URL = os.environ.get(
+    'EDUQ_DATA_URL',
+    'https://apisistema.eduqtecnologia.com.br/emissao-consulta-personalizada/obter-dados',
+)
+EDUQ_CONSULTA_TURMAS_ID = int(os.environ.get('EDUQ_CONSULTA_TURMAS_ID', '4'))
+EDUQ_CONSULTA_DETALHES_TURMA_ID = int(os.environ.get('EDUQ_CONSULTA_DETALHES_TURMA_ID', '5'))
+EDUQ_VERIFY_TLS = os.environ.get('EDUQ_VERIFY_TLS', '').strip().lower() in {
+    '1',
+    'true',
+    'yes',
+    'sim',
+    'on',
+}
+EDUQ_TIMEOUT = int(os.environ.get('EDUQ_TIMEOUT', '30'))

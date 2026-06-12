@@ -1,5 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
@@ -49,8 +50,18 @@ urlpatterns = [
         ),
         name='password_reset_complete',
     ),
+    path(
+        'catalog/',
+        RedirectView.as_view(pattern_name='home', permanent=False),
+        name='catalog_redirect',
+    ),
     path('', views.home, name='home'),
     path('alunos-por-turma/', views.alunos_por_turma, name='alunos_por_turma'),
+    path(
+        'alunos-por-turma/sincronizar-turmas/',
+        views.sincronizar_turmas_eduq,
+        name='sincronizar_turmas_eduq',
+    ),
     path('armarios/', views.armarios, name='armarios'),
     path('materiais/', views.materiais, name='materiais'),
 ]
