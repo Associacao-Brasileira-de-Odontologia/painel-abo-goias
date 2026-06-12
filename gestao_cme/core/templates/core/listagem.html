@@ -109,6 +109,17 @@
                         <span>Busca</span>
                         <strong>{{ busca|default:"Todos os registros" }}</strong>
                     </div>
+                    {% if ultima_sincronizacao %}
+                        <div class="info-chip">
+                            <span>Última sincronização</span>
+                            <strong>{{ ultima_sincronizacao|date:"d/m/Y H:i" }}</strong>
+                        </div>
+                    {% else %}
+                        <div class="info-chip">
+                            <span>Última sincronização</span>
+                            <strong>Não realizada</strong>
+                        </div>
+                    {% endif %}
                     <div class="info-chip">
                         <span>Resultado</span>
                         <strong>{{ page_obj.paginator.count }} registro(s)</strong>

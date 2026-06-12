@@ -14,6 +14,7 @@ from core.models import (
     Abrigo,
     Aluno,
     Armario,
+    Emprestimo,
     Kit,
     KitMaterial,
     Material,
@@ -182,11 +183,10 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Aluno Eduq")
         self.assertNotContains(response, "Aluno Exemplo")
 
-    def test_botao_de_sincronizacao_aparece_na_tela_de_alunos_por_turma(self):
+    def test_botao_de_sincronizacao_aparece_para_usuario_comum_na_tela_de_alunos_por_turma(self):
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
-            is_staff=True,
         )
         self.client.force_login(usuario)
 
@@ -194,6 +194,34 @@ class RotasIniciaisTests(TestCase):
 
         self.assertContains(response, "Sincronizar turmas")
         self.assertContains(response, reverse("sincronizar_turmas_eduq"))
+
+    def test_alunos_por_turma_exibe_ultima_sincronizacao(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        sincronizado_em = timezone.now().replace(second=0, microsecond=0)
+        turma = Turma.objects.create(
+            codigo="T-EDUQ",
+            nome="Turma Eduq",
+            origem=OrigemDados.EDUQ,
+            ultima_sincronizacao=sincronizado_em,
+        )
+        aluno = Aluno.objects.create(
+            matricula="A-EDUQ",
+            nome="Aluno Eduq",
+            turma=turma,
+            origem=OrigemDados.EDUQ,
+            ultima_sincronizacao=sincronizado_em,
+        )
+        Emprestimo.objects.create(aluno=aluno, coordenador_usuario=usuario)
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("alunos_por_turma"))
+
+        data_formatada = timezone.localtime(sincronizado_em).strftime("%d/%m/%Y %H:%M")
+        self.assertContains(response, "Última sincronização")
+        self.assertContains(response, data_formatada)
 
     def test_materiais_exibe_dados_reais_migrados(self):
         usuario = get_user_model().objects.create_user(
@@ -281,7 +309,6 @@ class RotasIniciaisTests(TestCase):
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
-            is_staff=True,
         )
         self.client.force_login(usuario)
 
@@ -310,18 +337,24 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "API indisponivel")
 
     @patch("core.views.sincronizar_eduq")
-    def test_sincronizacao_de_turmas_exige_usuario_staff(self, sync_mock):
+    def test_usuario_comum_pode_sincronizar_turmas(self, sync_mock):
+        sync_mock.return_value = SimpleNamespace(
+            turmas=SimpleNamespace(criados=1, atualizados=0, erros=[]),
+        )
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
-            is_staff=False,
         )
         self.client.force_login(usuario)
 
-        response = self.client.post(reverse("sincronizar_turmas_eduq"))
+        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
 
-        self.assertEqual(response.status_code, 403)
-        sync_mock.assert_not_called()
+        sync_mock.assert_called_once_with(
+            sincronizar_turmas=True,
+            sincronizar_alunos=False,
+        )
+        self.assertRedirects(response, reverse("alunos_por_turma"))
+        self.assertContains(response, "Turmas sincronizadas")
 
 
 class EduqSyncTests(TestCase):

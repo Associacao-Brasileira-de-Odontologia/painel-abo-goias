@@ -1,8 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
-from django.http import HttpResponseForbidden
+from django.db.models import Count, Max, Q
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -169,6 +168,19 @@ def alunos_por_turma(request):
         alunos_base = alunos_base.filter(emprestimos__coordenador_usuario=request.user).distinct()
         turmas_base = turmas_base.filter(alunos__emprestimos__coordenador_usuario=request.user).distinct()
 
+    ultima_sincronizacao_alunos = alunos_base.aggregate(
+        ultima=Max("ultima_sincronizacao")
+    )["ultima"]
+    ultima_sincronizacao_turmas = turmas_base.aggregate(
+        ultima=Max("ultima_sincronizacao")
+    )["ultima"]
+    datas_sincronizacao = [
+        data
+        for data in (ultima_sincronizacao_alunos, ultima_sincronizacao_turmas)
+        if data
+    ]
+    ultima_sincronizacao = max(datas_sincronizacao) if datas_sincronizacao else None
+
     metricas = [
         {"label": "Alunos", "value": alunos_base.count()},
         {"label": "Turmas", "value": turmas_base.count()},
@@ -193,6 +205,7 @@ def alunos_por_turma(request):
             "query_string": query_string,
             "empty_message": "Nenhum aluno encontrado.",
             "sync_action_url": "sincronizar_turmas_eduq",
+            "ultima_sincronizacao": ultima_sincronizacao,
             "filter_select": {
                 "name": "turma",
                 "label": "Turma",
@@ -209,9 +222,6 @@ def alunos_por_turma(request):
 @login_required
 @require_POST
 def sincronizar_turmas_eduq(request):
-    if not request.user.is_staff:
-        return HttpResponseForbidden("Usuário sem permissão para sincronizar turmas.")
-
     try:
         resultado = sincronizar_eduq(
             sincronizar_turmas=True,
