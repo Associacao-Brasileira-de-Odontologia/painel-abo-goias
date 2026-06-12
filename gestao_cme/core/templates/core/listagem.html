@@ -1,0 +1,176 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestão CME | {{ titulo }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
+                <div>
+                    <p class="eyebrow">{{ section_label }}</p>
+                    <h1>{{ titulo }}</h1>
+                </div>
+            </div>
+            <div class="user-menu">
+                <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="button secondary compact-button" type="submit">Sair</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Navegação</p>
+                <h2>Listagens</h2>
+                <p class="panel-copy">{{ subtitulo }}</p>
+
+                <nav class="side-nav" aria-label="Listagens do sistema">
+                    <a class="side-link" href="{% url 'home' %}">Empréstimos</a>
+                    <a class="side-link {% if active_page == 'alunos' %}active{% endif %}" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
+                    <a class="side-link {% if active_page == 'armarios' %}active{% endif %}" href="{% url 'armarios' %}">Armários</a>
+                    <a class="side-link {% if active_page == 'materiais' %}active{% endif %}" href="{% url 'materiais' %}">Materiais</a>
+                </nav>
+
+                <form class="form-stack" method="get">
+                    {% if filter_select %}
+                        <div class="field">
+                            <label for="{{ filter_select.name }}">{{ filter_select.label }}</label>
+                            <select id="{{ filter_select.name }}" name="{{ filter_select.name }}">
+                                <option value="">Todas</option>
+                                {% for option in filter_select.options %}
+                                    <option value="{{ option.value }}" {% if filter_select.value == option.value %}selected{% endif %}>{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% endif %}
+
+                    <div class="field">
+                        <label for="q">Buscar</label>
+                        <div class="search-control">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Digite para filtrar...">
+                        </div>
+                    </div>
+
+                    <button class="button primary update-first" type="submit">Filtrar listagem</button>
+                    <a class="button secondary" href="{{ request.path }}">Limpar filtros</a>
+                </form>
+
+                <div class="metric-grid">
+                    {% for metrica in metricas %}
+                        <div class="metric-card">
+                            <span class="metric-label">{{ metrica.label }}</span>
+                            <strong>{{ metrica.value }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">{{ section_label }}</p>
+                        <h2>{{ titulo }}</h2>
+                    </div>
+                    <a class="button secondary admin-link" href="/admin/core/">Abrir admin</a>
+                </div>
+
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Resultado</span>
+                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Página</span>
+                        <strong>{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</strong>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="generic-table">
+                        <thead>
+                            <tr>
+                                {% for header in table_headers %}
+                                    <th>{{ header }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                                <tr>
+                                    {% for cell in row.cells %}
+                                        <td>
+                                            {% if cell.badge %}
+                                                <span class="badge {{ cell.badge_class }}">{{ cell.badge }}</span>
+                                            {% else %}
+                                                <strong>{{ cell.primary }}</strong>
+                                                {% if cell.secondary %}
+                                                    <span class="cell-muted">{{ cell.secondary }}</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                            {% empty %}
+                                <tr class="empty-row">
+                                    <td colspan="{{ table_headers|length }}">{{ empty_message }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.paginator.count %}
+                    <div class="pagination-summary">
+                        Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ page_obj.paginator.count }} registros
+                    </div>
+                {% endif %}
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                    <nav class="pagination" aria-label="Paginação">
+                        {% if page_obj.has_previous %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+                        {% else %}
+                            <span class="page-link disabled">Anterior</span>
+                        {% endif %}
+
+                        {% for numero in page_obj.paginator.page_range %}
+                            {% if numero == page_obj.number %}
+                                <span class="page-link active">{{ numero }}</span>
+                            {% elif numero >= page_obj.number|add:"-2" and numero <= page_obj.number|add:"2" %}
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ numero }}">{{ numero }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
+                        {% else %}
+                            <span class="page-link disabled">Próxima</span>
+                        {% endif %}
+                    </nav>
+                {% endif %}
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        Associação Brasileira de Odontologia de Goiás
+    </footer>
+</body>
+</html>

@@ -20,6 +20,13 @@
                     <h1>Empréstimos aos alunos</h1>
                 </div>
             </div>
+            <div class="user-menu">
+                <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="button secondary compact-button" type="submit">Sair</button>
+                </form>
+            </div>
         </div>
     </header>
 
@@ -29,6 +36,13 @@
                 <p class="section-label">Painel do coordenador</p>
                 <h2>Últimos registros</h2>
                 <p class="panel-copy">Acompanhe os materiais retirados, devoluções previstas e pendências de cada turma.</p>
+
+                <nav class="side-nav" aria-label="Listagens do sistema">
+                    <a class="side-link active" href="{% url 'home' %}">Empréstimos</a>
+                    <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
+                    <a class="side-link" href="{% url 'armarios' %}">Armários</a>
+                    <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
+                </nav>
 
                 <form class="form-stack" method="get">
                     <div class="field">
