@@ -93,3 +93,38 @@ Para carregar os dados operacionais de exemplo:
 ```powershell
 python gestao_cme\manage.py loaddata dados_exemplo
 ```
+## Configuracao por ambiente
+
+O projeto carrega variaveis de ambiente a partir do sistema operacional e, quando existir, dos arquivos `.env` na raiz do repositorio ou dentro da pasta `gestao_cme/`. Use `.env.example` como referencia e nunca versionar segredos reais.
+
+Variaveis principais:
+
+- `DJANGO_DEBUG`: use `true` em desenvolvimento e `false` em producao.
+- `DJANGO_SECRET_KEY`: chave secreta do Django. Obrigatoria em producao.
+- `DJANGO_ALLOWED_HOSTS`: dominios/IPs permitidos, separados por virgula. Obrigatorio em producao.
+- `DJANGO_CSRF_TRUSTED_ORIGINS`: origens confiaveis para CSRF, separadas por virgula, incluindo protocolo. Exemplo: `https://cme.exemplo.com`.
+- `DATABASE_URL`: conexao do banco. Exemplo PostgreSQL: `postgresql://usuario:senha@localhost:5432/gestao_cme`.
+- `DJANGO_STATIC_ROOT`: pasta onde `collectstatic` grava os arquivos estaticos.
+- `DJANGO_SECURE_SSL_REDIRECT`: redireciona HTTP para HTTPS. Recomendado `true` em producao.
+- `DJANGO_SESSION_COOKIE_SECURE`: restringe cookie de sessao a HTTPS. Recomendado `true` em producao.
+- `DJANGO_CSRF_COOKIE_SECURE`: restringe cookie CSRF a HTTPS. Recomendado `true` em producao.
+- `DJANGO_SECURE_HSTS_SECONDS`: tempo de HSTS. Recomendado apenas quando HTTPS estiver validado.
+- `DJANGO_SECURE_PROXY_SSL_HEADER`: use `true` quando a aplicacao estiver atras de proxy reverso que envia `X-Forwarded-Proto`.
+- `DJANGO_EMAIL_BACKEND`, `DJANGO_EMAIL_HOST`, `DJANGO_EMAIL_PORT`, `DJANGO_EMAIL_HOST_USER`, `DJANGO_EMAIL_HOST_PASSWORD`, `DJANGO_EMAIL_USE_TLS`, `DJANGO_EMAIL_USE_SSL`: configuracoes de e-mail.
+
+Exemplo minimo para producao:
+
+```powershell
+$env:DJANGO_DEBUG="false"
+$env:DJANGO_SECRET_KEY="uma-chave-longa-e-aleatoria"
+$env:DJANGO_ALLOWED_HOSTS="cme.seudominio.com.br"
+$env:DJANGO_CSRF_TRUSTED_ORIGINS="https://cme.seudominio.com.br"
+$env:DATABASE_URL="postgresql://usuario:senha@localhost:5432/gestao_cme"
+```
+
+Antes de publicar, execute:
+
+```powershell
+python gestao_cme\manage.py check --deploy
+python gestao_cme\manage.py collectstatic
+```
