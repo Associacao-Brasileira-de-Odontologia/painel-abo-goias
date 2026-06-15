@@ -7,7 +7,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, urlopen
 
 from django.conf import settings
 
@@ -27,6 +27,7 @@ class ConfigEduq:
     consulta_detalhes_turma_id: int
     verify_tls: bool
     timeout: int
+    use_proxy: bool
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,7 @@ def carregar_config_eduq() -> ConfigEduq:
         ),
         verify_tls=_ler_booleano("EDUQ_VERIFY_TLS", settings.EDUQ_VERIFY_TLS),
         timeout=int(os.getenv("EDUQ_TIMEOUT", settings.EDUQ_TIMEOUT)),
+        use_proxy=_ler_booleano("EDUQ_USE_PROXY", settings.EDUQ_USE_PROXY),
     )
 
 
@@ -173,7 +175,19 @@ class EduqClient:
 
         context = None if self.config.verify_tls else ssl._create_unverified_context()
         try:
-            with urlopen(request, timeout=self.config.timeout, context=context) as response:
+            if self.config.use_proxy:
+                response_context = {"context": context} if context else {}
+                response = urlopen(
+                    request,
+                    timeout=self.config.timeout,
+                    **response_context,
+                )
+            else:
+                handlers = [ProxyHandler({})]
+                if context:
+                    handlers.append(HTTPSHandler(context=context))
+                response = build_opener(*handlers).open(request, timeout=self.config.timeout)
+            with response:
                 body = response.read().decode("utf-8")
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")

@@ -17,7 +17,7 @@
                 <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
                 <div>
                     <p class="eyebrow">Controle de materiais</p>
-                    <h1>Empréstimos aos alunos</h1>
+                    <h1>Empréstimos</h1>
                 </div>
             </div>
             <div class="user-menu">
@@ -34,14 +34,15 @@
         <div class="layout-grid">
             <aside class="panel config-panel">
                 <p class="section-label">Painel do coordenador</p>
-                <h2>Últimos registros</h2>
-                <p class="panel-copy">Acompanhe os materiais retirados, devoluções previstas e pendências de cada turma.</p>
+                <h2>Histórico de movimentações</h2>
+                <p class="panel-copy">Acompanhe as saídas, entradas e pendências registradas no sistema.</p>
 
                 <nav class="side-nav" aria-label="Listagens do sistema">
                     <a class="side-link active" href="{% url 'home' %}">Empréstimos</a>
                     <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
                     <a class="side-link" href="{% url 'armarios' %}">Armários</a>
                     <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
+                    <a class="side-link" href="{% url 'kits' %}">Kits</a>
                 </nav>
 
                 <form class="form-stack" method="get">
@@ -56,9 +57,19 @@
                     </div>
 
                     <div class="field">
+                        <label for="movimentacao">Movimentação</label>
+                        <select id="movimentacao" name="movimentacao">
+                            <option value="">Todas</option>
+                            {% for valor, rotulo in movimentacao_opcoes %}
+                                <option value="{{ valor }}" {% if movimentacao_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
                         <label for="q">Buscar</label>
                         <div class="search-control">
-                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Aluno, turma, material...">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Aluno, turma, pacote...">
                         </div>
                     </div>
 
@@ -68,16 +79,16 @@
 
                 <div class="metric-grid">
                     <div class="metric-card">
-                        <span class="metric-label">Em aberto</span>
-                        <strong>{{ metricas.emprestados|default:0 }}</strong>
+                        <span class="metric-label">Saídas</span>
+                        <strong>{{ metricas.saidas|default:0 }}</strong>
                     </div>
                     <div class="metric-card danger-metric">
-                        <span class="metric-label">Atrasados</span>
-                        <strong>{{ metricas.atrasados|default:0 }}</strong>
+                        <span class="metric-label">Pendentes</span>
+                        <strong>{{ metricas.pendentes|default:0 }}</strong>
                     </div>
                     <div class="metric-card">
-                        <span class="metric-label">Devolvidos</span>
-                        <strong>{{ metricas.devolvidos|default:0 }}</strong>
+                        <span class="metric-label">Entradas</span>
+                        <strong>{{ metricas.entradas|default:0 }}</strong>
                     </div>
                     <div class="metric-card">
                         <span class="metric-label">Total</span>
@@ -89,10 +100,10 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Movimentações recentes</p>
-                        <h2>Histórico de empréstimos</h2>
+                        <p class="section-label">Movimentações realizadas</p>
+                        <h2>Histórico de movimentações</h2>
                     </div>
-                    <a class="button secondary admin-link" href="/admin/core/emprestimo/add/">Novo empréstimo</a>
+                    <a class="button secondary admin-link" href="/admin/core/movimentacao/">Abrir movimentações</a>
                 </div>
 
                 <div class="selection-summary">
@@ -104,6 +115,14 @@
                         <span>Status</span>
                         <strong>{{ status_label }}</strong>
                     </div>
+                    <div class="info-chip">
+                        <span>Movimentação</span>
+                        <strong>{{ movimentacao_label }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Resultado</span>
+                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                    </div>
                 </div>
 
                 <div class="table-wrap">
@@ -113,46 +132,73 @@
                                 <th>Data</th>
                                 <th>Aluno</th>
                                 <th>Turma</th>
-                                <th>Materiais</th>
-                                <th>Kit</th>
-                                <th>Coordenador</th>
-                                <th>Previsão</th>
+                                <th>Movimentação</th>
+                                <th>Pacote</th>
+                                <th>Origem</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for emprestimo in emprestimos %}
+                            {% for registro in movimentacoes %}
                                 <tr>
                                     <td>
-                                        <strong>{{ emprestimo.data_emprestimo|date:"d/m/Y" }}</strong>
-                                        <span class="cell-muted">{{ emprestimo.data_emprestimo|date:"H:i" }}</span>
+                                        <strong>{{ registro.data_hora|date:"d/m/Y" }}</strong>
+                                        <span class="cell-muted">{{ registro.data_hora|date:"H:i" }}</span>
                                     </td>
                                     <td>
-                                        <strong>{{ emprestimo.aluno.nome }}</strong>
-                                        <span class="cell-muted">{{ emprestimo.aluno.matricula }}</span>
+                                        <strong>{{ registro.aluno_nome }}</strong>
+                                        <span class="cell-muted">{{ registro.aluno_codigo_externo|default:"Sem código" }}</span>
                                     </td>
-                                    <td>{{ emprestimo.aluno.turma.nome|default:"-" }}</td>
+                                    <td>{{ registro.turma_nome|default:"-" }}</td>
                                     <td>
-                                        <strong>{{ emprestimo.total_itens }} item(ns)</strong>
-                                        <span class="cell-muted">{{ emprestimo.materiais_resumo|default:"Sem itens" }}</span>
+                                        <strong>{{ registro.get_tipo_display }}</strong>
                                     </td>
-                                    <td>{{ emprestimo.kit.nome|default:"Avulso" }}</td>
-                                    <td>{{ emprestimo.coordenador|default:"-" }}</td>
-                                    <td>{{ emprestimo.data_prevista_devolucao|date:"d/m/Y"|default:"-" }}</td>
+                                    <td>{{ registro.pacote_codigo }}</td>
+                                    <td>{{ registro.get_origem_display }}</td>
                                     <td>
-                                        <span class="badge badge-{{ emprestimo.status_classe }}">
-                                            {{ emprestimo.get_status_display }}
+                                        <span class="badge badge-{{ registro.status_classe }}">
+                                            {{ registro.status_label }}
                                         </span>
                                     </td>
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="8">Nenhum empréstimo encontrado.</td>
+                                    <td colspan="7">Nenhuma movimentação encontrada.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                {% if page_obj.paginator.count %}
+                    <div class="pagination-summary">
+                        Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ page_obj.paginator.count }} registros
+                    </div>
+                {% endif %}
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                    <nav class="pagination" aria-label="Paginação">
+                        {% if page_obj.has_previous %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+                        {% else %}
+                            <span class="page-link disabled">Anterior</span>
+                        {% endif %}
+
+                        {% for numero in page_obj.paginator.page_range %}
+                            {% if numero == page_obj.number %}
+                                <span class="page-link active">{{ numero }}</span>
+                            {% elif numero >= page_obj.number|add:"-2" and numero <= page_obj.number|add:"2" %}
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ numero }}">{{ numero }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
+                        {% else %}
+                            <span class="page-link disabled">Próxima</span>
+                        {% endif %}
+                    </nav>
+                {% endif %}
             </section>
         </div>
     </main>

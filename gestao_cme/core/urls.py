@@ -64,4 +64,5 @@ urlpatterns = [
     ),
     path('armarios/', views.armarios, name='armarios'),
     path('materiais/', views.materiais, name='materiais'),
+    path('kits/', views.kits, name='kits'),
 ]

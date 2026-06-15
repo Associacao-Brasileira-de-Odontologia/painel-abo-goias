@@ -1,0 +1,161 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestão CME | Armários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
+                <div>
+                    <p class="eyebrow">Controle físico</p>
+                    <h1>Armários</h1>
+                </div>
+            </div>
+            <div class="user-menu">
+                <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="button secondary compact-button" type="submit">Sair</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Controle físico</p>
+                <h2>Armários</h2>
+                <p class="panel-copy">Visualize os identificadores dos armários e sua ocupação atual.</p>
+
+                <nav class="side-nav" aria-label="Listagens do sistema">
+                    <a class="side-link" href="{% url 'home' %}">Empréstimos</a>
+                    <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
+                    <a class="side-link active" href="{% url 'armarios' %}">Armários</a>
+                    <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
+                    <a class="side-link" href="{% url 'kits' %}">Kits</a>
+                </nav>
+
+                <form class="form-stack" method="get">
+                    <div class="field">
+                        <label for="ocupacao">Ocupação</label>
+                        <select id="ocupacao" name="ocupacao">
+                            <option value="">Todos</option>
+                            <option value="ocupado" {% if ocupacao_atual == "ocupado" %}selected{% endif %}>Ocupados</option>
+                            <option value="livre" {% if ocupacao_atual == "livre" %}selected{% endif %}>Livres</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="q">Buscar</label>
+                        <div class="search-control">
+                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Identificador do armário...">
+                        </div>
+                    </div>
+
+                    <button class="button primary update-first" type="submit">Filtrar armários</button>
+                    <a class="button secondary" href="{% url 'armarios' %}">Limpar filtros</a>
+                </form>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Armários</span>
+                        <strong>{{ metricas.total }}</strong>
+                    </div>
+                    <div class="metric-card danger-metric">
+                        <span class="metric-label">Ocupados</span>
+                        <strong>{{ metricas.ocupados }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Livres</span>
+                        <strong>{{ metricas.livres }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Filtrados</span>
+                        <strong>{{ metricas.filtrados }}</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Estoque físico</p>
+                        <h2>Mapa dos armários</h2>
+                    </div>
+                    <a class="button secondary admin-link" href="/admin/core/abrigo/">Abrir abrigos</a>
+                </div>
+
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Ocupação</span>
+                        <strong>{{ ocupacao_label }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Resultado</span>
+                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Identificador</th>
+                                <th>Ocupação</th>
+                                <th>Origem</th>
+                                <th>Ultima sincronizacao</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for abrigo in abrigos %}
+                                <tr>
+                                    <td><strong>{{ abrigo.identificador }}</strong></td>
+                                    <td>
+                                        {% if abrigo.ocupado %}
+                                            <span class="badge badge-atrasado">Ocupado</span>
+                                        {% else %}
+                                            <span class="badge badge-devolvido">Livre</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ abrigo.get_origem_display }}</td>
+                                    <td>{{ abrigo.ultima_sincronizacao|date:"d/m/Y H:i"|default:"-" }}</td>
+                                    <td>
+                                        {% if abrigo.ativo %}
+                                            <span class="badge badge-devolvido">Ativo</span>
+                                        {% else %}
+                                            <span class="badge badge-atrasado">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr class="empty-row">
+                                    <td colspan="5">Nenhum armário encontrado.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% include "core/partials/paginacao.html" %}
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">Associação Brasileira de Odontologia de Goiás</footer>
+</body>
+</html>

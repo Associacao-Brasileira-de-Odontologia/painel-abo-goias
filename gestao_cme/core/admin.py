@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    Abrigo,
     Aluno,
     Armario,
     Emprestimo,
@@ -9,6 +10,7 @@ from .models import (
     Kit,
     KitMaterial,
     Material,
+    Movimentacao,
     Turma,
 )
 
@@ -47,9 +49,17 @@ class AlunoAdmin(admin.ModelAdmin):
 
 @admin.register(Material)
 class MaterialAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "nome", "unidade_medida", "quantidade_minima", "ativo")
-    list_filter = ("ativo", "unidade_medida")
-    search_fields = ("codigo", "nome", "descricao")
+    list_display = (
+        "codigo",
+        "nome",
+        "identificacao",
+        "disponivel",
+        "origem",
+        "unidade_medida",
+        "ativo",
+    )
+    list_filter = ("ativo", "disponivel", "origem", "unidade_medida")
+    search_fields = ("codigo", "nome", "descricao", "identificacao", "rotulo_kit")
 
 
 class KitMaterialInline(admin.TabularInline):
@@ -60,8 +70,8 @@ class KitMaterialInline(admin.TabularInline):
 
 @admin.register(Kit)
 class KitAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "nome", "ativo")
-    list_filter = ("ativo",)
+    list_display = ("codigo", "nome", "quantidade", "origem", "ativo")
+    list_filter = ("ativo", "origem")
     search_fields = ("codigo", "nome", "descricao")
     inlines = (KitMaterialInline,)
 
@@ -78,6 +88,13 @@ class ArmarioAdmin(admin.ModelAdmin):
     list_filter = ("ativo", "localizacao")
     search_fields = ("identificacao", "localizacao", "descricao")
     inlines = (EstoqueArmarioInline,)
+
+
+@admin.register(Abrigo)
+class AbrigoAdmin(admin.ModelAdmin):
+    list_display = ("identificador", "ocupado", "origem", "ultima_sincronizacao", "ativo")
+    list_filter = ("ocupado", "origem", "ativo")
+    search_fields = ("identificador",)
 
 
 @admin.register(KitMaterial)
@@ -160,4 +177,28 @@ class ItemEmprestimoAdmin(admin.ModelAdmin):
         if request.user.is_superuser:
             return queryset
         return queryset.filter(emprestimo__coordenador_usuario=request.user)
+
+
+@admin.register(Movimentacao)
+class MovimentacaoAdmin(admin.ModelAdmin):
+    list_display = (
+        "data_hora",
+        "tipo",
+        "aluno_nome",
+        "turma_nome",
+        "pacote_codigo",
+        "retirado",
+        "arquivo_origem",
+    )
+    list_filter = ("tipo", "retirado", "arquivo_origem", "origem")
+    search_fields = (
+        "aluno_nome",
+        "aluno_codigo_externo",
+        "turma_nome",
+        "pacote_codigo",
+        "material__nome",
+        "material__codigo",
+    )
+    autocomplete_fields = ("aluno", "turma", "material")
+    date_hierarchy = "data_hora"
 

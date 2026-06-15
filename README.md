@@ -12,6 +12,7 @@ A integracao com a API do Eduq usa variaveis de ambiente:
 - `EDUQ_CONSULTA_TURMAS_ID`: ID da consulta personalizada de turmas. Padrao: `4`.
 - `EDUQ_CONSULTA_DETALHES_TURMA_ID`: ID da consulta personalizada de detalhes da turma/alunos. Padrao: `5`.
 - `EDUQ_VERIFY_TLS`: ativa validacao TLS quando definido como `true`, `1`, `yes`, `sim` ou `on`.
+- `EDUQ_USE_PROXY`: usa os proxies do ambiente quando definido como `true`, `1`, `yes`, `sim` ou `on`. Por padrao fica desativado para evitar falhas com proxies locais invalidos.
 
 Campos reais observados na API:
 
@@ -43,6 +44,38 @@ python gestao_cme\manage.py sincronizar_eduq --somente-alunos
 ```
 
 Nos testes reais, chamadas sequenciais para turmas diferentes funcionaram sem intervalo. A API so retornou limite minimo quando o mesmo payload foi repetido imediatamente com o mesmo token.
+
+## Migracao dos dados legados
+
+Os dados operacionais que estavam controlados em planilhas devem ser migrados uma vez para o banco Django. As planilhas sao tratadas apenas como fonte do sistema legado; depois da migracao, a aplicacao passa a trabalhar com os modelos do banco.
+
+Arquivos de origem esperados:
+
+- `Abrigos.csv`
+- `Kits.csv`
+- `Materiais para empréstimo.csv`
+- `Relatório de movimentação.csv`
+- `Itens não retirados.csv`
+
+Para simular a migracao sem salvar alteracoes:
+
+```powershell
+python gestao_cme\manage.py migrar_dados_legado --dry-run
+```
+
+Para gravar os dados legados no banco local:
+
+```powershell
+python gestao_cme\manage.py migrar_dados_legado
+```
+
+Para usar outra pasta:
+
+```powershell
+python gestao_cme\manage.py migrar_dados_legado --diretorio "C:\caminho\para\csvs"
+```
+
+Essa migracao alimenta `Abrigo`, `Kit`, `Material` e `Movimentacao` com origem `LEGADO`. O campo `Pacote` das movimentacoes e preservado como codigo bruto porque a exportacao atual usa codigos numericos que nao correspondem diretamente aos codigos dos materiais.
 
 ## Dados de exemplo
 

@@ -1,15 +1,28 @@
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
-from core.integrations.eduq import AlunoEduq, EduqAPIError, TurmaEduq
-from core.models import Aluno, Armario, Material, OrigemDados, Turma
+from core.integrations.eduq import AlunoEduq, ConfigEduq, EduqAPIError, EduqClient, TurmaEduq
+from core.models import (
+    Abrigo,
+    Aluno,
+    Armario,
+    Emprestimo,
+    Kit,
+    KitMaterial,
+    Material,
+    Movimentacao,
+    OrigemDados,
+    Turma,
+)
+from core.services.migracao_legado import migrar_dados_legado
 from core.services.eduq_sync import sincronizar_alunos_eduq, sincronizar_eduq, sincronizar_turmas_eduq
 
 
@@ -47,6 +60,94 @@ class RotasIniciaisTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/home.html")
 
+    def test_home_exibe_movimentacoes_migradas(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.SAIDA,
+            aluno_nome="Aluno Legado",
+            aluno_codigo_externo="817",
+            turma_nome="Turma Legada",
+            pacote_codigo="4801",
+            retirado=True,
+            arquivo_origem="Relatorio.csv",
+            row_hash="hash-home-saida",
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "Aluno Legado")
+        self.assertContains(response, "Turma Legada")
+        self.assertContains(response, "4801")
+        self.assertContains(response, "Retirado")
+
+    def test_home_filtra_movimentacoes_por_status_e_tipo(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.SAIDA,
+            aluno_nome="Aluno Retirado",
+            turma_nome="Turma A",
+            pacote_codigo="100",
+            retirado=True,
+            arquivo_origem="Relatorio.csv",
+            row_hash="hash-retirado",
+            origem=OrigemDados.LEGADO,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Pendente",
+            turma_nome="Turma B",
+            pacote_codigo="200",
+            retirado=False,
+            arquivo_origem="Itens.csv",
+            row_hash="hash-pendente",
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(
+            reverse("home"),
+            {"status": "pendente", "movimentacao": Movimentacao.Tipo.ENTRADA},
+        )
+
+        self.assertContains(response, "Aluno Pendente")
+        self.assertContains(response, "Não retirado")
+        self.assertNotContains(response, "Aluno Retirado")
+
+    @patch("core.integrations.eduq.build_opener")
+    def test_cliente_eduq_ignora_proxy_por_padrao(self, build_opener_mock):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read = lambda: b'{"sucesso": true}'
+        build_opener_mock.return_value.open.return_value = response
+        config = ConfigEduq(
+            dominio="dominio",
+            usuario="usuario",
+            senha="senha",
+            auth_url="https://eduq.test/auth",
+            data_url="https://eduq.test/data",
+            consulta_turmas_id=4,
+            consulta_detalhes_turma_id=5,
+            verify_tls=False,
+            timeout=30,
+            use_proxy=False,
+        )
+
+        EduqClient(config)._post_json("https://eduq.test/auth", {})
+
+        handlers = build_opener_mock.call_args.args
+        self.assertEqual(handlers[0].proxies, {})
+
     def test_listagem_de_alunos_nao_exibe_academicos_de_exemplo(self):
         turma_exemplo = Turma.objects.create(
             codigo="T-EXEMPLO",
@@ -82,11 +183,10 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Aluno Eduq")
         self.assertNotContains(response, "Aluno Exemplo")
 
-    def test_botao_de_sincronizacao_aparece_na_tela_de_alunos_por_turma(self):
+    def test_botao_de_sincronizacao_aparece_para_usuario_comum_na_tela_de_alunos_por_turma(self):
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
-            is_staff=True,
         )
         self.client.force_login(usuario)
 
@@ -94,6 +194,112 @@ class RotasIniciaisTests(TestCase):
 
         self.assertContains(response, "Sincronizar turmas")
         self.assertContains(response, reverse("sincronizar_turmas_eduq"))
+
+    def test_alunos_por_turma_exibe_ultima_sincronizacao(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        sincronizado_em = timezone.now().replace(second=0, microsecond=0)
+        turma = Turma.objects.create(
+            codigo="T-EDUQ",
+            nome="Turma Eduq",
+            origem=OrigemDados.EDUQ,
+            ultima_sincronizacao=sincronizado_em,
+        )
+        aluno = Aluno.objects.create(
+            matricula="A-EDUQ",
+            nome="Aluno Eduq",
+            turma=turma,
+            origem=OrigemDados.EDUQ,
+            ultima_sincronizacao=sincronizado_em,
+        )
+        Emprestimo.objects.create(aluno=aluno, coordenador_usuario=usuario)
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("alunos_por_turma"))
+
+        data_formatada = timezone.localtime(sincronizado_em).strftime("%d/%m/%Y %H:%M")
+        self.assertContains(response, "Última sincronização")
+        self.assertContains(response, data_formatada)
+
+    def test_materiais_exibe_dados_reais_migrados(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Material.objects.create(
+            nome="KIT CIRURGICO",
+            codigo="MATLEG-1",
+            identificacao="KIT 1",
+            rotulo_kit="KIT 1 - KIT CIRURGICO",
+            disponivel=True,
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("materiais"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/materiais.html")
+        self.assertContains(response, "KIT CIRURGICO")
+        self.assertContains(response, "KIT 1")
+        self.assertContains(response, "Disponível")
+
+    def test_armarios_exibe_abrigos_reais_e_filtra_ocupacao(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        Abrigo.objects.create(
+            identificador="150",
+            ocupado=True,
+            origem=OrigemDados.LEGADO,
+        )
+        Abrigo.objects.create(
+            identificador="151",
+            ocupado=False,
+            origem=OrigemDados.LEGADO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("armarios"), {"ocupacao": "ocupado"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/armarios.html")
+        self.assertContains(response, "150")
+        self.assertContains(response, "Ocupado")
+        self.assertNotContains(response, "151")
+
+    def test_kits_exibe_dados_reais_e_materiais_vinculados(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        kit = Kit.objects.create(
+            nome="KIT CIRURGICO",
+            codigo="KITLEG-1",
+            quantidade=2,
+            origem=OrigemDados.LEGADO,
+        )
+        material = Material.objects.create(
+            nome="KIT CIRURGICO",
+            codigo="MATLEG-1",
+            identificacao="KIT 1",
+            rotulo_kit="KIT 1 - KIT CIRURGICO",
+            disponivel=True,
+            origem=OrigemDados.LEGADO,
+        )
+        KitMaterial.objects.create(kit=kit, material=material, quantidade=1)
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("kits"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/kits.html")
+        self.assertContains(response, "KIT CIRURGICO")
+        self.assertContains(response, "KITLEG-1")
+        self.assertContains(response, "KIT 1")
 
     @patch("core.views.sincronizar_eduq")
     def test_botao_sincroniza_turmas_sem_sincronizar_alunos(self, sync_mock):
@@ -103,7 +309,6 @@ class RotasIniciaisTests(TestCase):
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
-            is_staff=True,
         )
         self.client.force_login(usuario)
 
@@ -128,22 +333,28 @@ class RotasIniciaisTests(TestCase):
 
         response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
 
-        self.assertContains(response, "Nao foi possivel sincronizar turmas")
+        self.assertContains(response, "Não foi possível sincronizar turmas")
         self.assertContains(response, "API indisponivel")
 
     @patch("core.views.sincronizar_eduq")
-    def test_sincronizacao_de_turmas_exige_usuario_staff(self, sync_mock):
+    def test_usuario_comum_pode_sincronizar_turmas(self, sync_mock):
+        sync_mock.return_value = SimpleNamespace(
+            turmas=SimpleNamespace(criados=1, atualizados=0, erros=[]),
+        )
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
-            is_staff=False,
         )
         self.client.force_login(usuario)
 
-        response = self.client.post(reverse("sincronizar_turmas_eduq"))
+        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
 
-        self.assertEqual(response.status_code, 403)
-        sync_mock.assert_not_called()
+        sync_mock.assert_called_once_with(
+            sincronizar_turmas=True,
+            sincronizar_alunos=False,
+        )
+        self.assertRedirects(response, reverse("alunos_por_turma"))
+        self.assertContains(response, "Turmas sincronizadas")
 
 
 class EduqSyncTests(TestCase):
@@ -364,3 +575,85 @@ class DadosExemploTests(TestCase):
         self.assertFalse(Aluno.objects.exists())
         self.assertTrue(Material.objects.exists())
         self.assertTrue(Armario.objects.exists())
+
+
+class MigracaoLegadoTests(TestCase):
+    def test_migra_dados_operacionais_legados_para_o_banco(self):
+        with patch("core.services.migracao_legado._ler_csv", side_effect=self._ler_csv_mock):
+            resultado = migrar_dados_legado("csvs")
+
+        self.assertEqual(resultado.abrigos.criados, 2)
+        self.assertEqual(resultado.kits.criados, 1)
+        self.assertEqual(resultado.materiais.criados, 2)
+        self.assertEqual(resultado.movimentacoes.criados, 2)
+        self.assertEqual(Abrigo.objects.filter(ocupado=True).count(), 1)
+        self.assertEqual(Kit.objects.get().quantidade, 2)
+        self.assertEqual(Material.objects.filter(disponivel=True).count(), 1)
+        self.assertEqual(Material.objects.filter(disponivel=False).count(), 1)
+        self.assertTrue(Movimentacao.objects.filter(tipo=Movimentacao.Tipo.SAIDA).exists())
+        self.assertTrue(Movimentacao.objects.filter(tipo=Movimentacao.Tipo.ENTRADA).exists())
+
+    def test_migracao_legado_e_idempotente(self):
+        with patch("core.services.migracao_legado._ler_csv", side_effect=self._ler_csv_mock):
+            migrar_dados_legado("csvs")
+            resultado = migrar_dados_legado("csvs")
+
+        self.assertEqual(resultado.abrigos.atualizados, 2)
+        self.assertEqual(resultado.kits.atualizados, 1)
+        self.assertEqual(resultado.materiais.atualizados, 2)
+        self.assertEqual(resultado.movimentacoes.atualizados, 2)
+        self.assertEqual(Abrigo.objects.count(), 2)
+        self.assertEqual(Kit.objects.count(), 1)
+        self.assertEqual(Material.objects.count(), 2)
+        self.assertEqual(Movimentacao.objects.count(), 2)
+
+    def _ler_csv_mock(self, path):
+        dados = {
+            "Abrigos.csv": [
+                {"Identificador": "1", "Ocupado": "true"},
+                {"Identificador": "2", "Ocupado": "false"},
+            ],
+            "Kits.csv": [
+                {"Kit": "KIT CIRURGICO", "Quantidade": "2", "Apagar": "system"},
+            ],
+            "Materiais para empréstimo.csv": [
+                {
+                    "Material": "KIT CIRURGICO",
+                    "Identificação": "KIT 1",
+                    "Kit": "KIT 1 - KIT CIRURGICO",
+                    "Ativo": "true",
+                    "Disponivel": "true",
+                    "Apagar": "model",
+                },
+                {
+                    "Material": "KIT CIRURGICO",
+                    "Identificação": "KIT 2",
+                    "Kit": "KIT 2 - KIT CIRURGICO",
+                    "Ativo": "true",
+                    "Disponivel": "false",
+                    "Apagar": "model",
+                },
+            ],
+            "Relatório de movimentação.csv": [
+                {
+                    "Data": "29/05/2026, 07:58",
+                    "Nome": "817 - Maria Eduarda",
+                    "Turma": "Turma Real",
+                    "Movimentação": "Saída",
+                    "Pacote": "4801",
+                    "Retirado": "true",
+                    "Apagar": "model",
+                },
+            ],
+            "Itens não retirados.csv": [
+                {
+                    "Data": "25/03/2024, 15:26",
+                    "Nome": "- Maria Eduarda",
+                    "Turma": "Turma Real",
+                    "Movimentação": "Entrada",
+                    "Pacote": "4801",
+                    "Entregar": "model",
+                },
+            ],
+        }
+        return dados[path.name]

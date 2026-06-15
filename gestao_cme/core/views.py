@@ -1,17 +1,22 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
-from django.http import HttpResponseForbidden
+from django.db.models import Count, Max, Q
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from .integrations.eduq import EduqAPIError
-from .models import Aluno, Armario, Emprestimo, Material, OrigemDados, Turma
+from .models import Abrigo, Aluno, Armario, Emprestimo, Kit, Material, Movimentacao, OrigemDados, Turma
 from .services.eduq_sync import sincronizar_eduq
 
 
 REGISTROS_POR_PAGINA = 10
+
+STATUS_MOVIMENTACAO_OPCOES = (
+    ("retirado", "Retirado"),
+    ("pendente", "Não retirado"),
+    ("sem_status", "Sem status"),
+)
 
 
 def paginar_queryset(request, queryset):
@@ -37,47 +42,57 @@ def emprestimos_visiveis(request):
 def home(request):
     busca = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
+    movimentacao = request.GET.get("movimentacao", "").strip()
 
-    emprestimos = (
-        emprestimos_visiveis(request)
-        .select_related("aluno", "aluno__turma", "kit")
-        .prefetch_related("itens__material", "itens__armario")
-        .all()
+    movimentacoes = (
+        Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .select_related("aluno", "turma", "material")
+        .order_by("-data_hora", "-id")
     )
 
-    if status in Emprestimo.Status.values:
-        emprestimos = emprestimos.filter(status=status)
+    if status == "retirado":
+        movimentacoes = movimentacoes.filter(retirado=True)
+    elif status == "pendente":
+        movimentacoes = movimentacoes.filter(retirado=False)
+    elif status == "sem_status":
+        movimentacoes = movimentacoes.filter(retirado__isnull=True)
+
+    if movimentacao in Movimentacao.Tipo.values:
+        movimentacoes = movimentacoes.filter(tipo=movimentacao)
 
     if busca:
-        emprestimos = emprestimos.filter(
-            Q(aluno__nome__icontains=busca)
+        movimentacoes = movimentacoes.filter(
+            Q(aluno_nome__icontains=busca)
+            | Q(aluno_codigo_externo__icontains=busca)
+            | Q(turma_nome__icontains=busca)
+            | Q(pacote_codigo__icontains=busca)
+            | Q(arquivo_origem__icontains=busca)
+            | Q(material__nome__icontains=busca)
+            | Q(material__codigo__icontains=busca)
             | Q(aluno__matricula__icontains=busca)
-            | Q(aluno__turma__nome__icontains=busca)
-            | Q(kit__nome__icontains=busca)
-            | Q(kit__codigo__icontains=busca)
-            | Q(coordenador__icontains=busca)
-            | Q(itens__material__nome__icontains=busca)
-            | Q(itens__material__codigo__icontains=busca)
         ).distinct()
 
-    emprestimos = list(emprestimos[:15])
-    status_label = dict(Emprestimo.Status.choices).get(status, "Todos")
+    page_obj, query_string = paginar_queryset(request, movimentacoes)
+    status_label = dict(STATUS_MOVIMENTACAO_OPCOES).get(status, "Todos")
+    movimentacao_label = dict(Movimentacao.Tipo.choices).get(movimentacao, "Todas")
 
-    for emprestimo in emprestimos:
-        itens = list(emprestimo.itens.all())
-        emprestimo.total_itens = sum(item.quantidade for item in itens)
-        emprestimo.materiais_resumo = ", ".join(
-            f"{item.quantidade}x {item.material.nome}" for item in itens[:3]
-        )
-        if len(itens) > 3:
-            emprestimo.materiais_resumo += f" +{len(itens) - 3}"
-        emprestimo.status_classe = emprestimo.status.lower()
+    for registro in page_obj.object_list:
+        if registro.retirado is True:
+            registro.status_label = "Retirado"
+            registro.status_classe = "devolvido"
+        elif registro.retirado is False:
+            registro.status_label = "Não retirado"
+            registro.status_classe = "atrasado"
+        else:
+            registro.status_label = "Sem status"
+            registro.status_classe = "emprestado"
+        registro.material_resumo = registro.material.nome if registro.material else "Pacote"
 
-    metricas = emprestimos_visiveis(request).aggregate(
+    metricas = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO).aggregate(
         total=Count("id"),
-        emprestados=Count("id", filter=Q(status=Emprestimo.Status.EMPRESTADO)),
-        atrasados=Count("id", filter=Q(status=Emprestimo.Status.ATRASADO)),
-        devolvidos=Count("id", filter=Q(status=Emprestimo.Status.DEVOLVIDO)),
+        saidas=Count("id", filter=Q(tipo=Movimentacao.Tipo.SAIDA)),
+        entradas=Count("id", filter=Q(tipo=Movimentacao.Tipo.ENTRADA)),
+        pendentes=Count("id", filter=Q(retirado=False)),
     )
 
     return render(
@@ -88,9 +103,14 @@ def home(request):
             "busca": busca,
             "status_atual": status,
             "status_label": status_label,
-            "status_opcoes": Emprestimo.Status.choices,
-            "emprestimos": emprestimos,
+            "status_opcoes": STATUS_MOVIMENTACAO_OPCOES,
+            "movimentacao_atual": movimentacao,
+            "movimentacao_label": movimentacao_label,
+            "movimentacao_opcoes": Movimentacao.Tipo.choices,
+            "movimentacoes": page_obj.object_list,
             "metricas": metricas,
+            "page_obj": page_obj,
+            "query_string": query_string,
         },
     )
 
@@ -148,6 +168,19 @@ def alunos_por_turma(request):
         alunos_base = alunos_base.filter(emprestimos__coordenador_usuario=request.user).distinct()
         turmas_base = turmas_base.filter(alunos__emprestimos__coordenador_usuario=request.user).distinct()
 
+    ultima_sincronizacao_alunos = alunos_base.aggregate(
+        ultima=Max("ultima_sincronizacao")
+    )["ultima"]
+    ultima_sincronizacao_turmas = turmas_base.aggregate(
+        ultima=Max("ultima_sincronizacao")
+    )["ultima"]
+    datas_sincronizacao = [
+        data
+        for data in (ultima_sincronizacao_alunos, ultima_sincronizacao_turmas)
+        if data
+    ]
+    ultima_sincronizacao = max(datas_sincronizacao) if datas_sincronizacao else None
+
     metricas = [
         {"label": "Alunos", "value": alunos_base.count()},
         {"label": "Turmas", "value": turmas_base.count()},
@@ -172,6 +205,7 @@ def alunos_por_turma(request):
             "query_string": query_string,
             "empty_message": "Nenhum aluno encontrado.",
             "sync_action_url": "sincronizar_turmas_eduq",
+            "ultima_sincronizacao": ultima_sincronizacao,
             "filter_select": {
                 "name": "turma",
                 "label": "Turma",
@@ -188,16 +222,13 @@ def alunos_por_turma(request):
 @login_required
 @require_POST
 def sincronizar_turmas_eduq(request):
-    if not request.user.is_staff:
-        return HttpResponseForbidden("Usuario sem permissao para sincronizar turmas.")
-
     try:
         resultado = sincronizar_eduq(
             sincronizar_turmas=True,
             sincronizar_alunos=False,
         )
     except EduqAPIError as exc:
-        messages.error(request, f"Nao foi possivel sincronizar turmas: {exc}")
+        messages.error(request, f"Não foi possível sincronizar turmas: {exc}")
     else:
         messages.success(
             request,
@@ -213,84 +244,39 @@ def sincronizar_turmas_eduq(request):
 @login_required
 def armarios(request):
     busca = request.GET.get("q", "").strip()
+    ocupacao = request.GET.get("ocupacao", "").strip()
 
-    armarios_queryset = Armario.objects.prefetch_related("estoques__material").order_by(
-        "identificacao"
-    )
-    if not request.user.is_superuser:
-        armarios_queryset = armarios_queryset.filter(
-            itens_emprestados__emprestimo__coordenador_usuario=request.user
-        ).distinct()
+    abrigos = Abrigo.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("identificador")
+    if ocupacao == "ocupado":
+        abrigos = abrigos.filter(ocupado=True)
+    elif ocupacao == "livre":
+        abrigos = abrigos.filter(ocupado=False)
     if busca:
-        armarios_queryset = armarios_queryset.filter(
-            Q(identificacao__icontains=busca)
-            | Q(localizacao__icontains=busca)
-            | Q(descricao__icontains=busca)
-            | Q(estoques__material__nome__icontains=busca)
-            | Q(estoques__material__codigo__icontains=busca)
-        ).distinct()
+        abrigos = abrigos.filter(identificador__icontains=busca)
 
-    armarios_lista = list(armarios_queryset)
-    page_obj, query_string = paginar_queryset(request, armarios_lista)
-    rows = []
-    total_unidades = 0
-    for armario in armarios_lista:
-        estoques = list(armario.estoques.all())
-        total_unidades += sum(estoque.quantidade for estoque in estoques)
-
-    for armario in page_obj.object_list:
-        estoques = list(armario.estoques.all())
-        quantidade_total = sum(estoque.quantidade for estoque in estoques)
-        materiais_resumo = ", ".join(estoque.material.nome for estoque in estoques[:3])
-        if len(estoques) > 3:
-            materiais_resumo += f" +{len(estoques) - 3}"
-
-        rows.append(
-            {
-                "cells": [
-                    {"primary": armario.identificacao, "secondary": armario.localizacao},
-                    {"primary": len(estoques), "secondary": "materiais distintos"},
-                    {"primary": quantidade_total, "secondary": "unidades em estoque"},
-                    {"primary": materiais_resumo or "-", "secondary": armario.descricao},
-                    {
-                        "badge": "Ativo" if armario.ativo else "Inativo",
-                        "badge_class": "badge-devolvido"
-                        if armario.ativo
-                        else "badge-atrasado",
-                    },
-                ]
-            }
-        )
-
-    armarios_base = Armario.objects.all()
-    if not request.user.is_superuser:
-        armarios_base = armarios_base.filter(
-            itens_emprestados__emprestimo__coordenador_usuario=request.user
-        ).distinct()
-
-    metricas = [
-        {"label": "Armários", "value": armarios_base.count()},
-        {"label": "Ativos", "value": armarios_base.filter(ativo=True).count()},
-        {"label": "Unidades", "value": total_unidades},
-        {"label": "Filtrados", "value": page_obj.paginator.count},
-    ]
+    page_obj, query_string = paginar_queryset(request, abrigos)
+    abrigos_base = Abrigo.objects.exclude(origem=OrigemDados.EXEMPLO)
+    metricas = {
+        "total": abrigos_base.count(),
+        "ocupados": abrigos_base.filter(ocupado=True).count(),
+        "livres": abrigos_base.filter(ocupado=False).count(),
+        "filtrados": page_obj.paginator.count,
+    }
 
     return render(
         request,
-        "core/listagem.html",
+        "core/armarios.html",
         {
             "usuario_logado": request.user,
-            "titulo": "Armários",
-            "subtitulo": "Veja os locais de guarda e o resumo de materiais disponíveis.",
-            "section_label": "Estoque físico",
-            "active_page": "armarios",
             "busca": busca,
+            "ocupacao_atual": ocupacao,
+            "ocupacao_label": {"ocupado": "Ocupados", "livre": "Livres"}.get(
+                ocupacao, "Todos"
+            ),
             "metricas": metricas,
-            "table_headers": ["Armário", "Materiais", "Quantidade", "Resumo", "Status"],
-            "rows": rows,
+            "abrigos": page_obj.object_list,
             "page_obj": page_obj,
             "query_string": query_string,
-            "empty_message": "Nenhum armário encontrado.",
         },
     )
 
@@ -298,80 +284,101 @@ def armarios(request):
 @login_required
 def materiais(request):
     busca = request.GET.get("q", "").strip()
+    disponibilidade = request.GET.get("disponibilidade", "").strip()
 
-    materiais_queryset = Material.objects.prefetch_related("kits", "armarios").order_by("nome")
-    if not request.user.is_superuser:
-        materiais_queryset = materiais_queryset.filter(
-            itememprestimo__emprestimo__coordenador_usuario=request.user
-        ).distinct()
+    materiais_queryset = (
+        Material.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .prefetch_related("kits")
+        .order_by("nome", "identificacao")
+    )
+    if disponibilidade == "disponivel":
+        materiais_queryset = materiais_queryset.filter(disponivel=True)
+    elif disponibilidade == "indisponivel":
+        materiais_queryset = materiais_queryset.filter(disponivel=False)
     if busca:
         materiais_queryset = materiais_queryset.filter(
             Q(nome__icontains=busca)
             | Q(codigo__icontains=busca)
             | Q(descricao__icontains=busca)
+            | Q(identificacao__icontains=busca)
+            | Q(rotulo_kit__icontains=busca)
             | Q(kits__nome__icontains=busca)
-            | Q(armarios__identificacao__icontains=busca)
         ).distinct()
 
     page_obj, query_string = paginar_queryset(request, materiais_queryset)
-    rows = []
-    for material in page_obj.object_list:
-        armarios_material = list(material.armarios.all())
-        kits_material = list(material.kits.all())
-        rows.append(
-            {
-                "cells": [
-                    {"primary": material.nome, "secondary": material.codigo},
-                    {
-                        "primary": material.get_unidade_medida_display(),
-                        "secondary": f"mínimo: {material.quantidade_minima}",
-                    },
-                    {
-                        "primary": len(armarios_material),
-                        "secondary": "armários com estoque",
-                    },
-                    {
-                        "primary": len(kits_material),
-                        "secondary": "kits vinculados",
-                    },
-                    {
-                        "badge": "Ativo" if material.ativo else "Inativo",
-                        "badge_class": "badge-devolvido"
-                        if material.ativo
-                        else "badge-atrasado",
-                    },
-                ]
-            }
-        )
-
-    materiais_base = Material.objects.all()
-    if not request.user.is_superuser:
-        materiais_base = materiais_base.filter(
-            itememprestimo__emprestimo__coordenador_usuario=request.user
-        ).distinct()
-
-    metricas = [
-        {"label": "Materiais", "value": materiais_base.count()},
-        {"label": "Ativos", "value": materiais_base.filter(ativo=True).count()},
-        {"label": "Kits", "value": materiais_base.filter(kits__isnull=False).distinct().count()},
-        {"label": "Filtrados", "value": page_obj.paginator.count},
-    ]
+    materiais_base = Material.objects.exclude(origem=OrigemDados.EXEMPLO)
+    metricas = {
+        "total": materiais_base.count(),
+        "ativos": materiais_base.filter(ativo=True).count(),
+        "disponiveis": materiais_base.filter(disponivel=True).count(),
+        "filtrados": page_obj.paginator.count,
+    }
 
     return render(
         request,
-        "core/listagem.html",
+        "core/materiais.html",
         {
             "usuario_logado": request.user,
-            "titulo": "Materiais",
-            "subtitulo": "Consulte todos os materiais cadastrados para uso nas clínicas e laboratórios.",
-            "section_label": "Catálogo da faculdade",
-            "active_page": "materiais",
             "busca": busca,
+            "disponibilidade_atual": disponibilidade,
+            "disponibilidade_label": {
+                "disponivel": "Disponíveis",
+                "indisponivel": "Indisponíveis",
+            }.get(disponibilidade, "Todos"),
             "metricas": metricas,
-            "table_headers": ["Material", "Unidade", "Armários", "Kits", "Status"],
-            "rows": rows,
+            "materiais": page_obj.object_list,
             "page_obj": page_obj,
             "query_string": query_string,
-            "empty_message": "Nenhum material encontrado.",
+        },
+    )
+
+
+@login_required
+def kits(request):
+    busca = request.GET.get("q", "").strip()
+
+    kits_queryset = (
+        Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .prefetch_related("itens__material")
+        .order_by("nome")
+    )
+    if busca:
+        kits_queryset = kits_queryset.filter(
+            Q(nome__icontains=busca)
+            | Q(codigo__icontains=busca)
+            | Q(descricao__icontains=busca)
+            | Q(itens__material__nome__icontains=busca)
+            | Q(itens__material__identificacao__icontains=busca)
+        ).distinct()
+
+    page_obj, query_string = paginar_queryset(request, kits_queryset)
+    for kit in page_obj.object_list:
+        itens = list(kit.itens.all())
+        kit.total_materiais = len(itens)
+        kit.materiais_disponiveis = sum(1 for item in itens if item.material.disponivel)
+        kit.materiais_resumo = ", ".join(
+            item.material.identificacao or item.material.nome for item in itens[:4]
+        )
+        if len(itens) > 4:
+            kit.materiais_resumo += f" +{len(itens) - 4}"
+
+    kits_base = Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
+    metricas = {
+        "total": kits_base.count(),
+        "ativos": kits_base.filter(ativo=True).count(),
+        "quantidade": sum(kit.quantidade for kit in kits_base),
+        "filtrados": page_obj.paginator.count,
+    }
+
+    return render(
+        request,
+        "core/kits.html",
+        {
+            "usuario_logado": request.user,
+            "busca": busca,
+            "metricas": metricas,
+            "kits": page_obj.object_list,
+            "page_obj": page_obj,
+            "query_string": query_string,
         },
     )
