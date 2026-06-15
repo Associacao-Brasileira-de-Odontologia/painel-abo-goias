@@ -139,13 +139,13 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"] if DEBUG else [])
 RAILWAY_PUBLIC_DOMAIN = _env("RAILWAY_PUBLIC_DOMAIN")
 
-# Adicionar sempre healthcheck do Railway
-if "healthcheck.railway.app" not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append("healthcheck.railway.app")
-
 # Adicionar domínio público do Railway se estiver definido
 if RAILWAY_PUBLIC_DOMAIN and RAILWAY_PUBLIC_DOMAIN not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+
+# Adicionar sempre healthcheck do Railway
+if "healthcheck.railway.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 if not DEBUG and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("Defina DJANGO_ALLOWED_HOSTS no ambiente de producao.")
