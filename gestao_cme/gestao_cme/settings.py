@@ -140,6 +140,8 @@ ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"] if 
 RAILWAY_PUBLIC_DOMAIN = _env("RAILWAY_PUBLIC_DOMAIN")
 if RAILWAY_PUBLIC_DOMAIN and RAILWAY_PUBLIC_DOMAIN not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+if RAILWAY_PUBLIC_DOMAIN and "healthcheck.railway.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("healthcheck.railway.app")
 if not DEBUG and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("Defina DJANGO_ALLOWED_HOSTS no ambiente de producao.")
 
