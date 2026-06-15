@@ -1,7 +1,11 @@
 [build]
-buildCommand = "python manage.py collectstatic --noinput"
+builder = "RAILPACK"
+buildCommand = "python gestao_cme/manage.py collectstatic --noinput"
 
 [deploy]
-startCommand = "gunicorn gestao_cme.wsgi:application --bind 0.0.0.0:$PORT"
+preDeployCommand = "python gestao_cme/manage.py migrate --noinput"
+startCommand = "gunicorn gestao_cme.wsgi:application --chdir gestao_cme --bind 0.0.0.0:$PORT --workers 4 --threads 2 --worker-class gthread --timeout 120 --access-logfile - --error-logfile -"
 healthcheckPath = "/healthz/"
-preDeployCommand = "python manage.py migrate --noinput"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
