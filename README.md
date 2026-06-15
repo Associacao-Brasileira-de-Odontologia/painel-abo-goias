@@ -128,3 +128,41 @@ Antes de publicar, execute:
 python gestao_cme\manage.py check --deploy
 python gestao_cme\manage.py collectstatic
 ```
+
+## Deploy no Railway
+
+O repositorio inclui `railway.toml`, `requirements.txt` e uma rota publica de saude em `/healthz/`.
+
+O Railway usa o `railway.toml` para:
+
+- instalar dependencias Python a partir do `requirements.txt`;
+- executar `python gestao_cme/manage.py collectstatic --noinput` no build;
+- executar `python gestao_cme/manage.py migrate --noinput` antes de iniciar uma nova versao;
+- iniciar a aplicacao com Gunicorn usando a porta definida por `$PORT`;
+- verificar saude da aplicacao em `/healthz/`.
+
+Passos recomendados no Railway:
+
+1. Criar um novo projeto a partir do repositorio GitHub.
+2. Adicionar um servico PostgreSQL ao projeto.
+3. No servico da aplicacao Django, configurar as variaveis:
+
+```text
+DJANGO_DEBUG=false
+DJANGO_SECRET_KEY=<gere-uma-chave-longa-e-segura>
+DJANGO_SECURE_PROXY_SSL_HEADER=true
+DJANGO_SECURE_HSTS_PRELOAD=true
+EDUQ_DOMINIO=<dominio-da-instituicao>
+EDUQ_USUARIO=<usuario-da-api>
+EDUQ_SENHA=<senha-da-api>
+EDUQ_VERIFY_TLS=true
+```
+
+O Railway fornece `RAILWAY_PUBLIC_DOMAIN` automaticamente quando um dominio publico e gerado. O sistema adiciona esse dominio em `ALLOWED_HOSTS` e em `CSRF_TRUSTED_ORIGINS`. Se usar dominio proprio, configure tambem:
+
+```text
+DJANGO_ALLOWED_HOSTS=cme.seudominio.com.br
+DJANGO_CSRF_TRUSTED_ORIGINS=https://cme.seudominio.com.br
+```
+
+Para PostgreSQL, o sistema usa `DATABASE_URL` quando ela existir. O Railway tambem disponibiliza `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST` e `PGPORT`, que sao aceitos como alternativa.

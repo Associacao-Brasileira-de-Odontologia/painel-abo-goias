@@ -25,3 +25,5 @@ TestResults.xml
 __pycache__/
 #credentials
 *.env
+staticfiles/
+gestao_cme/staticfiles/

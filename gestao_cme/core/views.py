@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Q
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -17,6 +18,10 @@ STATUS_MOVIMENTACAO_OPCOES = (
     ("pendente", "Não retirado"),
     ("sem_status", "Sem status"),
 )
+
+
+def healthcheck(request):
+    return HttpResponse("ok", content_type="text/plain")
 
 
 def paginar_queryset(request, queryset):

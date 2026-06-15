@@ -1,4 +1,5 @@
 import os
+import importlib.util
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
@@ -99,6 +100,19 @@ def _database_config() -> dict[str, dict]:
             }
         }
 
+    pg_database = _env("PGDATABASE")
+    if pg_database:
+        return {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": pg_database,
+                "USER": _env("PGUSER"),
+                "PASSWORD": _env("PGPASSWORD"),
+                "HOST": _env("PGHOST"),
+                "PORT": _env("PGPORT", "5432"),
+            }
+        }
+
     return {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -123,6 +137,9 @@ if not SECRET_KEY:
     raise ImproperlyConfigured("Defina DJANGO_SECRET_KEY no ambiente de producao.")
 
 ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"] if DEBUG else [])
+RAILWAY_PUBLIC_DOMAIN = _env("RAILWAY_PUBLIC_DOMAIN")
+if RAILWAY_PUBLIC_DOMAIN and RAILWAY_PUBLIC_DOMAIN not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
 if not DEBUG and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("Defina DJANGO_ALLOWED_HOSTS no ambiente de producao.")
 
@@ -148,6 +165,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if importlib.util.find_spec("whitenoise"):
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 
 ROOT_URLCONF = 'gestao_cme.urls'
 
@@ -208,6 +228,17 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = _env("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles"))
+STATICFILES_DIRS = []
+
+if importlib.util.find_spec("whitenoise"):
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
@@ -223,6 +254,10 @@ EMAIL_USE_TLS = _env_bool("DJANGO_EMAIL_USE_TLS", True)
 EMAIL_USE_SSL = _env_bool("DJANGO_EMAIL_USE_SSL", False)
 
 CSRF_TRUSTED_ORIGINS = _env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+if RAILWAY_PUBLIC_DOMAIN:
+    railway_origin = f"https://{RAILWAY_PUBLIC_DOMAIN}"
+    if railway_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(railway_origin)
 SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
 SESSION_COOKIE_SECURE = _env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = _env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)

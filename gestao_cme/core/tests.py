@@ -28,6 +28,12 @@ from core.services.eduq_sync import sincronizar_alunos_eduq, sincronizar_eduq, s
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
 class RotasIniciaisTests(TestCase):
+    def test_healthcheck_responde_sem_login(self):
+        response = self.client.get(reverse("healthcheck"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"ok")
+
     def test_home_sem_login_redireciona_para_login(self):
         response = self.client.get(reverse("home"))
 

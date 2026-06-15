@@ -55,6 +55,7 @@ urlpatterns = [
         RedirectView.as_view(pattern_name='home', permanent=False),
         name='catalog_redirect',
     ),
+    path('healthz/', views.healthcheck, name='healthcheck'),
     path('', views.home, name='home'),
     path('alunos-por-turma/', views.alunos_por_turma, name='alunos_por_turma'),
     path(
