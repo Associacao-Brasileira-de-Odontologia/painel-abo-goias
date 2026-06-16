@@ -1,4 +1,9 @@
-Repositório para desenvolvimento do painel gestão do cme por coordenadores
+Repositório para desenvolvimento dos sistemas internos da ABO Goiás.
+
+O projeto Django principal usa o pacote `abo_goias` e funciona como portal para múltiplas aplicações internas. Atualmente ele reúne:
+
+- Gestão de CME: controle de movimentações, materiais, kits e abrigos.
+- Identificador de Bancadas: geração de arquivos PPTX com identificadores por turma.
 
 ## Sincronizacao Eduq
 
@@ -95,7 +100,7 @@ python gestao_cme\manage.py loaddata dados_exemplo
 ```
 ## Configuracao por ambiente
 
-O projeto carrega variaveis de ambiente a partir do sistema operacional e, quando existir, dos arquivos `.env` na raiz do repositorio ou dentro da pasta `gestao_cme/`. Use `.env.example` como referencia e nunca versionar segredos reais.
+O projeto carrega variaveis de ambiente a partir do sistema operacional e, quando existir, dos arquivos `.env` na raiz do repositorio ou dentro da pasta Django `gestao_cme/`. Use `.env.example` como referencia e nunca versionar segredos reais.
 
 Variaveis principais:
 
@@ -103,7 +108,7 @@ Variaveis principais:
 - `DJANGO_SECRET_KEY`: chave secreta do Django. Obrigatoria em producao.
 - `DJANGO_ALLOWED_HOSTS`: dominios/IPs permitidos, separados por virgula. Obrigatorio em producao.
 - `DJANGO_CSRF_TRUSTED_ORIGINS`: origens confiaveis para CSRF, separadas por virgula, incluindo protocolo. Exemplo: `https://cme.exemplo.com`.
-- `DATABASE_URL`: conexao do banco. Exemplo PostgreSQL: `postgresql://usuario:senha@localhost:5432/gestao_cme`.
+- `DATABASE_URL`: conexao do banco. Exemplo PostgreSQL: `postgresql://usuario:senha@localhost:5432/abo_goias`.
 - `DJANGO_STATIC_ROOT`: pasta onde `collectstatic` grava os arquivos estaticos.
 - `DJANGO_SECURE_SSL_REDIRECT`: redireciona HTTP para HTTPS. Recomendado `true` em producao.
 - `DJANGO_SESSION_COOKIE_SECURE`: restringe cookie de sessao a HTTPS. Recomendado `true` em producao.
@@ -117,9 +122,9 @@ Exemplo minimo para producao:
 ```powershell
 $env:DJANGO_DEBUG="false"
 $env:DJANGO_SECRET_KEY="uma-chave-longa-e-aleatoria"
-$env:DJANGO_ALLOWED_HOSTS="cme.seudominio.com.br"
-$env:DJANGO_CSRF_TRUSTED_ORIGINS="https://cme.seudominio.com.br"
-$env:DATABASE_URL="postgresql://usuario:senha@localhost:5432/gestao_cme"
+$env:DJANGO_ALLOWED_HOSTS="sistemas.seudominio.com.br"
+$env:DJANGO_CSRF_TRUSTED_ORIGINS="https://sistemas.seudominio.com.br"
+$env:DATABASE_URL="postgresql://usuario:senha@localhost:5432/abo_goias"
 ```
 
 Antes de publicar, execute:
@@ -161,8 +166,8 @@ EDUQ_VERIFY_TLS=true
 O Railway fornece `RAILWAY_PUBLIC_DOMAIN` automaticamente quando um dominio publico e gerado. O sistema adiciona esse dominio em `ALLOWED_HOSTS` e em `CSRF_TRUSTED_ORIGINS`. Se usar dominio proprio, configure tambem:
 
 ```text
-DJANGO_ALLOWED_HOSTS=cme.seudominio.com.br
-DJANGO_CSRF_TRUSTED_ORIGINS=https://cme.seudominio.com.br
+DJANGO_ALLOWED_HOSTS=sistemas.seudominio.com.br
+DJANGO_CSRF_TRUSTED_ORIGINS=https://sistemas.seudominio.com.br
 ```
 
 Para PostgreSQL, o sistema usa `DATABASE_URL` quando ela existir. O Railway tambem disponibiliza `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST` e `PGPORT`, que sao aceitos como alternativa.

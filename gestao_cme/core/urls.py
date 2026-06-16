@@ -57,7 +57,7 @@ urlpatterns = [
     ),
     path('healthz/', views.healthcheck, name='healthcheck'),
     path('', views.portal, name='home'),
-    path('gestao-cme/', views.home, name='gestao_cme_home'),
+    path('gestao-cme/', views.home, name='cme_home'),
     path('alunos-por-turma/', views.alunos_por_turma, name='alunos_por_turma'),
     path(
         'alunos-por-turma/sincronizar-turmas/',

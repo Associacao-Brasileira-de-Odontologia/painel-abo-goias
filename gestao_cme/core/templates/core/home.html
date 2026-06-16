@@ -39,7 +39,7 @@
                     </div>
 
                     <button class="button primary update-first" type="submit">Aplicar filtros</button>
-                    <a class="button secondary" href="{% url 'gestao_cme_home' %}">Limpar filtros</a>
+                    <a class="button secondary" href="{% url 'cme_home' %}">Limpar filtros</a>
                 </form>
 
                 <div class="metric-grid">
@@ -84,7 +84,7 @@
                             <input id="results-q-movimentacoes" type="search" name="q" value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem...">
                         </div>
                         <button class="button primary" type="submit">Buscar</button>
-                        <a class="button secondary" href="{% url 'gestao_cme_home' %}">Limpar</a>
+                        <a class="button secondary" href="{% url 'cme_home' %}">Limpar</a>
                     </div>
                 </form>
 
@@ -149,7 +149,7 @@
                                         <div class="empty-state">
                                             <strong>Nenhuma movimentação encontrada.</strong>
                                             <p>Revise a busca ou limpe os filtros para consultar todas as movimentações registradas.</p>
-                                            <a class="button secondary compact-button" href="{% url 'gestao_cme_home' %}">Limpar filtros</a>
+                                            <a class="button secondary compact-button" href="{% url 'cme_home' %}">Limpar filtros</a>
                                         </div>
                                     </td>
                                 </tr>
