@@ -1,0 +1,143 @@
+﻿{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de CME | Materiais{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}Materiais{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Catálogo</p>
+                <h2>Materiais</h2>
+                <p class="panel-copy">Consulte os materiais cadastrados, com identificação, kit relacionado e disponibilidade.</p>
+
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="materiais" %}
+
+                <form class="form-stack" method="get">
+                    {% if busca %}
+                        <input type="hidden" name="q" value="{{ busca }}">
+                    {% endif %}
+                    <div class="field">
+                        <label for="disponibilidade">Disponibilidade</label>
+                        <select id="disponibilidade" name="disponibilidade">
+                            <option value="">Todos</option>
+                            <option value="disponivel" {% if disponibilidade_atual == "disponivel" %}selected{% endif %}>Disponíveis</option>
+                            <option value="indisponivel" {% if disponibilidade_atual == "indisponivel" %}selected{% endif %}>Indisponíveis</option>
+                        </select>
+                    </div>
+
+                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
+                    <a class="button secondary" href="{% url 'materiais' %}">Limpar filtros</a>
+                </form>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Materiais</span>
+                        <strong>{{ metricas.total }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Disponíveis</span>
+                        <strong>{{ metricas.disponiveis }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Ativos</span>
+                        <strong>{{ metricas.ativos }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Filtrados</span>
+                        <strong>{{ metricas.filtrados }}</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Catálogo</p>
+                        <h2>Materiais cadastrados</h2>
+                    </div>
+                    <a class="button secondary admin-link" href="/admin/core/material/">Abrir materiais</a>
+                </div>
+
+                <form class="results-search" method="get">
+                    {% if disponibilidade_atual %}
+                        <input type="hidden" name="disponibilidade" value="{{ disponibilidade_atual }}">
+                    {% endif %}
+                    <label class="search-label" for="results-q-materiais">Buscar na listagem</label>
+                    <div class="results-search-row">
+                        <div class="search-control">
+                            <input id="results-q-materiais" type="search" name="q" value="{{ busca }}" placeholder="Buscar por material, identificação, código ou kit...">
+                        </div>
+                        <button class="button primary" type="submit">Buscar</button>
+                        <a class="button secondary" href="{% url 'materiais' %}">Limpar</a>
+                    </div>
+                </form>
+
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Disponibilidade</span>
+                        <strong>{{ disponibilidade_label }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Resultado</span>
+                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                    </div>
+                </div>
+
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Material</th>
+                                <th>Identificação</th>
+                                <th>Kit relacionado</th>
+                                <th>Kits vinculados</th>
+                                <th>Origem</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for material in materiais %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ material.nome }}</strong>
+                                        <span class="cell-muted">{{ material.codigo }}</span>
+                                    </td>
+                                    <td>{{ material.identificacao|default:"-" }}</td>
+                                    <td>{{ material.rotulo_kit|default:material.descricao|default:"-" }}</td>
+                                    <td>{{ material.kits.count }}</td>
+                                    <td>{{ material.get_origem_display }}</td>
+                                    <td>
+                                        {% if material.disponivel %}
+                                            <span class="badge badge-devolvido">Disponível</span>
+                                        {% else %}
+                                            <span class="badge badge-atrasado">Indisponível</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr class="empty-row">
+                                    <td colspan="6">
+                                        <div class="empty-state">
+                                            <strong>Nenhum material encontrado.</strong>
+                                            <p>Tente buscar por nome, código, identificação ou kit. Você também pode limpar os filtros para ver todos os materiais.</p>
+                                            <a class="button secondary compact-button" href="{% url 'materiais' %}">Limpar filtros</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% include "gestao_cme/partials/paginacao.html" %}
+            </section>
+        </div>
+    </main>
+
+{% endblock %}

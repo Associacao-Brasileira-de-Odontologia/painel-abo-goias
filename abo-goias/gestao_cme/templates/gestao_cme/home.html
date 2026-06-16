@@ -1,0 +1,195 @@
+﻿{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de CME | Movimentações{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}Movimentações{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Painel do coordenador</p>
+                <h2>Histórico de movimentações</h2>
+                <p class="panel-copy">Acompanhe as saídas, entradas e pendências registradas no sistema.</p>
+
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="emprestimos" %}
+
+                <form class="form-stack" method="get">
+                    {% if busca %}
+                        <input type="hidden" name="q" value="{{ busca }}">
+                    {% endif %}
+                    <div class="field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option value="">Todos</option>
+                            {% for valor, rotulo in status_opcoes %}
+                                <option value="{{ valor }}" {% if status_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="movimentacao">Movimentação</label>
+                        <select id="movimentacao" name="movimentacao">
+                            <option value="">Todas</option>
+                            {% for valor, rotulo in movimentacao_opcoes %}
+                                <option value="{{ valor }}" {% if movimentacao_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
+                    <a class="button secondary" href="{% url 'cme_home' %}">Limpar filtros</a>
+                </form>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Saídas</span>
+                        <strong>{{ metricas.saidas|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card danger-metric">
+                        <span class="metric-label">Pendentes</span>
+                        <strong>{{ metricas.pendentes|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Entradas</span>
+                        <strong>{{ metricas.entradas|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Total</span>
+                        <strong>{{ metricas.total|default:0 }}</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Movimentações realizadas</p>
+                        <h2>Histórico de movimentações</h2>
+                    </div>
+                    <a class="button secondary admin-link" href="/admin/core/movimentacao/">Abrir movimentações</a>
+                </div>
+
+                <form class="results-search" method="get">
+                    {% if status_atual %}
+                        <input type="hidden" name="status" value="{{ status_atual }}">
+                    {% endif %}
+                    {% if movimentacao_atual %}
+                        <input type="hidden" name="movimentacao" value="{{ movimentacao_atual }}">
+                    {% endif %}
+                    <label class="search-label" for="results-q-movimentacoes">Buscar na listagem</label>
+                    <div class="results-search-row">
+                        <div class="search-control">
+                            <input id="results-q-movimentacoes" type="search" name="q" value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem...">
+                        </div>
+                        <button class="button primary" type="submit">Buscar</button>
+                        <a class="button secondary" href="{% url 'cme_home' %}">Limpar</a>
+                    </div>
+                </form>
+
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Status</span>
+                        <strong>{{ status_label }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Movimentação</span>
+                        <strong>{{ movimentacao_label }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Resultado</span>
+                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                    </div>
+                </div>
+
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Aluno</th>
+                                <th>Turma</th>
+                                <th>Movimentação</th>
+                                <th>Pacote</th>
+                                <th>Origem</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for registro in movimentacoes %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ registro.data_hora|date:"d/m/Y" }}</strong>
+                                        <span class="cell-muted">{{ registro.data_hora|date:"H:i" }}</span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ registro.aluno_nome }}</strong>
+                                        <span class="cell-muted">{{ registro.aluno_codigo_externo|default:"Sem código" }}</span>
+                                    </td>
+                                    <td>{{ registro.turma_nome|default:"-" }}</td>
+                                    <td>
+                                        <strong>{{ registro.get_tipo_display }}</strong>
+                                    </td>
+                                    <td>{{ registro.pacote_codigo }}</td>
+                                    <td>{{ registro.get_origem_display }}</td>
+                                    <td>
+                                        <span class="badge badge-{{ registro.status_classe }}">
+                                            {{ registro.status_label }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr class="empty-row">
+                                    <td colspan="7">
+                                        <div class="empty-state">
+                                            <strong>Nenhuma movimentação encontrada.</strong>
+                                            <p>Revise a busca ou limpe os filtros para consultar todas as movimentações registradas.</p>
+                                            <a class="button secondary compact-button" href="{% url 'cme_home' %}">Limpar filtros</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.paginator.count %}
+                    <div class="pagination-summary">
+                        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                        <span>Exibindo {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }}</span>
+                    </div>
+                {% endif %}
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                    <nav class="pagination" aria-label="Paginação">
+                        {% if page_obj.has_previous %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+                        {% else %}
+                            <span class="page-link disabled">Anterior</span>
+                        {% endif %}
+
+                        {% for numero in page_obj.paginator.page_range %}
+                            {% if numero == page_obj.number %}
+                                <span class="page-link active">{{ numero }}</span>
+                            {% elif numero >= page_obj.number|add:"-2" and numero <= page_obj.number|add:"2" %}
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ numero }}">{{ numero }}</a>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
+                        {% else %}
+                            <span class="page-link disabled">Próxima</span>
+                        {% endif %}
+                    </nav>
+                {% endif %}
+            </section>
+        </div>
+    </main>
+
+{% endblock %}
