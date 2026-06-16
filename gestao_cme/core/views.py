@@ -45,11 +45,75 @@ def emprestimos_visiveis(request):
 
 @login_required
 def portal(request):
+    movimentacoes_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
+    emprestimos_base = emprestimos_visiveis(request)
+
+    resumo = {
+        "movimentacoes": movimentacoes_base.count(),
+        "emprestimos_abertos": emprestimos_base.filter(status=Emprestimo.Status.EMPRESTADO).count(),
+        "alunos": Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
+        "materiais": Material.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
+        "turmas": Turma.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
+        "kits": Kit.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
+    }
+
+    atividade_recente = []
+    for movimentacao in (
+        movimentacoes_base.select_related("material")
+        .order_by("-data_hora", "-id")[:8]
+    ):
+        material = movimentacao.material.nome if movimentacao.material else f"pacote {movimentacao.pacote_codigo}"
+        aluno = movimentacao.aluno_nome or "Aluno não informado"
+
+        if movimentacao.tipo == Movimentacao.Tipo.ENTRADA:
+            categoria = "devolucao"
+            titulo = "Devolução registrada"
+            descricao = f"{aluno} devolveu {material}."
+        elif movimentacao.retirado is False:
+            categoria = "alerta"
+            titulo = "Retirada pendente"
+            descricao = f"{aluno} ainda não retirou {material}."
+        else:
+            categoria = "alerta"
+            titulo = "Saída de material"
+            descricao = f"{material} foi separado para {aluno}."
+
+        atividade_recente.append(
+            {
+                "categoria": categoria,
+                "titulo": titulo,
+                "descricao": descricao,
+                "data": movimentacao.data_hora,
+            }
+        )
+
+    for turma in (
+        Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .exclude(ultima_sincronizacao__isnull=True)
+        .order_by("-ultima_sincronizacao")[:4]
+    ):
+        atividade_recente.append(
+            {
+                "categoria": "exportacao",
+                "titulo": "Turma pronta para exportação",
+                "descricao": f"{turma.nome} foi atualizada para geração de identificadores.",
+                "data": turma.ultima_sincronizacao,
+            }
+        )
+
+    atividade_recente = sorted(
+        atividade_recente,
+        key=lambda atividade: atividade["data"],
+        reverse=True,
+    )[:6]
+
     return render(
         request,
         "core/portal.html",
         {
             "usuario_logado": request.user,
+            "resumo": resumo,
+            "atividade_recente": atividade_recente,
         },
     )
 

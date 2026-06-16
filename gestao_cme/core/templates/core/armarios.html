@@ -1,20 +1,23 @@
 {% extends "core/base.html" %}
 
-{% block title %}Gestão CME | Armários{% endblock %}
+{% block title %}Gestão de CME | Abrigos{% endblock %}
 {% block header_eyebrow %}Controle físico{% endblock %}
-{% block header_title %}Armários{% endblock %}
+{% block header_title %}Abrigos{% endblock %}
 
 {% block content %}
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
                 <p class="section-label">Controle físico</p>
-                <h2>Armários</h2>
-                <p class="panel-copy">Visualize os identificadores dos armários e sua ocupação atual.</p>
+                <h2>Abrigos</h2>
+                <p class="panel-copy">Visualize os identificadores dos abrigos e sua ocupação atual.</p>
 
-                {% include "core/partials/menu_sistemas.html" with active_page="armarios" %}
+                {% include "core/partials/menu_sistemas.html" with menu_app="cme" active_page="armarios" %}
 
                 <form class="form-stack" method="get">
+                    {% if busca %}
+                        <input type="hidden" name="q" value="{{ busca }}">
+                    {% endif %}
                     <div class="field">
                         <label for="ocupacao">Ocupação</label>
                         <select id="ocupacao" name="ocupacao">
@@ -24,20 +27,13 @@
                         </select>
                     </div>
 
-                    <div class="field">
-                        <label for="q">Buscar</label>
-                        <div class="search-control">
-                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Identificador do armário...">
-                        </div>
-                    </div>
-
-                    <button class="button primary update-first" type="submit">Filtrar armários</button>
-                    <a class="button secondary" href="{% url 'armarios' %}">Limpar filtros</a>
+                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
+                    <a class="button secondary" href="{% url 'abrigos' %}">Limpar filtros</a>
                 </form>
 
                 <div class="metric-grid">
                     <div class="metric-card">
-                        <span class="metric-label">Armários</span>
+                        <span class="metric-label">Abrigos</span>
                         <strong>{{ metricas.total }}</strong>
                     </div>
                     <div class="metric-card danger-metric">
@@ -59,10 +55,24 @@
                 <div class="results-topbar">
                     <div>
                         <p class="section-label">Estoque físico</p>
-                        <h2>Mapa dos armários</h2>
+                        <h2>Mapa dos abrigos</h2>
                     </div>
                     <a class="button secondary admin-link" href="/admin/core/abrigo/">Abrir abrigos</a>
                 </div>
+
+                <form class="results-search" method="get">
+                    {% if ocupacao_atual %}
+                        <input type="hidden" name="ocupacao" value="{{ ocupacao_atual }}">
+                    {% endif %}
+                    <label class="search-label" for="results-q-armarios">Buscar na listagem</label>
+                    <div class="results-search-row">
+                        <div class="search-control">
+                            <input id="results-q-armarios" type="search" name="q" value="{{ busca }}" placeholder="Buscar por identificador do abrigo...">
+                        </div>
+                        <button class="button primary" type="submit">Buscar</button>
+                        <a class="button secondary" href="{% url 'abrigos' %}">Limpar</a>
+                    </div>
+                </form>
 
                 <div class="selection-summary">
                     <div class="info-chip">
@@ -79,8 +89,8 @@
                     </div>
                 </div>
 
-                <div class="table-wrap">
-                    <table>
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Identificador</th>
@@ -113,7 +123,13 @@
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="5">Nenhum armário encontrado.</td>
+                                    <td colspan="5">
+                                        <div class="empty-state">
+                                            <strong>Nenhum abrigo encontrado.</strong>
+                                            <p>Revise o identificador buscado ou limpe os filtros de ocupação para visualizar todos os abrigos.</p>
+                                            <a class="button secondary compact-button" href="{% url 'abrigos' %}">Limpar filtros</a>
+                                        </div>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         </tbody>

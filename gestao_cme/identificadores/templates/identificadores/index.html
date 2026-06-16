@@ -1,7 +1,7 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Gestão CME | Identificadores de Bancada{% endblock %}
+{% block title %}Gestão de CME | Identificadores de Bancada{% endblock %}
 {% block header_eyebrow %}Identificadores{% endblock %}
 {% block header_title %}Bancadas{% endblock %}
 {% block extra_css %}
@@ -14,36 +14,9 @@
             <aside class="panel config-panel">
                 <p class="section-label">Geração de arquivos</p>
                 <h2>Identificadores</h2>
-                <p class="panel-copy">Selecione uma turma e um modelo visual para preparar a geração dos identificadores de bancada.</p>
+                <p class="panel-copy">Siga os passos para gerar os identificadores de bancada da turma selecionada.</p>
 
-                {% include "core/partials/menu_sistemas.html" with active_page="identificadores" %}
-
-                <form class="form-stack" method="post">
-                    {% csrf_token %}
-                    <div class="field">
-                        <label for="turma">Turma</label>
-                        <select id="turma" name="turma" required>
-                            <option value="">Selecione uma turma</option>
-                            {% for turma in turmas %}
-                                <option value="{{ turma.pk }}">{{ turma.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="field">
-                        <label for="modelo">Modelo</label>
-                        <select id="modelo" name="modelo" required>
-                            <option value="">Selecione um modelo</option>
-                            {% for modelo in modelos %}
-                                <option value="{{ modelo.id }}" {% if not modelo.disponivel %}disabled{% endif %}>
-                                    {{ modelo.nome }}{% if not modelo.disponivel %} - indisponível{% endif %}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <button class="button primary update-first disabled" type="button" disabled>Gerar identificadores</button>
-                </form>
+                {% include "core/partials/menu_sistemas.html" with menu_app="identificadores" active_page="identificadores" %}
 
                 <div class="metric-grid">
                     <div class="metric-card">
@@ -60,17 +33,159 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Migração Flask para Django</p>
-                        <h2>App criado e integrado</h2>
+                        <p class="section-label">Fluxo de geração</p>
+                        <h2>Identificadores de bancada</h2>
                     </div>
                 </div>
 
-                <div class="identifier-empty-state">
-                    <p class="section-label">Próxima etapa</p>
-                    <h2>Conectar geração de PPTX</h2>
-                    <p>Este app já está separado no Django, autenticado e usando as turmas do banco atual. O próximo passo é migrar o serviço que manipula os templates PowerPoint e habilitar o botão de geração.</p>
-                </div>
+                {% if messages %}
+                    <div class="messages">
+                        {% for message in messages %}
+                            <div class="message {{ message.tags }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <form class="identifier-flow" method="post" data-identifier-form>
+                    {% csrf_token %}
+
+                    <section class="identifier-step">
+                        <div class="step-content">
+                            <div class="step-heading">
+                                <div>
+                                    <h3>Selecionar turma</h3>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label for="turma">Turma</label>
+                                <select id="turma" name="turma" required data-turma-select>
+                                    <option value="">Selecione uma turma</option>
+                                    {% for turma in turmas %}
+                                        <option value="{{ turma.pk }}" {% if turma_selecionada_id == turma.pk|stringformat:"s" %}selected{% endif %}>
+                                            {{ turma.nome }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="identifier-step">
+                        <div class="step-content">
+                            <div class="step-heading">
+                                <div>
+                                    <h3>Escolher modelo</h3>
+                                </div>
+                            </div>
+
+                            <div class="model-list" role="radiogroup" aria-label="Modelos de identificador">
+                                {% for modelo in modelos %}
+                                    <label class="model-option {% if not modelo.disponivel %}unavailable{% endif %} {% if modelo_selecionado_id == modelo.id %}selected{% endif %}">
+                                        <input
+                                            type="radio"
+                                            name="modelo"
+                                            value="{{ modelo.id }}"
+                                            {% if modelo_selecionado_id == modelo.id %}checked{% endif %}
+                                            {% if not modelo.disponivel %}disabled{% endif %}
+                                            data-modelo-input
+                                        >
+                                        <span class="model-option-check" aria-hidden="true"></span>
+                                        <span class="model-preview">
+                                            <span class="model-preview-logo">{{ modelo.iniciais }}</span>
+                                            <span class="model-preview-line"></span>
+                                            <span class="model-preview-line short"></span>
+                                        </span>
+                                        <span class="model-info">
+                                            <strong>{{ modelo.nome }}</strong>
+                                            {% if modelo.disponivel %}
+                                                <em class="model-status available">Disponível</em>
+                                            {% else %}
+                                                <em class="model-status unavailable">Indisponível</em>
+                                            {% endif %}
+                                        </span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="identifier-step generate-step">
+                        <div class="step-content">
+                            <div class="step-heading">
+                                <div>
+                                    <h3>Gerar identificadores</h3>
+                                </div>
+                            </div>
+
+                            <button class="button primary generate-button" type="submit" disabled data-generate-button>
+                                Gerar identificadores
+                            </button>
+                            <p class="generate-hint" data-generate-hint>Selecione uma turma e um modelo disponível para gerar o arquivo.</p>
+                        </div>
+                    </section>
+                </form>
+
+                {% if resultado %}
+                    <section class="generation-result" aria-label="Arquivo gerado">
+                        <div>
+                            <p class="section-label">Arquivo pronto</p>
+                            <h3>Resumo da geração</h3>
+                        </div>
+
+                        <div class="result-metrics">
+                            <div class="result-metric">
+                                <span>Total de alunos</span>
+                                <strong>{{ resultado.total_alunos }}</strong>
+                            </div>
+                            <div class="result-metric">
+                                <span>Total de páginas</span>
+                                <strong>{{ resultado.total_paginas }}</strong>
+                            </div>
+                            <div class="result-metric wide">
+                                <span>Modelo</span>
+                                <strong>{{ resultado.modelo.nome }}</strong>
+                            </div>
+                        </div>
+
+                        <a class="button download result-download" href="{% url 'identificadores:baixar' resultado.nome_arquivo %}">
+                            Baixar PPTX
+                        </a>
+                    </section>
+                {% endif %}
             </section>
         </div>
     </main>
+
+    <script>
+        (function () {
+            const form = document.querySelector("[data-identifier-form]");
+            if (!form) return;
+
+            const turmaSelect = form.querySelector("[data-turma-select]");
+            const modeloInputs = Array.from(form.querySelectorAll("[data-modelo-input]"));
+            const generateButton = form.querySelector("[data-generate-button]");
+            const generateHint = form.querySelector("[data-generate-hint]");
+
+            function updateState() {
+                const turmaSelecionada = Boolean(turmaSelect.value);
+                const modeloSelecionado = modeloInputs.some((input) => input.checked && !input.disabled);
+                const canGenerate = turmaSelecionada && modeloSelecionado;
+
+                generateButton.disabled = !canGenerate;
+                generateButton.classList.toggle("disabled", !canGenerate);
+                generateHint.textContent = canGenerate
+                    ? "Tudo pronto para gerar o arquivo da turma selecionada."
+                    : "Selecione uma turma e um modelo disponível para gerar o arquivo.";
+
+                modeloInputs.forEach((input) => {
+                    input.closest(".model-option").classList.toggle("selected", input.checked);
+                });
+            }
+
+            turmaSelect.addEventListener("change", updateState);
+            modeloInputs.forEach((input) => input.addEventListener("change", updateState));
+            updateState();
+        })();
+    </script>
 {% endblock %}

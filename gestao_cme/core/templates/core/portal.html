@@ -1,30 +1,99 @@
 {% extends "core/base.html" %}
+{% load static %}
 
 {% block title %}ABO Goiás | Sistemas{% endblock %}
 {% block body_class %}portal-body{% endblock %}
 {% block header_class %}portal-header{% endblock %}
-{% block header_eyebrow %}ABO Goiás{% endblock %}
-{% block header_title %}Sistemas internos{% endblock %}
+{% block header_brand_text %}{% endblock %}
 {% block footer %}{% endblock %}
 
 {% block content %}
     <main class="portal-shell">
-        <section class="portal-panel panel">
-            <div class="portal-copy">
-                <p class="section-label">Selecione um sistema</p>
-                <h2>Escolha a área que deseja acessar</h2>
-                <p>Use a Gestão CME para acompanhar materiais, movimentações e cadastros. Use Identificadores para preparar arquivos de bancada a partir das turmas.</p>
+        <section class="portal-hero">
+            <div class="portal-hero-copy">
+                <p class="section-label">Portal ABO Goiás</p>
+                <h2>Olá, {{ usuario_logado.first_name|default:usuario_logado.username }}</h2>
+                <p class="portal-intro">Acesse os sistemas internos e acompanhe os dados principais da operação acadêmica.</p>
+
+                <div class="portal-stats" aria-label="Resumo dos sistemas">
+                    <div class="portal-stat">
+                        <span>Movimentações</span>
+                        <strong>{{ resumo.movimentacoes }}</strong>
+                    </div>
+                    <div class="portal-stat">
+                        <span>Movimentações abertas</span>
+                        <strong>{{ resumo.emprestimos_abertos }}</strong>
+                    </div>
+                    <div class="portal-stat">
+                        <span>Alunos</span>
+                        <strong>{{ resumo.alunos }}</strong>
+                    </div>
+                </div>
             </div>
 
-            <div class="system-grid">
-                <a class="system-card" href="{% url 'gestao_cme_home' %}">
-                    <span>Gestão CME</span>
-                    <strong>Materiais, kits, armários e movimentações</strong>
-                </a>
-                <a class="system-card" href="{% url 'identificadores:index' %}">
-                    <span>Identificador de Bancadas</span>
-                    <strong>Geração de arquivos PPTX por turma</strong>
-                </a>
+            <div class="portal-brand-card" aria-label="Associação Brasileira de Odontologia de Goiás">
+                <img src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
+                <div>
+                    <span>Ambiente integrado</span>
+                    <strong>Gestão acadêmica e operacional</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="portal-panel panel">
+            <div class="activity-feed">
+                <div class="activity-heading">
+                    <p class="section-label">Atividade recente</p>
+                    <h2>Últimas ações</h2>
+                </div>
+
+                <div class="activity-list" aria-label="Feed de atividade recente">
+                    {% for atividade in atividade_recente %}
+                        <article class="activity-item activity-{{ atividade.categoria }}">
+                            <span class="activity-dot" aria-hidden="true"></span>
+                            <div>
+                                <div class="activity-top">
+                                    <strong>{{ atividade.titulo }}</strong>
+                                    <time datetime="{{ atividade.data|date:'c' }}">{{ atividade.data|date:"d/m/Y H:i" }}</time>
+                                </div>
+                                <p>{{ atividade.descricao }}</p>
+                            </div>
+                        </article>
+                    {% empty %}
+                        <article class="activity-empty">
+                            <strong>Nenhuma ação recente</strong>
+                            <p>As movimentações e exportações aparecerão aqui quando forem registradas.</p>
+                        </article>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="portal-systems">
+                <div class="portal-systems-heading">
+                    <p class="section-label">Sistemas disponíveis</p>
+                    <h2>Acessos rápidos</h2>
+                </div>
+
+                <div class="system-grid">
+                    <a class="system-card primary-system" href="{% url 'gestao_cme_home' %}">
+                        <span>Gestão de CME</span>
+                        <strong>Controle de materiais</strong>
+                        <p>Movimentações, alunos, abrigos, materiais e kits.</p>
+                        <div class="system-meta">
+                            <span>{{ resumo.materiais }} materiais</span>
+                            <em>Acessar -></em>
+                        </div>
+                    </a>
+                    <a class="system-card" href="{% url 'identificadores:index' %}">
+                        <span>Identificador de Bancadas</span>
+                        <strong>Arquivos por turma</strong>
+                        <p>Modelos de bancada gerados a partir das turmas cadastradas.</p>
+                        <div class="system-meta">
+                            <span>{{ resumo.turmas }} turmas</span>
+                            <em>Acessar -></em>
+                        </div>
+                    </a>
+                </div>
             </div>
         </section>
     </main>

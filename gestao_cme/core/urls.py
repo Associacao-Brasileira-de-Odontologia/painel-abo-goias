@@ -64,6 +64,7 @@ urlpatterns = [
         views.sincronizar_turmas_eduq,
         name='sincronizar_turmas_eduq',
     ),
+    path('abrigos/', views.armarios, name='abrigos'),
     path('armarios/', views.armarios, name='armarios'),
     path('materiais/', views.materiais, name='materiais'),
     path('kits/', views.kits, name='kits'),

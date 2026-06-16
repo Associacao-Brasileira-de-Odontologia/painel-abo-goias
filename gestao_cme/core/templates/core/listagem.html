@@ -1,6 +1,6 @@
 {% extends "core/base.html" %}
 
-{% block title %}Gestão CME | {{ titulo }}{% endblock %}
+{% block title %}Gestão de CME | {{ titulo }}{% endblock %}
 {% block header_eyebrow %}{{ section_label }}{% endblock %}
 {% block header_title %}{{ titulo }}{% endblock %}
 
@@ -12,9 +12,12 @@
                 <h2>Listagens</h2>
                 <p class="panel-copy">{{ subtitulo }}</p>
 
-                {% include "core/partials/menu_sistemas.html" with active_page=active_page %}
+                {% include "core/partials/menu_sistemas.html" with menu_app="cme" active_page=active_page %}
 
                 <form class="form-stack" method="get">
+                    {% if busca %}
+                        <input type="hidden" name="q" value="{{ busca }}">
+                    {% endif %}
                     {% if filter_select %}
                         <div class="field">
                             <label for="{{ filter_select.name }}">{{ filter_select.label }}</label>
@@ -27,14 +30,7 @@
                         </div>
                     {% endif %}
 
-                    <div class="field">
-                        <label for="q">Buscar</label>
-                        <div class="search-control">
-                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Digite para filtrar...">
-                        </div>
-                    </div>
-
-                    <button class="button primary update-first" type="submit">Filtrar listagem</button>
+                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
                     <a class="button secondary" href="{{ request.path }}">Limpar filtros</a>
                 </form>
 
@@ -73,6 +69,20 @@
                     </div>
                 {% endif %}
 
+                <form class="results-search" method="get">
+                    {% if filter_select.value %}
+                        <input type="hidden" name="{{ filter_select.name }}" value="{{ filter_select.value }}">
+                    {% endif %}
+                    <label class="search-label" for="results-q">Buscar na listagem</label>
+                    <div class="results-search-row">
+                        <div class="search-control">
+                            <input id="results-q" type="search" name="q" value="{{ busca }}" placeholder="Buscar por aluno, turma, matrícula ou contato...">
+                        </div>
+                        <button class="button primary" type="submit">Buscar</button>
+                        <a class="button secondary" href="{{ request.path }}">Limpar</a>
+                    </div>
+                </form>
+
                 <div class="selection-summary">
                     <div class="info-chip">
                         <span>Busca</span>
@@ -99,8 +109,8 @@
                     </div>
                 </div>
 
-                <div class="table-wrap">
-                    <table class="generic-table">
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table generic-table">
                         <thead>
                             <tr>
                                 {% for header in table_headers %}
@@ -126,7 +136,13 @@
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="{{ table_headers|length }}">{{ empty_message }}</td>
+                                    <td colspan="{{ table_headers|length }}">
+                                        <div class="empty-state">
+                                            <strong>{{ empty_message }}</strong>
+                                            <p>Revise a busca ou limpe os filtros para consultar todos os alunos disponíveis.</p>
+                                            <a class="button secondary compact-button" href="{{ request.path }}">Limpar filtros</a>
+                                        </div>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -135,7 +151,8 @@
 
                 {% if page_obj.paginator.count %}
                     <div class="pagination-summary">
-                        Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ page_obj.paginator.count }} registros
+                        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                        <span>Exibindo {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }}</span>
                     </div>
                 {% endif %}
 

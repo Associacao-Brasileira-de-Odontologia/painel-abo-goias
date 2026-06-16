@@ -27,3 +27,4 @@ __pycache__/
 *.env
 staticfiles/
 gestao_cme/staticfiles/
+gestao_cme/identificadores/arquivos_gerados/

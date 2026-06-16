@@ -1,6 +1,6 @@
 {% extends "core/base.html" %}
 
-{% block title %}Gestão CME | Materiais{% endblock %}
+{% block title %}Gestão de CME | Materiais{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Materiais{% endblock %}
 
@@ -12,9 +12,12 @@
                 <h2>Materiais</h2>
                 <p class="panel-copy">Consulte os materiais cadastrados, com identificação, kit relacionado e disponibilidade.</p>
 
-                {% include "core/partials/menu_sistemas.html" with active_page="materiais" %}
+                {% include "core/partials/menu_sistemas.html" with menu_app="cme" active_page="materiais" %}
 
                 <form class="form-stack" method="get">
+                    {% if busca %}
+                        <input type="hidden" name="q" value="{{ busca }}">
+                    {% endif %}
                     <div class="field">
                         <label for="disponibilidade">Disponibilidade</label>
                         <select id="disponibilidade" name="disponibilidade">
@@ -24,14 +27,7 @@
                         </select>
                     </div>
 
-                    <div class="field">
-                        <label for="q">Buscar</label>
-                        <div class="search-control">
-                            <input id="q" type="search" name="q" value="{{ busca }}" placeholder="Material, identificação, kit...">
-                        </div>
-                    </div>
-
-                    <button class="button primary update-first" type="submit">Filtrar materiais</button>
+                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
                     <a class="button secondary" href="{% url 'materiais' %}">Limpar filtros</a>
                 </form>
 
@@ -64,6 +60,20 @@
                     <a class="button secondary admin-link" href="/admin/core/material/">Abrir materiais</a>
                 </div>
 
+                <form class="results-search" method="get">
+                    {% if disponibilidade_atual %}
+                        <input type="hidden" name="disponibilidade" value="{{ disponibilidade_atual }}">
+                    {% endif %}
+                    <label class="search-label" for="results-q-materiais">Buscar na listagem</label>
+                    <div class="results-search-row">
+                        <div class="search-control">
+                            <input id="results-q-materiais" type="search" name="q" value="{{ busca }}" placeholder="Buscar por material, identificação, código ou kit...">
+                        </div>
+                        <button class="button primary" type="submit">Buscar</button>
+                        <a class="button secondary" href="{% url 'materiais' %}">Limpar</a>
+                    </div>
+                </form>
+
                 <div class="selection-summary">
                     <div class="info-chip">
                         <span>Busca</span>
@@ -79,8 +89,8 @@
                     </div>
                 </div>
 
-                <div class="table-wrap">
-                    <table>
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Material</th>
@@ -112,7 +122,13 @@
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="6">Nenhum material encontrado.</td>
+                                    <td colspan="6">
+                                        <div class="empty-state">
+                                            <strong>Nenhum material encontrado.</strong>
+                                            <p>Tente buscar por nome, código, identificação ou kit. Você também pode limpar os filtros para ver todos os materiais.</p>
+                                            <a class="button secondary compact-button" href="{% url 'materiais' %}">Limpar filtros</a>
+                                        </div>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         </tbody>

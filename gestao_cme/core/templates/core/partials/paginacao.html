@@ -1,6 +1,7 @@
 {% if page_obj.paginator.count %}
     <div class="pagination-summary">
-        Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ page_obj.paginator.count }} registros
+        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <span>Exibindo {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }}</span>
     </div>
 {% endif %}
 
