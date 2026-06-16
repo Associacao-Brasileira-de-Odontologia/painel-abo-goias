@@ -27,25 +27,25 @@ Campos reais observados na API:
 Para consultar a API e gravar turmas/alunos no banco local:
 
 ```powershell
-python gestao_cme\manage.py sincronizar_eduq --somente-turmas
+python abo-goias\manage.py sincronizar_eduq --somente-turmas
 ```
 
 Para simular a sincronizacao sem salvar alteracoes:
 
 ```powershell
-python gestao_cme\manage.py sincronizar_eduq --somente-turmas --dry-run
+python abo-goias\manage.py sincronizar_eduq --somente-turmas --dry-run
 ```
 
 Para sincronizar alunos de uma turma especifica:
 
 ```powershell
-python gestao_cme\manage.py sincronizar_eduq --somente-alunos --turma-codigo 50057
+python abo-goias\manage.py sincronizar_eduq --somente-alunos --turma-codigo 50057
 ```
 
 Para sincronizar alunos de todas as turmas ja cadastradas:
 
 ```powershell
-python gestao_cme\manage.py sincronizar_eduq --somente-alunos
+python abo-goias\manage.py sincronizar_eduq --somente-alunos
 ```
 
 Nos testes reais, chamadas sequenciais para turmas diferentes funcionaram sem intervalo. A API so retornou limite minimo quando o mesmo payload foi repetido imediatamente com o mesmo token.
@@ -65,19 +65,19 @@ Arquivos de origem esperados:
 Para simular a migracao sem salvar alteracoes:
 
 ```powershell
-python gestao_cme\manage.py migrar_dados_legado --dry-run
+python abo-goias\manage.py migrar_dados_legado --dry-run
 ```
 
 Para gravar os dados legados no banco local:
 
 ```powershell
-python gestao_cme\manage.py migrar_dados_legado
+python abo-goias\manage.py migrar_dados_legado
 ```
 
 Para usar outra pasta:
 
 ```powershell
-python gestao_cme\manage.py migrar_dados_legado --diretorio "C:\caminho\para\csvs"
+python abo-goias\manage.py migrar_dados_legado --diretorio "C:\caminho\para\csvs"
 ```
 
 Essa migracao alimenta `Abrigo`, `Kit`, `Material` e `Movimentacao` com origem `LEGADO`. O campo `Pacote` das movimentacoes e preservado como codigo bruto porque a exportacao atual usa codigos numericos que nao correspondem diretamente aos codigos dos materiais.
@@ -96,11 +96,11 @@ Ela nao cria `Turma`, `Aluno`, `Emprestimo` ou `ItemEmprestimo`, pois turmas e a
 Para carregar os dados operacionais de exemplo:
 
 ```powershell
-python gestao_cme\manage.py loaddata dados_exemplo
+python abo-goias\manage.py loaddata dados_exemplo
 ```
 ## Configuracao por ambiente
 
-O projeto carrega variaveis de ambiente a partir do sistema operacional e, quando existir, dos arquivos `.env` na raiz do repositorio ou dentro da pasta Django `gestao_cme/`. Use `.env.example` como referencia e nunca versionar segredos reais.
+O projeto carrega variaveis de ambiente a partir do sistema operacional e, quando existir, dos arquivos `.env` na raiz do repositorio ou dentro da pasta Django `abo-goias/`. Use `.env.example` como referencia e nunca versionar segredos reais.
 
 Variaveis principais:
 
@@ -130,8 +130,8 @@ $env:DATABASE_URL="postgresql://usuario:senha@localhost:5432/abo_goias"
 Antes de publicar, execute:
 
 ```powershell
-python gestao_cme\manage.py check --deploy
-python gestao_cme\manage.py collectstatic
+python abo-goias\manage.py check --deploy
+python abo-goias\manage.py collectstatic
 ```
 
 ## Deploy no Railway
@@ -141,8 +141,8 @@ O repositorio inclui `railway.toml`, `requirements.txt` e uma rota publica de sa
 O Railway usa o `railway.toml` para:
 
 - instalar dependencias Python a partir do `requirements.txt`;
-- executar `python gestao_cme/manage.py collectstatic --noinput` no build;
-- executar `python gestao_cme/manage.py migrate --noinput` antes de iniciar uma nova versao;
+- executar `python abo-goias/manage.py collectstatic --noinput` no build;
+- executar `python abo-goias/manage.py migrate --noinput` antes de iniciar uma nova versao;
 - iniciar a aplicacao com Gunicorn usando a porta definida por `$PORT`;
 - verificar saude da aplicacao em `/healthz/`.
 

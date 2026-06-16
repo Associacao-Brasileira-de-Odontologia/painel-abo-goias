@@ -59,7 +59,7 @@ class RotasIniciaisTests(TestCase):
 
         self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
 
-    def test_home_autenticada_carrega_painel(self):
+    def test_home_autenticada_carrega_portal(self):
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -67,6 +67,18 @@ class RotasIniciaisTests(TestCase):
         self.client.force_login(usuario)
 
         response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/portal.html")
+
+    def test_cme_home_autenticada_carrega_painel(self):
+        usuario = get_user_model().objects.create_user(
+            username="coordenador",
+            password="senha-segura",
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("cme_home"))
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/home.html")
@@ -90,7 +102,7 @@ class RotasIniciaisTests(TestCase):
         )
         self.client.force_login(usuario)
 
-        response = self.client.get(reverse("home"))
+        response = self.client.get(reverse("cme_home"))
 
         self.assertContains(response, "Aluno Legado")
         self.assertContains(response, "Turma Legada")
@@ -127,7 +139,7 @@ class RotasIniciaisTests(TestCase):
         self.client.force_login(usuario)
 
         response = self.client.get(
-            reverse("home"),
+            reverse("cme_home"),
             {"status": "pendente", "movimentacao": Movimentacao.Tipo.ENTRADA},
         )
 
