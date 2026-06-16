@@ -1,35 +1,13 @@
-{% load static %}
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ABO Goiás | Sistemas</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
-</head>
-<body class="portal-body">
-    <header class="app-header portal-header">
-        <div class="header-inner">
-            <div class="brand">
-                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
-                <div>
-                    <p class="eyebrow">ABO Goiás</p>
-                    <h1>Sistemas internos</h1>
-                </div>
-            </div>
-            <div class="user-menu">
-                <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
-                <form method="post" action="{% url 'logout' %}">
-                    {% csrf_token %}
-                    <button class="button secondary compact-button" type="submit">Sair</button>
-                </form>
-            </div>
-        </div>
-    </header>
+{% extends "core/base.html" %}
 
+{% block title %}ABO Goiás | Sistemas{% endblock %}
+{% block body_class %}portal-body{% endblock %}
+{% block header_class %}portal-header{% endblock %}
+{% block header_eyebrow %}ABO Goiás{% endblock %}
+{% block header_title %}Sistemas internos{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block content %}
     <main class="portal-shell">
         <section class="portal-panel panel">
             <div class="portal-copy">
@@ -50,5 +28,4 @@
             </div>
         </section>
     </main>
-</body>
-</html>
+{% endblock %}

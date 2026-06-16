@@ -1,0 +1,44 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Gestão CME{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <header class="app-header {% block header_class %}{% endblock %}">
+        <div class="header-inner">
+            <div class="brand">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
+                <div>
+                    <p class="eyebrow">{% block header_eyebrow %}ABO Goiás{% endblock %}</p>
+                    <h1>{% block header_title %}Sistemas internos{% endblock %}</h1>
+                </div>
+            </div>
+            {% if usuario_logado %}
+                <div class="user-menu">
+                    <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button class="button secondary compact-button" type="submit">Sair</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </header>
+
+    {% block content %}{% endblock %}
+
+    {% block footer %}
+        <footer class="footer">
+            Associação Brasileira de Odontologia de Goiás
+        </footer>
+    {% endblock %}
+</body>
+</html>

@@ -1,35 +1,10 @@
-{% load static %}
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestão CME | Armários</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
-</head>
-<body>
-    <header class="app-header">
-        <div class="header-inner">
-            <div class="brand">
-                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
-                <div>
-                    <p class="eyebrow">Controle físico</p>
-                    <h1>Armários</h1>
-                </div>
-            </div>
-            <div class="user-menu">
-                <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
-                <form method="post" action="{% url 'logout' %}">
-                    {% csrf_token %}
-                    <button class="button secondary compact-button" type="submit">Sair</button>
-                </form>
-            </div>
-        </div>
-    </header>
+{% extends "core/base.html" %}
 
+{% block title %}Gestão CME | Armários{% endblock %}
+{% block header_eyebrow %}Controle físico{% endblock %}
+{% block header_title %}Armários{% endblock %}
+
+{% block content %}
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
@@ -37,14 +12,7 @@
                 <h2>Armários</h2>
                 <p class="panel-copy">Visualize os identificadores dos armários e sua ocupação atual.</p>
 
-                <nav class="side-nav" aria-label="Listagens do sistema">
-                    <a class="side-link" href="{% url 'gestao_cme_home' %}">Empréstimos</a>
-                    <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
-                    <a class="side-link active" href="{% url 'armarios' %}">Armários</a>
-                    <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
-                    <a class="side-link" href="{% url 'kits' %}">Kits</a>
-                    <a class="side-link" href="{% url 'identificadores:index' %}">Identificadores</a>
-                </nav>
+                {% include "core/partials/menu_sistemas.html" with active_page="armarios" %}
 
                 <form class="form-stack" method="get">
                     <div class="field">
@@ -157,6 +125,4 @@
         </div>
     </main>
 
-    <footer class="footer">Associação Brasileira de Odontologia de Goiás</footer>
-</body>
-</html>
+{% endblock %}
