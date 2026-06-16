@@ -38,11 +38,12 @@
                 <p class="panel-copy">Acompanhe as saídas, entradas e pendências registradas no sistema.</p>
 
                 <nav class="side-nav" aria-label="Listagens do sistema">
-                    <a class="side-link active" href="{% url 'home' %}">Empréstimos</a>
+                    <a class="side-link active" href="{% url 'gestao_cme_home' %}">Empréstimos</a>
                     <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
                     <a class="side-link" href="{% url 'armarios' %}">Armários</a>
                     <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
                     <a class="side-link" href="{% url 'kits' %}">Kits</a>
+                    <a class="side-link" href="{% url 'identificadores:index' %}">Identificadores</a>
                 </nav>
 
                 <form class="form-stack" method="get">
@@ -74,7 +75,7 @@
                     </div>
 
                     <button class="button primary update-first" type="submit">Filtrar registros</button>
-                    <a class="button secondary" href="{% url 'home' %}">Limpar filtros</a>
+                    <a class="button secondary" href="{% url 'gestao_cme_home' %}">Limpar filtros</a>
                 </form>
 
                 <div class="metric-grid">

@@ -1,0 +1,16 @@
+.identifier-empty-state {
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 28px;
+    background: rgba(8, 13, 25, 0.5);
+}
+
+.identifier-empty-state p:last-child {
+    max-width: 680px;
+    margin: 14px 0 0;
+    color: var(--muted);
+}

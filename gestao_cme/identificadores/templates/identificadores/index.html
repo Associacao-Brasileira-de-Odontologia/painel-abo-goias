@@ -1,0 +1,110 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestão CME | Identificadores de Bancada</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+    <link rel="stylesheet" href="{% static 'identificadores/css/identificadores.css' %}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <img class="brand-logo" src="{% static 'core/img/logo.png' %}" alt="ABO Goiás">
+                <div>
+                    <p class="eyebrow">Identificadores</p>
+                    <h1>Bancadas</h1>
+                </div>
+            </div>
+            <div class="user-menu">
+                <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button class="button secondary compact-button" type="submit">Sair</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Geração de arquivos</p>
+                <h2>Identificadores</h2>
+                <p class="panel-copy">Selecione uma turma e um modelo visual para preparar a geração dos identificadores de bancada.</p>
+
+                <nav class="side-nav" aria-label="Navegação principal">
+                    <a class="side-link" href="{% url 'gestao_cme_home' %}">Empréstimos</a>
+                    <a class="side-link" href="{% url 'alunos_por_turma' %}">Alunos por turma</a>
+                    <a class="side-link" href="{% url 'armarios' %}">Armários</a>
+                    <a class="side-link" href="{% url 'materiais' %}">Materiais</a>
+                    <a class="side-link" href="{% url 'kits' %}">Kits</a>
+                    <a class="side-link active" href="{% url 'identificadores:index' %}">Identificadores</a>
+                </nav>
+
+                <form class="form-stack" method="post">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="turma">Turma</label>
+                        <select id="turma" name="turma" required>
+                            <option value="">Selecione uma turma</option>
+                            {% for turma in turmas %}
+                                <option value="{{ turma.pk }}">{{ turma.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="modelo">Modelo</label>
+                        <select id="modelo" name="modelo" required>
+                            <option value="">Selecione um modelo</option>
+                            {% for modelo in modelos %}
+                                <option value="{{ modelo.id }}" {% if not modelo.disponivel %}disabled{% endif %}>
+                                    {{ modelo.nome }}{% if not modelo.disponivel %} - indisponível{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button class="button primary update-first disabled" type="button" disabled>Gerar identificadores</button>
+                </form>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Turmas</span>
+                        <strong>{{ total_turmas }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Modelos</span>
+                        <strong>{{ total_modelos_disponiveis }}/{{ total_modelos }}</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Migração Flask para Django</p>
+                        <h2>App criado e integrado</h2>
+                    </div>
+                </div>
+
+                <div class="identifier-empty-state">
+                    <p class="section-label">Próxima etapa</p>
+                    <h2>Conectar geração de PPTX</h2>
+                    <p>Este app já está separado no Django, autenticado e usando as turmas do banco atual. O próximo passo é migrar o serviço que manipula os templates PowerPoint e habilitar o botão de geração.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        Associação Brasileira de Odontologia de Goiás
+    </footer>
+</body>
+</html>

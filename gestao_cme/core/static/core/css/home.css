@@ -651,6 +651,90 @@ td strong {
     font-weight: 800;
 }
 
+.portal-body {
+    position: relative;
+    overflow-x: hidden;
+}
+
+.portal-body::before {
+    content: "";
+    width: min(760px, 90vw);
+    aspect-ratio: 3 / 1;
+    position: fixed;
+    right: -110px;
+    bottom: 8vh;
+    z-index: 0;
+    background: url("../img/logo.png") no-repeat center / contain;
+    opacity: 0.055;
+    pointer-events: none;
+}
+
+.portal-header,
+.portal-shell {
+    position: relative;
+    z-index: 1;
+}
+
+.portal-shell {
+    width: min(1100px, calc(100% - 32px));
+    margin: -10px auto 0;
+}
+
+.portal-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(360px, 1fr);
+    gap: 28px;
+    align-items: center;
+    padding: 34px;
+    background: rgba(17, 26, 46, 0.88);
+    backdrop-filter: blur(18px);
+}
+
+.portal-copy p:last-child {
+    max-width: 560px;
+    margin: 16px 0 0;
+    color: var(--muted);
+}
+
+.system-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.system-card {
+    min-height: 132px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 22px;
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--text);
+    text-decoration: none;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.system-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(47, 140, 255, 0.48);
+    background: var(--blue-soft);
+}
+
+.system-card span {
+    color: #9fcdff;
+    font-size: 0.86rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.system-card strong {
+    margin-top: 10px;
+    font-family: "Syne", "Segoe UI", Arial, sans-serif;
+    font-size: 1.45rem;
+    line-height: 1.12;
+}
+
 .pagination-summary {
     margin-top: 14px;
     color: var(--muted);
@@ -902,6 +986,10 @@ tbody td:last-child {
     }
 
     .layout-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .portal-panel {
         grid-template-columns: 1fr;
     }
 

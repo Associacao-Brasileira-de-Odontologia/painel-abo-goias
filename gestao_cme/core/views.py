@@ -44,6 +44,17 @@ def emprestimos_visiveis(request):
 
 
 @login_required
+def portal(request):
+    return render(
+        request,
+        "core/portal.html",
+        {
+            "usuario_logado": request.user,
+        },
+    )
+
+
+@login_required
 def home(request):
     busca = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
