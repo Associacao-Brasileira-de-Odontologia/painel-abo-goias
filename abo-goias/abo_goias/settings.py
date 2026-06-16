@@ -1,4 +1,4 @@
-import os
+﻿import os
 import importlib.util
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
@@ -160,7 +160,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core',
+    'gestao_cme.apps.GestaoCmeConfig',
     'identificadores',
 ]
 

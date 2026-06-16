@@ -1,4 +1,4 @@
-"""
+﻿"""
 URL configuration for the ABO Goias project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
@@ -19,6 +19,6 @@ from django.urls import include, path
 
 urlpatterns = [
     path('identificadores/', include('identificadores.urls')),
-    path('', include('core.urls')),
+    path('', include('gestao_cme.urls')),
     path('admin/', admin.site.urls),
 ]

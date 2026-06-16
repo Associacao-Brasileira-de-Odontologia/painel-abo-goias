@@ -1,12 +1,12 @@
-from django.contrib.auth.decorators import login_required
+﻿from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import render
 
-from core.models import Aluno, OrigemDados, Turma
-from core.integrations.eduq import EduqAPIError
-from core.services.eduq_sync import sincronizar_localizacao_alunos_turma
+from gestao_cme.models import Aluno, OrigemDados, Turma
+from gestao_cme.integrations.eduq import EduqAPIError
+from gestao_cme.services.eduq_sync import sincronizar_localizacao_alunos_turma
 
 from .services.modelos import (
     buscar_modelo,
