@@ -48,6 +48,8 @@ class Aluno(ModeloBase):
     cpf = models.CharField(max_length=14, null=True, blank=True)
     email = models.EmailField(blank=True)
     telefone = models.CharField(max_length=20, blank=True)
+    cidade = models.CharField(max_length=120, blank=True)
+    uf = models.CharField(max_length=20, blank=True)
     origem = models.CharField(
         max_length=20,
         choices=OrigemDados.choices,

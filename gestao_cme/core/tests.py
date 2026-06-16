@@ -23,7 +23,12 @@ from core.models import (
     Turma,
 )
 from core.services.migracao_legado import migrar_dados_legado
-from core.services.eduq_sync import sincronizar_alunos_eduq, sincronizar_eduq, sincronizar_turmas_eduq
+from core.services.eduq_sync import (
+    sincronizar_alunos_eduq,
+    sincronizar_eduq,
+    sincronizar_localizacao_alunos_turma,
+    sincronizar_turmas_eduq,
+)
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
@@ -384,7 +389,7 @@ class EduqSyncTests(TestCase):
                 "CPF": "101.222.333-44",
                 "CelularSMS": "(62) 99901-0001",
                 "Email": "ana.ribeiro@example.com",
-                "Descricao": "Especializacao em Endodontia",
+                "Descricao": "RIO VERDE",
                 "UF": "GO",
                 "codigoTurma": "50057",
             }
@@ -403,9 +408,11 @@ class EduqSyncTests(TestCase):
         self.assertEqual(turma.observacoes, "Matriculas ativas no Eduq: 11")
         self.assertEqual(turma.origem, OrigemDados.EDUQ)
         self.assertIsNotNone(turma.ultima_sincronizacao)
-        aluno = Aluno.objects.select_related("turma").get(matricula="20260001")
+        aluno = Aluno.objects.select_related("turma").get(matricula="A-20260001")
         self.assertEqual(aluno.nome, "Ana Clara Ribeiro")
         self.assertEqual(aluno.telefone, "(62) 99901-0001")
+        self.assertEqual(aluno.cidade, "RIO VERDE")
+        self.assertEqual(aluno.uf, "GO")
         self.assertEqual(aluno.turma.codigo, "50057")
         self.assertEqual(aluno.origem, OrigemDados.EDUQ)
         self.assertIsNotNone(aluno.ultima_sincronizacao)
@@ -467,6 +474,41 @@ class EduqSyncTests(TestCase):
 
         self.assertEqual(resumo.criados, 2)
         self.assertEqual(Aluno.objects.filter(cpf="111.222.333-44").count(), 2)
+
+    def test_atualiza_localizacao_de_alunos_existentes_pelo_eduq(self):
+        turma = Turma.objects.create(codigo="50057", nome="Turma Eduq", origem=OrigemDados.EDUQ)
+        aluno = Aluno.objects.create(
+            nome="Monara Cruvinel Moreira",
+            matricula="15.ESP.E.O.20230505612",
+            cpf="101.222.333-44",
+            turma=turma,
+            origem=OrigemDados.EDUQ,
+        )
+
+        class FakeEduqClient:
+            codigo_consultado = None
+
+            def listar_alunos(self, codigo_turma_eduq):
+                self.codigo_consultado = codigo_turma_eduq
+                return [
+                    AlunoEduq(
+                        matricula="15.ESP.E.O.20230505612",
+                        nome="MONARA CRUVINEL MOREIRA",
+                        cpf="101.222.333-44",
+                        cidade="RIO VERDE",
+                        uf="GO",
+                        turma_codigo="50057",
+                    )
+                ]
+
+        client = FakeEduqClient()
+        total = sincronizar_localizacao_alunos_turma(turma, client=client)
+
+        self.assertEqual(total, 1)
+        self.assertEqual(client.codigo_consultado, "50057")
+        aluno.refresh_from_db()
+        self.assertEqual(aluno.cidade, "RIO VERDE")
+        self.assertEqual(aluno.uf, "GO")
 
     def test_sincronizacao_consulta_alunos_por_turma_eduq(self):
         class FakeEduqClient:

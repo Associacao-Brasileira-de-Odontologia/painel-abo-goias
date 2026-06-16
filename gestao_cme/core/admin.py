@@ -39,12 +39,14 @@ class AlunoAdmin(admin.ModelAdmin):
         "turma",
         "email",
         "telefone",
+        "cidade",
+        "uf",
         "origem",
         "ultima_sincronizacao",
         "ativo",
     )
-    list_filter = ("ativo", "origem", "turma")
-    search_fields = ("nome", "matricula", "cpf", "email")
+    list_filter = ("ativo", "origem", "turma", "uf")
+    search_fields = ("nome", "matricula", "cpf", "email", "cidade", "uf")
 
 
 @admin.register(Material)

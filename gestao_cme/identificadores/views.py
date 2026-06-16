@@ -1,9 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import render
 
 from core.models import Aluno, OrigemDados, Turma
+from core.integrations.eduq import EduqAPIError
+from core.services.eduq_sync import sincronizar_localizacao_alunos_turma
 
 from .services.modelos import (
     buscar_modelo,
@@ -32,11 +35,14 @@ def index(request):
             else None
         )
         modelo = buscar_modelo(modelo_selecionado_id)
-        total_alunos = (
-            Aluno.objects.filter(turma=turma).exclude(origem=OrigemDados.EXEMPLO).count()
+        alunos = (
+            Aluno.objects.filter(turma=turma)
+            .exclude(origem=OrigemDados.EXEMPLO)
+            .order_by("nome")
             if turma
-            else 0
+            else Aluno.objects.none()
         )
+        total_alunos = alunos.count()
 
         if turma is None:
             messages.error(request, "Selecione uma turma valida.")
@@ -47,14 +53,44 @@ def index(request):
         elif total_alunos == 0:
             messages.error(request, "A turma selecionada nao possui alunos cadastrados.")
         else:
-            arquivo = gerar_arquivo_identificadores(turma, modelo)
+            if alunos.filter(Q(cidade="") | Q(uf="")).exists():
+                try:
+                    total_localizacoes = sincronizar_localizacao_alunos_turma(turma)
+                    if total_localizacoes:
+                        messages.info(
+                            request,
+                            f"Localizacao atualizada para {total_localizacoes} aluno(s) antes da geracao.",
+                        )
+                        alunos = (
+                            Aluno.objects.filter(turma=turma)
+                            .exclude(origem=OrigemDados.EXEMPLO)
+                            .order_by("nome")
+                        )
+                except EduqAPIError:
+                    messages.warning(
+                        request,
+                        "Nao foi possivel atualizar a localizacao dos alunos pelo Eduq agora.",
+                    )
+            alunos_sem_local = alunos.filter(Q(cidade="") | Q(uf="")).count()
+            if alunos_sem_local:
+                messages.warning(
+                    request,
+                    f"{alunos_sem_local} aluno(s) ainda estao sem localizacao cadastrada.",
+                )
+            arquivo = gerar_arquivo_identificadores(turma, modelo, alunos)
             resultado = {
                 "total_alunos": total_alunos,
-                "total_paginas": total_alunos,
-                "nome_arquivo": arquivo.name,
+                "total_paginas": arquivo.total_paginas,
+                "total_identificadores": arquivo.total_identificadores,
+                "nome_arquivo": arquivo.caminho.name,
                 "turma": turma,
                 "modelo": modelo,
             }
+            if arquivo.total_identificadores < total_alunos:
+                messages.warning(
+                    request,
+                    "O modelo suporta ate 48 identificadores. O arquivo foi gerado com os 48 primeiros alunos em ordem alfabetica.",
+                )
             messages.success(request, "Arquivo de identificadores gerado com sucesso.")
 
     return render(

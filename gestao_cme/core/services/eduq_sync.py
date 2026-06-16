@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from time import sleep
 from typing import Any
+import unicodedata
 
 from django.db import transaction
 from django.utils import timezone
@@ -143,6 +144,8 @@ def sincronizar_alunos_eduq(alunos_raw: list[dict[str, Any] | AlunoEduq]) -> Syn
                 "cpf": aluno.cpf or None,
                 "email": aluno.email,
                 "telefone": aluno.telefone,
+                "cidade": aluno.cidade,
+                "uf": aluno.uf,
                 "turma": turma,
                 "ativo": aluno.ativo,
                 "origem": OrigemDados.EDUQ,
@@ -156,3 +159,49 @@ def sincronizar_alunos_eduq(alunos_raw: list[dict[str, Any] | AlunoEduq]) -> Syn
             resumo.atualizados += 1
 
     return resumo
+
+
+def sincronizar_localizacao_alunos_turma(
+    turma: Turma,
+    client: EduqClient | None = None,
+) -> int:
+    client = client or EduqClient()
+    alunos_eduq = client.listar_alunos(turma.codigo)
+    if not alunos_eduq:
+        return 0
+
+    por_matricula = {aluno.matricula: aluno for aluno in alunos_eduq if aluno.matricula}
+    por_cpf = {aluno.cpf: aluno for aluno in alunos_eduq if aluno.cpf}
+    por_nome = {_normalizar_nome(aluno.nome): aluno for aluno in alunos_eduq if aluno.nome}
+    atualizados = 0
+
+    for aluno in Aluno.objects.filter(turma=turma):
+        aluno_eduq = (
+            por_matricula.get(aluno.matricula)
+            or (por_cpf.get(aluno.cpf) if aluno.cpf else None)
+            or por_nome.get(_normalizar_nome(aluno.nome))
+        )
+        if not aluno_eduq or not (aluno_eduq.cidade or aluno_eduq.uf):
+            continue
+
+        campos_atualizados = []
+        if aluno.cidade != aluno_eduq.cidade:
+            aluno.cidade = aluno_eduq.cidade
+            campos_atualizados.append("cidade")
+        if aluno.uf != aluno_eduq.uf:
+            aluno.uf = aluno_eduq.uf
+            campos_atualizados.append("uf")
+
+        if campos_atualizados:
+            aluno.ultima_sincronizacao = timezone.now()
+            campos_atualizados.append("ultima_sincronizacao")
+            aluno.save(update_fields=campos_atualizados)
+            atualizados += 1
+
+    return atualizados
+
+
+def _normalizar_nome(nome: str) -> str:
+    sem_acento = unicodedata.normalize("NFKD", str(nome or ""))
+    ascii_nome = sem_acento.encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_nome.upper().split())

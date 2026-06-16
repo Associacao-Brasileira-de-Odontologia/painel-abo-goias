@@ -48,6 +48,8 @@ class AlunoEduq:
     cpf: str = ""
     email: str = ""
     telefone: str = ""
+    cidade: str = ""
+    uf: str = ""
     turma_codigo: str = ""
     ativo: bool = True
 
@@ -56,7 +58,14 @@ def carregar_arquivo_env(caminho: Path | None = None) -> None:
     caminhos = []
     if caminho:
         caminhos.append(caminho)
-    caminhos.extend((settings.BASE_DIR / ".env", settings.BASE_DIR.parent / ".env"))
+    caminhos.extend(
+        (
+            settings.BASE_DIR / ".env",
+            settings.BASE_DIR.parent / ".env",
+            settings.BASE_DIR / ".env.example",
+            settings.BASE_DIR.parent / ".env.example",
+        )
+    )
 
     for arquivo in caminhos:
         if not arquivo.exists():
@@ -266,7 +275,15 @@ def normalizar_aluno(
 
     codigo = _primeiro_texto(
         item,
-        ("codigo", "codigo_eduq", "id", "idAluno", "matricula", "identificador", "cpf"),
+        (
+            "identificador",
+            "matricula",
+            "codigo",
+            "codigo_eduq",
+            "idAluno",
+            "id",
+            "cpf",
+        ),
     )
     turma_codigo = codigo_turma_eduq or _turma_codigo(item)
     if not codigo:
@@ -278,6 +295,8 @@ def normalizar_aluno(
         cpf=_primeiro_texto(item, ("cpf", "documento")),
         email=_primeiro_texto(item, ("email", "e_mail")),
         telefone=_primeiro_texto(item, ("telefone", "celular", "celularsms", "fone")),
+        cidade=_primeiro_texto(item, ("descricao", "cidade", "municipio", "local")),
+        uf=_primeiro_texto(item, ("uf", "sigla_uf", "estado")),
         turma_codigo=str(turma_codigo),
         ativo=_primeiro_bool(item, ("ativo", "active", "status")),
     )
