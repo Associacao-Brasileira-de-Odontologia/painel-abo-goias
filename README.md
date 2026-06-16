@@ -1,9 +1,96 @@
-Repositório para desenvolvimento dos sistemas internos da ABO Goiás.
+# Sistemas internos ABO Goiás
+
+Repositório para desenvolvimento dos sistemas internos da Associação Brasileira de Odontologia de Goiás.
 
 O projeto Django principal usa o pacote `abo_goias` e funciona como portal para múltiplas aplicações internas. Atualmente ele reúne:
 
 - Gestão de CME: controle de movimentações, materiais, kits e abrigos.
 - Identificador de Bancadas: geração de arquivos PPTX com identificadores por turma.
+
+## Status atual
+
+O projeto está em fase de implementação e integração. As principais bases funcionais já existem, mas ainda há pontos técnicos que devem ser revisados antes de considerar o sistema pronto para produção.
+
+Implementado até o momento:
+
+- Portal inicial da ABO Goiás com acesso aos sistemas disponíveis.
+- Aplicação Gestão de CME com listagens de movimentações, alunos por turma, materiais, kits e abrigos.
+- Paginação de listagens com 10 registros por página.
+- Busca e filtros nas telas principais.
+- Autenticação com login, logout e reset de senha.
+- Restrição de visualização de movimentações por coordenador.
+- Migração de dados legados a partir de planilhas/CSVs.
+- Integração com a API do Eduq para turmas e alunos.
+- Registro de localização dos alunos a partir dos campos reais `Descricao` e `UF` retornados pelo Eduq.
+- Aplicação Identificador de Bancadas com seleção de turma, seleção de modelo, geração de PPTX e download do arquivo.
+- Substituição de placeholders no PPTX para preencher nome e local dos alunos.
+- Refatoração de nomenclatura:
+  - `abo_goias`: projeto/plataforma principal.
+  - `gestao_cme`: aplicação de Gestão de CME.
+  - `identificadores`: aplicação de Identificador de Bancadas.
+
+Pontos de atenção:
+
+- O app `gestao_cme` ainda usa `label = "core"` em `gestao_cme/apps.py` para manter compatibilidade com migrations, fixtures, tabelas existentes e URLs do admin.
+- Por causa desse label legado, fixtures e migrations ainda referenciam modelos como `core.material`, `core.aluno`, etc.
+- URLs do admin também continuam no formato `/admin/core/...`.
+- O arquivo `.env.example` deve servir apenas como modelo. Não versionar credenciais reais.
+- Existe uma migration que cria um usuário de teste (`coordenador.teste`). Antes de produção, recomenda-se remover essa criação automática ou substituir por um comando/fixture exclusivo de desenvolvimento.
+- A geração de identificadores ainda faz tentativa de atualização de localização pelo Eduq durante o request. Para produção, o ideal é separar sincronização e geração, ou mover a sincronização para uma rotina assíncrona.
+
+## Estrutura do projeto
+
+```text
+abo-goias/
+├── abo_goias/          # Configurações Django do projeto principal
+├── gestao_cme/         # Aplicação Gestão de CME
+├── identificadores/    # Aplicação Identificador de Bancadas
+├── manage.py
+└── db.sqlite3          # Banco local de desenvolvimento
+```
+
+## Como executar em desenvolvimento
+
+Instale as dependências:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Execute as migrations:
+
+```powershell
+python abo-goias\manage.py migrate
+```
+
+Inicie o servidor local:
+
+```powershell
+python abo-goias\manage.py runserver
+```
+
+Rotas principais:
+
+- Portal: `http://127.0.0.1:8000/`
+- Gestão de CME: `http://127.0.0.1:8000/gestao-cme/`
+- Identificador de Bancadas: `http://127.0.0.1:8000/identificadores/`
+- Admin: `http://127.0.0.1:8000/admin/`
+
+## Validação recomendada
+
+Antes de abrir merge ou publicar uma versão, execute:
+
+```powershell
+python abo-goias\manage.py check
+python abo-goias\manage.py test
+```
+
+Para produção, execute também:
+
+```powershell
+python abo-goias\manage.py check --deploy
+python abo-goias\manage.py collectstatic
+```
 
 ## Sincronizacao Eduq
 
@@ -171,3 +258,12 @@ DJANGO_CSRF_TRUSTED_ORIGINS=https://sistemas.seudominio.com.br
 ```
 
 Para PostgreSQL, o sistema usa `DATABASE_URL` quando ela existir. O Railway tambem disponibiliza `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST` e `PGPORT`, que sao aceitos como alternativa.
+
+## Recomendações antes de produção
+
+- Remover credenciais reais de `.env.example`, caso existam, e rotacionar senhas já compartilhadas.
+- Criar usuários por fluxo administrativo, comando de setup ou painel admin, não por migration.
+- Decidir se o label legado `core` será mantido permanentemente ou se haverá uma migration planejada para renomear app label/tabelas/admin.
+- Separar sincronização Eduq da geração de PPTX para evitar lentidão ou falha externa durante o download.
+- Adicionar logs estruturados para erros de integração Eduq e processamento de PPTX.
+- Rodar a suíte de testes completa após as refatorações de nomenclatura.
