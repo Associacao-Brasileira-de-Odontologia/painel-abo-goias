@@ -1,9 +1,24 @@
+"""Modelos da aplicacao de gestao da CME da ABO Goias.
+
+Este modulo concentra os cadastros academicos, materiais, kits, abrigos,
+estoques, emprestimos e movimentacoes usados pelo painel operacional.
+As docstrings das classes descrevem o papel de cada modelo no fluxo do
+sistema e servem como referencia rapida para manutencao e integracoes.
+"""
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 
 class ModeloBase(models.Model):
+    """Base abstrata com campos comuns de auditoria e ativacao.
+
+    Deve ser herdada por modelos de dominio que precisam registrar data de
+    criacao, data da ultima atualizacao e status ativo/inativo sem duplicar
+    esses campos em cada tabela.
+    """
+
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
     ativo = models.BooleanField(default=True)
@@ -13,6 +28,13 @@ class ModeloBase(models.Model):
 
 
 class OrigemDados(models.TextChoices):
+    """Origem de um registro importado ou criado no painel.
+
+    A escolha ajuda a separar dados manuais, dados sincronizados do Eduq,
+    dados migrados de planilhas legadas e registros de exemplo usados para
+    demonstracao ou testes operacionais.
+    """
+
     MANUAL = "MANUAL", "Manual"
     EDUQ = "EDUQ", "Eduq"
     LEGADO = "LEGADO", "Legado"
@@ -20,6 +42,13 @@ class OrigemDados(models.TextChoices):
 
 
 class Turma(ModeloBase):
+    """Turma academica disponivel para consulta e geracao de identificadores.
+
+    Reune codigo externo, nome, curso, periodo e informacoes de sincronizacao.
+    E usada para agrupar alunos da pos-graduacao e alimentar tanto a gestao da
+    CME quanto a aplicacao de identificadores.
+    """
+
     nome = models.CharField(max_length=120)
     codigo = models.CharField(max_length=30, unique=True)
     curso = models.CharField(max_length=120, blank=True)
@@ -39,10 +68,19 @@ class Turma(ModeloBase):
         verbose_name_plural = "turmas"
 
     def __str__(self):
+        """Retorna uma identificacao curta com codigo e nome da turma."""
+
         return f"{self.codigo} - {self.nome}"
 
 
 class Aluno(ModeloBase):
+    """Aluno vinculado a uma turma e aos fluxos de retirada de materiais.
+
+    Guarda dados academicos, contato, localizacao e origem da informacao. O
+    cadastro e usado para emprestimos, historico de movimentacoes e montagem
+    de arquivos de identificadores por turma.
+    """
+
     nome = models.CharField(max_length=150)
     matricula = models.CharField(max_length=40, unique=True)
     cpf = models.CharField(max_length=14, null=True, blank=True)
@@ -70,11 +108,22 @@ class Aluno(ModeloBase):
         verbose_name_plural = "alunos"
 
     def __str__(self):
+        """Retorna o nome do aluno para telas administrativas e seletores."""
+
         return self.nome
 
 
 class Material(ModeloBase):
+    """Item fisico controlado pela CME para emprestimo ou composicao de kits.
+
+    Representa materiais cadastrados manualmente, sincronizados ou migrados de
+    planilhas. Mantem codigo, identificacao visual, disponibilidade, unidade de
+    medida e quantidade minima para apoiar estoque, kits e movimentacoes.
+    """
+
     class UnidadeMedida(models.TextChoices):
+        """Unidades aceitas para contagem operacional de materiais."""
+
         UNIDADE = "UN", "Unidade"
         CAIXA = "CX", "Caixa"
         PACOTE = "PC", "Pacote"
@@ -106,10 +155,19 @@ class Material(ModeloBase):
         verbose_name_plural = "materiais"
 
     def __str__(self):
+        """Retorna o nome do material em listagens e relacionamentos."""
+
         return self.nome
 
 
 class Kit(ModeloBase):
+    """Conjunto de materiais preparado para emprestimos e controle operacional.
+
+    O kit organiza varios materiais por meio de KitMaterial, mantendo codigo,
+    nome, descricao e quantidade disponivel. E usado para agrupar itens comuns
+    em fluxos de emprestimo e exibicao no painel da CME.
+    """
+
     nome = models.CharField(max_length=120)
     codigo = models.CharField(max_length=40, unique=True)
     descricao = models.TextField(blank=True)
@@ -133,10 +191,18 @@ class Kit(ModeloBase):
         verbose_name_plural = "kits"
 
     def __str__(self):
+        """Retorna o nome do kit para exibicao administrativa."""
+
         return self.nome
 
 
 class KitMaterial(models.Model):
+    """Relacionamento entre um kit e os materiais que o compoem.
+
+    Define a quantidade de cada material dentro de um kit e impede duplicidade
+    do mesmo material no mesmo kit por meio de restricao unica.
+    """
+
     kit = models.ForeignKey(Kit, on_delete=models.CASCADE, related_name="itens")
     material = models.ForeignKey(Material, on_delete=models.PROTECT)
     quantidade = models.PositiveIntegerField(default=1)
@@ -153,10 +219,18 @@ class KitMaterial(models.Model):
         verbose_name_plural = "materiais do kit"
 
     def __str__(self):
+        """Retorna a quantidade seguida do material vinculado ao kit."""
+
         return f"{self.quantidade} x {self.material}"
 
 
 class Armario(ModeloBase):
+    """Local fisico de armazenamento usado para organizar estoque de materiais.
+
+    Cada armario possui identificacao unica, localizacao e descricao opcional.
+    Os materiais armazenados nele sao controlados pelo modelo EstoqueArmario.
+    """
+
     identificacao = models.CharField(max_length=60, unique=True)
     localizacao = models.CharField(max_length=120, blank=True)
     descricao = models.TextField(blank=True)
@@ -173,10 +247,18 @@ class Armario(ModeloBase):
         verbose_name_plural = "armarios"
 
     def __str__(self):
+        """Retorna a identificacao unica do armario."""
+
         return self.identificacao
 
 
 class Abrigo(ModeloBase):
+    """Espaco individual de guarda acompanhado pela gestao da CME.
+
+    Registra o identificador do abrigo e seu estado de ocupacao. Os registros
+    podem vir de cadastro manual, migracao legada ou sincronizacao operacional.
+    """
+
     identificador = models.CharField(max_length=30, unique=True)
     ocupado = models.BooleanField(default=False)
     origem = models.CharField(
@@ -192,10 +274,19 @@ class Abrigo(ModeloBase):
         verbose_name_plural = "abrigos"
 
     def __str__(self):
+        """Retorna o identificador do abrigo."""
+
         return self.identificador
 
 
 class EstoqueArmario(models.Model):
+    """Quantidade de um material armazenada em um armario especifico.
+
+    Funciona como tabela intermediaria entre Armario e Material, com quantidade
+    e observacoes. A restricao unica garante somente um saldo por material em
+    cada armario.
+    """
+
     armario = models.ForeignKey(Armario, on_delete=models.CASCADE, related_name="estoques")
     material = models.ForeignKey(Material, on_delete=models.PROTECT)
     quantidade = models.PositiveIntegerField(default=0)
@@ -213,11 +304,22 @@ class EstoqueArmario(models.Model):
         verbose_name_plural = "estoques dos armarios"
 
     def __str__(self):
+        """Retorna armario, material e saldo disponivel do estoque."""
+
         return f"{self.armario} - {self.material}: {self.quantidade}"
 
 
 class Emprestimo(ModeloBase):
+    """Registro principal de emprestimo de kit ou materiais para um aluno.
+
+    Armazena aluno, kit opcional, responsavel, datas relevantes, status e
+    observacoes. Os materiais efetivamente emprestados ficam detalhados em
+    ItemEmprestimo para permitir controle por item e por armario.
+    """
+
     class Status(models.TextChoices):
+        """Estados possiveis do ciclo de vida de um emprestimo."""
+
         EMPRESTADO = "EMPRESTADO", "Emprestado"
         DEVOLVIDO = "DEVOLVIDO", "Devolvido"
         ATRASADO = "ATRASADO", "Atrasado"
@@ -258,10 +360,19 @@ class Emprestimo(ModeloBase):
         verbose_name_plural = "emprestimos"
 
     def __str__(self):
+        """Retorna uma descricao curta com o numero e o aluno do emprestimo."""
+
         return f"Emprestimo #{self.pk} - {self.aluno}"
 
 
 class ItemEmprestimo(models.Model):
+    """Material especifico incluido em um emprestimo.
+
+    Detalha o material retirado, o armario de origem quando informado e a
+    quantidade emprestada. A restricao unica evita repetir o mesmo conjunto de
+    emprestimo, material e armario.
+    """
+
     emprestimo = models.ForeignKey(
         Emprestimo,
         on_delete=models.CASCADE,
@@ -289,11 +400,22 @@ class ItemEmprestimo(models.Model):
         verbose_name_plural = "itens do emprestimo"
 
     def __str__(self):
+        """Retorna a quantidade seguida do material emprestado."""
+
         return f"{self.quantidade} x {self.material}"
 
 
 class Movimentacao(ModeloBase):
+    """Historico de entradas e saidas de materiais importado ou registrado.
+
+    Mantem a data, tipo de movimentacao, aluno, turma, material, codigo do
+    pacote e arquivo de origem. Tambem preserva campos textuais do legado para
+    consultas mesmo quando a vinculacao com cadastros normalizados nao existe.
+    """
+
     class Tipo(models.TextChoices):
+        """Tipos de movimentacao reconhecidos pelo controle da CME."""
+
         SAIDA = "SAIDA", "Saida"
         ENTRADA = "ENTRADA", "Entrada"
 
@@ -340,4 +462,6 @@ class Movimentacao(ModeloBase):
         verbose_name_plural = "movimentacoes"
 
     def __str__(self):
+        """Retorna uma descricao resumida do evento de movimentacao."""
+
         return f"{self.get_tipo_display()} - {self.pacote_codigo} - {self.aluno_nome}"
