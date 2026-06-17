@@ -18,6 +18,14 @@ from .services.modelos import (
 
 @login_required
 def index(request):
+    """Exibe e processa a geracao de identificadores por turma.
+
+    No GET, monta a tela com turmas ativas e modelos PPTX disponiveis. No POST,
+    valida turma e modelo, tenta atualizar localizacao de alunos sem cidade ou
+    UF, gera o arquivo de identificadores e prepara o resumo do resultado para
+    exibicao no template.
+    """
+
     turmas = (
         Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
         .filter(ativo=True)
@@ -112,6 +120,13 @@ def index(request):
 
 @login_required
 def baixar(request, nome_arquivo):
+    """Entrega ao usuario um arquivo PPTX de identificadores ja gerado.
+
+    Valida o nome recebido, confirma que o arquivo existe na area de geracao e
+    retorna uma resposta de download. Quando o caminho e invalido ou inexistente,
+    responde com erro 404.
+    """
+
     try:
         caminho = caminho_arquivo_gerado(nome_arquivo)
     except ValueError as exc:
