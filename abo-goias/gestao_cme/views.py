@@ -1,8 +1,13 @@
-﻿from django.contrib import messages
+﻿from __future__ import annotations
+
+from typing import Any
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
+from django.core.paginator import Page, Paginator
 from django.db.models import Count, Max, Q
-from django.http import HttpResponse
+from django.db.models.query import QuerySet
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -28,7 +33,7 @@ STATUS_MOVIMENTACAO_OPCOES = (
 )
 
 
-def healthcheck(request):
+def healthcheck(request: HttpRequest) -> HttpResponse:
     """Retorna uma resposta simples para verificacao de disponibilidade.
 
     Usada por infraestrutura, monitoramento ou plataforma de deploy para
@@ -38,7 +43,9 @@ def healthcheck(request):
     return HttpResponse("ok", content_type="text/plain")
 
 
-def paginar_queryset(request, queryset):
+def paginar_queryset(
+    request: HttpRequest, queryset: QuerySet[Any]
+) -> tuple[Page[Any], str]:
     """Pagina um queryset preservando os filtros atuais da query string.
 
     Remove apenas o parametro ``page`` antes de reconstruir a query string,
@@ -54,7 +61,7 @@ def paginar_queryset(request, queryset):
     return page_obj, query_params.urlencode()
 
 
-def emprestimos_visiveis(request):
+def emprestimos_visiveis(request: HttpRequest) -> QuerySet[Emprestimo]:
     """Retorna emprestimos que o usuario logado pode visualizar.
 
     Superusuarios veem todos os emprestimos reais, enquanto coordenadores veem
@@ -72,7 +79,7 @@ def emprestimos_visiveis(request):
 
 
 @login_required
-def portal(request):
+def portal(request: HttpRequest) -> HttpResponse:
     """Renderiza o painel inicial com indicadores e atividade recente.
 
     Consolida totais de movimentacoes, emprestimos, alunos, materiais, turmas
@@ -161,7 +168,7 @@ def portal(request):
 
 
 @login_required
-def home(request):
+def home(request: HttpRequest) -> HttpResponse:
     """Lista movimentacoes de materiais com busca, filtros e metricas.
 
     Permite filtrar por status de retirada, tipo de movimentacao e texto livre
@@ -247,7 +254,7 @@ def home(request):
 
 
 @login_required
-def alunos_por_turma(request):
+def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     """Exibe alunos agrupados por turma com filtros e acao de sincronizacao.
 
     A view lista cadastros academicos ativos, respeitando a visibilidade do
@@ -367,7 +374,7 @@ def alunos_por_turma(request):
 
 @login_required
 @require_POST
-def sincronizar_turmas_eduq(request):
+def sincronizar_turmas_eduq(request: HttpRequest) -> HttpResponse:
     """Executa a sincronizacao manual de turmas com o Eduq.
 
     Processa apenas turmas, registra mensagens de sucesso ou erro para a
@@ -395,7 +402,7 @@ def sincronizar_turmas_eduq(request):
 
 
 @login_required
-def armarios(request):
+def armarios(request: HttpRequest) -> HttpResponse:
     """Lista abrigos controlados pela CME com filtros de ocupacao.
 
     Permite buscar por identificador, filtrar por abrigos ocupados ou livres e
@@ -443,7 +450,7 @@ def armarios(request):
 
 
 @login_required
-def materiais(request):
+def materiais(request: HttpRequest) -> HttpResponse:
     """Lista materiais cadastrados com busca e filtro de disponibilidade.
 
     Consulta materiais reais, permite busca por codigo, nome, descricao,
@@ -502,7 +509,7 @@ def materiais(request):
 
 
 @login_required
-def kits(request):
+def kits(request: HttpRequest) -> HttpResponse:
     """Lista kits de materiais com resumo dos itens que os compoem.
 
     Permite busca por dados do kit e de seus materiais, prepara informacoes de

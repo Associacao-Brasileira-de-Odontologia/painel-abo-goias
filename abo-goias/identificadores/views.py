@@ -1,7 +1,9 @@
-﻿from django.contrib import messages
+﻿from __future__ import annotations
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from gestao_cme.integrations.eduq import EduqAPIError
@@ -17,7 +19,7 @@ from .services.modelos import (
 
 
 @login_required
-def index(request):
+def index(request: HttpRequest) -> HttpResponse:
     """Exibe e processa a geracao de identificadores por turma.
 
     No GET, monta a tela com turmas ativas e modelos PPTX disponiveis. No POST,
@@ -139,7 +141,7 @@ def index(request):
 
 
 @login_required
-def baixar(request, nome_arquivo):
+def baixar(request: HttpRequest, nome_arquivo: str) -> FileResponse:
     """Entrega ao usuario um arquivo PPTX de identificadores ja gerado.
 
     Valida o nome recebido, confirma que o arquivo existe na area de geracao e

@@ -146,7 +146,7 @@ class EduqClient:
     de alto nivel para listar turmas e alunos ja normalizados.
     """
 
-    def __init__(self, config: ConfigEduq | None = None):
+    def __init__(self, config: ConfigEduq | None = None) -> None:
         """Inicializa o cliente com configuracao explicita ou do ambiente."""
 
         self.config = config or carregar_config_eduq()
