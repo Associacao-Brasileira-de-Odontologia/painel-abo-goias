@@ -36,7 +36,9 @@ class Command(BaseCommand):
         self._escrever_resumo("Movimentacoes", resultado.movimentacoes)
 
         if options["dry_run"]:
-            self.stdout.write(self.style.WARNING("Dry-run concluido. Nenhuma alteracao foi salva."))
+            self.stdout.write(
+                self.style.WARNING("Dry-run concluido. Nenhuma alteracao foi salva.")
+            )
         elif _tem_erros(resultado):
             self.stdout.write(self.style.WARNING("Migracao concluida com alertas."))
         else:

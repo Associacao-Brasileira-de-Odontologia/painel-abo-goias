@@ -28,7 +28,10 @@ class Command(BaseCommand):
             "--turma-codigo",
             action="append",
             default=[],
-            help="Codigo Eduq de uma turma para sincronizar alunos. Pode ser usado mais de uma vez.",
+            help=(
+                "Codigo Eduq de uma turma para sincronizar alunos. "
+                "Pode ser usado mais de uma vez."
+            ),
         )
         parser.add_argument(
             "--intervalo-consultas",
@@ -39,7 +42,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options["somente_turmas"] and options["somente_alunos"]:
-            raise CommandError("Use apenas uma opcao entre --somente-turmas e --somente-alunos.")
+            raise CommandError(
+                "Use apenas uma opcao entre --somente-turmas e --somente-alunos."
+            )
 
         sincronizar_turmas = not options["somente_alunos"]
         sincronizar_alunos = not options["somente_turmas"]
@@ -64,11 +69,17 @@ class Command(BaseCommand):
         self._escrever_resumo("Alunos", resultado.alunos)
 
         if options["dry_run"]:
-            self.stdout.write(self.style.WARNING("Dry-run concluido. Nenhuma alteracao foi salva."))
+            self.stdout.write(
+                self.style.WARNING("Dry-run concluido. Nenhuma alteracao foi salva.")
+            )
         elif resultado.turmas.erros or resultado.alunos.erros:
-            self.stdout.write(self.style.WARNING("Sincronizacao concluida com alertas."))
+            self.stdout.write(
+                self.style.WARNING("Sincronizacao concluida com alertas.")
+            )
         else:
-            self.stdout.write(self.style.SUCCESS("Sincronizacao concluida com sucesso."))
+            self.stdout.write(
+                self.style.SUCCESS("Sincronizacao concluida com sucesso.")
+            )
 
     def _escrever_resumo(self, titulo, resumo):
         self.stdout.write(

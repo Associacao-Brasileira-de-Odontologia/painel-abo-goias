@@ -1,11 +1,11 @@
-﻿from django.contrib.auth.decorators import login_required
-from django.contrib import messages
+﻿from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import render
 
-from gestao_cme.models import Aluno, OrigemDados, Turma
 from gestao_cme.integrations.eduq import EduqAPIError
+from gestao_cme.models import Aluno, OrigemDados, Turma
 from gestao_cme.services.eduq_sync import sincronizar_localizacao_alunos_turma
 
 from .services.modelos import (
@@ -32,8 +32,12 @@ def index(request):
         .order_by("nome")
     )
     modelos = listar_modelos()
-    turma_selecionada_id = request.POST.get("turma", "") if request.method == "POST" else ""
-    modelo_selecionado_id = request.POST.get("modelo", "") if request.method == "POST" else ""
+    turma_selecionada_id = (
+        request.POST.get("turma", "") if request.method == "POST" else ""
+    )
+    modelo_selecionado_id = (
+        request.POST.get("modelo", "") if request.method == "POST" else ""
+    )
     resultado = None
 
     if request.method == "POST":
@@ -59,7 +63,9 @@ def index(request):
         elif not modelo.disponivel:
             messages.error(request, "O modelo selecionado esta indisponivel.")
         elif total_alunos == 0:
-            messages.error(request, "A turma selecionada nao possui alunos cadastrados.")
+            messages.error(
+                request, "A turma selecionada nao possui alunos cadastrados."
+            )
         else:
             if alunos.filter(Q(cidade="") | Q(uf="")).exists():
                 try:
@@ -67,7 +73,10 @@ def index(request):
                     if total_localizacoes:
                         messages.info(
                             request,
-                            f"Localizacao atualizada para {total_localizacoes} aluno(s) antes da geracao.",
+                            (
+                                "Localizacao atualizada para "
+                                f"{total_localizacoes} aluno(s) antes da geracao."
+                            ),
                         )
                         alunos = (
                             Aluno.objects.filter(turma=turma)
@@ -77,13 +86,19 @@ def index(request):
                 except EduqAPIError:
                     messages.warning(
                         request,
-                        "Nao foi possivel atualizar a localizacao dos alunos pelo Eduq agora.",
+                        (
+                            "Nao foi possivel atualizar a localizacao dos alunos "
+                            "pelo Eduq agora."
+                        ),
                     )
             alunos_sem_local = alunos.filter(Q(cidade="") | Q(uf="")).count()
             if alunos_sem_local:
                 messages.warning(
                     request,
-                    f"{alunos_sem_local} aluno(s) ainda estao sem localizacao cadastrada.",
+                    (
+                        f"{alunos_sem_local} aluno(s) ainda estao sem "
+                        "localizacao cadastrada."
+                    ),
                 )
             arquivo = gerar_arquivo_identificadores(turma, modelo, alunos)
             resultado = {
@@ -97,7 +112,10 @@ def index(request):
             if arquivo.total_identificadores < total_alunos:
                 messages.warning(
                     request,
-                    "O modelo suporta ate 48 identificadores. O arquivo foi gerado com os 48 primeiros alunos em ordem alfabetica.",
+                    (
+                        "O modelo suporta ate 48 identificadores. O arquivo foi "
+                        "gerado com os 48 primeiros alunos em ordem alfabetica."
+                    ),
                 )
             messages.success(request, "Arquivo de identificadores gerado com sucesso.")
 
@@ -113,7 +131,9 @@ def index(request):
             "resultado": resultado,
             "total_turmas": turmas.count(),
             "total_modelos": len(modelos),
-            "total_modelos_disponiveis": sum(1 for modelo in modelos if modelo.disponivel),
+            "total_modelos_disponiveis": sum(
+                1 for modelo in modelos if modelo.disponivel
+            ),
         },
     )
 
@@ -137,5 +157,7 @@ def baixar(request, nome_arquivo):
         caminho.open("rb"),
         as_attachment=True,
         filename=caminho.name,
-        content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        content_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
     )
