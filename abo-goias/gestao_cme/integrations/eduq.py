@@ -124,9 +124,14 @@ def carregar_config_eduq() -> ConfigEduq:
         senha=credenciais["senha"],
         auth_url=os.getenv("EDUQ_AUTH_URL", settings.EDUQ_AUTH_URL).strip(),
         data_url=os.getenv("EDUQ_DATA_URL", settings.EDUQ_DATA_URL).strip(),
-        consulta_turmas_id=int(os.getenv("EDUQ_CONSULTA_TURMAS_ID", settings.EDUQ_CONSULTA_TURMAS_ID)),
+        consulta_turmas_id=int(
+            os.getenv("EDUQ_CONSULTA_TURMAS_ID", settings.EDUQ_CONSULTA_TURMAS_ID)
+        ),
         consulta_detalhes_turma_id=int(
-            os.getenv("EDUQ_CONSULTA_DETALHES_TURMA_ID", settings.EDUQ_CONSULTA_DETALHES_TURMA_ID)
+            os.getenv(
+                "EDUQ_CONSULTA_DETALHES_TURMA_ID",
+                settings.EDUQ_CONSULTA_DETALHES_TURMA_ID,
+            )
         ),
         verify_tls=_ler_booleano("EDUQ_VERIFY_TLS", settings.EDUQ_VERIFY_TLS),
         timeout=int(os.getenv("EDUQ_TIMEOUT", settings.EDUQ_TIMEOUT)),
@@ -206,7 +211,9 @@ class EduqClient:
         """Executa uma consulta autenticada no endpoint de dados do Eduq."""
 
         token = self._autenticar()
-        return self._post_json(self.config.data_url, payload, headers={"token-auth": token})
+        return self._post_json(
+            self.config.data_url, payload, headers={"token-auth": token}
+        )
 
     def _post_json(
         self,
@@ -240,19 +247,27 @@ class EduqClient:
                 handlers = [ProxyHandler({})]
                 if context:
                     handlers.append(HTTPSHandler(context=context))
-                response = build_opener(*handlers).open(request, timeout=self.config.timeout)
+                response = build_opener(*handlers).open(
+                    request, timeout=self.config.timeout
+                )
             with response:
                 body = response.read().decode("utf-8")
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise EduqAPIError(f"Erro HTTP {exc.code} ao consultar Eduq: {detail}") from exc
+            raise EduqAPIError(
+                f"Erro HTTP {exc.code} ao consultar Eduq: {detail}"
+            ) from exc
         except URLError as exc:
-            raise EduqAPIError(f"Falha de conexao ao consultar Eduq: {exc.reason}") from exc
+            raise EduqAPIError(
+                f"Falha de conexao ao consultar Eduq: {exc.reason}"
+            ) from exc
 
         try:
             return json.loads(body)
         except json.JSONDecodeError as exc:
-            raise EduqAPIError("A API do Eduq retornou uma resposta que nao e JSON valido.") from exc
+            raise EduqAPIError(
+                "A API do Eduq retornou uma resposta que nao e JSON valido."
+            ) from exc
 
 
 def normalizar_turma(item: dict[str, Any] | TurmaEduq) -> TurmaEduq | None:
@@ -283,7 +298,15 @@ def normalizar_turma(item: dict[str, Any] | TurmaEduq) -> TurmaEduq | None:
     descricao = _primeiro_texto(item, ("descricao",))
     nome = _primeiro_texto(
         item,
-        ("nome", "nome_turma", "turma", "descricao", "descricao_turma", "curso", "sigla"),
+        (
+            "nome",
+            "nome_turma",
+            "turma",
+            "descricao",
+            "descricao_turma",
+            "curso",
+            "sigla",
+        ),
     )
 
     if sigla and descricao:
@@ -415,7 +438,9 @@ def _normalizar_chave(chave: str) -> str:
 def _primeiro_texto(item: dict[str, Any], chaves: tuple[str, ...]) -> str:
     """Retorna o primeiro valor textual encontrado entre chaves alternativas."""
 
-    valores_por_chave = {_normalizar_chave(chave): valor for chave, valor in item.items()}
+    valores_por_chave = {
+        _normalizar_chave(chave): valor for chave, valor in item.items()
+    }
     for chave in chaves:
         valor = valores_por_chave.get(_normalizar_chave(chave))
         if valor is not None:
@@ -426,7 +451,9 @@ def _primeiro_texto(item: dict[str, Any], chaves: tuple[str, ...]) -> str:
 def _primeiro_bool(item: dict[str, Any], chaves: tuple[str, ...]) -> bool:
     """Retorna o primeiro valor booleano interpretavel entre chaves alternativas."""
 
-    valores_por_chave = {_normalizar_chave(chave): valor for chave, valor in item.items()}
+    valores_por_chave = {
+        _normalizar_chave(chave): valor for chave, valor in item.items()
+    }
     for chave in chaves:
         valor = valores_por_chave.get(_normalizar_chave(chave))
         if isinstance(valor, bool):
@@ -477,7 +504,9 @@ def _turma_ativa(item: dict[str, Any]) -> bool:
 def _turma_codigo(raw: dict[str, Any]) -> str:
     """Extrai o codigo da turma de um aluno ou objeto aninhado de turma."""
 
-    codigo = _primeiro_texto(raw, ("turma_codigo", "codigoTurma", "codTurma", "idTurma"))
+    codigo = _primeiro_texto(
+        raw, ("turma_codigo", "codigoTurma", "codTurma", "idTurma")
+    )
     if codigo:
         return codigo
 

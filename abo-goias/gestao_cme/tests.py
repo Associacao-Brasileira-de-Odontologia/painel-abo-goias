@@ -9,7 +9,13 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from gestao_cme.integrations.eduq import AlunoEduq, ConfigEduq, EduqAPIError, EduqClient, TurmaEduq
+from gestao_cme.integrations.eduq import (
+    AlunoEduq,
+    ConfigEduq,
+    EduqAPIError,
+    EduqClient,
+    TurmaEduq,
+)
 from gestao_cme.models import (
     Abrigo,
     Aluno,
@@ -22,13 +28,13 @@ from gestao_cme.models import (
     OrigemDados,
     Turma,
 )
-from gestao_cme.services.migracao_legado import migrar_dados_legado
 from gestao_cme.services.eduq_sync import (
     sincronizar_alunos_eduq,
     sincronizar_eduq,
     sincronizar_localizacao_alunos_turma,
     sincronizar_turmas_eduq,
 )
+from gestao_cme.services.migracao_legado import migrar_dados_legado
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
@@ -206,7 +212,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Aluno Eduq")
         self.assertNotContains(response, "Aluno Exemplo")
 
-    def test_botao_de_sincronizacao_aparece_para_usuario_comum_na_tela_de_alunos_por_turma(self):
+    def test_botao_sincronizacao_aparece_para_usuario_comum(self):
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -432,7 +438,13 @@ class EduqSyncTests(TestCase):
     def test_sincronizacao_e_idempotente_por_codigo_e_matricula(self):
         sincronizar_turmas_eduq([{"codigo": "IMP-2026-1", "nome": "Implantodontia"}])
         sincronizar_alunos_eduq(
-            [{"matricula": "20260002", "nome": "Bruno Almeida", "codigoTurma": "IMP-2026-1"}]
+            [
+                {
+                    "matricula": "20260002",
+                    "nome": "Bruno Almeida",
+                    "codigoTurma": "IMP-2026-1",
+                }
+            ]
         )
 
         resumo_turmas = sincronizar_turmas_eduq(
@@ -457,7 +469,13 @@ class EduqSyncTests(TestCase):
 
     def test_aluno_com_turma_inexistente_retorna_erro_sem_criar_registro(self):
         resumo = sincronizar_alunos_eduq(
-            [{"matricula": "20260003", "nome": "Carolina Sousa", "codigoTurma": "TURMA-X"}]
+            [
+                {
+                    "matricula": "20260003",
+                    "nome": "Carolina Sousa",
+                    "codigoTurma": "TURMA-X",
+                }
+            ]
         )
 
         self.assertEqual(resumo.criados, 0)
@@ -465,7 +483,9 @@ class EduqSyncTests(TestCase):
         self.assertFalse(Aluno.objects.exists())
 
     def test_sincronizacao_permite_cpfs_duplicados_quando_ids_eduq_sao_diferentes(self):
-        Turma.objects.create(codigo="TURMA-CPF", nome="Turma CPF", origem=OrigemDados.EDUQ)
+        Turma.objects.create(
+            codigo="TURMA-CPF", nome="Turma CPF", origem=OrigemDados.EDUQ
+        )
 
         resumo = sincronizar_alunos_eduq(
             [
@@ -488,7 +508,9 @@ class EduqSyncTests(TestCase):
         self.assertEqual(Aluno.objects.filter(cpf="111.222.333-44").count(), 2)
 
     def test_atualiza_localizacao_de_alunos_existentes_pelo_eduq(self):
-        turma = Turma.objects.create(codigo="50057", nome="Turma Eduq", origem=OrigemDados.EDUQ)
+        turma = Turma.objects.create(
+            codigo="50057", nome="Turma Eduq", origem=OrigemDados.EDUQ
+        )
         aluno = Aluno.objects.create(
             nome="Monara Cruvinel Moreira",
             matricula="15.ESP.E.O.20230505612",
@@ -579,7 +601,9 @@ class EduqSyncTests(TestCase):
         self.assertTrue(Aluno.objects.filter(matricula="ALUNO-OK").exists())
 
     def test_sincronizacao_de_alunos_em_massa_ignora_turmas_de_exemplo(self):
-        Turma.objects.create(codigo="TURMA-EDUQ", nome="Turma Eduq", origem=OrigemDados.EDUQ)
+        Turma.objects.create(
+            codigo="TURMA-EDUQ", nome="Turma Eduq", origem=OrigemDados.EDUQ
+        )
         Turma.objects.create(
             codigo="TURMA-EXEMPLO",
             nome="Turma Exemplo",
@@ -616,7 +640,9 @@ class EduqSyncTests(TestCase):
 
 class DadosExemploTests(TestCase):
     def test_fixture_de_exemplo_nao_cria_dados_academicos_fake(self):
-        fixture_path = settings.BASE_DIR / "gestao_cme" / "fixtures" / "dados_exemplo.json"
+        fixture_path = (
+            settings.BASE_DIR / "gestao_cme" / "fixtures" / "dados_exemplo.json"
+        )
         data = json.loads(fixture_path.read_text(encoding="utf-8"))
         modelos = {item["model"] for item in data}
 
@@ -639,7 +665,10 @@ class DadosExemploTests(TestCase):
 
 class MigracaoLegadoTests(TestCase):
     def test_migra_dados_operacionais_legados_para_o_banco(self):
-        with patch("gestao_cme.services.migracao_legado._ler_csv", side_effect=self._ler_csv_mock):
+        with patch(
+            "gestao_cme.services.migracao_legado._ler_csv",
+            side_effect=self._ler_csv_mock,
+        ):
             resultado = migrar_dados_legado("csvs")
 
         self.assertEqual(resultado.abrigos.criados, 2)
@@ -650,11 +679,18 @@ class MigracaoLegadoTests(TestCase):
         self.assertEqual(Kit.objects.get().quantidade, 2)
         self.assertEqual(Material.objects.filter(disponivel=True).count(), 1)
         self.assertEqual(Material.objects.filter(disponivel=False).count(), 1)
-        self.assertTrue(Movimentacao.objects.filter(tipo=Movimentacao.Tipo.SAIDA).exists())
-        self.assertTrue(Movimentacao.objects.filter(tipo=Movimentacao.Tipo.ENTRADA).exists())
+        self.assertTrue(
+            Movimentacao.objects.filter(tipo=Movimentacao.Tipo.SAIDA).exists()
+        )
+        self.assertTrue(
+            Movimentacao.objects.filter(tipo=Movimentacao.Tipo.ENTRADA).exists()
+        )
 
     def test_migracao_legado_e_idempotente(self):
-        with patch("gestao_cme.services.migracao_legado._ler_csv", side_effect=self._ler_csv_mock):
+        with patch(
+            "gestao_cme.services.migracao_legado._ler_csv",
+            side_effect=self._ler_csv_mock,
+        ):
             migrar_dados_legado("csvs")
             resultado = migrar_dados_legado("csvs")
 

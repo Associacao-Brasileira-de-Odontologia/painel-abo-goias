@@ -1,3 +1,4 @@
-from django.contrib import admin
+"""Administracao da aplicacao de identificadores.
 
-# Register your models here.
+O app nao possui modelos proprios para registrar no Django Admin.
+"""

@@ -4,17 +4,16 @@ O modulo manipula templates PowerPoint como pacotes ZIP/XML, substitui
 placeholders de alunos e remove slides excedentes antes de salvar o arquivo.
 """
 
-from dataclasses import dataclass
 import math
-from pathlib import Path
 import re
 import zipfile
+from dataclasses import dataclass
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
-
 
 TEMPLATES_IDENTIFICADORES_DIR = settings.BASE_DIR / "identificadores" / "templates_pptx"
 ARQUIVOS_GERADOS_DIR = settings.BASE_DIR / "identificadores" / "arquivos_gerados"
@@ -119,7 +118,9 @@ def montar_dados_identificadores(alunos) -> dict[str, str]:
     return dados
 
 
-def substituir_placeholders_no_slide(xml_bytes: bytes, valores: dict[str, str]) -> bytes:
+def substituir_placeholders_no_slide(
+    xml_bytes: bytes, valores: dict[str, str]
+) -> bytes:
     """Substitui placeholders de texto dentro do XML de um slide.
 
     A funcao preserva o XML original em caso de falha para evitar corromper o
@@ -134,7 +135,9 @@ def substituir_placeholders_no_slide(xml_bytes: bytes, valores: dict[str, str]) 
     try:
         ET.register_namespace("a", ns["a"])
         ET.register_namespace("p", ns["p"])
-        ET.register_namespace("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships")
+        ET.register_namespace(
+            "r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        )
         root = ET.fromstring(xml_bytes)
 
         for shape in root.findall(".//p:sp", ns):
@@ -185,7 +188,9 @@ def deve_remover_parte_slide(caminho: str, total_slides: int) -> bool:
     return numero_slide is not None and numero_slide > total_slides
 
 
-def atualizar_rels_apresentacao(xml_bytes: bytes, total_slides: int) -> tuple[bytes, set[str]]:
+def atualizar_rels_apresentacao(
+    xml_bytes: bytes, total_slides: int
+) -> tuple[bytes, set[str]]:
     """Remove relacionamentos para slides acima do total usado.
 
     Retorna o XML atualizado e o conjunto de ids de relacionamento removidos,
@@ -239,7 +244,9 @@ def atualizar_content_types(xml_bytes: bytes, total_slides: int) -> bytes:
 
     for override in list(root):
         part_name = override.attrib.get("PartName", "")
-        if part_name.startswith("/ppt/slides/slide") or part_name.startswith("/ppt/notesSlides/notesSlide"):
+        if part_name.startswith("/ppt/slides/slide") or part_name.startswith(
+            "/ppt/notesSlides/notesSlide"
+        ):
             numero_slide = obter_numero_slide(part_name)
             if numero_slide and numero_slide > total_slides:
                 root.remove(override)
@@ -247,7 +254,9 @@ def atualizar_content_types(xml_bytes: bytes, total_slides: int) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def gerar_arquivo_identificadores(turma, modelo: ModeloIdentificador, alunos) -> ArquivoIdentificadoresGerado:
+def gerar_arquivo_identificadores(
+    turma, modelo: ModeloIdentificador, alunos
+) -> ArquivoIdentificadoresGerado:
     """Gera um PPTX de identificadores preenchido para uma turma.
 
     Copia o template selecionado, substitui placeholders dos slides, remove
@@ -259,7 +268,10 @@ def gerar_arquivo_identificadores(turma, modelo: ModeloIdentificador, alunos) ->
     timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
     nome_turma = slugify(turma.nome) or f"turma-{turma.pk}"
     nome_modelo = slugify(modelo.nome) or modelo.id
-    destino = ARQUIVOS_GERADOS_DIR / f"identificadores-{nome_turma}-{nome_modelo}-{timestamp}.pptx"
+    destino = (
+        ARQUIVOS_GERADOS_DIR
+        / f"identificadores-{nome_turma}-{nome_modelo}-{timestamp}.pptx"
+    )
     alunos_template = list(alunos)[:CAPACIDADE_TEMPLATE]
     total_slides = max(1, math.ceil(len(alunos_template) / IDENTIFICADORES_POR_SLIDE))
     valores = montar_dados_identificadores(alunos_template)
@@ -283,7 +295,9 @@ def gerar_arquivo_identificadores(turma, modelo: ModeloIdentificador, alunos) ->
                     data = atualizar_presentation_xml(data, rids_removidos)
                 elif item.filename == "[Content_Types].xml":
                     data = atualizar_content_types(data, total_slides)
-                elif item.filename.startswith("ppt/slides/slide") and item.filename.endswith(".xml"):
+                elif item.filename.startswith(
+                    "ppt/slides/slide"
+                ) and item.filename.endswith(".xml"):
                     data = substituir_placeholders_no_slide(data, valores)
 
                 target.writestr(item, data)

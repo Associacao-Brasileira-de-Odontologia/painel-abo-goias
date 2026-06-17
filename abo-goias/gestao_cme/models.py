@@ -287,7 +287,9 @@ class EstoqueArmario(models.Model):
     cada armario.
     """
 
-    armario = models.ForeignKey(Armario, on_delete=models.CASCADE, related_name="estoques")
+    armario = models.ForeignKey(
+        Armario, on_delete=models.CASCADE, related_name="estoques"
+    )
     material = models.ForeignKey(Material, on_delete=models.PROTECT)
     quantidade = models.PositiveIntegerField(default=0)
     observacoes = models.TextField(blank=True)

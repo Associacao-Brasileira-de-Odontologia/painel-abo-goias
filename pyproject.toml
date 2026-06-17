@@ -1,0 +1,19 @@
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | env
+  | staticfiles
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["abo_goias", "gestao_cme", "identificadores"]
+skip = [".git", ".venv", "venv", "env", "staticfiles", "migrations"]

@@ -27,7 +27,6 @@ from gestao_cme.models import (
     Turma,
 )
 
-
 ARQUIVO_ABRIGOS = "Abrigos.csv"
 ARQUIVO_ITENS_NAO_RETIRADOS = "Itens não retirados.csv"
 ARQUIVO_MOVIMENTACAO = "Relatório de movimentação.csv"
@@ -236,7 +235,9 @@ def migrar_movimentacoes(path: Path) -> MigracaoResumo:
     alunos_por_nome = {_normalizar(aluno.nome): aluno for aluno in Aluno.objects.all()}
     alunos_por_codigo = {aluno.matricula: aluno for aluno in Aluno.objects.all()}
     turmas_por_nome = {_normalizar(turma.nome): turma for turma in Turma.objects.all()}
-    materiais_por_codigo = {material.codigo: material for material in Material.objects.all()}
+    materiais_por_codigo = {
+        material.codigo: material for material in Material.objects.all()
+    }
 
     for index, row in enumerate(_ler_csv(path), start=2):
         try:

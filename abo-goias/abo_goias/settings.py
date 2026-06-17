@@ -1,5 +1,5 @@
-﻿import os
-import importlib.util
+﻿import importlib.util
+import os
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
@@ -67,7 +67,9 @@ def _database_from_url(database_url: str) -> dict[str, str | int]:
     }
     engine = engines.get(parsed.scheme)
     if not engine:
-        raise ImproperlyConfigured(f"Banco de dados nao suportado em DATABASE_URL: {parsed.scheme}")
+        raise ImproperlyConfigured(
+            f"Banco de dados nao suportado em DATABASE_URL: {parsed.scheme}"
+        )
 
     database = {
         "ENGINE": engine,
@@ -131,12 +133,18 @@ DEBUG = _env_bool("DJANGO_DEBUG", True)
 
 SECRET_KEY = _env(
     "DJANGO_SECRET_KEY",
-    "django-insecure-5o#=*kk7080r&^=1zdm^m007xxurh+n4df0a54@n_fiqfs3mbv" if DEBUG else "",
+    (
+        "django-insecure-5o#=*kk7080r&^=1zdm^m007xxurh+n4df0a54@n_fiqfs3mbv"
+        if DEBUG
+        else ""
+    ),
 )
 if not SECRET_KEY:
     raise ImproperlyConfigured("Defina DJANGO_SECRET_KEY no ambiente de producao.")
 
-ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"] if DEBUG else [])
+ALLOWED_HOSTS = _env_list(
+    "DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"] if DEBUG else []
+)
 RAILWAY_PUBLIC_DOMAIN = _env("RAILWAY_PUBLIC_DOMAIN")
 
 # Adicionar domínio público do Railway se estiver definido
@@ -154,47 +162,47 @@ if not DEBUG and not ALLOWED_HOSTS:
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'gestao_cme.apps.GestaoCmeConfig',
-    'identificadores',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "gestao_cme.apps.GestaoCmeConfig",
+    "identificadores",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 if importlib.util.find_spec("whitenoise"):
     MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 
-ROOT_URLCONF = 'abo_goias.urls'
+ROOT_URLCONF = "abo_goias.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'abo_goias.wsgi.application'
+WSGI_APPLICATION = "abo_goias.wsgi.application"
 
 
 DATABASES = _database_config()
@@ -205,16 +213,16 @@ DATABASES = _database_config()
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -224,7 +232,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = _env("DJANGO_LANGUAGE_CODE", "pt-br")
 
-TIME_ZONE = 'America/Sao_Paulo'
+TIME_ZONE = "America/Sao_Paulo"
 
 USE_I18N = True
 
@@ -234,7 +242,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 STATIC_ROOT = _env("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles"))
 STATICFILES_DIRS = []
 
@@ -248,11 +256,13 @@ if importlib.util.find_spec("whitenoise"):
         },
     }
 
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'home'
-LOGOUT_REDIRECT_URL = 'login'
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "home"
+LOGOUT_REDIRECT_URL = "login"
 
-EMAIL_BACKEND = _env("DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_BACKEND = _env(
+    "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
 DEFAULT_FROM_EMAIL = _env("DJANGO_DEFAULT_FROM_EMAIL", "noreply@abogoias.local")
 EMAIL_HOST = _env("DJANGO_EMAIL_HOST")
 EMAIL_PORT = _env_int("DJANGO_EMAIL_PORT", 587)
@@ -276,7 +286,9 @@ SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
 SESSION_COOKIE_SECURE = _env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = _env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
 SECURE_HSTS_SECONDS = _env_int("DJANGO_SECURE_HSTS_SECONDS", 0 if DEBUG else 31536000)
-SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool(
+    "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG
+)
 SECURE_HSTS_PRELOAD = _env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
 SECURE_PROXY_SSL_HEADER = (
     ("HTTP_X_FORWARDED_PROTO", "https")
@@ -285,27 +297,29 @@ SECURE_PROXY_SSL_HEADER = (
 )
 
 EDUQ_AUTH_URL = os.environ.get(
-    'EDUQ_AUTH_URL',
-    'https://apisistema.eduqtecnologia.com.br/autenticacao/logar',
+    "EDUQ_AUTH_URL",
+    "https://apisistema.eduqtecnologia.com.br/autenticacao/logar",
 )
 EDUQ_DATA_URL = os.environ.get(
-    'EDUQ_DATA_URL',
-    'https://apisistema.eduqtecnologia.com.br/emissao-consulta-personalizada/obter-dados',
+    "EDUQ_DATA_URL",
+    "https://apisistema.eduqtecnologia.com.br/emissao-consulta-personalizada/obter-dados",
 )
-EDUQ_CONSULTA_TURMAS_ID = int(os.environ.get('EDUQ_CONSULTA_TURMAS_ID', '4'))
-EDUQ_CONSULTA_DETALHES_TURMA_ID = int(os.environ.get('EDUQ_CONSULTA_DETALHES_TURMA_ID', '5'))
-EDUQ_VERIFY_TLS = os.environ.get('EDUQ_VERIFY_TLS', '').strip().lower() in {
-    '1',
-    'true',
-    'yes',
-    'sim',
-    'on',
+EDUQ_CONSULTA_TURMAS_ID = int(os.environ.get("EDUQ_CONSULTA_TURMAS_ID", "4"))
+EDUQ_CONSULTA_DETALHES_TURMA_ID = int(
+    os.environ.get("EDUQ_CONSULTA_DETALHES_TURMA_ID", "5")
+)
+EDUQ_VERIFY_TLS = os.environ.get("EDUQ_VERIFY_TLS", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "sim",
+    "on",
 }
-EDUQ_TIMEOUT = int(os.environ.get('EDUQ_TIMEOUT', '30'))
-EDUQ_USE_PROXY = os.environ.get('EDUQ_USE_PROXY', '').strip().lower() in {
-    '1',
-    'true',
-    'yes',
-    'sim',
-    'on',
+EDUQ_TIMEOUT = int(os.environ.get("EDUQ_TIMEOUT", "30"))
+EDUQ_USE_PROXY = os.environ.get("EDUQ_USE_PROXY", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "sim",
+    "on",
 }

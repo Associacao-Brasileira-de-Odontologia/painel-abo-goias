@@ -4,10 +4,10 @@ Este modulo orquestra consultas ao cliente Eduq, normaliza dados recebidos e
 grava turmas, alunos e localizacoes no banco local.
 """
 
+import unicodedata
 from dataclasses import dataclass, field
 from time import sleep
 from typing import Any
-import unicodedata
 
 from django.db import transaction
 from django.utils import timezone
@@ -85,7 +85,9 @@ def sincronizar_eduq(
                 codigos_para_alunos = [turma.codigo for turma in turmas_eduq]
             else:
                 codigos_para_alunos = list(
-                    Turma.objects.filter(ativo=True, origem=OrigemDados.EDUQ).values_list(
+                    Turma.objects.filter(
+                        ativo=True, origem=OrigemDados.EDUQ
+                    ).values_list(
                         "codigo",
                         flat=True,
                     )
@@ -221,7 +223,9 @@ def sincronizar_localizacao_alunos_turma(
 
     por_matricula = {aluno.matricula: aluno for aluno in alunos_eduq if aluno.matricula}
     por_cpf = {aluno.cpf: aluno for aluno in alunos_eduq if aluno.cpf}
-    por_nome = {_normalizar_nome(aluno.nome): aluno for aluno in alunos_eduq if aluno.nome}
+    por_nome = {
+        _normalizar_nome(aluno.nome): aluno for aluno in alunos_eduq if aluno.nome
+    }
     atualizados = 0
 
     for aluno in Aluno.objects.filter(turma=turma):

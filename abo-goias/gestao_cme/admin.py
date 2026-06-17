@@ -94,7 +94,13 @@ class ArmarioAdmin(admin.ModelAdmin):
 
 @admin.register(Abrigo)
 class AbrigoAdmin(admin.ModelAdmin):
-    list_display = ("identificador", "ocupado", "origem", "ultima_sincronizacao", "ativo")
+    list_display = (
+        "identificador",
+        "ocupado",
+        "origem",
+        "ultima_sincronizacao",
+        "ativo",
+    )
     list_filter = ("ocupado", "origem", "ativo")
     search_fields = ("identificador",)
 
@@ -203,4 +209,3 @@ class MovimentacaoAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("aluno", "turma", "material")
     date_hierarchy = "data_hora"
-

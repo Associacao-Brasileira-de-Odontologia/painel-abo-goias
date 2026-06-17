@@ -9,6 +9,4 @@ de modelo e intencional, evitando a criacao de modelos duplicados ou paralelos
 para dados que ja pertencem a gestao da CME.
 """
 
-from django.db import models
-
 # Reservado para modelos futuros especificos da geracao de identificadores.

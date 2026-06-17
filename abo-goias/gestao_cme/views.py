@@ -1,5 +1,5 @@
-﻿from django.contrib.auth.decorators import login_required
-from django.contrib import messages
+﻿from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Q
 from django.http import HttpResponse
@@ -7,9 +7,17 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from .integrations.eduq import EduqAPIError
-from .models import Abrigo, Aluno, Armario, Emprestimo, Kit, Material, Movimentacao, OrigemDados, Turma
+from .models import (
+    Abrigo,
+    Aluno,
+    Emprestimo,
+    Kit,
+    Material,
+    Movimentacao,
+    OrigemDados,
+    Turma,
+)
 from .services.eduq_sync import sincronizar_eduq
-
 
 REGISTROS_POR_PAGINA = 10
 
@@ -77,7 +85,9 @@ def portal(request):
 
     resumo = {
         "movimentacoes": movimentacoes_base.count(),
-        "emprestimos_abertos": emprestimos_base.filter(status=Emprestimo.Status.EMPRESTADO).count(),
+        "emprestimos_abertos": emprestimos_base.filter(
+            status=Emprestimo.Status.EMPRESTADO
+        ).count(),
         "alunos": Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
         "materiais": Material.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
         "turmas": Turma.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
@@ -85,11 +95,14 @@ def portal(request):
     }
 
     atividade_recente = []
-    for movimentacao in (
-        movimentacoes_base.select_related("material")
-        .order_by("-data_hora", "-id")[:8]
-    ):
-        material = movimentacao.material.nome if movimentacao.material else f"pacote {movimentacao.pacote_codigo}"
+    for movimentacao in movimentacoes_base.select_related("material").order_by(
+        "-data_hora", "-id"
+    )[:8]:
+        material = (
+            movimentacao.material.nome
+            if movimentacao.material
+            else f"pacote {movimentacao.pacote_codigo}"
+        )
         aluno = movimentacao.aluno_nome or "Aluno não informado"
 
         if movimentacao.tipo == Movimentacao.Tipo.ENTRADA:
@@ -123,7 +136,9 @@ def portal(request):
             {
                 "categoria": "exportacao",
                 "titulo": "Turma pronta para exportação",
-                "descricao": f"{turma.nome} foi atualizada para geração de identificadores.",
+                "descricao": (
+                    f"{turma.nome} foi atualizada para geração de identificadores."
+                ),
                 "data": turma.ultima_sincronizacao,
             }
         )
@@ -200,7 +215,9 @@ def home(request):
         else:
             registro.status_label = "Sem status"
             registro.status_classe = "emprestado"
-        registro.material_resumo = registro.material.nome if registro.material else "Pacote"
+        registro.material_resumo = (
+            registro.material.nome if registro.material else "Pacote"
+        )
 
     metricas = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO).aggregate(
         total=Count("id"),
@@ -272,7 +289,9 @@ def alunos_por_turma(request):
                 {"primary": aluno.email or "-", "secondary": aluno.telefone or ""},
                 {
                     "badge": "Ativo" if aluno.ativo else "Inativo",
-                    "badge_class": "badge-devolvido" if aluno.ativo else "badge-atrasado",
+                    "badge_class": (
+                        "badge-devolvido" if aluno.ativo else "badge-atrasado"
+                    ),
                 },
             ]
         }
@@ -281,13 +300,19 @@ def alunos_por_turma(request):
 
     turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
     if not request.user.is_superuser:
-        turmas = turmas.filter(alunos__emprestimos__coordenador_usuario=request.user).distinct()
+        turmas = turmas.filter(
+            alunos__emprestimos__coordenador_usuario=request.user
+        ).distinct()
 
     alunos_base = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
     turmas_base = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
     if not request.user.is_superuser:
-        alunos_base = alunos_base.filter(emprestimos__coordenador_usuario=request.user).distinct()
-        turmas_base = turmas_base.filter(alunos__emprestimos__coordenador_usuario=request.user).distinct()
+        alunos_base = alunos_base.filter(
+            emprestimos__coordenador_usuario=request.user
+        ).distinct()
+        turmas_base = turmas_base.filter(
+            alunos__emprestimos__coordenador_usuario=request.user
+        ).distinct()
 
     ultima_sincronizacao_alunos = alunos_base.aggregate(
         ultima=Max("ultima_sincronizacao")
@@ -380,7 +405,9 @@ def armarios(request):
     busca = request.GET.get("q", "").strip()
     ocupacao = request.GET.get("ocupacao", "").strip()
 
-    abrigos = Abrigo.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("identificador")
+    abrigos = Abrigo.objects.exclude(origem=OrigemDados.EXEMPLO).order_by(
+        "identificador"
+    )
     if ocupacao == "ocupado":
         abrigos = abrigos.filter(ocupado=True)
     elif ocupacao == "livre":
