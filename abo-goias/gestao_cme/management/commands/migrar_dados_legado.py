@@ -1,15 +1,22 @@
-﻿from pathlib import Path
+﻿from __future__ import annotations
 
-from django.core.management.base import BaseCommand, CommandError
+from pathlib import Path
+from typing import Any
+
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
 
-from gestao_cme.services.migracao_legado import migrar_dados_legado
+from gestao_cme.services.migracao_legado import (
+    MigracaoLegadoResultado,
+    MigracaoResumo,
+    migrar_dados_legado,
+)
 
 
 class Command(BaseCommand):
     help = "Migra para o banco Django os dados do sistema legado mantido em planilhas."
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--diretorio",
             default=str(Path.home() / "Downloads"),
@@ -21,7 +28,7 @@ class Command(BaseCommand):
             help="Executa a migracao e desfaz as gravacoes ao final.",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         try:
             with transaction.atomic():
                 resultado = migrar_dados_legado(Path(options["diretorio"]))
@@ -44,7 +51,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS("Migracao concluida com sucesso."))
 
-    def _escrever_resumo(self, titulo, resumo):
+    def _escrever_resumo(self, titulo: str, resumo: MigracaoResumo) -> None:
         self.stdout.write(
             f"{titulo}: {resumo.criados} criados, "
             f"{resumo.atualizados} atualizados, {len(resumo.erros)} erros."
@@ -57,7 +64,7 @@ class Command(BaseCommand):
             )
 
 
-def _tem_erros(resultado):
+def _tem_erros(resultado: MigracaoLegadoResultado) -> bool:
     return any(
         (
             resultado.abrigos.erros,

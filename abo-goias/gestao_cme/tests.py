@@ -1,4 +1,5 @@
 ﻿import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -39,13 +40,13 @@ from gestao_cme.services.migracao_legado import migrar_dados_legado
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
 class RotasIniciaisTests(TestCase):
-    def test_healthcheck_responde_sem_login(self):
+    def test_healthcheck_responde_sem_login(self) -> None:
         response = self.client.get(reverse("healthcheck"))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"ok")
 
-    def test_home_sem_login_redireciona_para_login(self):
+    def test_home_sem_login_redireciona_para_login(self) -> None:
         response = self.client.get(reverse("home"))
 
         self.assertRedirects(
@@ -54,18 +55,18 @@ class RotasIniciaisTests(TestCase):
             fetch_redirect_response=False,
         )
 
-    def test_login_e_a_tela_inicial_para_usuario_nao_autenticado(self):
+    def test_login_e_a_tela_inicial_para_usuario_nao_autenticado(self) -> None:
         response = self.client.get(reverse("login"))
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_cme/auth/login.html")
 
-    def test_catalog_legado_redireciona_para_home(self):
+    def test_catalog_legado_redireciona_para_home(self) -> None:
         response = self.client.get("/catalog/")
 
         self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
 
-    def test_home_autenticada_carrega_portal(self):
+    def test_home_autenticada_carrega_portal(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -77,7 +78,7 @@ class RotasIniciaisTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_cme/portal.html")
 
-    def test_cme_home_autenticada_carrega_painel(self):
+    def test_cme_home_autenticada_carrega_painel(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -89,7 +90,7 @@ class RotasIniciaisTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_cme/home.html")
 
-    def test_home_exibe_movimentacoes_migradas(self):
+    def test_home_exibe_movimentacoes_migradas(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -115,7 +116,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "4801")
         self.assertContains(response, "Retirado")
 
-    def test_home_filtra_movimentacoes_por_status_e_tipo(self):
+    def test_home_filtra_movimentacoes_por_status_e_tipo(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -154,7 +155,9 @@ class RotasIniciaisTests(TestCase):
         self.assertNotContains(response, "Aluno Retirado")
 
     @patch("gestao_cme.integrations.eduq.build_opener")
-    def test_cliente_eduq_ignora_proxy_por_padrao(self, build_opener_mock):
+    def test_cliente_eduq_ignora_proxy_por_padrao(
+        self, build_opener_mock: MagicMock
+    ) -> None:
         response = MagicMock()
         response.__enter__.return_value = response
         response.read = lambda: b'{"sucesso": true}'
@@ -177,7 +180,7 @@ class RotasIniciaisTests(TestCase):
         handlers = build_opener_mock.call_args.args
         self.assertEqual(handlers[0].proxies, {})
 
-    def test_listagem_de_alunos_nao_exibe_academicos_de_exemplo(self):
+    def test_listagem_de_alunos_nao_exibe_academicos_de_exemplo(self) -> None:
         turma_exemplo = Turma.objects.create(
             codigo="T-EXEMPLO",
             nome="Turma Exemplo",
@@ -212,7 +215,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Aluno Eduq")
         self.assertNotContains(response, "Aluno Exemplo")
 
-    def test_botao_sincronizacao_aparece_para_usuario_comum(self):
+    def test_botao_sincronizacao_aparece_para_usuario_comum(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -224,7 +227,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Sincronizar turmas")
         self.assertContains(response, reverse("sincronizar_turmas_eduq"))
 
-    def test_alunos_por_turma_exibe_ultima_sincronizacao(self):
+    def test_alunos_por_turma_exibe_ultima_sincronizacao(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -252,7 +255,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Última sincronização")
         self.assertContains(response, data_formatada)
 
-    def test_materiais_exibe_dados_reais_migrados(self):
+    def test_materiais_exibe_dados_reais_migrados(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -275,7 +278,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "KIT 1")
         self.assertContains(response, "Disponível")
 
-    def test_armarios_exibe_abrigos_reais_e_filtra_ocupacao(self):
+    def test_armarios_exibe_abrigos_reais_e_filtra_ocupacao(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -300,7 +303,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Ocupado")
         self.assertNotContains(response, "151")
 
-    def test_kits_exibe_dados_reais_e_materiais_vinculados(self):
+    def test_kits_exibe_dados_reais_e_materiais_vinculados(self) -> None:
         usuario = get_user_model().objects.create_user(
             username="coordenador",
             password="senha-segura",
@@ -331,7 +334,9 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "KIT 1")
 
     @patch("gestao_cme.views.sincronizar_eduq")
-    def test_botao_sincroniza_turmas_sem_sincronizar_alunos(self, sync_mock):
+    def test_botao_sincroniza_turmas_sem_sincronizar_alunos(
+        self, sync_mock: MagicMock
+    ) -> None:
         sync_mock.return_value = SimpleNamespace(
             turmas=SimpleNamespace(criados=2, atualizados=3, erros=[]),
         )
@@ -351,7 +356,9 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "Turmas sincronizadas: 2 criadas, 3 atualizadas")
 
     @patch("gestao_cme.views.sincronizar_eduq")
-    def test_sincronizacao_de_turmas_exibe_erro_da_api(self, sync_mock):
+    def test_sincronizacao_de_turmas_exibe_erro_da_api(
+        self, sync_mock: MagicMock
+    ) -> None:
         sync_mock.side_effect = EduqAPIError("API indisponivel")
         usuario = get_user_model().objects.create_user(
             username="coordenador",
@@ -366,7 +373,7 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "API indisponivel")
 
     @patch("gestao_cme.views.sincronizar_eduq")
-    def test_usuario_comum_pode_sincronizar_turmas(self, sync_mock):
+    def test_usuario_comum_pode_sincronizar_turmas(self, sync_mock: MagicMock) -> None:
         sync_mock.return_value = SimpleNamespace(
             turmas=SimpleNamespace(criados=1, atualizados=0, erros=[]),
         )
@@ -387,7 +394,7 @@ class RotasIniciaisTests(TestCase):
 
 
 class EduqSyncTests(TestCase):
-    def test_sincroniza_turmas_e_alunos_do_payload_eduq(self):
+    def test_sincroniza_turmas_e_alunos_do_payload_eduq(self) -> None:
         turmas = [
             {
                 "Identificador da Turma": 50057,
@@ -435,7 +442,7 @@ class EduqSyncTests(TestCase):
         self.assertEqual(aluno.origem, OrigemDados.EDUQ)
         self.assertIsNotNone(aluno.ultima_sincronizacao)
 
-    def test_sincronizacao_e_idempotente_por_codigo_e_matricula(self):
+    def test_sincronizacao_e_idempotente_por_codigo_e_matricula(self) -> None:
         sincronizar_turmas_eduq([{"codigo": "IMP-2026-1", "nome": "Implantodontia"}])
         sincronizar_alunos_eduq(
             [
@@ -467,7 +474,9 @@ class EduqSyncTests(TestCase):
         self.assertEqual(Turma.objects.get().nome, "Implantodontia Atualizada")
         self.assertEqual(Aluno.objects.get().nome, "Bruno Henrique Almeida")
 
-    def test_aluno_com_turma_inexistente_retorna_erro_sem_criar_registro(self):
+    def test_aluno_com_turma_inexistente_retorna_erro_sem_criar_registro(
+        self,
+    ) -> None:
         resumo = sincronizar_alunos_eduq(
             [
                 {
@@ -482,7 +491,9 @@ class EduqSyncTests(TestCase):
         self.assertEqual(len(resumo.erros), 1)
         self.assertFalse(Aluno.objects.exists())
 
-    def test_sincronizacao_permite_cpfs_duplicados_quando_ids_eduq_sao_diferentes(self):
+    def test_sincronizacao_permite_cpfs_duplicados_quando_ids_eduq_sao_diferentes(
+        self,
+    ) -> None:
         Turma.objects.create(
             codigo="TURMA-CPF", nome="Turma CPF", origem=OrigemDados.EDUQ
         )
@@ -507,7 +518,7 @@ class EduqSyncTests(TestCase):
         self.assertEqual(resumo.criados, 2)
         self.assertEqual(Aluno.objects.filter(cpf="111.222.333-44").count(), 2)
 
-    def test_atualiza_localizacao_de_alunos_existentes_pelo_eduq(self):
+    def test_atualiza_localizacao_de_alunos_existentes_pelo_eduq(self) -> None:
         turma = Turma.objects.create(
             codigo="50057", nome="Turma Eduq", origem=OrigemDados.EDUQ
         )
@@ -522,7 +533,7 @@ class EduqSyncTests(TestCase):
         class FakeEduqClient:
             codigo_consultado = None
 
-            def listar_alunos(self, codigo_turma_eduq):
+            def listar_alunos(self, codigo_turma_eduq: str) -> list[AlunoEduq]:
                 self.codigo_consultado = codigo_turma_eduq
                 return [
                     AlunoEduq(
@@ -544,17 +555,17 @@ class EduqSyncTests(TestCase):
         self.assertEqual(aluno.cidade, "RIO VERDE")
         self.assertEqual(aluno.uf, "GO")
 
-    def test_sincronizacao_consulta_alunos_por_turma_eduq(self):
+    def test_sincronizacao_consulta_alunos_por_turma_eduq(self) -> None:
         class FakeEduqClient:
             codigos_consultados = []
 
-            def listar_turmas(self):
+            def listar_turmas(self) -> list[TurmaEduq]:
                 return [
                     TurmaEduq(codigo="TURMA-1", nome="Turma 1"),
                     TurmaEduq(codigo="TURMA-2", nome="Turma 2"),
                 ]
 
-            def listar_alunos(self, codigo_turma_eduq):
+            def listar_alunos(self, codigo_turma_eduq: str) -> list[AlunoEduq]:
                 self.codigos_consultados.append(codigo_turma_eduq)
                 return [
                     AlunoEduq(
@@ -574,15 +585,15 @@ class EduqSyncTests(TestCase):
         self.assertEqual(Turma.objects.count(), 2)
         self.assertEqual(Aluno.objects.count(), 2)
 
-    def test_sincronizacao_de_alunos_continua_quando_uma_turma_falha(self):
+    def test_sincronizacao_de_alunos_continua_quando_uma_turma_falha(self) -> None:
         class FakeEduqClient:
-            def listar_turmas(self):
+            def listar_turmas(self) -> list[TurmaEduq]:
                 return [
                     TurmaEduq(codigo="TURMA-OK", nome="Turma OK"),
                     TurmaEduq(codigo="TURMA-ERRO", nome="Turma Erro"),
                 ]
 
-            def listar_alunos(self, codigo_turma_eduq):
+            def listar_alunos(self, codigo_turma_eduq: str) -> list[AlunoEduq]:
                 if codigo_turma_eduq == "TURMA-ERRO":
                     raise EduqAPIError("falha temporaria")
                 return [
@@ -600,7 +611,9 @@ class EduqSyncTests(TestCase):
         self.assertIn("TURMA-ERRO", resultado.alunos.erros[0])
         self.assertTrue(Aluno.objects.filter(matricula="ALUNO-OK").exists())
 
-    def test_sincronizacao_de_alunos_em_massa_ignora_turmas_de_exemplo(self):
+    def test_sincronizacao_de_alunos_em_massa_ignora_turmas_de_exemplo(
+        self,
+    ) -> None:
         Turma.objects.create(
             codigo="TURMA-EDUQ", nome="Turma Eduq", origem=OrigemDados.EDUQ
         )
@@ -613,10 +626,10 @@ class EduqSyncTests(TestCase):
         class FakeEduqClient:
             codigos_consultados = []
 
-            def listar_turmas(self):
+            def listar_turmas(self) -> list[TurmaEduq]:
                 raise AssertionError("Nao deve consultar turmas quando somente alunos.")
 
-            def listar_alunos(self, codigo_turma_eduq):
+            def listar_alunos(self, codigo_turma_eduq: str) -> list[AlunoEduq]:
                 self.codigos_consultados.append(codigo_turma_eduq)
                 return [
                     AlunoEduq(
@@ -639,7 +652,7 @@ class EduqSyncTests(TestCase):
 
 
 class DadosExemploTests(TestCase):
-    def test_fixture_de_exemplo_nao_cria_dados_academicos_fake(self):
+    def test_fixture_de_exemplo_nao_cria_dados_academicos_fake(self) -> None:
         fixture_path = (
             settings.BASE_DIR / "gestao_cme" / "fixtures" / "dados_exemplo.json"
         )
@@ -654,7 +667,7 @@ class DadosExemploTests(TestCase):
         self.assertIn("core.kit", modelos)
         self.assertIn("core.armario", modelos)
 
-    def test_fixture_de_exemplo_carrega_apenas_dados_operacionais(self):
+    def test_fixture_de_exemplo_carrega_apenas_dados_operacionais(self) -> None:
         call_command("loaddata", "dados_exemplo", verbosity=0)
 
         self.assertFalse(Turma.objects.exists())
@@ -664,7 +677,7 @@ class DadosExemploTests(TestCase):
 
 
 class MigracaoLegadoTests(TestCase):
-    def test_migra_dados_operacionais_legados_para_o_banco(self):
+    def test_migra_dados_operacionais_legados_para_o_banco(self) -> None:
         with patch(
             "gestao_cme.services.migracao_legado._ler_csv",
             side_effect=self._ler_csv_mock,
@@ -686,7 +699,7 @@ class MigracaoLegadoTests(TestCase):
             Movimentacao.objects.filter(tipo=Movimentacao.Tipo.ENTRADA).exists()
         )
 
-    def test_migracao_legado_e_idempotente(self):
+    def test_migracao_legado_e_idempotente(self) -> None:
         with patch(
             "gestao_cme.services.migracao_legado._ler_csv",
             side_effect=self._ler_csv_mock,
@@ -703,7 +716,7 @@ class MigracaoLegadoTests(TestCase):
         self.assertEqual(Material.objects.count(), 2)
         self.assertEqual(Movimentacao.objects.count(), 2)
 
-    def _ler_csv_mock(self, path):
+    def _ler_csv_mock(self, path: Path) -> list[dict[str, str]]:
         dados = {
             "Abrigos.csv": [
                 {"Identificador": "1", "Ocupado": "true"},

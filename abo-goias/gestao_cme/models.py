@@ -6,6 +6,8 @@ As docstrings das classes descrevem o papel de cada modelo no fluxo do
 sistema e servem como referencia rapida para manutencao e integracoes.
 """
 
+from __future__ import annotations
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -67,7 +69,7 @@ class Turma(ModeloBase):
         verbose_name = "turma"
         verbose_name_plural = "turmas"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna uma identificacao curta com codigo e nome da turma."""
 
         return f"{self.codigo} - {self.nome}"
@@ -107,7 +109,7 @@ class Aluno(ModeloBase):
         verbose_name = "aluno"
         verbose_name_plural = "alunos"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna o nome do aluno para telas administrativas e seletores."""
 
         return self.nome
@@ -154,7 +156,7 @@ class Material(ModeloBase):
         verbose_name = "material"
         verbose_name_plural = "materiais"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna o nome do material em listagens e relacionamentos."""
 
         return self.nome
@@ -190,7 +192,7 @@ class Kit(ModeloBase):
         verbose_name = "kit"
         verbose_name_plural = "kits"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna o nome do kit para exibicao administrativa."""
 
         return self.nome
@@ -218,7 +220,7 @@ class KitMaterial(models.Model):
         verbose_name = "material do kit"
         verbose_name_plural = "materiais do kit"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna a quantidade seguida do material vinculado ao kit."""
 
         return f"{self.quantidade} x {self.material}"
@@ -246,7 +248,7 @@ class Armario(ModeloBase):
         verbose_name = "armario"
         verbose_name_plural = "armarios"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna a identificacao unica do armario."""
 
         return self.identificacao
@@ -273,7 +275,7 @@ class Abrigo(ModeloBase):
         verbose_name = "abrigo"
         verbose_name_plural = "abrigos"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna o identificador do abrigo."""
 
         return self.identificador
@@ -305,7 +307,7 @@ class EstoqueArmario(models.Model):
         verbose_name = "estoque do armario"
         verbose_name_plural = "estoques dos armarios"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna armario, material e saldo disponivel do estoque."""
 
         return f"{self.armario} - {self.material}: {self.quantidade}"
@@ -361,7 +363,7 @@ class Emprestimo(ModeloBase):
         verbose_name = "emprestimo"
         verbose_name_plural = "emprestimos"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna uma descricao curta com o numero e o aluno do emprestimo."""
 
         return f"Emprestimo #{self.pk} - {self.aluno}"
@@ -401,7 +403,7 @@ class ItemEmprestimo(models.Model):
         verbose_name = "item do emprestimo"
         verbose_name_plural = "itens do emprestimo"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna a quantidade seguida do material emprestado."""
 
         return f"{self.quantidade} x {self.material}"
@@ -463,7 +465,7 @@ class Movimentacao(ModeloBase):
         verbose_name = "movimentacao"
         verbose_name_plural = "movimentacoes"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Retorna uma descricao resumida do evento de movimentacao."""
 
         return f"{self.get_tipo_display()} - {self.pacote_codigo} - {self.aluno_nome}"

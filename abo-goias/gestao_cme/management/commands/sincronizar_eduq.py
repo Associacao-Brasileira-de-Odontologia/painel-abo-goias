@@ -1,14 +1,18 @@
-﻿from django.core.management.base import BaseCommand, CommandError
+﻿from __future__ import annotations
+
+from typing import Any
+
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
 
 from gestao_cme.integrations.eduq import EduqAPIError, EduqClient
-from gestao_cme.services.eduq_sync import sincronizar_eduq
+from gestao_cme.services.eduq_sync import SyncResumo, sincronizar_eduq
 
 
 class Command(BaseCommand):
     help = "Consulta a API do Eduq e sincroniza turmas e alunos no banco local."
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -40,7 +44,7 @@ class Command(BaseCommand):
             help="Segundos de espera entre consultas de alunos por turma.",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         if options["somente_turmas"] and options["somente_alunos"]:
             raise CommandError(
                 "Use apenas uma opcao entre --somente-turmas e --somente-alunos."
@@ -81,7 +85,7 @@ class Command(BaseCommand):
                 self.style.SUCCESS("Sincronizacao concluida com sucesso.")
             )
 
-    def _escrever_resumo(self, titulo, resumo):
+    def _escrever_resumo(self, titulo: str, resumo: SyncResumo) -> None:
         self.stdout.write(
             f"{titulo}: {resumo.criados} criados, "
             f"{resumo.atualizados} atualizados, {len(resumo.erros)} erros."

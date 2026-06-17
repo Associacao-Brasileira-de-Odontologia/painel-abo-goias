@@ -1,4 +1,10 @@
+from __future__ import annotations
+
+from typing import Any
+
 from django.contrib import admin
+from django.db.models.query import QuerySet
+from django.http import HttpRequest
 
 from .models import (
     Abrigo,
@@ -154,13 +160,15 @@ class EmprestimoAdmin(admin.ModelAdmin):
     date_hierarchy = "data_emprestimo"
     inlines = (ItemEmprestimoInline,)
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Emprestimo]:
         queryset = super().get_queryset(request)
         if request.user.is_superuser:
             return queryset
         return queryset.filter(coordenador_usuario=request.user)
 
-    def save_model(self, request, obj, form, change):
+    def save_model(
+        self, request: HttpRequest, obj: Emprestimo, form: Any, change: bool
+    ) -> None:
         if not obj.coordenador_usuario_id:
             obj.coordenador_usuario = request.user
         if not obj.coordenador:
@@ -180,7 +188,7 @@ class ItemEmprestimoAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("emprestimo", "material", "armario")
 
-    def get_queryset(self, request):
+    def get_queryset(self, request: HttpRequest) -> QuerySet[ItemEmprestimo]:
         queryset = super().get_queryset(request)
         if request.user.is_superuser:
             return queryset

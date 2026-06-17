@@ -9,6 +9,7 @@ import re
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Iterable, Protocol
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
@@ -19,6 +20,17 @@ TEMPLATES_IDENTIFICADORES_DIR = settings.BASE_DIR / "identificadores" / "templat
 ARQUIVOS_GERADOS_DIR = settings.BASE_DIR / "identificadores" / "arquivos_gerados"
 IDENTIFICADORES_POR_SLIDE = 3
 CAPACIDADE_TEMPLATE = 48
+
+
+class AlunoIdentificador(Protocol):
+    nome: str
+    cidade: str
+    uf: str
+
+
+class TurmaIdentificador(Protocol):
+    nome: str
+    pk: Any
 
 
 @dataclass(frozen=True)
@@ -86,7 +98,7 @@ def buscar_modelo(modelo_id: str) -> ModeloIdentificador | None:
     return next((modelo for modelo in listar_modelos() if modelo.id == modelo_id), None)
 
 
-def montar_local_aluno(aluno) -> str:
+def montar_local_aluno(aluno: AlunoIdentificador) -> str:
     """Monta o texto de cidade e UF exibido no identificador do aluno."""
 
     cidade = (getattr(aluno, "cidade", "") or "").strip()
@@ -100,14 +112,16 @@ def montar_local_aluno(aluno) -> str:
     return ""
 
 
-def montar_dados_identificadores(alunos) -> dict[str, str]:
+def montar_dados_identificadores(
+    alunos: Iterable[AlunoIdentificador],
+) -> dict[str, str]:
     """Cria o mapa de placeholders NomeN e LocalN para o template PPTX.
 
     A quantidade e limitada pela capacidade fixa do template; posicoes sem
     aluno recebem texto vazio para limpar placeholders remanescentes.
     """
 
-    dados = {}
+    dados: dict[str, str] = {}
     alunos = list(alunos)[:CAPACIDADE_TEMPLATE]
 
     for indice in range(1, CAPACIDADE_TEMPLATE + 1):
@@ -200,7 +214,7 @@ def atualizar_rels_apresentacao(
     ns = {"rel": "http://schemas.openxmlformats.org/package/2006/relationships"}
     ET.register_namespace("", ns["rel"])
     root = ET.fromstring(xml_bytes)
-    rids_removidos = set()
+    rids_removidos: set[str] = set()
 
     for rel in list(root):
         rel_type = rel.attrib.get("Type", "")
@@ -208,7 +222,9 @@ def atualizar_rels_apresentacao(
         numero_slide = obter_numero_slide(target)
 
         if rel_type.endswith("/slide") and numero_slide and numero_slide > total_slides:
-            rids_removidos.add(rel.attrib.get("Id"))
+            rid = rel.attrib.get("Id")
+            if rid:
+                rids_removidos.add(rid)
             root.remove(rel)
 
     return ET.tostring(root, encoding="utf-8", xml_declaration=True), rids_removidos
@@ -255,7 +271,9 @@ def atualizar_content_types(xml_bytes: bytes, total_slides: int) -> bytes:
 
 
 def gerar_arquivo_identificadores(
-    turma, modelo: ModeloIdentificador, alunos
+    turma: TurmaIdentificador,
+    modelo: ModeloIdentificador,
+    alunos: Iterable[AlunoIdentificador],
 ) -> ArquivoIdentificadoresGerado:
     """Gera um PPTX de identificadores preenchido para uma turma.
 
