@@ -1,3 +1,9 @@
+"""Servicos para listar modelos e gerar arquivos PPTX de identificadores.
+
+O modulo manipula templates PowerPoint como pacotes ZIP/XML, substitui
+placeholders de alunos e remove slides excedentes antes de salvar o arquivo.
+"""
+
 from dataclasses import dataclass
 import math
 from pathlib import Path
@@ -18,21 +24,29 @@ CAPACIDADE_TEMPLATE = 48
 
 @dataclass(frozen=True)
 class ModeloIdentificador:
+    """Modelo PPTX disponivel para gerar identificadores de alunos."""
+
     id: str
     nome: str
     arquivo: Path
 
     @property
     def disponivel(self) -> bool:
+        """Indica se o arquivo fisico do template existe no projeto."""
+
         return self.arquivo.exists()
 
     @property
     def iniciais(self) -> str:
+        """Retorna iniciais curtas do nome para uso visual na interface."""
+
         return "".join(parte[0] for parte in self.nome.split()[:2]).upper()
 
 
 @dataclass(frozen=True)
 class ArquivoIdentificadoresGerado:
+    """Resultado da geracao de um arquivo PPTX de identificadores."""
+
     caminho: Path
     total_paginas: int
     total_identificadores: int
@@ -55,6 +69,8 @@ MODELOS_IDENTIFICADOR = (
 
 
 def listar_modelos() -> list[ModeloIdentificador]:
+    """Lista todos os modelos configurados com seus caminhos de template."""
+
     return [
         ModeloIdentificador(
             id=modelo_id,
@@ -66,10 +82,14 @@ def listar_modelos() -> list[ModeloIdentificador]:
 
 
 def buscar_modelo(modelo_id: str) -> ModeloIdentificador | None:
+    """Busca um modelo pelo identificador usado no formulario."""
+
     return next((modelo for modelo in listar_modelos() if modelo.id == modelo_id), None)
 
 
 def montar_local_aluno(aluno) -> str:
+    """Monta o texto de cidade e UF exibido no identificador do aluno."""
+
     cidade = (getattr(aluno, "cidade", "") or "").strip()
     uf = (getattr(aluno, "uf", "") or "").strip()
 
@@ -82,6 +102,12 @@ def montar_local_aluno(aluno) -> str:
 
 
 def montar_dados_identificadores(alunos) -> dict[str, str]:
+    """Cria o mapa de placeholders NomeN e LocalN para o template PPTX.
+
+    A quantidade e limitada pela capacidade fixa do template; posicoes sem
+    aluno recebem texto vazio para limpar placeholders remanescentes.
+    """
+
     dados = {}
     alunos = list(alunos)[:CAPACIDADE_TEMPLATE]
 
@@ -94,6 +120,12 @@ def montar_dados_identificadores(alunos) -> dict[str, str]:
 
 
 def substituir_placeholders_no_slide(xml_bytes: bytes, valores: dict[str, str]) -> bytes:
+    """Substitui placeholders de texto dentro do XML de um slide.
+
+    A funcao preserva o XML original em caso de falha para evitar corromper o
+    arquivo PPTX quando algum slide possui estrutura inesperada.
+    """
+
     ns = {
         "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
         "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
@@ -130,11 +162,15 @@ def substituir_placeholders_no_slide(xml_bytes: bytes, valores: dict[str, str]) 
 
 
 def obter_numero_slide(caminho: str) -> int | None:
+    """Extrai o numero de slide a partir de um caminho interno do PPTX."""
+
     match = re.search(r"slide(\d+)\.xml(?:\.rels)?$", caminho, re.IGNORECASE)
     return int(match.group(1)) if match else None
 
 
 def deve_remover_parte_slide(caminho: str, total_slides: int) -> bool:
+    """Indica se uma parte interna do PPTX pertence a slide excedente."""
+
     prefixes = (
         "ppt/slides/slide",
         "ppt/slides/_rels/slide",
@@ -150,6 +186,12 @@ def deve_remover_parte_slide(caminho: str, total_slides: int) -> bool:
 
 
 def atualizar_rels_apresentacao(xml_bytes: bytes, total_slides: int) -> tuple[bytes, set[str]]:
+    """Remove relacionamentos para slides acima do total usado.
+
+    Retorna o XML atualizado e o conjunto de ids de relacionamento removidos,
+    que depois sao excluidos da lista principal da apresentacao.
+    """
+
     ns = {"rel": "http://schemas.openxmlformats.org/package/2006/relationships"}
     ET.register_namespace("", ns["rel"])
     root = ET.fromstring(xml_bytes)
@@ -168,6 +210,8 @@ def atualizar_rels_apresentacao(xml_bytes: bytes, total_slides: int) -> tuple[by
 
 
 def atualizar_presentation_xml(xml_bytes: bytes, rids_removidos: set[str]) -> bytes:
+    """Remove da apresentacao os slides vinculados aos relacionamentos apagados."""
+
     ns = {
         "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
         "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
@@ -187,6 +231,8 @@ def atualizar_presentation_xml(xml_bytes: bytes, rids_removidos: set[str]) -> by
 
 
 def atualizar_content_types(xml_bytes: bytes, total_slides: int) -> bytes:
+    """Remove declaracoes de tipo de conteudo para slides excedentes."""
+
     ns = {"ct": "http://schemas.openxmlformats.org/package/2006/content-types"}
     ET.register_namespace("", ns["ct"])
     root = ET.fromstring(xml_bytes)
@@ -202,6 +248,13 @@ def atualizar_content_types(xml_bytes: bytes, total_slides: int) -> bytes:
 
 
 def gerar_arquivo_identificadores(turma, modelo: ModeloIdentificador, alunos) -> ArquivoIdentificadoresGerado:
+    """Gera um PPTX de identificadores preenchido para uma turma.
+
+    Copia o template selecionado, substitui placeholders dos slides, remove
+    slides acima da quantidade necessaria e salva o resultado na pasta de
+    arquivos gerados.
+    """
+
     ARQUIVOS_GERADOS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
     nome_turma = slugify(turma.nome) or f"turma-{turma.pk}"
@@ -243,6 +296,12 @@ def gerar_arquivo_identificadores(turma, modelo: ModeloIdentificador, alunos) ->
 
 
 def caminho_arquivo_gerado(nome_arquivo: str) -> Path:
+    """Resolve com seguranca o caminho de um arquivo gerado para download.
+
+    O nome recebido e reduzido ao basename e validado para permanecer dentro
+    da pasta de arquivos gerados, evitando travessia de diretorios.
+    """
+
     caminho = (ARQUIVOS_GERADOS_DIR / Path(nome_arquivo).name).resolve()
     raiz = ARQUIVOS_GERADOS_DIR.resolve()
     if raiz not in caminho.parents:

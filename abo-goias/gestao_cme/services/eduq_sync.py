@@ -1,4 +1,10 @@
-﻿from dataclasses import dataclass, field
+﻿"""Servicos de sincronizacao entre a CME e a API Eduq.
+
+Este modulo orquestra consultas ao cliente Eduq, normaliza dados recebidos e
+grava turmas, alunos e localizacoes no banco local.
+"""
+
+from dataclasses import dataclass, field
 from time import sleep
 from typing import Any
 import unicodedata
@@ -19,6 +25,12 @@ from gestao_cme.models import Aluno, OrigemDados, Turma
 
 @dataclass
 class SyncResumo:
+    """Resumo quantitativo de uma etapa de sincronizacao.
+
+    Guarda contadores de registros criados, atualizados, ignorados e mensagens
+    de erro acumuladas durante o processamento de turmas ou alunos.
+    """
+
     criados: int = 0
     atualizados: int = 0
     ignorados: int = 0
@@ -26,11 +38,19 @@ class SyncResumo:
 
     @property
     def total_processado(self) -> int:
+        """Calcula o total de itens tratados, incluindo erros."""
+
         return self.criados + self.atualizados + self.ignorados + len(self.erros)
 
 
 @dataclass
 class SyncEduqResultado:
+    """Resultado completo de uma sincronizacao com o Eduq.
+
+    Agrupa os resumos independentes de turmas e alunos para que chamadores
+    possam apresentar indicadores separados por tipo de cadastro.
+    """
+
     turmas: SyncResumo = field(default_factory=SyncResumo)
     alunos: SyncResumo = field(default_factory=SyncResumo)
 
@@ -42,6 +62,14 @@ def sincronizar_eduq(
     turma_codigos: list[str] | None = None,
     intervalo_consultas: float = 0,
 ) -> SyncEduqResultado:
+    """Sincroniza turmas e/ou alunos usando o cliente Eduq informado.
+
+    Quando turmas sao sincronizadas, seus codigos podem ser reaproveitados para
+    buscar alunos. Caso contrario, a rotina usa os codigos recebidos ou as
+    turmas Eduq ja ativas no banco local. Todo o processamento ocorre dentro de
+    uma transacao atomica.
+    """
+
     client = client or EduqClient()
     resultado = SyncEduqResultado()
 
@@ -81,6 +109,13 @@ def sincronizar_eduq(
 
 
 def sincronizar_turmas_eduq(turmas_raw: list[dict[str, Any] | TurmaEduq]) -> SyncResumo:
+    """Cria ou atualiza turmas locais a partir de registros vindos do Eduq.
+
+    Cada item e normalizado para ``TurmaEduq`` antes do ``update_or_create``.
+    Registros sem codigo ou nome entram no resumo como erro, sem interromper
+    os demais itens.
+    """
+
     resumo = SyncResumo()
     sincronizado_em = timezone.now()
 
@@ -115,6 +150,13 @@ def sincronizar_turmas_eduq(turmas_raw: list[dict[str, Any] | TurmaEduq]) -> Syn
 
 
 def sincronizar_alunos_eduq(alunos_raw: list[dict[str, Any] | AlunoEduq]) -> SyncResumo:
+    """Cria ou atualiza alunos locais a partir de registros vindos do Eduq.
+
+    A rotina associa cada aluno a uma turma local pelo codigo informado pelo
+    Eduq. Quando a turma nao existe ou o aluno nao possui dados minimos, o item
+    e registrado como erro no resumo.
+    """
+
     resumo = SyncResumo()
     sincronizado_em = timezone.now()
     turmas_por_codigo = {turma.codigo: turma for turma in Turma.objects.all()}
@@ -165,6 +207,13 @@ def sincronizar_localizacao_alunos_turma(
     turma: Turma,
     client: EduqClient | None = None,
 ) -> int:
+    """Atualiza cidade e UF de alunos de uma turma consultando o Eduq.
+
+    A correspondencia tenta matricula, CPF e nome normalizado, nessa ordem.
+    Retorna a quantidade de alunos que tiveram algum campo de localizacao
+    alterado.
+    """
+
     client = client or EduqClient()
     alunos_eduq = client.listar_alunos(turma.codigo)
     if not alunos_eduq:
@@ -202,6 +251,8 @@ def sincronizar_localizacao_alunos_turma(
 
 
 def _normalizar_nome(nome: str) -> str:
+    """Remove acentos, normaliza caixa e compacta espacos de um nome."""
+
     sem_acento = unicodedata.normalize("NFKD", str(nome or ""))
     ascii_nome = sem_acento.encode("ascii", "ignore").decode("ascii")
     return " ".join(ascii_nome.upper().split())

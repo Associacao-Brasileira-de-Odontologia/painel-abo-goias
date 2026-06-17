@@ -1,4 +1,10 @@
-﻿import csv
+﻿"""Servicos para migrar dados operacionais de planilhas legadas.
+
+O modulo importa CSVs historicos de abrigos, kits, materiais e movimentacoes,
+normalizando os valores antes de persisti-los nos modelos da CME.
+"""
+
+import csv
 import hashlib
 import re
 import unicodedata
@@ -31,11 +37,19 @@ ARQUIVO_MATERIAIS = "Materiais para empréstimo.csv"
 
 @dataclass
 class MigracaoResumo:
+    """Resumo de uma importacao de arquivo legado.
+
+    Guarda quantos registros foram criados, atualizados e quais erros foram
+    encontrados durante a leitura ou persistencia de um CSV especifico.
+    """
+
     criados: int = 0
     atualizados: int = 0
     erros: list[str] = field(default_factory=list)
 
     def somar(self, other: "MigracaoResumo") -> None:
+        """Acumula os contadores e erros de outro resumo de migracao."""
+
         self.criados += other.criados
         self.atualizados += other.atualizados
         self.erros.extend(other.erros)
@@ -43,6 +57,12 @@ class MigracaoResumo:
 
 @dataclass
 class MigracaoLegadoResultado:
+    """Resultado consolidado da migracao de todos os arquivos legados.
+
+    Separa os resumos por dominio operacional para facilitar mensagens de
+    comando, auditoria e investigacao de erros por tipo de dado.
+    """
+
     abrigos: MigracaoResumo = field(default_factory=MigracaoResumo)
     kits: MigracaoResumo = field(default_factory=MigracaoResumo)
     materiais: MigracaoResumo = field(default_factory=MigracaoResumo)
@@ -50,6 +70,13 @@ class MigracaoLegadoResultado:
 
 
 def migrar_dados_legado(diretorio: Path | str) -> MigracaoLegadoResultado:
+    """Executa a migracao completa a partir de um diretorio de CSVs legados.
+
+    Processa abrigos, kits, materiais e movimentacoes em uma transacao atomica.
+    Cada etapa recebe o arquivo esperado pelo nome historico e devolve um
+    resumo separado dentro do resultado consolidado.
+    """
+
     diretorio = Path(diretorio)
     resultado = MigracaoLegadoResultado()
 
@@ -68,6 +95,12 @@ def migrar_dados_legado(diretorio: Path | str) -> MigracaoLegadoResultado:
 
 
 def migrar_abrigos(path: Path) -> MigracaoResumo:
+    """Importa abrigos a partir do CSV de ocupacao legado.
+
+    Agrupa linhas pelo identificador do abrigo e considera o abrigo ocupado se
+    qualquer linha correspondente indicar ocupacao.
+    """
+
     resumo = MigracaoResumo()
     sincronizado_em = timezone.now()
     agrupados: dict[str, bool] = {}
@@ -100,6 +133,12 @@ def migrar_abrigos(path: Path) -> MigracaoResumo:
 
 
 def migrar_kits(path: Path) -> MigracaoResumo:
+    """Importa kits legados criando codigos estaveis a partir do nome.
+
+    Cada linha valida gera ou atualiza um kit com origem LEGADO, quantidade e
+    data de sincronizacao da rodada atual.
+    """
+
     resumo = MigracaoResumo()
     sincronizado_em = timezone.now()
 
@@ -128,6 +167,12 @@ def migrar_kits(path: Path) -> MigracaoResumo:
 
 
 def migrar_materiais(path: Path) -> MigracaoResumo:
+    """Importa materiais legados e vincula cada item ao kit correspondente.
+
+    A rotina usa codigos estaveis para materiais e kits, cria kits auxiliares
+    quando necessario e atualiza a tabela intermediaria KitMaterial.
+    """
+
     resumo = MigracaoResumo()
     sincronizado_em = timezone.now()
 
@@ -181,6 +226,12 @@ def migrar_materiais(path: Path) -> MigracaoResumo:
 
 
 def migrar_movimentacoes(path: Path) -> MigracaoResumo:
+    """Importa historico de entradas, saidas e retiradas pendentes.
+
+    Normaliza aluno, turma, material, data e tipo de movimentacao, preservando
+    dados textuais do CSV mesmo quando nao ha cadastro relacionado no banco.
+    """
+
     resumo = MigracaoResumo()
     alunos_por_nome = {_normalizar(aluno.nome): aluno for aluno in Aluno.objects.all()}
     alunos_por_codigo = {aluno.matricula: aluno for aluno in Aluno.objects.all()}
@@ -235,6 +286,8 @@ def migrar_movimentacoes(path: Path) -> MigracaoResumo:
 
 
 def _ler_csv(path: Path) -> list[dict[str, str]]:
+    """Le um CSV UTF-8 com BOM opcional e retorna linhas como dicionarios."""
+
     if not path.exists():
         raise ValueError(f"Arquivo nao encontrado: {path}")
     with path.open("r", encoding="utf-8-sig", newline="") as file:
@@ -242,15 +295,21 @@ def _ler_csv(path: Path) -> list[dict[str, str]]:
 
 
 def _texto(row: dict[str, Any], key: str) -> str:
+    """Extrai um campo textual de uma linha, removendo espacos externos."""
+
     value = row.get(key)
     return "" if value is None else str(value).strip()
 
 
 def _bool(value: str) -> bool:
+    """Converte valores textuais comuns de verdadeiro para booleano."""
+
     return str(value).strip().lower() in {"1", "true", "sim", "yes", "on"}
 
 
 def _inteiro(value: str) -> int:
+    """Converte texto para inteiro, usando zero quando o valor e invalido."""
+
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -258,17 +317,23 @@ def _inteiro(value: str) -> int:
 
 
 def _codigo_estavel(prefix: str, value: str) -> str:
+    """Gera um codigo deterministico com prefixo e hash curto do valor."""
+
     digest = hashlib.sha1(value.encode("utf-8")).hexdigest()[:12].upper()
     return f"{prefix}-{digest}"
 
 
 def _normalizar(value: str) -> str:
+    """Normaliza texto para comparacoes flexiveis entre planilha e banco."""
+
     sem_acento = unicodedata.normalize("NFKD", value or "")
     ascii_value = sem_acento.encode("ascii", "ignore").decode("ascii").upper()
     return re.sub(r"[^A-Z0-9]+", " ", ascii_value).strip()
 
 
 def _parse_data(value: str) -> datetime:
+    """Interpreta datas legadas nos formatos conhecidos e aplica timezone."""
+
     for fmt in ("%d/%m/%Y, %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S"):
         try:
             parsed = datetime.strptime(value, fmt)
@@ -279,6 +344,8 @@ def _parse_data(value: str) -> datetime:
 
 
 def _tipo_movimentacao(value: str) -> str:
+    """Converte o texto do CSV para uma escolha de Movimentacao.Tipo."""
+
     normalized = _normalizar(value)
     if normalized == "SAIDA":
         return Movimentacao.Tipo.SAIDA
@@ -288,6 +355,8 @@ def _tipo_movimentacao(value: str) -> str:
 
 
 def _parse_aluno(value: str) -> tuple[str, str]:
+    """Separa codigo externo e nome do aluno no formato legado."""
+
     cleaned = value.strip().lstrip("-").strip()
     match = re.match(r"^(\d+)\s*-\s*(.+)$", cleaned)
     if match:
@@ -296,6 +365,8 @@ def _parse_aluno(value: str) -> tuple[str, str]:
 
 
 def _retirado(row: dict[str, str]) -> bool | None:
+    """Determina o status de retirada conforme colunas presentes no CSV."""
+
     if "Retirado" in row and _texto(row, "Retirado"):
         return _bool(_texto(row, "Retirado"))
     if "Entregar" in row and _texto(row, "Entregar"):
@@ -304,6 +375,8 @@ def _retirado(row: dict[str, str]) -> bool | None:
 
 
 def _row_hash(file_name: str, row: dict[str, str]) -> str:
+    """Calcula hash unico e reprodutivel para uma linha de arquivo legado."""
+
     parts = [file_name]
     for key in sorted(row):
         parts.append(f"{key}={row.get(key, '')}")

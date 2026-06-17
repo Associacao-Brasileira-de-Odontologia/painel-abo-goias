@@ -1,3 +1,9 @@
+"""Integracao com a API Eduq.
+
+Este modulo carrega configuracao, autentica no Eduq, executa consultas
+personalizadas e normaliza respostas externas para estruturas internas.
+"""
+
 import json
 import os
 import ssl
@@ -13,11 +19,15 @@ from django.conf import settings
 
 
 class EduqAPIError(Exception):
+    """Erro de configuracao, autenticacao ou comunicacao com a API Eduq."""
+
     pass
 
 
 @dataclass(frozen=True)
 class ConfigEduq:
+    """Configuracao necessaria para autenticar e consultar a API Eduq."""
+
     dominio: str
     usuario: str
     senha: str
@@ -32,6 +42,8 @@ class ConfigEduq:
 
 @dataclass(frozen=True)
 class TurmaEduq:
+    """Representacao normalizada de uma turma recebida do Eduq."""
+
     codigo: str
     nome: str
     curso: str = ""
@@ -43,6 +55,8 @@ class TurmaEduq:
 
 @dataclass(frozen=True)
 class AlunoEduq:
+    """Representacao normalizada de um aluno recebido do Eduq."""
+
     matricula: str
     nome: str
     cpf: str = ""
@@ -55,6 +69,13 @@ class AlunoEduq:
 
 
 def carregar_arquivo_env(caminho: Path | None = None) -> None:
+    """Carrega variaveis de ambiente de arquivos .env conhecidos.
+
+    Valores ja presentes no ambiente sao preservados. Quando um caminho
+    especifico e informado, ele tem prioridade sobre os arquivos padrao do
+    projeto.
+    """
+
     caminhos = []
     if caminho:
         caminhos.append(caminho)
@@ -79,6 +100,12 @@ def carregar_arquivo_env(caminho: Path | None = None) -> None:
 
 
 def carregar_config_eduq() -> ConfigEduq:
+    """Monta a configuracao da API Eduq a partir do ambiente e settings.
+
+    Valida credenciais obrigatorias e converte opcoes como consulta, timeout,
+    proxy e verificacao TLS para os tipos usados pelo cliente HTTP.
+    """
+
     carregar_arquivo_env()
 
     credenciais = {
@@ -108,11 +135,21 @@ def carregar_config_eduq() -> ConfigEduq:
 
 
 class EduqClient:
+    """Cliente HTTP minimo para autenticar e consultar dados no Eduq.
+
+    Mantem o token autenticado em memoria durante a instancia e expõe metodos
+    de alto nivel para listar turmas e alunos ja normalizados.
+    """
+
     def __init__(self, config: ConfigEduq | None = None):
+        """Inicializa o cliente com configuracao explicita ou do ambiente."""
+
         self.config = config or carregar_config_eduq()
         self._token: str | None = None
 
     def listar_turmas(self) -> list[TurmaEduq]:
+        """Consulta turmas no Eduq e retorna apenas registros normalizados."""
+
         payload = {
             "consultaPersonalizada": {"id": self.config.consulta_turmas_id},
             "filtros": [],
@@ -125,6 +162,8 @@ class EduqClient:
         ]
 
     def listar_alunos(self, codigo_turma_eduq: str) -> list[AlunoEduq]:
+        """Consulta alunos de uma turma Eduq e normaliza a resposta."""
+
         payload = {
             "consultaPersonalizada": {"id": self.config.consulta_detalhes_turma_id},
             "filtros": [{"chave": "filtroTurma", "valor": str(codigo_turma_eduq)}],
@@ -139,6 +178,8 @@ class EduqClient:
         ]
 
     def _autenticar(self) -> str:
+        """Autentica no Eduq e retorna um token reutilizavel pela instancia."""
+
         if self._token:
             return self._token
 
@@ -162,6 +203,8 @@ class EduqClient:
         return self._token
 
     def _consultar(self, payload: dict[str, Any]) -> Any:
+        """Executa uma consulta autenticada no endpoint de dados do Eduq."""
+
         token = self._autenticar()
         return self._post_json(self.config.data_url, payload, headers={"token-auth": token})
 
@@ -171,6 +214,8 @@ class EduqClient:
         payload: dict[str, Any],
         headers: dict[str, str] | None = None,
     ) -> Any:
+        """Envia POST JSON e converte a resposta da API para objeto Python."""
+
         request = Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -211,6 +256,12 @@ class EduqClient:
 
 
 def normalizar_turma(item: dict[str, Any] | TurmaEduq) -> TurmaEduq | None:
+    """Converte um registro bruto do Eduq em ``TurmaEduq``.
+
+    Aceita diferentes nomes de chave encontrados nas consultas personalizadas e
+    retorna ``None`` quando nao ha dados minimos para identificar a turma.
+    """
+
     if isinstance(item, TurmaEduq):
         return item
 
@@ -266,6 +317,12 @@ def normalizar_aluno(
     item: dict[str, Any] | AlunoEduq,
     codigo_turma_eduq: str | None = None,
 ) -> AlunoEduq | None:
+    """Converte um registro bruto do Eduq em ``AlunoEduq``.
+
+    Usa varias chaves alternativas para matricula, nome, contato e localizacao.
+    Quando nao ha matricula, cria um identificador derivado da turma e do nome.
+    """
+
     if isinstance(item, AlunoEduq):
         return item
 
@@ -303,6 +360,8 @@ def normalizar_aluno(
 
 
 def _encontrar_lista(dados: Any) -> list[dict[str, Any]]:
+    """Procura uma lista de dicionarios em respostas aninhadas da API."""
+
     if isinstance(dados, str):
         try:
             return _encontrar_lista(json.loads(dados))
@@ -331,6 +390,8 @@ def _encontrar_lista(dados: Any) -> list[dict[str, Any]]:
 
 
 def _extrair_resultado(data: Any) -> Any:
+    """Extrai e decodifica o campo ``resultado`` quando ele existe."""
+
     if not isinstance(data, dict) or "resultado" not in data:
         return data
 
@@ -345,11 +406,15 @@ def _extrair_resultado(data: Any) -> Any:
 
 
 def _normalizar_chave(chave: str) -> str:
+    """Remove acentos e padroniza nomes de chaves para comparacao."""
+
     sem_acento = unicodedata.normalize("NFKD", str(chave))
     return sem_acento.encode("ascii", "ignore").decode("ascii").lower().strip()
 
 
 def _primeiro_texto(item: dict[str, Any], chaves: tuple[str, ...]) -> str:
+    """Retorna o primeiro valor textual encontrado entre chaves alternativas."""
+
     valores_por_chave = {_normalizar_chave(chave): valor for chave, valor in item.items()}
     for chave in chaves:
         valor = valores_por_chave.get(_normalizar_chave(chave))
@@ -359,6 +424,8 @@ def _primeiro_texto(item: dict[str, Any], chaves: tuple[str, ...]) -> str:
 
 
 def _primeiro_bool(item: dict[str, Any], chaves: tuple[str, ...]) -> bool:
+    """Retorna o primeiro valor booleano interpretavel entre chaves alternativas."""
+
     valores_por_chave = {_normalizar_chave(chave): valor for chave, valor in item.items()}
     for chave in chaves:
         valor = valores_por_chave.get(_normalizar_chave(chave))
@@ -370,6 +437,8 @@ def _primeiro_bool(item: dict[str, Any], chaves: tuple[str, ...]) -> bool:
 
 
 def _primeira_data(item: dict[str, Any], chaves: tuple[str, ...]) -> date | None:
+    """Retorna a primeira data valida encontrada nas chaves informadas."""
+
     valor = _primeiro_texto(item, chaves)
     if not valor:
         return None
@@ -383,6 +452,8 @@ def _primeira_data(item: dict[str, Any], chaves: tuple[str, ...]) -> date | None
 
 
 def _observacoes_turma(periodo: str, matriculas_ativas: str) -> str:
+    """Monta observacoes da turma com periodo e matriculas ativas."""
+
     partes = []
     if periodo:
         partes.append(f"Periodo: {periodo}")
@@ -392,6 +463,8 @@ def _observacoes_turma(periodo: str, matriculas_ativas: str) -> str:
 
 
 def _turma_ativa(item: dict[str, Any]) -> bool:
+    """Determina se a turma esta ativa a partir dos campos do Eduq."""
+
     matriculas_ativas = _primeiro_texto(item, ("matriculas ativas",))
     if matriculas_ativas:
         try:
@@ -402,6 +475,8 @@ def _turma_ativa(item: dict[str, Any]) -> bool:
 
 
 def _turma_codigo(raw: dict[str, Any]) -> str:
+    """Extrai o codigo da turma de um aluno ou objeto aninhado de turma."""
+
     codigo = _primeiro_texto(raw, ("turma_codigo", "codigoTurma", "codTurma", "idTurma"))
     if codigo:
         return codigo
@@ -414,6 +489,8 @@ def _turma_codigo(raw: dict[str, Any]) -> str:
 
 
 def _ler_booleano(nome: str, padrao: bool = False) -> bool:
+    """Le uma variavel de ambiente booleana com valor padrao."""
+
     valor = os.getenv(nome)
     if valor is None:
         return padrao
