@@ -21,10 +21,23 @@ STATUS_MOVIMENTACAO_OPCOES = (
 
 
 def healthcheck(request):
+    """Retorna uma resposta simples para verificacao de disponibilidade.
+
+    Usada por infraestrutura, monitoramento ou plataforma de deploy para
+    confirmar que a aplicacao Django esta respondendo requisicoes HTTP.
+    """
+
     return HttpResponse("ok", content_type="text/plain")
 
 
 def paginar_queryset(request, queryset):
+    """Pagina um queryset preservando os filtros atuais da query string.
+
+    Remove apenas o parametro ``page`` antes de reconstruir a query string,
+    permitindo que templates de paginacao mantenham busca e filtros ativos ao
+    navegar entre paginas.
+    """
+
     query_params = request.GET.copy()
     query_params.pop("page", None)
     paginator = Paginator(queryset, REGISTROS_POR_PAGINA)
@@ -34,6 +47,13 @@ def paginar_queryset(request, queryset):
 
 
 def emprestimos_visiveis(request):
+    """Retorna emprestimos que o usuario logado pode visualizar.
+
+    Superusuarios veem todos os emprestimos reais, enquanto coordenadores veem
+    somente registros vinculados ao proprio usuario. Dados de exemplo sao
+    removidos para nao interferir nos indicadores operacionais.
+    """
+
     queryset = Emprestimo.objects.exclude(
         Q(aluno__origem=OrigemDados.EXEMPLO)
         | Q(aluno__turma__origem=OrigemDados.EXEMPLO)
@@ -45,6 +65,13 @@ def emprestimos_visiveis(request):
 
 @login_required
 def portal(request):
+    """Renderiza o painel inicial com indicadores e atividade recente.
+
+    Consolida totais de movimentacoes, emprestimos, alunos, materiais, turmas
+    e kits, alem de montar uma linha do tempo curta com eventos recentes de
+    movimentacao e sincronizacao de turmas.
+    """
+
     movimentacoes_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
     emprestimos_base = emprestimos_visiveis(request)
 
@@ -120,6 +147,13 @@ def portal(request):
 
 @login_required
 def home(request):
+    """Lista movimentacoes de materiais com busca, filtros e metricas.
+
+    Permite filtrar por status de retirada, tipo de movimentacao e texto livre
+    em campos de aluno, turma, pacote, arquivo e material. Tambem prepara
+    labels de status usados na tabela renderizada.
+    """
+
     busca = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
     movimentacao = request.GET.get("movimentacao", "").strip()
@@ -197,6 +231,13 @@ def home(request):
 
 @login_required
 def alunos_por_turma(request):
+    """Exibe alunos agrupados por turma com filtros e acao de sincronizacao.
+
+    A view lista cadastros academicos ativos, respeitando a visibilidade do
+    usuario logado. Tambem calcula metricas da listagem, turmas disponiveis
+    para filtro e a data mais recente de sincronizacao com fontes externas.
+    """
+
     busca = request.GET.get("q", "").strip()
     turma_id = request.GET.get("turma", "").strip()
 
@@ -302,6 +343,13 @@ def alunos_por_turma(request):
 @login_required
 @require_POST
 def sincronizar_turmas_eduq(request):
+    """Executa a sincronizacao manual de turmas com o Eduq.
+
+    Processa apenas turmas, registra mensagens de sucesso ou erro para a
+    interface e redireciona o usuario de volta para a listagem de alunos por
+    turma.
+    """
+
     try:
         resultado = sincronizar_eduq(
             sincronizar_turmas=True,
@@ -323,6 +371,12 @@ def sincronizar_turmas_eduq(request):
 
 @login_required
 def armarios(request):
+    """Lista abrigos controlados pela CME com filtros de ocupacao.
+
+    Permite buscar por identificador, filtrar por abrigos ocupados ou livres e
+    apresentar metricas de ocupacao para apoiar a gestao fisica dos espacos.
+    """
+
     busca = request.GET.get("q", "").strip()
     ocupacao = request.GET.get("ocupacao", "").strip()
 
@@ -363,6 +417,13 @@ def armarios(request):
 
 @login_required
 def materiais(request):
+    """Lista materiais cadastrados com busca e filtro de disponibilidade.
+
+    Consulta materiais reais, permite busca por codigo, nome, descricao,
+    identificacao e kit relacionado, e calcula indicadores de total, ativos,
+    disponiveis e itens filtrados.
+    """
+
     busca = request.GET.get("q", "").strip()
     disponibilidade = request.GET.get("disponibilidade", "").strip()
 
@@ -415,6 +476,13 @@ def materiais(request):
 
 @login_required
 def kits(request):
+    """Lista kits de materiais com resumo dos itens que os compoem.
+
+    Permite busca por dados do kit e de seus materiais, prepara informacoes de
+    resumo para exibicao no template e calcula metricas gerais de kits ativos e
+    quantidade operacional.
+    """
+
     busca = request.GET.get("q", "").strip()
 
     kits_queryset = (
