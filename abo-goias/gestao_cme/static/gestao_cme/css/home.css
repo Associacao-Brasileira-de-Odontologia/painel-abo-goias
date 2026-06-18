@@ -837,6 +837,12 @@ td strong {
     border-radius: 12px;
     padding: 16px;
     background: rgba(8, 13, 25, 0.44);
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.portal-stat:hover {
+    border-color: var(--line-strong);
+    background: rgba(8, 13, 25, 0.64);
 }
 
 .portal-stat span,
@@ -1069,11 +1075,25 @@ td strong {
 }
 
 .system-meta em {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     color: #d9ecff;
     font-size: 0.88rem;
     font-style: normal;
     font-weight: 900;
     white-space: nowrap;
+}
+
+.system-meta em svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .pagination-summary {
@@ -1390,6 +1410,12 @@ tbody td:last-child {
         min-width: 720px;
     }
 
+}
+
+@media (max-width: 768px) {
+    .portal-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 620px) {

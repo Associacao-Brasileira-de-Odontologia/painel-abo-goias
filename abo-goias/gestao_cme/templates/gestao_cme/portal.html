@@ -21,7 +21,7 @@
                         <strong>{{ resumo.movimentacoes }}</strong>
                     </div>
                     <div class="portal-stat">
-                        <span>Movimentações abertas</span>
+                        <span>Empréstimos ativos</span>
                         <strong>{{ resumo.emprestimos_abertos }}</strong>
                     </div>
                     <div class="portal-stat">
@@ -104,7 +104,10 @@
                         <p>Movimentações, alunos, abrigos, materiais e kits.</p>
                         <div class="system-meta">
                             <span>{{ resumo.materiais }} materiais</span>
-                            <em>Acessar -></em>
+                            <em>
+                                Acessar
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                            </em>
                         </div>
                     </a>
                     <a class="system-card" href="{% url 'identificadores:index' %}">
@@ -113,7 +116,10 @@
                         <p>Modelos de bancada gerados a partir das turmas cadastradas.</p>
                         <div class="system-meta">
                             <span>{{ resumo.turmas }} turmas</span>
-                            <em>Acessar -></em>
+                            <em>
+                                Acessar
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                            </em>
                         </div>
                     </a>
                 </div>
