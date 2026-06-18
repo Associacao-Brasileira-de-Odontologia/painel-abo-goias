@@ -15,27 +15,53 @@
                 <h2>Olá, {{ usuario_logado.first_name|default:usuario_logado.username }}</h2>
                 <p class="portal-intro">Acesse os sistemas internos e acompanhe os dados principais da operação acadêmica.</p>
 
-                <div class="portal-stats" aria-label="Resumo dos sistemas">
-                    <div class="portal-stat">
-                        <span>Movimentações</span>
-                        <strong>{{ resumo.movimentacoes }}</strong>
-                    </div>
-                    <div class="portal-stat">
-                        <span>Movimentações abertas</span>
-                        <strong>{{ resumo.emprestimos_abertos }}</strong>
-                    </div>
-                    <div class="portal-stat">
-                        <span>Alunos</span>
-                        <strong>{{ resumo.alunos }}</strong>
+                <div class="portal-stats-section">
+                    <p class="section-label">Indicadores</p>
+                    <div class="portal-stats" aria-label="Indicadores do sistema">
+                        <div class="portal-stat">
+                            <span>Movimentações</span>
+                            <strong>{{ resumo.movimentacoes }}</strong>
+                        </div>
+                        <div class="portal-stat">
+                            <span>Empréstimos ativos</span>
+                            <strong>{{ resumo.emprestimos_abertos }}</strong>
+                        </div>
+                        <div class="portal-stat">
+                            <span>Alunos</span>
+                            <strong>{{ resumo.alunos }}</strong>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="portal-brand-card" aria-label="Associação Brasileira de Odontologia de Goiás">
-                <img src="{% static 'gestao_cme/img/logo.png' %}" alt="ABO Goiás">
+            <div class="portal-brand-card" aria-label="Resumo do acervo">
                 <div>
-                    <span>Ambiente integrado</span>
-                    <strong>Gestão acadêmica e operacional</strong>
+                    <p class="section-label">Acervo</p>
+                    <h2>Resumo rápido</h2>
+                </div>
+
+                <div class="portal-status-grid">
+                    <div class="portal-status-item">
+                        <span>Materiais</span>
+                        <strong>{{ resumo.materiais }}</strong>
+                    </div>
+                    <div class="portal-status-item">
+                        <span>Kits</span>
+                        <strong>{{ resumo.kits }}</strong>
+                    </div>
+                    <div class="portal-status-item">
+                        <span>Turmas</span>
+                        <strong>{{ resumo.turmas }}</strong>
+                    </div>
+                    <div class="portal-status-item">
+                        <span>Empréstimos ativos</span>
+                        <strong>{{ resumo.emprestimos_abertos }}</strong>
+                    </div>
+                </div>
+
+                <div class="portal-quick-links">
+                    <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída de material</a>
+                    <a class="button secondary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
                 </div>
             </div>
         </section>
@@ -81,7 +107,10 @@
                         <p>Movimentações, alunos, abrigos, materiais e kits.</p>
                         <div class="system-meta">
                             <span>{{ resumo.materiais }} materiais</span>
-                            <em>Acessar -></em>
+                            <em>
+                                Acessar
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                            </em>
                         </div>
                     </a>
                     <a class="system-card" href="{% url 'identificadores:index' %}">
@@ -90,7 +119,10 @@
                         <p>Modelos de bancada gerados a partir das turmas cadastradas.</p>
                         <div class="system-meta">
                             <span>{{ resumo.turmas }} turmas</span>
-                            <em>Acessar -></em>
+                            <em>
+                                Acessar
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                            </em>
                         </div>
                     </a>
                 </div>
