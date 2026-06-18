@@ -1,0 +1,212 @@
+{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de CME | Empréstimos{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}Empréstimos{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Painel do coordenador</p>
+                <h2>Empréstimos</h2>
+                <p class="panel-copy">Acompanhe os empréstimos ativos, devolvidos e atrasados.</p>
+
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="emprestimos_lista" %}
+
+                <form class="form-stack" method="get">
+                    {% if busca %}
+                        <input type="hidden" name="q" value="{{ busca }}">
+                    {% endif %}
+                    <div class="field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option value="">Todos</option>
+                            {% for valor, rotulo in status_opcoes %}
+                                <option value="{{ valor }}" {% if status_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
+                    <a class="button secondary" href="{% url 'emprestimos' %}">Limpar filtros</a>
+                </form>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Total</span>
+                        <strong>{{ metricas.total|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Emprestados</span>
+                        <strong>{{ metricas.emprestados|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card danger-metric">
+                        <span class="metric-label">Atrasados</span>
+                        <strong>{{ metricas.atrasados|default:0 }}</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Devolvidos</span>
+                        <strong>{{ metricas.devolvidos|default:0 }}</strong>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Controle de empréstimos</p>
+                        <h2>Empréstimos registrados</h2>
+                    </div>
+                    <div class="topbar-actions">
+                        <a class="button primary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
+                        <a class="button secondary admin-link" href="/admin/gestao_cme/emprestimo/">Admin</a>
+                    </div>
+                </div>
+
+                <form class="results-search" method="get">
+                    {% if status_filtro %}
+                        <input type="hidden" name="status" value="{{ status_filtro }}">
+                    {% endif %}
+                    <label class="search-label" for="results-q-emp">Buscar na listagem</label>
+                    <div class="results-search-row">
+                        <div class="search-control">
+                            <input id="results-q-emp" type="search" name="q" value="{{ busca }}" placeholder="Buscar por aluno, matrícula, kit ou coordenador...">
+                        </div>
+                        <button class="button primary" type="submit">Buscar</button>
+                        <a class="button secondary" href="{% url 'emprestimos' %}">Limpar</a>
+                    </div>
+                </form>
+
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Status</span>
+                        <strong>{{ status_label }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Resultado</span>
+                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                    </div>
+                </div>
+
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Aluno</th>
+                                <th>Kit</th>
+                                <th>Itens</th>
+                                <th>Emprestado em</th>
+                                <th>Devolução prevista</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for emp in emprestimos %}
+                                <tr>
+                                    <td><strong>#{{ emp.pk }}</strong></td>
+                                    <td>
+                                        <strong>{{ emp.aluno.nome }}</strong>
+                                        {% if emp.aluno.turma %}
+                                            <span class="cell-muted">{{ emp.aluno.turma.codigo }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if emp.kit %}
+                                            <strong>{{ emp.kit.nome }}</strong>
+                                            <span class="cell-muted">{{ emp.kit.codigo }}</span>
+                                        {% else %}
+                                            <span class="cell-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ emp.itens.count }}</td>
+                                    <td>
+                                        <strong>{{ emp.data_emprestimo|date:"d/m/Y" }}</strong>
+                                        <span class="cell-muted">{{ emp.data_emprestimo|date:"H:i" }}</span>
+                                    </td>
+                                    <td>
+                                        {% if emp.data_prevista_devolucao %}
+                                            {{ emp.data_prevista_devolucao|date:"d/m/Y" }}
+                                        {% elif emp.data_devolucao %}
+                                            <span class="cell-muted">{{ emp.data_devolucao|date:"d/m/Y" }}</span>
+                                        {% else %}
+                                            <span class="cell-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if emp.status == "EMPRESTADO" %}
+                                            <span class="badge badge-emprestado">Emprestado</span>
+                                        {% elif emp.status == "DEVOLVIDO" %}
+                                            <span class="badge badge-devolvido">Devolvido</span>
+                                        {% else %}
+                                            <span class="badge badge-atrasado">Atrasado</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="actions-cell">
+                                        {% if emp.status != "DEVOLVIDO" %}
+                                            <form method="post" action="{% url 'devolver_emprestimo' emp.pk %}" class="inline-form">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button class="button compact-button secondary" type="submit" title="Registrar devolução">Devolver</button>
+                                            </form>
+                                        {% endif %}
+                                        {% if emp.status == "EMPRESTADO" %}
+                                            <form method="post" action="{% url 'marcar_emprestimo_atrasado' emp.pk %}" class="inline-form">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button class="button compact-button danger-button" type="submit" title="Marcar como atrasado">Atrasado</button>
+                                            </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr class="empty-row">
+                                    <td colspan="8">
+                                        <div class="empty-state">
+                                            <strong>Nenhum empréstimo encontrado.</strong>
+                                            <p>Revise os filtros ou <a href="{% url 'criar_emprestimo' %}">registre um novo empréstimo</a>.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.paginator.count %}
+                    <div class="pagination-summary">
+                        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                        <span>Exibindo {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }}</span>
+                    </div>
+                {% endif %}
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                    <nav class="pagination" aria-label="Paginação">
+                        {% if page_obj.has_previous %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+                        {% else %}
+                            <span class="page-link disabled">Anterior</span>
+                        {% endif %}
+                        {% for numero in page_obj.paginator.page_range %}
+                            {% if numero == page_obj.number %}
+                                <span class="page-link active">{{ numero }}</span>
+                            {% elif numero >= page_obj.number|add:"-2" and numero <= page_obj.number|add:"2" %}
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ numero }}">{{ numero }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        {% if page_obj.has_next %}
+                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
+                        {% else %}
+                            <span class="page-link disabled">Próxima</span>
+                        {% endif %}
+                    </nav>
+                {% endif %}
+            </section>
+        </div>
+    </main>
+{% endblock %}

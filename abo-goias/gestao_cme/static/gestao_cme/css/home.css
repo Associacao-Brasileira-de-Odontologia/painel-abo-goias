@@ -1427,3 +1427,108 @@ tbody td:last-child {
         width: 100%;
     }
 }
+
+/* ── Mensagens globais ──────────────────────────────────────── */
+
+.messages-banner {
+    width: min(1240px, calc(100% - 32px));
+    margin: 0 auto 0;
+    padding: 12px 0 0;
+    display: grid;
+    gap: 8px;
+}
+
+/* ── Campos de formulário adicionais ────────────────────────── */
+
+input[type="datetime-local"],
+input[type="date"],
+textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 16px;
+    background: rgba(8, 13, 25, 0.68);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+input[type="datetime-local"],
+input[type="date"] {
+    min-height: 50px;
+}
+
+input[type="datetime-local"]:focus,
+input[type="date"]:focus,
+textarea:focus {
+    border-color: rgba(47, 140, 255, 0.82);
+    box-shadow: 0 0 0 4px rgba(47, 140, 255, 0.13);
+    background: rgba(9, 15, 29, 0.95);
+}
+
+.field-optional {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.form-errors {
+    margin-bottom: 20px;
+    padding: 14px 18px;
+    border: 1px solid rgba(255, 94, 94, 0.36);
+    border-radius: 16px;
+    background: rgba(255, 94, 94, 0.1);
+    color: #ffb8b8;
+}
+
+.form-errors ul {
+    margin: 0;
+    padding: 0 0 0 18px;
+}
+
+.form-errors li {
+    margin-bottom: 4px;
+}
+
+.form-errors li:last-child {
+    margin-bottom: 0;
+}
+
+/* ── Formulário wide (na seção de resultados) ───────────────── */
+
+.form-stack-wide {
+    display: grid;
+    gap: 20px;
+    padding-top: 0;
+    border-top: none;
+    max-width: 640px;
+}
+
+.form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-top: 8px;
+}
+
+/* ── Ações inline na tabela ─────────────────────────────────── */
+
+.actions-cell {
+    white-space: nowrap;
+    padding-right: 12px !important;
+}
+
+.inline-form {
+    display: inline;
+    margin: 0;
+    padding: 0;
+}
+
+.danger-button {
+    background: rgba(255, 94, 94, 0.16) !important;
+    border: 1px solid rgba(255, 94, 94, 0.36) !important;
+    color: #ff9e9e !important;
+}
+
+.danger-button:hover {
+    background: rgba(255, 94, 94, 0.28) !important;
+}

@@ -51,10 +51,23 @@
                         <h2>{{ titulo }}</h2>
                     </div>
                     <div class="topbar-actions">
+                        {% if cadastrar_aluno_url %}
+                            <a class="button primary" href="{{ cadastrar_aluno_url }}">Cadastrar aluno</a>
+                        {% endif %}
+                        {% if cadastrar_turma_url %}
+                            <a class="button secondary" href="{{ cadastrar_turma_url }}">Cadastrar turma</a>
+                        {% endif %}
+                        {% if sync_alunos_url %}
+                            <form class="sync-form" method="post" action="{{ sync_alunos_url }}">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="button secondary" type="submit">{{ sync_alunos_label }}</button>
+                            </form>
+                        {% endif %}
                         {% if sync_action_url %}
                             <form class="sync-form" method="post" action="{% url sync_action_url %}">
                                 {% csrf_token %}
-                                <button class="button primary admin-link" type="submit">Sincronizar turmas</button>
+                                <button class="button secondary" type="submit">Sincronizar turmas</button>
                             </form>
                         {% endif %}
                         <a class="button secondary admin-link" href="/admin/core/">Abrir admin</a>

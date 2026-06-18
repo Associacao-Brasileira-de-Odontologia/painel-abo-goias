@@ -1,14 +1,20 @@
 ﻿from __future__ import annotations
 
+import hashlib
+import uuid
+from datetime import datetime
 from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
+from django.db import transaction
 from django.db.models import Count, Max, Q
 from django.db.models.query import QuerySet
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .integrations.eduq import EduqAPIError
@@ -16,6 +22,7 @@ from .models import (
     Abrigo,
     Aluno,
     Emprestimo,
+    ItemEmprestimo,
     Kit,
     Material,
     Movimentacao,
@@ -25,6 +32,12 @@ from .models import (
 from .services.eduq_sync import sincronizar_eduq
 
 REGISTROS_POR_PAGINA = 10
+
+
+def _gerar_row_hash() -> str:
+    """Gera um hash unico para movimentacoes criadas manualmente pelo painel."""
+    return hashlib.sha256(uuid.uuid4().bytes).hexdigest()
+
 
 STATUS_MOVIMENTACAO_OPCOES = (
     ("retirado", "Retirado"),
@@ -311,6 +324,16 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             alunos__emprestimos__coordenador_usuario=request.user
         ).distinct()
 
+    # Resolve turma selecionada para habilitar sincronizacao por turma
+    turma_selecionada = None
+    if turma_id.isdigit():
+        try:
+            turma_selecionada = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).get(
+                pk=turma_id
+            )
+        except Turma.DoesNotExist:
+            pass
+
     alunos_base = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
     turmas_base = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
     if not request.user.is_superuser:
@@ -358,6 +381,21 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             "query_string": query_string,
             "empty_message": "Nenhum aluno encontrado.",
             "sync_action_url": "sincronizar_turmas_eduq",
+            "sync_alunos_url": (
+                reverse(
+                    "sincronizar_alunos_turma",
+                    kwargs={"turma_id": turma_selecionada.pk},
+                )
+                if turma_selecionada and turma_selecionada.origem == OrigemDados.EDUQ
+                else None
+            ),
+            "sync_alunos_label": (
+                f"Sincronizar alunos de {turma_selecionada.nome}"
+                if turma_selecionada
+                else None
+            ),
+            "cadastrar_aluno_url": reverse("cadastrar_aluno"),
+            "cadastrar_turma_url": reverse("cadastrar_turma"),
             "ultima_sincronizacao": ultima_sincronizacao,
             "filter_select": {
                 "name": "turma",
@@ -564,3 +602,602 @@ def kits(request: HttpRequest) -> HttpResponse:
             "query_string": query_string,
         },
     )
+
+
+def _contexto_form_movimentacao(
+    request: HttpRequest,
+    tipo: str,
+) -> dict[str, Any]:
+    """Monta o contexto base compartilhado entre registrar_saida e registrar_entrada."""
+
+    tipo_label = "Saída" if tipo == Movimentacao.Tipo.SAIDA else "Entrada"
+    active_page = "nova_saida" if tipo == Movimentacao.Tipo.SAIDA else "nova_entrada"
+    return {
+        "usuario_logado": request.user,
+        "tipo": tipo,
+        "tipo_label": tipo_label,
+        "titulo": f"Registrar {tipo_label.lower()}",
+        "subtitulo": (
+            "Registre a entrega de um pacote ao aluno."
+            if tipo == Movimentacao.Tipo.SAIDA
+            else "Registre a devolução de um pacote pelo aluno."
+        ),
+        "submit_label": f"Registrar {tipo_label.lower()}",
+        "active_page": active_page,
+        "alunos": (
+            Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
+            .filter(ativo=True)
+            .select_related("turma")
+            .order_by("turma__nome", "nome")
+        ),
+        "materiais": (
+            Material.objects.exclude(origem=OrigemDados.EXEMPLO)
+            .filter(ativo=True)
+            .order_by("nome")
+        ),
+    }
+
+
+def _processar_form_movimentacao(
+    request: HttpRequest,
+    tipo: str,
+) -> tuple[Movimentacao | None, list[str], dict[str, str]]:
+    """Valida e salva uma movimentacao a partir do POST.
+    Retorna (objeto, erros, form_data)."""
+
+    form_data = {
+        "aluno": request.POST.get("aluno", "").strip(),
+        "pacote_codigo": request.POST.get("pacote_codigo", "").strip(),
+        "material": request.POST.get("material", "").strip(),
+        "data_hora": request.POST.get("data_hora", "").strip(),
+        "observacoes": request.POST.get("observacoes", "").strip(),
+    }
+    erros: list[str] = []
+    aluno: Aluno | None = None
+    material: Material | None = None
+
+    if not form_data["aluno"].isdigit():
+        erros.append("Selecione um aluno.")
+    else:
+        try:
+            aluno = (
+                Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
+                .select_related("turma")
+                .get(pk=form_data["aluno"])
+            )
+        except Aluno.DoesNotExist:
+            erros.append("Aluno não encontrado.")
+
+    if not form_data["pacote_codigo"]:
+        erros.append("Informe o código do pacote.")
+
+    if form_data["material"].isdigit():
+        try:
+            material = Material.objects.exclude(origem=OrigemDados.EXEMPLO).get(
+                pk=form_data["material"]
+            )
+        except Material.DoesNotExist:
+            pass
+
+    data_hora = timezone.now()
+    if form_data["data_hora"]:
+        try:
+            data_hora = timezone.make_aware(
+                datetime.strptime(form_data["data_hora"], "%Y-%m-%dT%H:%M")
+            )
+        except ValueError:
+            erros.append("Data e hora inválidas.")
+
+    if erros or not aluno:
+        return None, erros, form_data
+
+    retirado = None if tipo == Movimentacao.Tipo.SAIDA else True
+    mov = Movimentacao.objects.create(
+        data_hora=data_hora,
+        tipo=tipo,
+        aluno=aluno,
+        turma=aluno.turma,
+        material=material,
+        aluno_nome=aluno.nome,
+        aluno_codigo_externo=aluno.matricula,
+        turma_nome=aluno.turma.nome if aluno.turma else "",
+        pacote_codigo=form_data["pacote_codigo"],
+        retirado=retirado,
+        arquivo_origem="painel",
+        row_hash=_gerar_row_hash(),
+        origem=OrigemDados.MANUAL,
+        observacoes=form_data["observacoes"],
+    )
+    return mov, [], form_data
+
+
+@login_required
+def registrar_saida(request: HttpRequest) -> HttpResponse:
+    """Registra a saida de um material/pacote para um aluno."""
+
+    contexto = _contexto_form_movimentacao(request, Movimentacao.Tipo.SAIDA)
+
+    if request.method == "POST":
+        mov, erros, form_data = _processar_form_movimentacao(
+            request, Movimentacao.Tipo.SAIDA
+        )
+        if mov:
+            messages.success(
+                request,
+                f"Saída registrada para {mov.aluno_nome} — pacote {mov.pacote_codigo}.",
+            )
+            return redirect("cme_home")
+        contexto.update({"erros": erros, "form": form_data})
+        return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
+
+    contexto.update({"erros": [], "form": {}})
+    return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
+
+
+@login_required
+def registrar_entrada(request: HttpRequest) -> HttpResponse:
+    """Registra a entrada (devolucao) de um material/pacote por um aluno."""
+
+    contexto = _contexto_form_movimentacao(request, Movimentacao.Tipo.ENTRADA)
+
+    if request.method == "POST":
+        mov, erros, form_data = _processar_form_movimentacao(
+            request, Movimentacao.Tipo.ENTRADA
+        )
+        if mov:
+            messages.success(
+                request,
+                f"Entrada registrada para {mov.aluno_nome} — "
+                "pacote {mov.pacote_codigo}.",
+            )
+            return redirect("cme_home")
+        contexto.update({"erros": erros, "form": form_data})
+        return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
+
+    contexto.update({"erros": [], "form": {}})
+    return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
+
+
+@login_required
+@require_POST
+def alternar_retirado(request: HttpRequest, pk: int) -> HttpResponse:
+    """Alterna o campo retirado de uma movimentacao entre os tres estados possiveis."""
+
+    try:
+        mov = Movimentacao.objects.get(pk=pk)
+    except Movimentacao.DoesNotExist:
+        messages.error(request, "Movimentação não encontrada.")
+        return redirect("cme_home")
+
+    if mov.retirado is None:
+        mov.retirado = True
+    elif mov.retirado is True:
+        mov.retirado = False
+    else:
+        mov.retirado = None
+    mov.save()
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("cme_home")
+
+
+@login_required
+@require_POST
+def excluir_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
+    """Remove permanentemente uma movimentacao do sistema."""
+
+    try:
+        mov = Movimentacao.objects.get(pk=pk)
+    except Movimentacao.DoesNotExist:
+        messages.error(request, "Movimentação não encontrada.")
+        return redirect("cme_home")
+
+    nome = mov.aluno_nome or "Aluno não informado"
+    pacote = mov.pacote_codigo
+    mov.delete()
+    messages.success(request, f"Movimentação de {nome} — pacote {pacote} — excluída.")
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("cme_home")
+
+
+# ── Fase 2: cadastros manuais e sincronização por turma ──────────────────────
+
+
+@login_required
+@require_POST
+def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpResponse:
+    """Sincroniza alunos de uma turma especifica com o Eduq."""
+
+    try:
+        turma = Turma.objects.get(pk=turma_id)
+    except Turma.DoesNotExist:
+        messages.error(request, "Turma não encontrada.")
+        return redirect("alunos_por_turma")
+
+    try:
+        resultado = sincronizar_eduq(
+            sincronizar_turmas=False,
+            sincronizar_alunos=True,
+            turma_codigos=[turma.codigo],
+        )
+    except EduqAPIError as exc:
+        messages.error(
+            request, f"Não foi possível sincronizar alunos de {turma.nome}: {exc}"
+        )
+    else:
+        erros = len(resultado.alunos.erros)
+        messages.success(
+            request,
+            f"Alunos de {turma.nome} sincronizados: "
+            f"{resultado.alunos.criados} criados, "
+            f"{resultado.alunos.atualizados} atualizados"
+            + (f", {erros} erro(s)." if erros else "."),
+        )
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect(f"{reverse('alunos_por_turma')}?turma={turma_id}")
+
+
+@login_required
+def cadastrar_aluno(request: HttpRequest) -> HttpResponse:
+    """Cria um novo aluno manualmente no sistema."""
+
+    turmas = (
+        Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .filter(ativo=True)
+        .order_by("nome")
+    )
+    erros: list[str] = []
+    form_data: dict[str, str] = {}
+
+    if request.method == "POST":
+        form_data = {
+            "nome": request.POST.get("nome", "").strip(),
+            "matricula": request.POST.get("matricula", "").strip(),
+            "turma": request.POST.get("turma", "").strip(),
+            "cpf": request.POST.get("cpf", "").strip(),
+            "email": request.POST.get("email", "").strip(),
+            "telefone": request.POST.get("telefone", "").strip(),
+        }
+
+        if not form_data["nome"]:
+            erros.append("Informe o nome do aluno.")
+        if not form_data["matricula"]:
+            erros.append("Informe a matrícula.")
+        elif Aluno.objects.filter(matricula=form_data["matricula"]).exists():
+            erros.append(
+                f"Já existe um aluno com a matrícula {form_data['matricula']!r}."
+            )
+
+        turma = None
+        if not form_data["turma"].isdigit():
+            erros.append("Selecione uma turma.")
+        else:
+            try:
+                turma = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).get(
+                    pk=form_data["turma"]
+                )
+            except Turma.DoesNotExist:
+                erros.append("Turma não encontrada.")
+
+        if not erros:
+            aluno = Aluno.objects.create(
+                nome=form_data["nome"],
+                matricula=form_data["matricula"],
+                turma=turma,
+                cpf=form_data["cpf"] or None,
+                email=form_data["email"],
+                telefone=form_data["telefone"],
+                origem=OrigemDados.MANUAL,
+            )
+            messages.success(request, f"Aluno {aluno.nome} cadastrado com sucesso.")
+            return redirect("alunos_por_turma")
+
+    return render(
+        request,
+        "gestao_cme/cadastrar_aluno.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": "Cadastrar aluno",
+            "active_page": "alunos",
+            "turmas": turmas,
+            "erros": erros,
+            "form": form_data,
+        },
+    )
+
+
+@login_required
+def cadastrar_turma(request: HttpRequest) -> HttpResponse:
+    """Cria uma nova turma manualmente no sistema."""
+
+    erros: list[str] = []
+    form_data: dict[str, str] = {}
+
+    if request.method == "POST":
+        form_data = {
+            "nome": request.POST.get("nome", "").strip(),
+            "codigo": request.POST.get("codigo", "").strip(),
+            "curso": request.POST.get("curso", "").strip(),
+            "data_inicio": request.POST.get("data_inicio", "").strip(),
+            "data_fim": request.POST.get("data_fim", "").strip(),
+            "observacoes": request.POST.get("observacoes", "").strip(),
+        }
+
+        if not form_data["nome"]:
+            erros.append("Informe o nome da turma.")
+        if not form_data["codigo"]:
+            erros.append("Informe o código da turma.")
+        elif Turma.objects.filter(codigo=form_data["codigo"]).exists():
+            erros.append(f"Já existe uma turma com o código {form_data['codigo']!r}.")
+
+        data_inicio = None
+        data_fim = None
+        if form_data["data_inicio"]:
+            try:
+                data_inicio = datetime.strptime(
+                    form_data["data_inicio"], "%Y-%m-%d"
+                ).date()
+            except ValueError:
+                erros.append("Data de início inválida.")
+        if form_data["data_fim"]:
+            try:
+                data_fim = datetime.strptime(form_data["data_fim"], "%Y-%m-%d").date()
+            except ValueError:
+                erros.append("Data de fim inválida.")
+
+        if not erros:
+            turma = Turma.objects.create(
+                nome=form_data["nome"],
+                codigo=form_data["codigo"],
+                curso=form_data["curso"],
+                data_inicio=data_inicio,
+                data_fim=data_fim,
+                observacoes=form_data["observacoes"],
+                origem=OrigemDados.MANUAL,
+            )
+            messages.success(request, f"Turma {turma.nome} cadastrada com sucesso.")
+            return redirect("alunos_por_turma")
+
+    return render(
+        request,
+        "gestao_cme/cadastrar_turma.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": "Cadastrar turma",
+            "active_page": "alunos",
+            "erros": erros,
+            "form": form_data,
+        },
+    )
+
+
+# ── Fase 3: fluxo de empréstimos ─────────────────────────────────────────────
+
+_STATUS_EMPRESTIMO_OPCOES = (
+    (Emprestimo.Status.EMPRESTADO, "Emprestado"),
+    (Emprestimo.Status.DEVOLVIDO, "Devolvido"),
+    (Emprestimo.Status.ATRASADO, "Atrasado"),
+)
+
+
+@login_required
+def emprestimos(request: HttpRequest) -> HttpResponse:
+    """Lista emprestimos com filtros de status e busca."""
+
+    busca = request.GET.get("q", "").strip()
+    status_filtro = request.GET.get("status", "").strip()
+
+    queryset = (
+        emprestimos_visiveis(request)
+        .select_related("aluno", "aluno__turma", "kit", "coordenador_usuario")
+        .prefetch_related("itens")
+    )
+
+    if status_filtro in Emprestimo.Status.values:
+        queryset = queryset.filter(status=status_filtro)
+
+    if busca:
+        queryset = queryset.filter(
+            Q(aluno__nome__icontains=busca)
+            | Q(aluno__matricula__icontains=busca)
+            | Q(kit__nome__icontains=busca)
+            | Q(kit__codigo__icontains=busca)
+            | Q(coordenador__icontains=busca)
+            | Q(observacoes__icontains=busca)
+        ).distinct()
+
+    page_obj, query_string = paginar_queryset(request, queryset)
+
+    base = emprestimos_visiveis(request)
+    metricas = base.aggregate(
+        total=Count("id"),
+        emprestados=Count("id", filter=Q(status=Emprestimo.Status.EMPRESTADO)),
+        devolvidos=Count("id", filter=Q(status=Emprestimo.Status.DEVOLVIDO)),
+        atrasados=Count("id", filter=Q(status=Emprestimo.Status.ATRASADO)),
+    )
+
+    return render(
+        request,
+        "gestao_cme/emprestimos.html",
+        {
+            "usuario_logado": request.user,
+            "busca": busca,
+            "status_filtro": status_filtro,
+            "status_opcoes": _STATUS_EMPRESTIMO_OPCOES,
+            "status_label": dict(_STATUS_EMPRESTIMO_OPCOES).get(status_filtro, "Todos"),
+            "emprestimos": page_obj.object_list,
+            "metricas": metricas,
+            "page_obj": page_obj,
+            "query_string": query_string,
+        },
+    )
+
+
+@login_required
+def criar_emprestimo(request: HttpRequest) -> HttpResponse:
+    """Cria um novo emprestimo vinculando aluno, kit e itens automaticamente."""
+
+    alunos_qs = (
+        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .filter(ativo=True)
+        .select_related("turma")
+        .order_by("turma__nome", "nome")
+    )
+    kits_qs = (
+        Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .filter(ativo=True)
+        .prefetch_related("itens__material")
+        .order_by("nome")
+    )
+
+    erros: list[str] = []
+    form_data: dict[str, str] = {}
+
+    if request.method == "POST":
+        form_data = {
+            "aluno": request.POST.get("aluno", "").strip(),
+            "kit": request.POST.get("kit", "").strip(),
+            "data_prevista_devolucao": request.POST.get(
+                "data_prevista_devolucao", ""
+            ).strip(),
+            "observacoes": request.POST.get("observacoes", "").strip(),
+        }
+
+        aluno = None
+        kit = None
+
+        if not form_data["aluno"].isdigit():
+            erros.append("Selecione um aluno.")
+        else:
+            try:
+                aluno = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).get(
+                    pk=form_data["aluno"]
+                )
+            except Aluno.DoesNotExist:
+                erros.append("Aluno não encontrado.")
+
+        if form_data["kit"].isdigit():
+            try:
+                kit = (
+                    Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
+                    .prefetch_related("itens__material")
+                    .get(pk=form_data["kit"])
+                )
+            except Kit.DoesNotExist:
+                erros.append("Kit não encontrado.")
+
+        data_prevista = None
+        if form_data["data_prevista_devolucao"]:
+            try:
+                data_prevista = datetime.strptime(
+                    form_data["data_prevista_devolucao"], "%Y-%m-%d"
+                ).date()
+            except ValueError:
+                erros.append("Data prevista de devolução inválida.")
+
+        if not erros and aluno:
+            with transaction.atomic():
+                emp = Emprestimo.objects.create(
+                    aluno=aluno,
+                    kit=kit,
+                    coordenador=request.user.get_full_name() or request.user.username,
+                    coordenador_usuario=request.user,
+                    data_prevista_devolucao=data_prevista,
+                    status=Emprestimo.Status.EMPRESTADO,
+                    observacoes=form_data["observacoes"],
+                )
+                if kit:
+                    for item_kit in kit.itens.all():
+                        ItemEmprestimo.objects.create(
+                            emprestimo=emp,
+                            material=item_kit.material,
+                            quantidade=item_kit.quantidade,
+                        )
+
+            kit_info = f" — kit {kit.nome}" if kit else ""
+            messages.success(
+                request,
+                f"Empréstimo #{emp.pk} criado para {aluno.nome}{kit_info}.",
+            )
+            return redirect("emprestimos")
+
+    return render(
+        request,
+        "gestao_cme/criar_emprestimo.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": "Novo empréstimo",
+            "active_page": "emprestimos",
+            "alunos": alunos_qs,
+            "kits": kits_qs,
+            "erros": erros,
+            "form": form_data,
+        },
+    )
+
+
+@login_required
+@require_POST
+def devolver_emprestimo(request: HttpRequest, pk: int) -> HttpResponse:
+    """Registra a devolucao de um emprestimo, marcando-o como devolvido."""
+
+    try:
+        emp = emprestimos_visiveis(request).get(pk=pk)
+    except Emprestimo.DoesNotExist:
+        messages.error(request, "Empréstimo não encontrado.")
+        return redirect("emprestimos")
+
+    if emp.status == Emprestimo.Status.DEVOLVIDO:
+        messages.error(request, f"Empréstimo #{emp.pk} já foi devolvido.")
+        return redirect("emprestimos")
+
+    emp.status = Emprestimo.Status.DEVOLVIDO
+    emp.data_devolucao = timezone.now()
+    emp.save()
+    messages.success(
+        request, f"Devolução do empréstimo #{emp.pk} de {emp.aluno.nome} registrada."
+    )
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("emprestimos")
+
+
+@login_required
+@require_POST
+def marcar_emprestimo_atrasado(request: HttpRequest, pk: int) -> HttpResponse:
+    """Marca um emprestimo em aberto como atrasado."""
+
+    try:
+        emp = emprestimos_visiveis(request).get(pk=pk)
+    except Emprestimo.DoesNotExist:
+        messages.error(request, "Empréstimo não encontrado.")
+        return redirect("emprestimos")
+
+    if emp.status != Emprestimo.Status.EMPRESTADO:
+        messages.error(
+            request,
+            "Apenas empréstimos com status 'Emprestado' "
+            "podem ser marcados como atrasados.",
+        )
+        return redirect("emprestimos")
+
+    emp.status = Emprestimo.Status.ATRASADO
+    emp.save()
+    messages.success(
+        request, f"Empréstimo #{emp.pk} de {emp.aluno.nome} marcado como atrasado."
+    )
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("emprestimos")
