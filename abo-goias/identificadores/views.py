@@ -4,11 +4,14 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 from gestao_cme.integrations.eduq import EduqAPIError
 from gestao_cme.models import Aluno, OrigemDados, Turma
-from gestao_cme.services.eduq_sync import sincronizar_localizacao_alunos_turma
+from gestao_cme.services.eduq_sync import (
+    sincronizar_eduq,
+    sincronizar_localizacao_alunos_turma,
+)
 
 from .services.modelos import (
     buscar_modelo,
@@ -138,6 +141,37 @@ def index(request: HttpRequest) -> HttpResponse:
             ),
         },
     )
+
+
+@login_required
+def sincronizar(request: HttpRequest) -> HttpResponse:
+    """Sincroniza turmas e alunos com o Eduq e redireciona de volta ao app."""
+
+    if request.method != "POST":
+        return redirect("identificadores:index")
+
+    try:
+        resultado = sincronizar_eduq(
+            sincronizar_turmas=True,
+            sincronizar_alunos=True,
+        )
+    except EduqAPIError as exc:
+        messages.error(request, f"Não foi possível sincronizar com o Eduq: {exc}")
+    else:
+        erros_turmas = len(resultado.turmas.erros)
+        erros_alunos = len(resultado.alunos.erros)
+        msg = (
+            f"Turmas: {resultado.turmas.criados} criadas, "
+            f"{resultado.turmas.atualizados} atualizadas"
+            + (f", {erros_turmas} erro(s)" if erros_turmas else "")
+            + f". Alunos: {resultado.alunos.criados} criados, "
+            f"{resultado.alunos.atualizados} atualizados"
+            + (f", {erros_alunos} erro(s)" if erros_alunos else "")
+            + "."
+        )
+        messages.success(request, msg)
+
+    return redirect("identificadores:index")
 
 
 @login_required

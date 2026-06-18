@@ -36,6 +36,12 @@
                         <p class="section-label">Fluxo de geração</p>
                         <h2>Identificadores de bancada</h2>
                     </div>
+                    <div class="topbar-actions">
+                        <form class="sync-form" method="post" action="{% url 'identificadores:sincronizar' %}">
+                            {% csrf_token %}
+                            <button class="button secondary compact-button" type="submit">Sincronizar turmas e alunos</button>
+                        </form>
+                    </div>
                 </div>
 
                 {% if messages %}
