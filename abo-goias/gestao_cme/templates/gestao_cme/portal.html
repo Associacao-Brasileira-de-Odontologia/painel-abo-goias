@@ -15,18 +15,21 @@
                 <h2>Olá, {{ usuario_logado.first_name|default:usuario_logado.username }}</h2>
                 <p class="portal-intro">Acesse os sistemas internos e acompanhe os dados principais da operação acadêmica.</p>
 
-                <div class="portal-stats" aria-label="Resumo dos sistemas">
-                    <div class="portal-stat">
-                        <span>Movimentações</span>
-                        <strong>{{ resumo.movimentacoes }}</strong>
-                    </div>
-                    <div class="portal-stat">
-                        <span>Empréstimos ativos</span>
-                        <strong>{{ resumo.emprestimos_abertos }}</strong>
-                    </div>
-                    <div class="portal-stat">
-                        <span>Alunos</span>
-                        <strong>{{ resumo.alunos }}</strong>
+                <div class="portal-stats-section">
+                    <p class="section-label">Indicadores</p>
+                    <div class="portal-stats" aria-label="Indicadores do sistema">
+                        <div class="portal-stat">
+                            <span>Movimentações</span>
+                            <strong>{{ resumo.movimentacoes }}</strong>
+                        </div>
+                        <div class="portal-stat">
+                            <span>Empréstimos ativos</span>
+                            <strong>{{ resumo.emprestimos_abertos }}</strong>
+                        </div>
+                        <div class="portal-stat">
+                            <span>Alunos</span>
+                            <strong>{{ resumo.alunos }}</strong>
+                        </div>
                     </div>
                 </div>
             </div>
