@@ -57,7 +57,9 @@
                         <p class="section-label">Estoque físico</p>
                         <h2>Mapa dos abrigos</h2>
                     </div>
-                    <a class="button secondary admin-link" href="/admin/core/abrigo/">Abrir abrigos</a>
+                    <div class="topbar-actions">
+                        <a class="button primary" href="{% url 'cadastrar_abrigo' %}">Cadastrar abrigo</a>
+                    </div>
                 </div>
 
                 <form class="results-search" method="get">
@@ -98,6 +100,7 @@
                                 <th>Origem</th>
                                 <th>Ultima sincronizacao</th>
                                 <th>Status</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -120,10 +123,13 @@
                                             <span class="badge badge-atrasado">Inativo</span>
                                         {% endif %}
                                     </td>
+                                    <td class="actions-cell">
+                                        <a class="button compact-button secondary" href="{% url 'editar_abrigo' abrigo.pk %}">Editar</a>
+                                    </td>
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="5">
+                                    <td colspan="6">
                                         <div class="empty-state">
                                             <strong>Nenhum abrigo encontrado.</strong>
                                             <p>Revise o identificador buscado ou limpe os filtros de ocupação para visualizar todos os abrigos.</p>

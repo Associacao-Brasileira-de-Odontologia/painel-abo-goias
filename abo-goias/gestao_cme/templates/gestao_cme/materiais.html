@@ -57,7 +57,9 @@
                         <p class="section-label">Catálogo</p>
                         <h2>Materiais cadastrados</h2>
                     </div>
-                    <a class="button secondary admin-link" href="/admin/core/material/">Abrir materiais</a>
+                    <div class="topbar-actions">
+                        <a class="button primary" href="{% url 'cadastrar_material' %}">Cadastrar material</a>
+                    </div>
                 </div>
 
                 <form class="results-search" method="get">
@@ -99,6 +101,7 @@
                                 <th>Kits vinculados</th>
                                 <th>Origem</th>
                                 <th>Status</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -119,10 +122,13 @@
                                             <span class="badge badge-atrasado">Indisponível</span>
                                         {% endif %}
                                     </td>
+                                    <td class="actions-cell">
+                                        <a class="button compact-button secondary" href="{% url 'editar_material' material.pk %}">Editar</a>
+                                    </td>
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="6">
+                                    <td colspan="7">
                                         <div class="empty-state">
                                             <strong>Nenhum material encontrado.</strong>
                                             <p>Tente buscar por nome, código, identificação ou kit. Você também pode limpar os filtros para ver todos os materiais.</p>

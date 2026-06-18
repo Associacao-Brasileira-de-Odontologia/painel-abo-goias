@@ -1,0 +1,112 @@
+{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de CME | {{ titulo }}{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Registrar movimentação</p>
+                <h2>{{ titulo }}</h2>
+                <p class="panel-copy">{{ subtitulo }}</p>
+
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page=active_page %}
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Nova movimentação</p>
+                        <h2>{{ titulo }}</h2>
+                    </div>
+                    <a class="button secondary" href="{% url 'cme_home' %}">Voltar ao histórico</a>
+                </div>
+
+                {% if erros %}
+                    <div class="form-errors">
+                        <ul>
+                            {% for erro in erros %}
+                                <li>{{ erro }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form class="form-stack form-stack-wide" method="post">
+                    {% csrf_token %}
+
+                    <div class="field field-required">
+                        <label for="aluno">Aluno</label>
+                        <select id="aluno" name="aluno" required>
+                            <option value="">Selecione um aluno...</option>
+                            {% regroup alunos by turma as alunos_por_turma %}
+                            {% for grupo in alunos_por_turma %}
+                                <optgroup label="{{ grupo.grouper|default:'Sem turma' }}">
+                                    {% for aluno in grupo.list %}
+                                        <option value="{{ aluno.pk }}"
+                                            {% if form.aluno == aluno.pk|stringformat:"s" %}selected{% endif %}>
+                                            {{ aluno.nome }}{% if aluno.matricula %} — {{ aluno.matricula }}{% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field field-required">
+                        <label for="pacote_codigo">Código do pacote</label>
+                        <input
+                            id="pacote_codigo"
+                            type="text"
+                            name="pacote_codigo"
+                            value="{{ form.pacote_codigo|default:'' }}"
+                            placeholder="Ex.: KIT-001"
+                            required
+                            maxlength="40"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="material">Material <span class="field-optional">(opcional)</span></label>
+                        <select id="material" name="material">
+                            <option value="">Nenhum material específico</option>
+                            {% for mat in materiais %}
+                                <option value="{{ mat.pk }}"
+                                    {% if form.material == mat.pk|stringformat:"s" %}selected{% endif %}>
+                                    {{ mat.nome }}{% if mat.codigo %} — {{ mat.codigo }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="data_hora">Data e hora <span class="field-optional">(opcional — padrão: agora)</span></label>
+                        <input
+                            id="data_hora"
+                            type="datetime-local"
+                            name="data_hora"
+                            value="{{ form.data_hora|default:'' }}"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="observacoes">Observações <span class="field-optional">(opcional)</span></label>
+                        <textarea
+                            id="observacoes"
+                            name="observacoes"
+                            rows="3"
+                            placeholder="Informações adicionais sobre esta movimentação..."
+                        >{{ form.observacoes|default:'' }}</textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="button primary" type="submit">{{ submit_label }}</button>
+                        <a class="button secondary" href="{% url 'cme_home' %}">Cancelar</a>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </main>
+{% endblock %}
