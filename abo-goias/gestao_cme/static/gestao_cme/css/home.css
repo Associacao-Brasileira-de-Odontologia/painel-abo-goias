@@ -665,6 +665,12 @@ td strong {
     font-weight: 800;
 }
 
+.user-menu form {
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
 .compact-button {
     min-height: 40px;
     border-radius: 12px;
@@ -1568,4 +1574,110 @@ textarea:focus {
 
 .danger-button:hover {
     background: rgba(255, 94, 94, 0.28) !important;
+}
+
+/* ── Dashboard CME ───────────────────────────────────────────── */
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.kpi-section {
+    margin-bottom: 28px;
+}
+
+.kpi-section > .section-label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+/* Variantes de cor explícitas para os KPI cards (sobrescrevem o seletor + adjacente) */
+.metric-card.metric-blue {
+    border-color: rgba(47, 140, 255, 0.34);
+    background: linear-gradient(145deg, rgba(47, 140, 255, 0.34), rgba(47, 140, 255, 0.1));
+    color: #dcecff;
+}
+
+.metric-card.metric-success {
+    border-color: rgba(57, 217, 138, 0.28);
+    background: linear-gradient(145deg, rgba(57, 217, 138, 0.22), rgba(57, 217, 138, 0.07));
+    color: #b3f0d5;
+}
+
+.metric-card.metric-neutral {
+    border-color: rgba(146, 161, 186, 0.22);
+    background: linear-gradient(145deg, rgba(146, 161, 186, 0.12), rgba(146, 161, 186, 0.04));
+    color: var(--muted-strong);
+}
+
+.metric-secondary {
+    margin-top: auto;
+    font-size: 0.8rem;
+    opacity: 0.75;
+}
+
+.dashboard-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+}
+
+.proximas-list {
+    display: grid;
+    gap: 8px;
+}
+
+.proxima-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(8, 13, 25, 0.44);
+    align-items: center;
+}
+
+.proxima-item.vencido {
+    border-color: rgba(255, 94, 94, 0.3);
+    background: rgba(255, 94, 94, 0.04);
+}
+
+.proxima-item strong {
+    font-size: 0.92rem;
+    color: var(--text);
+    display: block;
+}
+
+.proxima-date {
+    text-align: right;
+}
+
+.proxima-date strong {
+    display: block;
+    font-size: 0.88rem;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.proxima-item.vencido .proxima-date strong {
+    color: #ff9e9e;
+}
+
+.panel-quick-actions {
+    display: grid;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+@media (max-width: 1100px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-split {
+        grid-template-columns: 1fr;
+    }
 }

@@ -1,0 +1,171 @@
+{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de CME | Visão Geral{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}Visão Geral{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Gestão de CME</p>
+                <h2>Visão Geral</h2>
+                <p class="panel-copy">Métricas consolidadas de movimentações e empréstimos registrados na CME.</p>
+
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="dashboard" %}
+
+                <div class="panel-quick-actions">
+                    <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída</a>
+                    <a class="button secondary" href="{% url 'registrar_entrada' %}">Nova entrada</a>
+                    <a class="button secondary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
+                </div>
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Métricas operacionais</p>
+                        <h2>Visão geral da CME</h2>
+                    </div>
+                </div>
+
+                {% if messages %}
+                    <div class="messages">
+                        {% for message in messages %}
+                            <div class="message {{ message.tags }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Movimentações -->
+                <div class="kpi-section">
+                    <p class="section-label">Movimentações</p>
+                    <div class="kpi-grid">
+                        <div class="metric-card metric-neutral">
+                            <span class="metric-label">Total</span>
+                            <strong>{{ metricas_mov.total }}</strong>
+                            <span class="metric-secondary">registros</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Saídas</span>
+                            <strong>{{ metricas_mov.saidas }}</strong>
+                            <span class="metric-secondary">materiais retirados</span>
+                        </div>
+                        <div class="metric-card metric-blue">
+                            <span class="metric-label">Entradas</span>
+                            <strong>{{ metricas_mov.entradas }}</strong>
+                            <span class="metric-secondary">materiais devolvidos</span>
+                        </div>
+                        <div class="metric-card danger-metric">
+                            <span class="metric-label">Pendentes</span>
+                            <strong>{{ metricas_mov.pendentes }}</strong>
+                            <span class="metric-secondary">aguardando retirada</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empréstimos -->
+                <div class="kpi-section">
+                    <p class="section-label">Empréstimos</p>
+                    <div class="kpi-grid">
+                        <div class="metric-card metric-neutral">
+                            <span class="metric-label">Total</span>
+                            <strong>{{ metricas_emp.total }}</strong>
+                            <span class="metric-secondary">{{ metricas_emp.taxa_devolucao }}% devolvidos</span>
+                        </div>
+                        <div class="metric-card metric-blue">
+                            <span class="metric-label">Emprestados</span>
+                            <strong>{{ metricas_emp.emprestados }}</strong>
+                            <span class="metric-secondary">em aberto</span>
+                        </div>
+                        <div class="metric-card danger-metric">
+                            <span class="metric-label">Atrasados</span>
+                            <strong>{{ metricas_emp.atrasados }}</strong>
+                            <span class="metric-secondary">fora do prazo</span>
+                        </div>
+                        <div class="metric-card metric-success">
+                            <span class="metric-label">Devolvidos</span>
+                            <strong>{{ metricas_emp.devolvidos }}</strong>
+                            <span class="metric-secondary">concluídos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Próximas devoluções + Atividade recente -->
+                <div class="dashboard-split">
+
+                    <!-- Próximas devoluções -->
+                    <div>
+                        <div class="activity-heading">
+                            <p class="section-label">Devoluções pendentes</p>
+                            <h2>Próximas devoluções</h2>
+                        </div>
+                        <div class="proximas-list">
+                            {% for emp in proximas_devolucoes %}
+                                <div class="proxima-item {% if emp.data_prevista_devolucao < hoje %}vencido{% endif %}">
+                                    <div>
+                                        <strong>{{ emp.aluno.nome }}</strong>
+                                        <span class="cell-muted">
+                                            {% if emp.kit %}{{ emp.kit.nome }}{% else %}Sem kit{% endif %}
+                                            {% if emp.aluno.turma %} · {{ emp.aluno.turma.codigo }}{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="proxima-date">
+                                        <strong>{{ emp.data_prevista_devolucao|date:"d/m/Y" }}</strong>
+                                        <span class="cell-muted">
+                                            {% if emp.data_prevista_devolucao < hoje %}
+                                                Vencido
+                                            {% else %}
+                                                Previsto
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <article class="activity-empty">
+                                    <strong>Nenhuma devolução pendente</strong>
+                                    <p>Não há empréstimos ativos com data de devolução registrada.</p>
+                                </article>
+                            {% endfor %}
+                        </div>
+                        {% if proximas_devolucoes %}
+                            <div style="margin-top: 14px;">
+                                <a class="button secondary compact-button" href="{% url 'emprestimos' %}">Ver todos os empréstimos</a>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Atividade recente -->
+                    <div class="activity-feed">
+                        <div class="activity-heading">
+                            <p class="section-label">Histórico de ações</p>
+                            <h2>Atividade recente</h2>
+                        </div>
+                        <div class="activity-list">
+                            {% for atividade in atividade_recente %}
+                                <article class="activity-item activity-{{ atividade.categoria }}">
+                                    <span class="activity-dot" aria-hidden="true"></span>
+                                    <div>
+                                        <div class="activity-top">
+                                            <strong>{{ atividade.titulo }}</strong>
+                                            <time datetime="{{ atividade.data|date:'c' }}">{{ atividade.data|date:"d/m H:i" }}</time>
+                                        </div>
+                                        <p>{{ atividade.descricao }}</p>
+                                    </div>
+                                </article>
+                            {% empty %}
+                                <article class="activity-empty">
+                                    <strong>Nenhuma ação recente</strong>
+                                    <p>As movimentações e empréstimos registrados aparecerão aqui.</p>
+                                </article>
+                            {% endfor %}
+                        </div>
+                        <div style="margin-top: 14px;">
+                            <a class="button secondary compact-button" href="{% url 'cme_home' %}">Ver todas as movimentações</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+{% endblock %}

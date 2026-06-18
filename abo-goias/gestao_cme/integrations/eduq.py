@@ -4,6 +4,7 @@ Este modulo carrega configuracao, autentica no Eduq, executa consultas
 personalizadas e normaliza respostas externas para estruturas internas.
 """
 
+import hashlib
 import json
 import os
 import ssl
@@ -16,6 +17,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, urlopen
 
 from django.conf import settings
+from django.core.cache import cache
+
+# Margem de 1h abaixo do limite real (24h) para evitar uso de token prestes a expirar
+_EDUQ_TOKEN_TTL = 23 * 60 * 60
 
 
 class EduqAPIError(Exception):
@@ -142,15 +147,18 @@ def carregar_config_eduq() -> ConfigEduq:
 class EduqClient:
     """Cliente HTTP minimo para autenticar e consultar dados no Eduq.
 
-    Mantem o token autenticado em memoria durante a instancia e expõe metodos
-    de alto nivel para listar turmas e alunos ja normalizados.
+    O token de acesso e armazenado no cache Django com TTL de 23h para ser
+    reutilizado entre instancias e requisicoes. Quando uma consulta retorna
+    HTTP 401 ou 403, o token e invalidado e renovado automaticamente uma vez.
     """
 
     def __init__(self, config: ConfigEduq | None = None) -> None:
         """Inicializa o cliente com configuracao explicita ou do ambiente."""
 
         self.config = config or carregar_config_eduq()
-        self._token: str | None = None
+        # Chave anonimizada: hash dos dados de identidade sem expor credenciais no cache
+        _identidade = f"{self.config.dominio}:{self.config.usuario}".encode()
+        self._cache_key = "eduq_token_" + hashlib.sha256(_identidade).hexdigest()[:24]
 
     def listar_turmas(self) -> list[TurmaEduq]:
         """Consulta turmas no Eduq e retorna apenas registros normalizados."""
@@ -183,10 +191,15 @@ class EduqClient:
         ]
 
     def _autenticar(self) -> str:
-        """Autentica no Eduq e retorna um token reutilizavel pela instancia."""
+        """Retorna o token ativo, buscando do cache ou renovando se necessario."""
 
-        if self._token:
-            return self._token
+        token: str | None = cache.get(self._cache_key)
+        if token:
+            return token
+        return self._renovar_token()
+
+    def _renovar_token(self) -> str:
+        """Autentica no Eduq, salva o token no cache e o retorna."""
 
         data = self._post_json(
             self.config.auth_url,
@@ -204,16 +217,26 @@ class EduqClient:
         if not token:
             raise EduqAPIError("Token token1 nao encontrado na resposta da Eduq.")
 
-        self._token = str(token)
-        return self._token
+        cache.set(self._cache_key, str(token), _EDUQ_TOKEN_TTL)
+        return str(token)
 
     def _consultar(self, payload: dict[str, Any]) -> Any:
-        """Executa uma consulta autenticada no endpoint de dados do Eduq."""
+        """Executa uma consulta autenticada, renovando o token em caso de 401/403."""
 
         token = self._autenticar()
-        return self._post_json(
-            self.config.data_url, payload, headers={"token-auth": token}
-        )
+        try:
+            return self._post_json(
+                self.config.data_url, payload, headers={"token-auth": token}
+            )
+        except EduqAPIError as exc:
+            mensagem = str(exc)
+            if "Erro HTTP 401" in mensagem or "Erro HTTP 403" in mensagem:
+                cache.delete(self._cache_key)
+                token = self._renovar_token()
+                return self._post_json(
+                    self.config.data_url, payload, headers={"token-auth": token}
+                )
+            raise
 
     def _post_json(
         self,
