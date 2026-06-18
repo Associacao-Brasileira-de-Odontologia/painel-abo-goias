@@ -1,0 +1,160 @@
+{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de CME | {{ titulo }}{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Catálogo</p>
+                <h2>{% if is_edit %}Editar material{% else %}Novo material{% endif %}</h2>
+                <p class="panel-copy">
+                    {% if is_edit %}
+                        Altere os dados do material. O código deve ser único em todo o catálogo.
+                    {% else %}
+                        Cadastre um material manualmente. O código deve ser único em todo o catálogo.
+                    {% endif %}
+                </p>
+
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="materiais" %}
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Catálogo</p>
+                        <h2>{{ titulo }}</h2>
+                    </div>
+                    <a class="button secondary" href="{% url 'materiais' %}">Voltar à listagem</a>
+                </div>
+
+                {% if erros %}
+                    <div class="form-errors">
+                        <ul>
+                            {% for erro in erros %}
+                                <li>{{ erro }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form class="form-stack form-stack-wide" method="post">
+                    {% csrf_token %}
+
+                    <div class="field field-required">
+                        <label for="nome">Nome</label>
+                        <input
+                            id="nome"
+                            type="text"
+                            name="nome"
+                            value="{{ form.nome|default:'' }}"
+                            placeholder="Ex.: Espelho clínico"
+                            required
+                            maxlength="120"
+                        >
+                    </div>
+
+                    <div class="field field-required">
+                        <label for="codigo">Código</label>
+                        <input
+                            id="codigo"
+                            type="text"
+                            name="codigo"
+                            value="{{ form.codigo|default:'' }}"
+                            placeholder="Ex.: ESP-001"
+                            required
+                            maxlength="40"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="identificacao">Identificação <span class="field-optional">(opcional)</span></label>
+                        <input
+                            id="identificacao"
+                            type="text"
+                            name="identificacao"
+                            value="{{ form.identificacao|default:'' }}"
+                            placeholder="Código de identificação física"
+                            maxlength="30"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="rotulo_kit">Rótulo do kit <span class="field-optional">(opcional)</span></label>
+                        <input
+                            id="rotulo_kit"
+                            type="text"
+                            name="rotulo_kit"
+                            value="{{ form.rotulo_kit|default:'' }}"
+                            placeholder="Como o material aparece no kit"
+                            maxlength="120"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="unidade_medida">Unidade de medida</label>
+                        <select id="unidade_medida" name="unidade_medida">
+                            {% for valor, rotulo in unidades %}
+                                <option value="{{ valor }}" {% if form.unidade_medida == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="quantidade_minima">Quantidade mínima</label>
+                        <input
+                            id="quantidade_minima"
+                            type="number"
+                            name="quantidade_minima"
+                            value="{{ form.quantidade_minima|default:'0' }}"
+                            min="0"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label for="descricao">Descrição <span class="field-optional">(opcional)</span></label>
+                        <textarea
+                            id="descricao"
+                            name="descricao"
+                            rows="3"
+                            placeholder="Descrição detalhada do material..."
+                        >{{ form.descricao|default:'' }}</textarea>
+                    </div>
+
+                    <div class="field field-checkbox">
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="disponivel"
+                                {% if form.disponivel %}checked{% endif %}
+                            >
+                            Material disponível para empréstimo
+                        </label>
+                    </div>
+
+                    {% if is_edit %}
+                        <div class="field field-checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="ativo"
+                                    {% if form.ativo %}checked{% endif %}
+                                >
+                                Material ativo no catálogo
+                            </label>
+                        </div>
+                    {% endif %}
+
+                    <div class="form-actions">
+                        <button class="button primary" type="submit">
+                            {% if is_edit %}Salvar alterações{% else %}Cadastrar material{% endif %}
+                        </button>
+                        <a class="button secondary" href="{% url 'materiais' %}">Cancelar</a>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </main>
+{% endblock %}

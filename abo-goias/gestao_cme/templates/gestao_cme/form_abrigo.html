@@ -1,0 +1,93 @@
+{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de CME | {{ titulo }}{% endblock %}
+{% block header_eyebrow %}Controle físico{% endblock %}
+{% block header_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                <p class="section-label">Controle físico</p>
+                <h2>{% if is_edit %}Editar abrigo{% else %}Novo abrigo{% endif %}</h2>
+                <p class="panel-copy">
+                    {% if is_edit %}
+                        Altere os dados do abrigo. O identificador deve ser único em todo o sistema.
+                    {% else %}
+                        Cadastre um abrigo manualmente. O identificador deve ser único em todo o sistema.
+                    {% endif %}
+                </p>
+
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="armarios" %}
+            </aside>
+
+            <section class="panel results-panel">
+                <div class="results-topbar">
+                    <div>
+                        <p class="section-label">Controle físico</p>
+                        <h2>{{ titulo }}</h2>
+                    </div>
+                    <a class="button secondary" href="{% url 'abrigos' %}">Voltar à listagem</a>
+                </div>
+
+                {% if erros %}
+                    <div class="form-errors">
+                        <ul>
+                            {% for erro in erros %}
+                                <li>{{ erro }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form class="form-stack form-stack-wide" method="post">
+                    {% csrf_token %}
+
+                    <div class="field field-required">
+                        <label for="identificador">Identificador</label>
+                        <input
+                            id="identificador"
+                            type="text"
+                            name="identificador"
+                            value="{{ form.identificador|default:'' }}"
+                            placeholder="Ex.: A-01, B-12..."
+                            required
+                            maxlength="30"
+                        >
+                    </div>
+
+                    <div class="field field-checkbox">
+                        <label>
+                            <input
+                                type="checkbox"
+                                name="ocupado"
+                                {% if form.ocupado %}checked{% endif %}
+                            >
+                            Abrigo ocupado no momento
+                        </label>
+                    </div>
+
+                    {% if is_edit %}
+                        <div class="field field-checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="ativo"
+                                    {% if form.ativo %}checked{% endif %}
+                                >
+                                Abrigo ativo
+                            </label>
+                        </div>
+                    {% endif %}
+
+                    <div class="form-actions">
+                        <button class="button primary" type="submit">
+                            {% if is_edit %}Salvar alterações{% else %}Cadastrar abrigo{% endif %}
+                        </button>
+                        <a class="button secondary" href="{% url 'abrigos' %}">Cancelar</a>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </main>
+{% endblock %}
