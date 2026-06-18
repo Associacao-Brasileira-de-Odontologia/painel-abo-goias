@@ -24,11 +24,16 @@
                     <a class="button secondary" href="{% url 'alunos_por_turma' %}">Voltar à listagem</a>
                 </div>
 
-                {% if erros %}
+                {% if form.errors %}
                     <div class="form-errors">
                         <ul>
-                            {% for erro in erros %}
-                                <li>{{ erro }}</li>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
                             {% endfor %}
                         </ul>
                     </div>
@@ -43,7 +48,7 @@
                             id="nome"
                             type="text"
                             name="nome"
-                            value="{{ form.nome|default:'' }}"
+                            value="{{ form.nome.value|default:'' }}"
                             placeholder="Nome do aluno"
                             required
                             maxlength="150"
@@ -56,7 +61,7 @@
                             id="matricula"
                             type="text"
                             name="matricula"
-                            value="{{ form.matricula|default:'' }}"
+                            value="{{ form.matricula.value|default:'' }}"
                             placeholder="Código de matrícula"
                             required
                             maxlength="40"
@@ -69,7 +74,7 @@
                             <option value="">Selecione uma turma...</option>
                             {% for turma in turmas %}
                                 <option value="{{ turma.pk }}"
-                                    {% if form.turma == turma.pk|stringformat:"s" %}selected{% endif %}>
+                                    {% if form.turma.value == turma.pk|stringformat:"s" %}selected{% endif %}>
                                     {{ turma.codigo }} — {{ turma.nome }}
                                 </option>
                             {% endfor %}
@@ -82,7 +87,7 @@
                             id="cpf"
                             type="text"
                             name="cpf"
-                            value="{{ form.cpf|default:'' }}"
+                            value="{{ form.cpf.value|default:'' }}"
                             placeholder="000.000.000-00"
                             maxlength="14"
                         >
@@ -94,7 +99,7 @@
                             id="email"
                             type="email"
                             name="email"
-                            value="{{ form.email|default:'' }}"
+                            value="{{ form.email.value|default:'' }}"
                             placeholder="email@exemplo.com"
                             maxlength="254"
                         >
@@ -106,7 +111,7 @@
                             id="telefone"
                             type="text"
                             name="telefone"
-                            value="{{ form.telefone|default:'' }}"
+                            value="{{ form.telefone.value|default:'' }}"
                             placeholder="(62) 99999-9999"
                             maxlength="20"
                         >

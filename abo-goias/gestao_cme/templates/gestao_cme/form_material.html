@@ -30,11 +30,16 @@
                     <a class="button secondary" href="{% url 'materiais' %}">Voltar à listagem</a>
                 </div>
 
-                {% if erros %}
+                {% if form.errors %}
                     <div class="form-errors">
                         <ul>
-                            {% for erro in erros %}
-                                <li>{{ erro }}</li>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
                             {% endfor %}
                         </ul>
                     </div>
@@ -49,7 +54,7 @@
                             id="nome"
                             type="text"
                             name="nome"
-                            value="{{ form.nome|default:'' }}"
+                            value="{{ form.nome.value|default:'' }}"
                             placeholder="Ex.: Espelho clínico"
                             required
                             maxlength="120"
@@ -62,7 +67,7 @@
                             id="codigo"
                             type="text"
                             name="codigo"
-                            value="{{ form.codigo|default:'' }}"
+                            value="{{ form.codigo.value|default:'' }}"
                             placeholder="Ex.: ESP-001"
                             required
                             maxlength="40"
@@ -75,7 +80,7 @@
                             id="identificacao"
                             type="text"
                             name="identificacao"
-                            value="{{ form.identificacao|default:'' }}"
+                            value="{{ form.identificacao.value|default:'' }}"
                             placeholder="Código de identificação física"
                             maxlength="30"
                         >
@@ -87,7 +92,7 @@
                             id="rotulo_kit"
                             type="text"
                             name="rotulo_kit"
-                            value="{{ form.rotulo_kit|default:'' }}"
+                            value="{{ form.rotulo_kit.value|default:'' }}"
                             placeholder="Como o material aparece no kit"
                             maxlength="120"
                         >
@@ -96,8 +101,8 @@
                     <div class="field">
                         <label for="unidade_medida">Unidade de medida</label>
                         <select id="unidade_medida" name="unidade_medida">
-                            {% for valor, rotulo in unidades %}
-                                <option value="{{ valor }}" {% if form.unidade_medida == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% for valor, rotulo in form.unidade_medida.field.choices %}
+                                <option value="{{ valor }}" {% if form.unidade_medida.value == valor %}selected{% endif %}>{{ rotulo }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -108,7 +113,7 @@
                             id="quantidade_minima"
                             type="number"
                             name="quantidade_minima"
-                            value="{{ form.quantidade_minima|default:'0' }}"
+                            value="{{ form.quantidade_minima.value|default:'0' }}"
                             min="0"
                         >
                     </div>
@@ -120,7 +125,7 @@
                             name="descricao"
                             rows="3"
                             placeholder="Descrição detalhada do material..."
-                        >{{ form.descricao|default:'' }}</textarea>
+                        >{{ form.descricao.value|default:'' }}</textarea>
                     </div>
 
                     <div class="field field-checkbox">
@@ -128,7 +133,7 @@
                             <input
                                 type="checkbox"
                                 name="disponivel"
-                                {% if form.disponivel %}checked{% endif %}
+                                {% if form.disponivel.value %}checked{% endif %}
                             >
                             Material disponível para empréstimo
                         </label>
@@ -140,7 +145,7 @@
                                 <input
                                     type="checkbox"
                                     name="ativo"
-                                    {% if form.ativo %}checked{% endif %}
+                                    {% if form.ativo.value %}checked{% endif %}
                                 >
                                 Material ativo no catálogo
                             </label>

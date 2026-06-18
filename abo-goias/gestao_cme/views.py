@@ -2,7 +2,6 @@
 
 import hashlib
 import uuid
-from datetime import datetime
 from typing import Any
 
 from django.contrib import messages
@@ -17,6 +16,16 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .forms import (
+    AbrigoEditForm,
+    AbrigoForm,
+    CadastrarAlunoForm,
+    CadastrarTurmaForm,
+    EmprestimoForm,
+    MaterialEditForm,
+    MaterialForm,
+    MovimentacaoForm,
+)
 from .integrations.eduq import EduqAPIError
 from .models import (
     Abrigo,
@@ -604,14 +613,14 @@ def kits(request: HttpRequest) -> HttpResponse:
     )
 
 
-def _contexto_form_movimentacao(
+def _contexto_movimentacao(
     request: HttpRequest,
     tipo: str,
+    form: MovimentacaoForm,
 ) -> dict[str, Any]:
-    """Monta o contexto base compartilhado entre registrar_saida e registrar_entrada."""
+    """Monta o contexto compartilhado entre registrar_saida e registrar_entrada."""
 
     tipo_label = "Saída" if tipo == Movimentacao.Tipo.SAIDA else "Entrada"
-    active_page = "nova_saida" if tipo == Movimentacao.Tipo.SAIDA else "nova_entrada"
     return {
         "usuario_logado": request.user,
         "tipo": tipo,
@@ -623,139 +632,77 @@ def _contexto_form_movimentacao(
             else "Registre a devolução de um pacote pelo aluno."
         ),
         "submit_label": f"Registrar {tipo_label.lower()}",
-        "active_page": active_page,
-        "alunos": (
-            Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
-            .filter(ativo=True)
-            .select_related("turma")
-            .order_by("turma__nome", "nome")
+        "active_page": (
+            "nova_saida" if tipo == Movimentacao.Tipo.SAIDA else "nova_entrada"
         ),
-        "materiais": (
-            Material.objects.exclude(origem=OrigemDados.EXEMPLO)
-            .filter(ativo=True)
-            .order_by("nome")
-        ),
+        "alunos": form.fields["aluno"].queryset,
+        "materiais": form.fields["material"].queryset,
+        "form": form,
     }
 
 
-def _processar_form_movimentacao(
-    request: HttpRequest,
+def _salvar_movimentacao(
+    form: MovimentacaoForm,
     tipo: str,
-) -> tuple[Movimentacao | None, list[str], dict[str, str]]:
-    """Valida e salva uma movimentacao a partir do POST.
-    Retorna (objeto, erros, form_data)."""
+    retirado: bool | None,
+) -> Movimentacao:
+    """Persiste uma movimentacao a partir de um form já validado."""
 
-    form_data = {
-        "aluno": request.POST.get("aluno", "").strip(),
-        "pacote_codigo": request.POST.get("pacote_codigo", "").strip(),
-        "material": request.POST.get("material", "").strip(),
-        "data_hora": request.POST.get("data_hora", "").strip(),
-        "observacoes": request.POST.get("observacoes", "").strip(),
-    }
-    erros: list[str] = []
-    aluno: Aluno | None = None
-    material: Material | None = None
-
-    if not form_data["aluno"].isdigit():
-        erros.append("Selecione um aluno.")
-    else:
-        try:
-            aluno = (
-                Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
-                .select_related("turma")
-                .get(pk=form_data["aluno"])
-            )
-        except Aluno.DoesNotExist:
-            erros.append("Aluno não encontrado.")
-
-    if not form_data["pacote_codigo"]:
-        erros.append("Informe o código do pacote.")
-
-    if form_data["material"].isdigit():
-        try:
-            material = Material.objects.exclude(origem=OrigemDados.EXEMPLO).get(
-                pk=form_data["material"]
-            )
-        except Material.DoesNotExist:
-            pass
-
-    data_hora = timezone.now()
-    if form_data["data_hora"]:
-        try:
-            data_hora = timezone.make_aware(
-                datetime.strptime(form_data["data_hora"], "%Y-%m-%dT%H:%M")
-            )
-        except ValueError:
-            erros.append("Data e hora inválidas.")
-
-    if erros or not aluno:
-        return None, erros, form_data
-
-    retirado = None if tipo == Movimentacao.Tipo.SAIDA else True
-    mov = Movimentacao.objects.create(
-        data_hora=data_hora,
+    aluno: Aluno = form.cleaned_data["aluno"]
+    return Movimentacao.objects.create(
+        data_hora=form.cleaned_data["data_hora"],
         tipo=tipo,
         aluno=aluno,
         turma=aluno.turma,
-        material=material,
+        material=form.cleaned_data.get("material"),
         aluno_nome=aluno.nome,
         aluno_codigo_externo=aluno.matricula,
         turma_nome=aluno.turma.nome if aluno.turma else "",
-        pacote_codigo=form_data["pacote_codigo"],
+        pacote_codigo=form.cleaned_data["pacote_codigo"],
         retirado=retirado,
         arquivo_origem="painel",
         row_hash=_gerar_row_hash(),
         origem=OrigemDados.MANUAL,
-        observacoes=form_data["observacoes"],
+        observacoes=form.cleaned_data.get("observacoes", ""),
     )
-    return mov, [], form_data
 
 
 @login_required
 def registrar_saida(request: HttpRequest) -> HttpResponse:
     """Registra a saida de um material/pacote para um aluno."""
 
-    contexto = _contexto_form_movimentacao(request, Movimentacao.Tipo.SAIDA)
-
-    if request.method == "POST":
-        mov, erros, form_data = _processar_form_movimentacao(
-            request, Movimentacao.Tipo.SAIDA
+    form = MovimentacaoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        mov = _salvar_movimentacao(form, Movimentacao.Tipo.SAIDA, retirado=None)
+        messages.success(
+            request,
+            f"Saída registrada para {mov.aluno_nome} — pacote {mov.pacote_codigo}.",
         )
-        if mov:
-            messages.success(
-                request,
-                f"Saída registrada para {mov.aluno_nome} — pacote {mov.pacote_codigo}.",
-            )
-            return redirect("cme_home")
-        contexto.update({"erros": erros, "form": form_data})
-        return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
-
-    contexto.update({"erros": [], "form": {}})
-    return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
+        return redirect("cme_home")
+    return render(
+        request,
+        "gestao_cme/registrar_movimentacao.html",
+        _contexto_movimentacao(request, Movimentacao.Tipo.SAIDA, form),
+    )
 
 
 @login_required
 def registrar_entrada(request: HttpRequest) -> HttpResponse:
     """Registra a entrada (devolucao) de um material/pacote por um aluno."""
 
-    contexto = _contexto_form_movimentacao(request, Movimentacao.Tipo.ENTRADA)
-
-    if request.method == "POST":
-        mov, erros, form_data = _processar_form_movimentacao(
-            request, Movimentacao.Tipo.ENTRADA
+    form = MovimentacaoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        mov = _salvar_movimentacao(form, Movimentacao.Tipo.ENTRADA, retirado=True)
+        messages.success(
+            request,
+            f"Entrada registrada para {mov.aluno_nome} — pacote {mov.pacote_codigo}.",
         )
-        if mov:
-            messages.success(
-                request,
-                f"Entrada registrada para {mov.aluno_nome} — "
-                "pacote {mov.pacote_codigo}.",
-            )
-            return redirect("cme_home")
-        contexto.update({"erros": erros, "form": form_data})
-        return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
-
-    contexto.update({"erros": [], "form": {}})
-    return render(request, "gestao_cme/registrar_movimentacao.html", contexto)
+        return redirect("cme_home")
+    return render(
+        request,
+        "gestao_cme/registrar_movimentacao.html",
+        _contexto_movimentacao(request, Movimentacao.Tipo.ENTRADA, form),
+    )
 
 
 @login_required
@@ -849,56 +796,13 @@ def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpRespons
 def cadastrar_aluno(request: HttpRequest) -> HttpResponse:
     """Cria um novo aluno manualmente no sistema."""
 
-    turmas = (
-        Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .filter(ativo=True)
-        .order_by("nome")
-    )
-    erros: list[str] = []
-    form_data: dict[str, str] = {}
-
-    if request.method == "POST":
-        form_data = {
-            "nome": request.POST.get("nome", "").strip(),
-            "matricula": request.POST.get("matricula", "").strip(),
-            "turma": request.POST.get("turma", "").strip(),
-            "cpf": request.POST.get("cpf", "").strip(),
-            "email": request.POST.get("email", "").strip(),
-            "telefone": request.POST.get("telefone", "").strip(),
-        }
-
-        if not form_data["nome"]:
-            erros.append("Informe o nome do aluno.")
-        if not form_data["matricula"]:
-            erros.append("Informe a matrícula.")
-        elif Aluno.objects.filter(matricula=form_data["matricula"]).exists():
-            erros.append(
-                f"Já existe um aluno com a matrícula {form_data['matricula']!r}."
-            )
-
-        turma = None
-        if not form_data["turma"].isdigit():
-            erros.append("Selecione uma turma.")
-        else:
-            try:
-                turma = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).get(
-                    pk=form_data["turma"]
-                )
-            except Turma.DoesNotExist:
-                erros.append("Turma não encontrada.")
-
-        if not erros:
-            aluno = Aluno.objects.create(
-                nome=form_data["nome"],
-                matricula=form_data["matricula"],
-                turma=turma,
-                cpf=form_data["cpf"] or None,
-                email=form_data["email"],
-                telefone=form_data["telefone"],
-                origem=OrigemDados.MANUAL,
-            )
-            messages.success(request, f"Aluno {aluno.nome} cadastrado com sucesso.")
-            return redirect("alunos_por_turma")
+    form = CadastrarAlunoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        aluno = form.save(commit=False)
+        aluno.origem = OrigemDados.MANUAL
+        aluno.save()
+        messages.success(request, f"Aluno {aluno.nome} cadastrado com sucesso.")
+        return redirect("alunos_por_turma")
 
     return render(
         request,
@@ -907,9 +811,8 @@ def cadastrar_aluno(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "titulo": "Cadastrar aluno",
             "active_page": "alunos",
-            "turmas": turmas,
-            "erros": erros,
-            "form": form_data,
+            "turmas": form.fields["turma"].queryset,
+            "form": form,
         },
     )
 
@@ -918,53 +821,13 @@ def cadastrar_aluno(request: HttpRequest) -> HttpResponse:
 def cadastrar_turma(request: HttpRequest) -> HttpResponse:
     """Cria uma nova turma manualmente no sistema."""
 
-    erros: list[str] = []
-    form_data: dict[str, str] = {}
-
-    if request.method == "POST":
-        form_data = {
-            "nome": request.POST.get("nome", "").strip(),
-            "codigo": request.POST.get("codigo", "").strip(),
-            "curso": request.POST.get("curso", "").strip(),
-            "data_inicio": request.POST.get("data_inicio", "").strip(),
-            "data_fim": request.POST.get("data_fim", "").strip(),
-            "observacoes": request.POST.get("observacoes", "").strip(),
-        }
-
-        if not form_data["nome"]:
-            erros.append("Informe o nome da turma.")
-        if not form_data["codigo"]:
-            erros.append("Informe o código da turma.")
-        elif Turma.objects.filter(codigo=form_data["codigo"]).exists():
-            erros.append(f"Já existe uma turma com o código {form_data['codigo']!r}.")
-
-        data_inicio = None
-        data_fim = None
-        if form_data["data_inicio"]:
-            try:
-                data_inicio = datetime.strptime(
-                    form_data["data_inicio"], "%Y-%m-%d"
-                ).date()
-            except ValueError:
-                erros.append("Data de início inválida.")
-        if form_data["data_fim"]:
-            try:
-                data_fim = datetime.strptime(form_data["data_fim"], "%Y-%m-%d").date()
-            except ValueError:
-                erros.append("Data de fim inválida.")
-
-        if not erros:
-            turma = Turma.objects.create(
-                nome=form_data["nome"],
-                codigo=form_data["codigo"],
-                curso=form_data["curso"],
-                data_inicio=data_inicio,
-                data_fim=data_fim,
-                observacoes=form_data["observacoes"],
-                origem=OrigemDados.MANUAL,
-            )
-            messages.success(request, f"Turma {turma.nome} cadastrada com sucesso.")
-            return redirect("alunos_por_turma")
+    form = CadastrarTurmaForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        turma = form.save(commit=False)
+        turma.origem = OrigemDados.MANUAL
+        turma.save()
+        messages.success(request, f"Turma {turma.nome} cadastrada com sucesso.")
+        return redirect("alunos_por_turma")
 
     return render(
         request,
@@ -973,8 +836,7 @@ def cadastrar_turma(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "titulo": "Cadastrar turma",
             "active_page": "alunos",
-            "erros": erros,
-            "form": form_data,
+            "form": form,
         },
     )
 
@@ -984,30 +846,17 @@ def cadastrar_turma(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def cadastrar_abrigo(request: HttpRequest) -> HttpResponse:
-    erros: list[str] = []
-    form_data: dict[str, object] = {"identificador": "", "ocupado": False}
+    """Cria um novo abrigo manualmente no sistema."""
 
-    if request.method == "POST":
-        form_data = {
-            "identificador": request.POST.get("identificador", "").strip(),
-            "ocupado": request.POST.get("ocupado") == "on",
-        }
-
-        if not form_data["identificador"]:
-            erros.append("Identificador é obrigatório.")
-        elif Abrigo.objects.filter(identificador=form_data["identificador"]).exists():
-            erros.append("Já existe um abrigo com esse identificador.")
-
-        if not erros:
-            abrigo = Abrigo.objects.create(
-                identificador=form_data["identificador"],
-                ocupado=form_data["ocupado"],
-                origem=OrigemDados.MANUAL,
-            )
-            messages.success(
-                request, f"Abrigo {abrigo.identificador} cadastrado com sucesso."
-            )
-            return redirect("abrigos")
+    form = AbrigoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        abrigo = form.save(commit=False)
+        abrigo.origem = OrigemDados.MANUAL
+        abrigo.save()
+        messages.success(
+            request, f"Abrigo {abrigo.identificador} cadastrado com sucesso."
+        )
+        return redirect("abrigos")
 
     return render(
         request,
@@ -1017,45 +866,23 @@ def cadastrar_abrigo(request: HttpRequest) -> HttpResponse:
             "titulo": "Cadastrar abrigo",
             "is_edit": False,
             "active_page": "armarios",
-            "erros": erros,
-            "form": form_data,
+            "form": form,
         },
     )
 
 
 @login_required
 def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
+    """Atualiza os dados de um abrigo existente."""
+
     abrigo = get_object_or_404(Abrigo, pk=pk)
-    erros: list[str] = []
-
-    if request.method == "POST":
-        identificador = request.POST.get("identificador", "").strip()
-        form_data: dict[str, object] = {
-            "identificador": identificador,
-            "ocupado": request.POST.get("ocupado") == "on",
-            "ativo": request.POST.get("ativo") == "on",
-        }
-
-        if not identificador:
-            erros.append("Identificador é obrigatório.")
-        elif Abrigo.objects.filter(identificador=identificador).exclude(pk=pk).exists():
-            erros.append("Já existe um abrigo com esse identificador.")
-
-        if not erros:
-            abrigo.identificador = form_data["identificador"]
-            abrigo.ocupado = form_data["ocupado"]
-            abrigo.ativo = form_data["ativo"]
-            abrigo.save()
-            messages.success(
-                request, f"Abrigo {abrigo.identificador} atualizado com sucesso."
-            )
-            return redirect("abrigos")
-    else:
-        form_data = {
-            "identificador": abrigo.identificador,
-            "ocupado": abrigo.ocupado,
-            "ativo": abrigo.ativo,
-        }
+    form = AbrigoEditForm(request.POST or None, instance=abrigo)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(
+            request, f"Abrigo {abrigo.identificador} atualizado com sucesso."
+        )
+        return redirect("abrigos")
 
     return render(
         request,
@@ -1066,74 +893,22 @@ def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
             "is_edit": True,
             "objeto": abrigo,
             "active_page": "armarios",
-            "erros": erros,
-            "form": form_data,
+            "form": form,
         },
     )
 
 
 @login_required
 def cadastrar_material(request: HttpRequest) -> HttpResponse:
-    erros: list[str] = []
-    form_data: dict[str, object] = {
-        "nome": "",
-        "codigo": "",
-        "descricao": "",
-        "identificacao": "",
-        "rotulo_kit": "",
-        "disponivel": True,
-        "unidade_medida": Material.UnidadeMedida.UNIDADE,
-        "quantidade_minima": "0",
-    }
+    """Cria um novo material manualmente no sistema."""
 
-    if request.method == "POST":
-        form_data = {
-            "nome": request.POST.get("nome", "").strip(),
-            "codigo": request.POST.get("codigo", "").strip(),
-            "descricao": request.POST.get("descricao", "").strip(),
-            "identificacao": request.POST.get("identificacao", "").strip(),
-            "rotulo_kit": request.POST.get("rotulo_kit", "").strip(),
-            "disponivel": request.POST.get("disponivel") == "on",
-            "unidade_medida": request.POST.get(
-                "unidade_medida", Material.UnidadeMedida.UNIDADE
-            ).strip(),
-            "quantidade_minima": request.POST.get("quantidade_minima", "0").strip(),
-        }
-
-        if not form_data["nome"]:
-            erros.append("Nome é obrigatório.")
-        if not form_data["codigo"]:
-            erros.append("Código é obrigatório.")
-        elif Material.objects.filter(codigo=form_data["codigo"]).exists():
-            erros.append("Já existe um material com esse código.")
-
-        quantidade_minima = 0
-        try:
-            quantidade_minima = int(form_data["quantidade_minima"])
-            if quantidade_minima < 0:
-                erros.append("Quantidade mínima não pode ser negativa.")
-        except ValueError:
-            erros.append("Quantidade mínima deve ser um número inteiro.")
-
-        if form_data["unidade_medida"] not in Material.UnidadeMedida.values:
-            erros.append("Unidade de medida inválida.")
-
-        if not erros:
-            material = Material.objects.create(
-                nome=form_data["nome"],
-                codigo=form_data["codigo"],
-                descricao=form_data["descricao"],
-                identificacao=form_data["identificacao"],
-                rotulo_kit=form_data["rotulo_kit"],
-                disponivel=form_data["disponivel"],
-                unidade_medida=form_data["unidade_medida"],
-                quantidade_minima=quantidade_minima,
-                origem=OrigemDados.MANUAL,
-            )
-            messages.success(
-                request, f"Material {material.nome} cadastrado com sucesso."
-            )
-            return redirect("materiais")
+    form = MaterialForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        material = form.save(commit=False)
+        material.origem = OrigemDados.MANUAL
+        material.save()
+        messages.success(request, f"Material {material.nome} cadastrado com sucesso.")
+        return redirect("materiais")
 
     return render(
         request,
@@ -1143,80 +918,21 @@ def cadastrar_material(request: HttpRequest) -> HttpResponse:
             "titulo": "Cadastrar material",
             "is_edit": False,
             "active_page": "materiais",
-            "unidades": Material.UnidadeMedida.choices,
-            "erros": erros,
-            "form": form_data,
+            "form": form,
         },
     )
 
 
 @login_required
 def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
+    """Atualiza os dados de um material existente."""
+
     material = get_object_or_404(Material, pk=pk)
-    erros: list[str] = []
-
-    if request.method == "POST":
-        form_data: dict[str, object] = {
-            "nome": request.POST.get("nome", "").strip(),
-            "codigo": request.POST.get("codigo", "").strip(),
-            "descricao": request.POST.get("descricao", "").strip(),
-            "identificacao": request.POST.get("identificacao", "").strip(),
-            "rotulo_kit": request.POST.get("rotulo_kit", "").strip(),
-            "disponivel": request.POST.get("disponivel") == "on",
-            "unidade_medida": request.POST.get(
-                "unidade_medida", Material.UnidadeMedida.UNIDADE
-            ).strip(),
-            "quantidade_minima": request.POST.get("quantidade_minima", "0").strip(),
-            "ativo": request.POST.get("ativo") == "on",
-        }
-
-        if not form_data["nome"]:
-            erros.append("Nome é obrigatório.")
-        if not form_data["codigo"]:
-            erros.append("Código é obrigatório.")
-        elif (
-            Material.objects.filter(codigo=form_data["codigo"]).exclude(pk=pk).exists()
-        ):
-            erros.append("Já existe um material com esse código.")
-
-        quantidade_minima = 0
-        try:
-            quantidade_minima = int(form_data["quantidade_minima"])
-            if quantidade_minima < 0:
-                erros.append("Quantidade mínima não pode ser negativa.")
-        except ValueError:
-            erros.append("Quantidade mínima deve ser um número inteiro.")
-
-        if form_data["unidade_medida"] not in Material.UnidadeMedida.values:
-            erros.append("Unidade de medida inválida.")
-
-        if not erros:
-            material.nome = form_data["nome"]
-            material.codigo = form_data["codigo"]
-            material.descricao = form_data["descricao"]
-            material.identificacao = form_data["identificacao"]
-            material.rotulo_kit = form_data["rotulo_kit"]
-            material.disponivel = form_data["disponivel"]
-            material.unidade_medida = form_data["unidade_medida"]
-            material.quantidade_minima = quantidade_minima
-            material.ativo = form_data["ativo"]
-            material.save()
-            messages.success(
-                request, f"Material {material.nome} atualizado com sucesso."
-            )
-            return redirect("materiais")
-    else:
-        form_data = {
-            "nome": material.nome,
-            "codigo": material.codigo,
-            "descricao": material.descricao,
-            "identificacao": material.identificacao,
-            "rotulo_kit": material.rotulo_kit,
-            "disponivel": material.disponivel,
-            "unidade_medida": material.unidade_medida,
-            "quantidade_minima": str(material.quantidade_minima),
-            "ativo": material.ativo,
-        }
+    form = MaterialEditForm(request.POST or None, instance=material)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, f"Material {material.nome} atualizado com sucesso.")
+        return redirect("materiais")
 
     return render(
         request,
@@ -1227,9 +943,7 @@ def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
             "is_edit": True,
             "objeto": material,
             "active_page": "materiais",
-            "unidades": Material.UnidadeMedida.choices,
-            "erros": erros,
-            "form": form_data,
+            "form": form,
         },
     )
 
@@ -1300,89 +1014,35 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
 def criar_emprestimo(request: HttpRequest) -> HttpResponse:
     """Cria um novo emprestimo vinculando aluno, kit e itens automaticamente."""
 
-    alunos_qs = (
-        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .filter(ativo=True)
-        .select_related("turma")
-        .order_by("turma__nome", "nome")
-    )
-    kits_qs = (
-        Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .filter(ativo=True)
-        .prefetch_related("itens__material")
-        .order_by("nome")
-    )
-
-    erros: list[str] = []
-    form_data: dict[str, str] = {}
-
-    if request.method == "POST":
-        form_data = {
-            "aluno": request.POST.get("aluno", "").strip(),
-            "kit": request.POST.get("kit", "").strip(),
-            "data_prevista_devolucao": request.POST.get(
-                "data_prevista_devolucao", ""
-            ).strip(),
-            "observacoes": request.POST.get("observacoes", "").strip(),
-        }
-
-        aluno = None
-        kit = None
-
-        if not form_data["aluno"].isdigit():
-            erros.append("Selecione um aluno.")
-        else:
-            try:
-                aluno = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).get(
-                    pk=form_data["aluno"]
-                )
-            except Aluno.DoesNotExist:
-                erros.append("Aluno não encontrado.")
-
-        if form_data["kit"].isdigit():
-            try:
-                kit = (
-                    Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
-                    .prefetch_related("itens__material")
-                    .get(pk=form_data["kit"])
-                )
-            except Kit.DoesNotExist:
-                erros.append("Kit não encontrado.")
-
-        data_prevista = None
-        if form_data["data_prevista_devolucao"]:
-            try:
-                data_prevista = datetime.strptime(
-                    form_data["data_prevista_devolucao"], "%Y-%m-%d"
-                ).date()
-            except ValueError:
-                erros.append("Data prevista de devolução inválida.")
-
-        if not erros and aluno:
-            with transaction.atomic():
-                emp = Emprestimo.objects.create(
-                    aluno=aluno,
-                    kit=kit,
-                    coordenador=request.user.get_full_name() or request.user.username,
-                    coordenador_usuario=request.user,
-                    data_prevista_devolucao=data_prevista,
-                    status=Emprestimo.Status.EMPRESTADO,
-                    observacoes=form_data["observacoes"],
-                )
-                if kit:
-                    for item_kit in kit.itens.all():
-                        ItemEmprestimo.objects.create(
-                            emprestimo=emp,
-                            material=item_kit.material,
-                            quantidade=item_kit.quantidade,
-                        )
-
-            kit_info = f" — kit {kit.nome}" if kit else ""
-            messages.success(
-                request,
-                f"Empréstimo #{emp.pk} criado para {aluno.nome}{kit_info}.",
+    form = EmprestimoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        aluno: Aluno = form.cleaned_data["aluno"]
+        kit: Kit | None = form.cleaned_data.get("kit")
+        with transaction.atomic():
+            emp = Emprestimo.objects.create(
+                aluno=aluno,
+                kit=kit,
+                coordenador=request.user.get_full_name() or request.user.username,
+                coordenador_usuario=request.user,
+                data_prevista_devolucao=form.cleaned_data.get(
+                    "data_prevista_devolucao"
+                ),
+                status=Emprestimo.Status.EMPRESTADO,
+                observacoes=form.cleaned_data.get("observacoes", ""),
             )
-            return redirect("emprestimos")
+            if kit:
+                for item_kit in kit.itens.all():
+                    ItemEmprestimo.objects.create(
+                        emprestimo=emp,
+                        material=item_kit.material,
+                        quantidade=item_kit.quantidade,
+                    )
+        kit_info = f" — kit {kit.nome}" if kit else ""
+        messages.success(
+            request,
+            f"Empréstimo #{emp.pk} criado para {aluno.nome}{kit_info}.",
+        )
+        return redirect("emprestimos")
 
     return render(
         request,
@@ -1391,10 +1051,9 @@ def criar_emprestimo(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "titulo": "Novo empréstimo",
             "active_page": "emprestimos",
-            "alunos": alunos_qs,
-            "kits": kits_qs,
-            "erros": erros,
-            "form": form_data,
+            "alunos": form.fields["aluno"].queryset,
+            "kits": form.fields["kit"].queryset,
+            "form": form,
         },
     )
 

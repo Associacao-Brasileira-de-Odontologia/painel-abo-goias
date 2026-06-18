@@ -24,11 +24,16 @@
                     <a class="button secondary" href="{% url 'cme_home' %}">Voltar ao histórico</a>
                 </div>
 
-                {% if erros %}
+                {% if form.errors %}
                     <div class="form-errors">
                         <ul>
-                            {% for erro in erros %}
-                                <li>{{ erro }}</li>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
                             {% endfor %}
                         </ul>
                     </div>
@@ -46,7 +51,7 @@
                                 <optgroup label="{{ grupo.grouper|default:'Sem turma' }}">
                                     {% for aluno in grupo.list %}
                                         <option value="{{ aluno.pk }}"
-                                            {% if form.aluno == aluno.pk|stringformat:"s" %}selected{% endif %}>
+                                            {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
                                             {{ aluno.nome }}{% if aluno.matricula %} — {{ aluno.matricula }}{% endif %}
                                         </option>
                                     {% endfor %}
@@ -61,10 +66,10 @@
                             id="pacote_codigo"
                             type="text"
                             name="pacote_codigo"
-                            value="{{ form.pacote_codigo|default:'' }}"
+                            value="{{ form.pacote_codigo.value|default:'' }}"
                             placeholder="Ex.: KIT-001"
                             required
-                            maxlength="40"
+                            maxlength="80"
                         >
                     </div>
 
@@ -74,7 +79,7 @@
                             <option value="">Nenhum material específico</option>
                             {% for mat in materiais %}
                                 <option value="{{ mat.pk }}"
-                                    {% if form.material == mat.pk|stringformat:"s" %}selected{% endif %}>
+                                    {% if form.material.value == mat.pk|stringformat:"s" %}selected{% endif %}>
                                     {{ mat.nome }}{% if mat.codigo %} — {{ mat.codigo }}{% endif %}
                                 </option>
                             {% endfor %}
@@ -87,7 +92,7 @@
                             id="data_hora"
                             type="datetime-local"
                             name="data_hora"
-                            value="{{ form.data_hora|default:'' }}"
+                            value="{{ form.data_hora.value|default:'' }}"
                         >
                     </div>
 
@@ -98,7 +103,7 @@
                             name="observacoes"
                             rows="3"
                             placeholder="Informações adicionais sobre esta movimentação..."
-                        >{{ form.observacoes|default:'' }}</textarea>
+                        >{{ form.observacoes.value|default:'' }}</textarea>
                     </div>
 
                     <div class="form-actions">

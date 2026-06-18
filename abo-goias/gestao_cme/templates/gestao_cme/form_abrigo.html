@@ -30,11 +30,16 @@
                     <a class="button secondary" href="{% url 'abrigos' %}">Voltar à listagem</a>
                 </div>
 
-                {% if erros %}
+                {% if form.errors %}
                     <div class="form-errors">
                         <ul>
-                            {% for erro in erros %}
-                                <li>{{ erro }}</li>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
                             {% endfor %}
                         </ul>
                     </div>
@@ -49,7 +54,7 @@
                             id="identificador"
                             type="text"
                             name="identificador"
-                            value="{{ form.identificador|default:'' }}"
+                            value="{{ form.identificador.value|default:'' }}"
                             placeholder="Ex.: A-01, B-12..."
                             required
                             maxlength="30"
@@ -61,7 +66,7 @@
                             <input
                                 type="checkbox"
                                 name="ocupado"
-                                {% if form.ocupado %}checked{% endif %}
+                                {% if form.ocupado.value %}checked{% endif %}
                             >
                             Abrigo ocupado no momento
                         </label>
@@ -73,7 +78,7 @@
                                 <input
                                     type="checkbox"
                                     name="ativo"
-                                    {% if form.ativo %}checked{% endif %}
+                                    {% if form.ativo.value %}checked{% endif %}
                                 >
                                 Abrigo ativo
                             </label>
