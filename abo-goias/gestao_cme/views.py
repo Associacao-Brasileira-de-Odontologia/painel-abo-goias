@@ -293,8 +293,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         .select_related("turma")
         .order_by("turma__nome", "nome")
     )
-    if not request.user.is_superuser:
-        alunos = alunos.filter(emprestimos__coordenador_usuario=request.user).distinct()
     if turma_id.isdigit():
         alunos = alunos.filter(turma_id=turma_id)
     if busca:
@@ -328,10 +326,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     ]
 
     turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
-    if not request.user.is_superuser:
-        turmas = turmas.filter(
-            alunos__emprestimos__coordenador_usuario=request.user
-        ).distinct()
 
     # Resolve turma selecionada para habilitar sincronizacao por turma
     turma_selecionada = None
@@ -345,13 +339,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
 
     alunos_base = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
     turmas_base = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
-    if not request.user.is_superuser:
-        alunos_base = alunos_base.filter(
-            emprestimos__coordenador_usuario=request.user
-        ).distinct()
-        turmas_base = turmas_base.filter(
-            alunos__emprestimos__coordenador_usuario=request.user
-        ).distinct()
 
     ultima_sincronizacao_alunos = alunos_base.aggregate(
         ultima=Max("ultima_sincronizacao")
