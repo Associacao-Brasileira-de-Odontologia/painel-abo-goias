@@ -12,7 +12,7 @@ from django.db import transaction
 from django.db.models import Count, Max, Q
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -973,6 +973,261 @@ def cadastrar_turma(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "titulo": "Cadastrar turma",
             "active_page": "alunos",
+            "erros": erros,
+            "form": form_data,
+        },
+    )
+
+
+# ── Cadastros de Abrigo e Material ───────────────────────────────────────────
+
+
+@login_required
+def cadastrar_abrigo(request: HttpRequest) -> HttpResponse:
+    erros: list[str] = []
+    form_data: dict[str, object] = {"identificador": "", "ocupado": False}
+
+    if request.method == "POST":
+        form_data = {
+            "identificador": request.POST.get("identificador", "").strip(),
+            "ocupado": request.POST.get("ocupado") == "on",
+        }
+
+        if not form_data["identificador"]:
+            erros.append("Identificador é obrigatório.")
+        elif Abrigo.objects.filter(identificador=form_data["identificador"]).exists():
+            erros.append("Já existe um abrigo com esse identificador.")
+
+        if not erros:
+            abrigo = Abrigo.objects.create(
+                identificador=form_data["identificador"],
+                ocupado=form_data["ocupado"],
+                origem=OrigemDados.MANUAL,
+            )
+            messages.success(
+                request, f"Abrigo {abrigo.identificador} cadastrado com sucesso."
+            )
+            return redirect("abrigos")
+
+    return render(
+        request,
+        "gestao_cme/form_abrigo.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": "Cadastrar abrigo",
+            "is_edit": False,
+            "active_page": "armarios",
+            "erros": erros,
+            "form": form_data,
+        },
+    )
+
+
+@login_required
+def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
+    abrigo = get_object_or_404(Abrigo, pk=pk)
+    erros: list[str] = []
+
+    if request.method == "POST":
+        identificador = request.POST.get("identificador", "").strip()
+        form_data: dict[str, object] = {
+            "identificador": identificador,
+            "ocupado": request.POST.get("ocupado") == "on",
+            "ativo": request.POST.get("ativo") == "on",
+        }
+
+        if not identificador:
+            erros.append("Identificador é obrigatório.")
+        elif Abrigo.objects.filter(identificador=identificador).exclude(pk=pk).exists():
+            erros.append("Já existe um abrigo com esse identificador.")
+
+        if not erros:
+            abrigo.identificador = form_data["identificador"]
+            abrigo.ocupado = form_data["ocupado"]
+            abrigo.ativo = form_data["ativo"]
+            abrigo.save()
+            messages.success(
+                request, f"Abrigo {abrigo.identificador} atualizado com sucesso."
+            )
+            return redirect("abrigos")
+    else:
+        form_data = {
+            "identificador": abrigo.identificador,
+            "ocupado": abrigo.ocupado,
+            "ativo": abrigo.ativo,
+        }
+
+    return render(
+        request,
+        "gestao_cme/form_abrigo.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": f"Editar abrigo {abrigo.identificador}",
+            "is_edit": True,
+            "objeto": abrigo,
+            "active_page": "armarios",
+            "erros": erros,
+            "form": form_data,
+        },
+    )
+
+
+@login_required
+def cadastrar_material(request: HttpRequest) -> HttpResponse:
+    erros: list[str] = []
+    form_data: dict[str, object] = {
+        "nome": "",
+        "codigo": "",
+        "descricao": "",
+        "identificacao": "",
+        "rotulo_kit": "",
+        "disponivel": True,
+        "unidade_medida": Material.UnidadeMedida.UNIDADE,
+        "quantidade_minima": "0",
+    }
+
+    if request.method == "POST":
+        form_data = {
+            "nome": request.POST.get("nome", "").strip(),
+            "codigo": request.POST.get("codigo", "").strip(),
+            "descricao": request.POST.get("descricao", "").strip(),
+            "identificacao": request.POST.get("identificacao", "").strip(),
+            "rotulo_kit": request.POST.get("rotulo_kit", "").strip(),
+            "disponivel": request.POST.get("disponivel") == "on",
+            "unidade_medida": request.POST.get(
+                "unidade_medida", Material.UnidadeMedida.UNIDADE
+            ).strip(),
+            "quantidade_minima": request.POST.get("quantidade_minima", "0").strip(),
+        }
+
+        if not form_data["nome"]:
+            erros.append("Nome é obrigatório.")
+        if not form_data["codigo"]:
+            erros.append("Código é obrigatório.")
+        elif Material.objects.filter(codigo=form_data["codigo"]).exists():
+            erros.append("Já existe um material com esse código.")
+
+        quantidade_minima = 0
+        try:
+            quantidade_minima = int(form_data["quantidade_minima"])
+            if quantidade_minima < 0:
+                erros.append("Quantidade mínima não pode ser negativa.")
+        except ValueError:
+            erros.append("Quantidade mínima deve ser um número inteiro.")
+
+        if form_data["unidade_medida"] not in Material.UnidadeMedida.values:
+            erros.append("Unidade de medida inválida.")
+
+        if not erros:
+            material = Material.objects.create(
+                nome=form_data["nome"],
+                codigo=form_data["codigo"],
+                descricao=form_data["descricao"],
+                identificacao=form_data["identificacao"],
+                rotulo_kit=form_data["rotulo_kit"],
+                disponivel=form_data["disponivel"],
+                unidade_medida=form_data["unidade_medida"],
+                quantidade_minima=quantidade_minima,
+                origem=OrigemDados.MANUAL,
+            )
+            messages.success(
+                request, f"Material {material.nome} cadastrado com sucesso."
+            )
+            return redirect("materiais")
+
+    return render(
+        request,
+        "gestao_cme/form_material.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": "Cadastrar material",
+            "is_edit": False,
+            "active_page": "materiais",
+            "unidades": Material.UnidadeMedida.choices,
+            "erros": erros,
+            "form": form_data,
+        },
+    )
+
+
+@login_required
+def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
+    material = get_object_or_404(Material, pk=pk)
+    erros: list[str] = []
+
+    if request.method == "POST":
+        form_data: dict[str, object] = {
+            "nome": request.POST.get("nome", "").strip(),
+            "codigo": request.POST.get("codigo", "").strip(),
+            "descricao": request.POST.get("descricao", "").strip(),
+            "identificacao": request.POST.get("identificacao", "").strip(),
+            "rotulo_kit": request.POST.get("rotulo_kit", "").strip(),
+            "disponivel": request.POST.get("disponivel") == "on",
+            "unidade_medida": request.POST.get(
+                "unidade_medida", Material.UnidadeMedida.UNIDADE
+            ).strip(),
+            "quantidade_minima": request.POST.get("quantidade_minima", "0").strip(),
+            "ativo": request.POST.get("ativo") == "on",
+        }
+
+        if not form_data["nome"]:
+            erros.append("Nome é obrigatório.")
+        if not form_data["codigo"]:
+            erros.append("Código é obrigatório.")
+        elif (
+            Material.objects.filter(codigo=form_data["codigo"]).exclude(pk=pk).exists()
+        ):
+            erros.append("Já existe um material com esse código.")
+
+        quantidade_minima = 0
+        try:
+            quantidade_minima = int(form_data["quantidade_minima"])
+            if quantidade_minima < 0:
+                erros.append("Quantidade mínima não pode ser negativa.")
+        except ValueError:
+            erros.append("Quantidade mínima deve ser um número inteiro.")
+
+        if form_data["unidade_medida"] not in Material.UnidadeMedida.values:
+            erros.append("Unidade de medida inválida.")
+
+        if not erros:
+            material.nome = form_data["nome"]
+            material.codigo = form_data["codigo"]
+            material.descricao = form_data["descricao"]
+            material.identificacao = form_data["identificacao"]
+            material.rotulo_kit = form_data["rotulo_kit"]
+            material.disponivel = form_data["disponivel"]
+            material.unidade_medida = form_data["unidade_medida"]
+            material.quantidade_minima = quantidade_minima
+            material.ativo = form_data["ativo"]
+            material.save()
+            messages.success(
+                request, f"Material {material.nome} atualizado com sucesso."
+            )
+            return redirect("materiais")
+    else:
+        form_data = {
+            "nome": material.nome,
+            "codigo": material.codigo,
+            "descricao": material.descricao,
+            "identificacao": material.identificacao,
+            "rotulo_kit": material.rotulo_kit,
+            "disponivel": material.disponivel,
+            "unidade_medida": material.unidade_medida,
+            "quantidade_minima": str(material.quantidade_minima),
+            "ativo": material.ativo,
+        }
+
+    return render(
+        request,
+        "gestao_cme/form_material.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": f"Editar {material.nome}",
+            "is_edit": True,
+            "objeto": material,
+            "active_page": "materiais",
+            "unidades": Material.UnidadeMedida.choices,
             "erros": erros,
             "form": form_data,
         },
