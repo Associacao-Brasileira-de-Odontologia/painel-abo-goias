@@ -31,11 +31,34 @@
                 </div>
             </div>
 
-            <div class="portal-brand-card" aria-label="Associação Brasileira de Odontologia de Goiás">
-                <img src="{% static 'gestao_cme/img/logo.png' %}" alt="ABO Goiás">
+            <div class="portal-brand-card" aria-label="Resumo do acervo">
                 <div>
-                    <span>Ambiente integrado</span>
-                    <strong>Gestão acadêmica e operacional</strong>
+                    <p class="section-label">Acervo</p>
+                    <h2>Resumo rápido</h2>
+                </div>
+
+                <div class="portal-status-grid">
+                    <div class="portal-status-item">
+                        <span>Materiais</span>
+                        <strong>{{ resumo.materiais }}</strong>
+                    </div>
+                    <div class="portal-status-item">
+                        <span>Kits</span>
+                        <strong>{{ resumo.kits }}</strong>
+                    </div>
+                    <div class="portal-status-item">
+                        <span>Turmas</span>
+                        <strong>{{ resumo.turmas }}</strong>
+                    </div>
+                    <div class="portal-status-item">
+                        <span>Empréstimos ativos</span>
+                        <strong>{{ resumo.emprestimos_abertos }}</strong>
+                    </div>
+                </div>
+
+                <div class="portal-quick-links">
+                    <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída de material</a>
+                    <a class="button secondary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
                 </div>
             </div>
         </section>
