@@ -1115,3 +1115,108 @@ def marcar_emprestimo_atrasado(request: HttpRequest, pk: int) -> HttpResponse:
     if next_url.startswith("/"):
         return HttpResponseRedirect(next_url)
     return redirect("emprestimos")
+
+
+@login_required
+def cme_dashboard(request: HttpRequest) -> HttpResponse:
+    """Exibe metricas consolidadas e atividade recente da gestao de CME."""
+
+    hoje = timezone.now().date()
+    mov_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
+    emp_base = emprestimos_visiveis(request)
+
+    total_emp = emp_base.count()
+    devolvidos_emp = emp_base.filter(status=Emprestimo.Status.DEVOLVIDO).count()
+
+    metricas_mov = {
+        "total": mov_base.count(),
+        "saidas": mov_base.filter(tipo=Movimentacao.Tipo.SAIDA).count(),
+        "entradas": mov_base.filter(tipo=Movimentacao.Tipo.ENTRADA).count(),
+        "pendentes": mov_base.filter(
+            tipo=Movimentacao.Tipo.SAIDA, retirado=False
+        ).count(),
+    }
+    metricas_emp = {
+        "total": total_emp,
+        "emprestados": emp_base.filter(status=Emprestimo.Status.EMPRESTADO).count(),
+        "atrasados": emp_base.filter(status=Emprestimo.Status.ATRASADO).count(),
+        "devolvidos": devolvidos_emp,
+        "taxa_devolucao": (round(devolvidos_emp / total_emp * 100) if total_emp else 0),
+    }
+
+    proximas_devolucoes = list(
+        emp_base.filter(
+            status__in=[Emprestimo.Status.EMPRESTADO, Emprestimo.Status.ATRASADO],
+            data_prevista_devolucao__isnull=False,
+        )
+        .select_related("aluno", "aluno__turma", "kit")
+        .order_by("data_prevista_devolucao")[:8]
+    )
+
+    atividade_recente: list[dict] = []
+
+    for mov in mov_base.select_related("material").order_by("-data_hora", "-id")[:10]:
+        material = mov.material.nome if mov.material else f"pacote {mov.pacote_codigo}"
+        aluno = mov.aluno_nome or "Aluno não informado"
+        if mov.tipo == Movimentacao.Tipo.ENTRADA:
+            categoria, titulo = "devolucao", "Devolução de material"
+            descricao = f"{aluno} devolveu {material}."
+        elif mov.retirado is False:
+            categoria, titulo = "alerta", "Retirada pendente"
+            descricao = f"{aluno} ainda não retirou {material}."
+        else:
+            categoria, titulo = "alerta", "Saída de material"
+            descricao = f"{material} saiu para {aluno}."
+        atividade_recente.append(
+            {
+                "categoria": categoria,
+                "titulo": titulo,
+                "descricao": descricao,
+                "data": mov.data_hora,
+            }
+        )
+
+    for emp in (
+        emp_base.filter(
+            status=Emprestimo.Status.DEVOLVIDO, data_devolucao__isnull=False
+        )
+        .select_related("aluno")
+        .order_by("-data_devolucao")[:5]
+    ):
+        atividade_recente.append(
+            {
+                "categoria": "devolucao",
+                "titulo": "Empréstimo devolvido",
+                "descricao": f"{emp.aluno.nome} devolveu o empréstimo #{emp.pk}.",
+                "data": emp.data_devolucao,
+            }
+        )
+
+    for emp in emp_base.select_related("aluno", "kit").order_by("-data_emprestimo")[:5]:
+        kit_info = f" — {emp.kit.nome}" if emp.kit else ""
+        atividade_recente.append(
+            {
+                "categoria": "exportacao",
+                "titulo": "Empréstimo registrado",
+                "descricao": f"Empréstimo #{emp.pk} para {emp.aluno.nome}{kit_info}.",
+                "data": emp.data_emprestimo,
+            }
+        )
+
+    atividade_recente = sorted(
+        atividade_recente, key=lambda x: x["data"], reverse=True
+    )[:12]
+
+    return render(
+        request,
+        "gestao_cme/dashboard_cme.html",
+        {
+            "usuario_logado": request.user,
+            "active_page": "dashboard",
+            "hoje": hoje,
+            "metricas_mov": metricas_mov,
+            "metricas_emp": metricas_emp,
+            "proximas_devolucoes": proximas_devolucoes,
+            "atividade_recente": atividade_recente,
+        },
+    )

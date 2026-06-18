@@ -57,7 +57,13 @@ urlpatterns = [
     ),
     path("healthz/", views.healthcheck, name="healthcheck"),
     path("", views.portal, name="home"),
-    path("gestao-cme/", views.home, name="cme_home"),
+    path(
+        "gestao-cme/",
+        RedirectView.as_view(pattern_name="cme_dashboard", permanent=False),
+        name="cme_entrada",
+    ),
+    path("gestao-cme/movimentacoes/", views.home, name="cme_home"),
+    path("gestao-cme/visao-geral/", views.cme_dashboard, name="cme_dashboard"),
     path("alunos-por-turma/", views.alunos_por_turma, name="alunos_por_turma"),
     path(
         "alunos-por-turma/sincronizar-turmas/",
