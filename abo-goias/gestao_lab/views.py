@@ -525,14 +525,37 @@ def pacientes(request: HttpRequest) -> HttpResponse:
 
 
 # ---------------------------------------------------------------------------
-# Sincronização Dental Office (stub — Fase 4)
+# Sincronização Dental Office
 # ---------------------------------------------------------------------------
 
 
 @login_required
 @require_POST
 def sincronizar_dental(request: HttpRequest) -> HttpResponse:
-    messages.info(
-        request, "Integração com o Dental Office será implementada na Fase 4."
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import (
+        sincronizar_alunos,
+        sincronizar_pacientes,
     )
-    return redirect("lab_dashboard")
+
+    clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+
+    if not clinic_id:
+        messages.error(request, "DENTAL_CLINIC_ID não configurado no ambiente.")
+        return redirect("lab_pacientes")
+
+    try:
+        rp = sincronizar_pacientes(clinic_id=clinic_id)
+        ra = sincronizar_alunos(user_group=user_group)
+        messages.success(
+            request,
+            f"Sincronização concluída — "
+            f"Pacientes: {rp['criados']} criado(s), {rp['atualizados']} atualizado(s). "
+            f"Alunos: {ra['criados']} criado(s), {ra['atualizados']} atualizado(s).",
+        )
+    except DentalAPIError as exc:
+        messages.error(request, f"Erro na API Dental Office: {exc}")
+
+    return redirect("lab_pacientes")

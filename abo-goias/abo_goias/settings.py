@@ -119,6 +119,7 @@ def _database_config() -> dict[str, dict]:
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {"timeout": 20},
         }
     }
 
@@ -296,6 +297,33 @@ SECURE_PROXY_SSL_HEADER = (
     if _env_bool("DJANGO_SECURE_PROXY_SSL_HEADER", False)
     else None
 )
+
+DENTAL_CLINIC_ID = int(os.environ.get("DENTAL_CLINIC_ID", "1"))
+DENTAL_USER_GROUP_ALUNO = int(os.environ.get("DENTAL_USER_GROUP_ALUNO", "8"))
+
+DENTAL_AUTH_URL = os.environ.get(
+    "DENTAL_AUTH_URL",
+    "https://demo.api.app.dentaloffice.com.br/v1/auth/tokens",
+)
+DENTAL_BASE_URL = os.environ.get(
+    "DENTAL_BASE_URL",
+    "https://demo.api.app.dentaloffice.com.br/v1",
+)
+DENTAL_VERIFY_TLS = os.environ.get("DENTAL_VERIFY_TLS", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "sim",
+    "on",
+}
+DENTAL_TIMEOUT = int(os.environ.get("DENTAL_TIMEOUT", "30"))
+DENTAL_USE_PROXY = os.environ.get("DENTAL_USE_PROXY", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "sim",
+    "on",
+}
 
 EDUQ_AUTH_URL = os.environ.get(
     "EDUQ_AUTH_URL",

@@ -1,0 +1,75 @@
+"""Management command para sincronizar alunos e pacientes do Dental Office."""
+
+from django.conf import settings
+from django.core.management.base import BaseCommand
+from gestao_lab.integrations.dental import DentalAPIError
+from gestao_lab.services.dental_sync import sincronizar_alunos, sincronizar_pacientes
+
+
+class Command(BaseCommand):
+    help = "Sincroniza alunos e pacientes do Dental Office com o banco local."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--clinic-id",
+            type=int,
+            default=None,
+            help="ID da clínica no Dental Office (padrão: DENTAL_CLINIC_ID).",
+        )
+        parser.add_argument(
+            "--user-group",
+            type=int,
+            default=None,
+            help="Grupo de usuários alunos (padrão: DENTAL_USER_GROUP_ALUNO).",
+        )
+        parser.add_argument(
+            "--apenas-pacientes",
+            action="store_true",
+            help="Sincroniza apenas pacientes, ignorando alunos.",
+        )
+        parser.add_argument(
+            "--apenas-alunos",
+            action="store_true",
+            help="Sincroniza apenas alunos, ignorando pacientes.",
+        )
+
+    def handle(self, *args, **options):
+        clinic_id = options["clinic_id"] or getattr(settings, "DENTAL_CLINIC_ID", None)
+        user_group = options["user_group"] or getattr(
+            settings, "DENTAL_USER_GROUP_ALUNO", 8
+        )
+        apenas_pacientes = options["apenas_pacientes"]
+        apenas_alunos = options["apenas_alunos"]
+
+        try:
+            if not apenas_alunos:
+                if not clinic_id:
+                    self.stderr.write(
+                        self.style.ERROR(
+                            "Informe --clinic-id ou configure DENTAL_CLINIC_ID."
+                        )
+                    )
+                    return
+                self.stdout.write(f"Sincronizando pacientes (clínica {clinic_id})...")
+                r = sincronizar_pacientes(clinic_id=clinic_id)
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"  Pacientes — criados: {r['criados']}, "
+                        f"atualizados: {r['atualizados']}, "
+                        f"ignorados: {r['ignorados']}."
+                    )
+                )
+
+            if not apenas_pacientes:
+                self.stdout.write(f"Sincronizando alunos (grupo {user_group})...")
+                r = sincronizar_alunos(user_group=user_group)
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"  Alunos — criados: {r['criados']}, "
+                        f"atualizados: {r['atualizados']}, "
+                        f"ignorados: {r['ignorados']}."
+                    )
+                )
+
+        except DentalAPIError as exc:
+            self.stderr.write(self.style.ERROR(f"Erro na API Dental Office: {exc}"))
