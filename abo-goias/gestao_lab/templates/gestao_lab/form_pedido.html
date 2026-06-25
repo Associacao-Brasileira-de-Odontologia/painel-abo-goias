@@ -1,0 +1,164 @@
+{% extends "gestao_lab/base.html" %}
+
+{% block title %}Gestão de Laboratório | Novo pedido{% endblock %}
+{% block header_eyebrow %}Gestão de laboratório{% endblock %}
+{% block header_title %}Novo pedido{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+    <div class="layout-grid">
+        <aside class="panel config-panel">
+            <p class="section-label">Gestão de laboratório</p>
+            <h2>Novo pedido</h2>
+            <p class="panel-copy">Preencha os dados do pedido de material para envio ao laboratório.</p>
+
+            {% include "gestao_lab/partials/menu_lab.html" with active_page="novo_pedido" %}
+        </aside>
+
+        <section class="panel results-panel">
+            <div class="results-topbar">
+                <div>
+                    <p class="section-label">Pedidos de material</p>
+                    <h2>
+                        {% if moldagem_origem %}
+                            Pedido a partir de moldagem #{{ moldagem_origem.pk }}
+                        {% else %}
+                            Registrar pedido de material
+                        {% endif %}
+                    </h2>
+                </div>
+                <a class="button secondary" href="{% url 'lab_pedidos' %}">Voltar</a>
+            </div>
+
+            {% if moldagem_origem %}
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Paciente (pré-preenchido)</span>
+                        <strong>{{ moldagem_origem.paciente.nome }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Aluno (pré-preenchido)</span>
+                        <strong>{{ moldagem_origem.aluno.nome }}</strong>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if form.errors %}
+                <div class="form-errors">
+                    <ul>
+                        {% for field in form %}
+                            {% for error in field.errors %}
+                                <li>{{ field.label }}: {{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <form class="form-stack form-stack-wide" method="post">
+                {% csrf_token %}
+
+                <div class="field field-required">
+                    <label for="id_paciente">Paciente</label>
+                    <select id="id_paciente" name="paciente" required>
+                        <option value="">— Selecione o paciente —</option>
+                        {% for paciente in form.fields.paciente.queryset %}
+                            <option value="{{ paciente.pk }}"
+                                {% if form.paciente.value == paciente.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ paciente.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.paciente.errors %}
+                        <span class="field-error">{{ form.paciente.errors|join:", " }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="field field-required">
+                    <label for="id_aluno">Aluno</label>
+                    <select id="id_aluno" name="aluno" required>
+                        <option value="">— Selecione o aluno —</option>
+                        {% for aluno in form.fields.aluno.queryset %}
+                            <option value="{{ aluno.pk }}"
+                                {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ aluno.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.aluno.errors %}
+                        <span class="field-error">{{ form.aluno.errors|join:", " }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="field field-required">
+                    <label for="id_laboratorio">Laboratório</label>
+                    <select id="id_laboratorio" name="laboratorio" required>
+                        <option value="">— Selecione o laboratório —</option>
+                        {% for lab in form.fields.laboratorio.queryset %}
+                            <option value="{{ lab.pk }}"
+                                {% if form.laboratorio.value == lab.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ lab.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.laboratorio.errors %}
+                        <span class="field-error">{{ form.laboratorio.errors|join:", " }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="field field-required">
+                    <label for="id_equipe">Equipe responsável</label>
+                    <select id="id_equipe" name="equipe" required>
+                        <option value="">— Selecione a equipe —</option>
+                        {% for equipe in form.fields.equipe.queryset %}
+                            <option value="{{ equipe.pk }}"
+                                {% if form.equipe.value == equipe.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ equipe.nome }} — {{ equipe.coordenador }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.equipe.errors %}
+                        <span class="field-error">{{ form.equipe.errors|join:", " }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="field field-required">
+                    <label for="id_previsao_entrega">Previsão de entrega (devolução)</label>
+                    <input
+                        id="id_previsao_entrega"
+                        type="date"
+                        name="previsao_entrega"
+                        value="{{ form.previsao_entrega.value|default:'' }}"
+                        required
+                    >
+                    {% if form.previsao_entrega.errors %}
+                        <span class="field-error">{{ form.previsao_entrega.errors|join:", " }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="field field-required">
+                    <label for="id_descricao_servico">Descrição do serviço</label>
+                    <textarea
+                        id="id_descricao_servico"
+                        name="descricao_servico"
+                        rows="4"
+                        placeholder="Descreva o procedimento, especificações e observações relevantes..."
+                        required
+                    >{{ form.descricao_servico.value|default:'' }}</textarea>
+                    {% if form.descricao_servico.errors %}
+                        <span class="field-error">{{ form.descricao_servico.errors|join:", " }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="form-actions">
+                    <button class="button primary" type="submit">Registrar pedido</button>
+                    <a class="button secondary" href="{% url 'lab_pedidos' %}">Cancelar</a>
+                </div>
+            </form>
+        </section>
+    </div>
+</main>
+{% endblock %}

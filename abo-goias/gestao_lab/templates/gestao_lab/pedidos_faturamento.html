@@ -1,0 +1,143 @@
+{% extends "gestao_lab/base.html" %}
+{% load lab_tags %}
+
+{% block title %}Gestão de Laboratório | Faturamento{% endblock %}
+{% block header_eyebrow %}Gestão de laboratório{% endblock %}
+{% block header_title %}Faturamento{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+    <div class="layout-grid">
+        <aside class="panel config-panel">
+            <p class="section-label">Gestão de laboratório</p>
+            <h2>Faturamento</h2>
+            <p class="panel-copy">Pedidos entregues que ainda precisam de informações financeiras preenchidas.</p>
+
+            {% include "gestao_lab/partials/menu_lab.html" with active_page="faturamento" %}
+        </aside>
+
+        <section class="panel results-panel">
+            <div class="results-topbar">
+                <div>
+                    <p class="section-label">Pendências financeiras</p>
+                    <h2>Pedidos aguardando faturamento</h2>
+                </div>
+            </div>
+
+            <form class="results-search" method="get">
+                <label class="search-label" for="results-q-fat">Buscar na listagem</label>
+                <div class="results-search-row">
+                    <div class="search-control">
+                        <input id="results-q-fat" type="search" name="q" value="{{ busca }}" placeholder="Buscar por paciente, aluno ou laboratório...">
+                    </div>
+                    <button class="button primary" type="submit">Buscar</button>
+                    <a class="button secondary" href="{% url 'lab_pedidos_faturamento' %}">Limpar</a>
+                </div>
+            </form>
+
+            <div class="selection-summary">
+                <div class="info-chip">
+                    <span>Busca</span>
+                    <strong>{{ busca|default:"Todos os registros" }}</strong>
+                </div>
+                <div class="info-chip">
+                    <span>Resultado</span>
+                    <strong>{{ page_obj.paginator.count }} pedido(s)</strong>
+                </div>
+            </div>
+
+            {% if messages %}
+                <div class="messages">
+                    {% for message in messages %}
+                        <div class="message {{ message.tags }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="table-wrap data-table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Paciente / Aluno</th>
+                            <th>Laboratório</th>
+                            <th>Entregue em</th>
+                            <th>Fat. Paciente</th>
+                            <th>Fat. Lab</th>
+                            <th>Nota Fiscal</th>
+                            <th>Vencimento</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pedido in pedidos %}
+                            <tr>
+                                <td><strong>#{{ pedido.pk }}</strong></td>
+                                <td>
+                                    <strong>{{ pedido.paciente.nome }}</strong>
+                                    <span class="cell-muted">{{ pedido.aluno.nome }}</span>
+                                </td>
+                                <td>
+                                    <strong>{{ pedido.laboratorio.nome }}</strong>
+                                    {% if pedido.laboratorio.whatsapp %}
+                                        <span class="cell-muted">{{ pedido.laboratorio.whatsapp }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ pedido.data_entrega|date:"d/m/Y"|default:"—" }}</td>
+
+                                <td>
+                                    <form method="post" action="{% url 'lab_atualizar_faturamento' pedido.pk %}" class="inline-form" id="fat-form-{{ pedido.pk }}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        {% with form=forms_faturamento|default_if_none:None %}
+                                            <input type="checkbox" name="faturado_paciente"
+                                                   {% if pedido.faturado_paciente %}checked{% endif %}
+                                                   onchange="this.form.submit()"
+                                                   title="Faturado paciente">
+                                        {% endwith %}
+                                    </form>
+                                </td>
+                                <td>
+                                    <form method="post" action="{% url 'lab_atualizar_faturamento' pedido.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <input type="checkbox" name="faturado_lab"
+                                               {% if pedido.faturado_lab %}checked{% endif %}
+                                               onchange="this.form.submit()"
+                                               title="Faturado lab">
+                                    </form>
+                                </td>
+                                <td>{{ pedido.numero_nota_fiscal|default:"—" }}</td>
+                                <td>{{ pedido.data_vencimento|date:"d/m/Y"|default:"—" }}</td>
+
+                                <td class="actions-cell">
+                                    {% if pedido.laboratorio.whatsapp %}
+                                        <a class="button compact-button secondary"
+                                           href="{{ pedido.laboratorio.whatsapp|whatsapp_url_msg:pedido.laboratorio.nome }}"
+                                           target="_blank" rel="noopener"
+                                           title="Enviar mensagem ao laboratório">
+                                            WhatsApp
+                                        </a>
+                                    {% endif %}
+                                    <a class="button compact-button secondary" href="{% url 'lab_detalhe_pedido' pedido.pk %}">Preencher</a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr class="empty-row">
+                                <td colspan="9">
+                                    <div class="empty-state">
+                                        <strong>Nenhum pedido com faturamento pendente.</strong>
+                                        <p>Todos os pedidos entregues já têm informações financeiras completas.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "gestao_cme/partials/paginacao.html" %}
+        </section>
+    </div>
+</main>
+{% endblock %}

@@ -1,0 +1,99 @@
+<nav class="side-nav" aria-label="Navegação do laboratório">
+    <a class="side-link {% if active_page == 'dashboard' %}active{% endif %}" href="{% url 'lab_dashboard' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <rect width="7" height="7" x="3" y="3" rx="1"></rect>
+                <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+                <rect width="7" height="7" x="14" y="14" rx="1"></rect>
+                <rect width="7" height="7" x="3" y="14" rx="1"></rect>
+            </svg>
+        </span>
+        <span>Visão Geral</span>
+    </a>
+
+    <a class="side-link {% if active_page == 'pedidos' %}active{% endif %}" href="{% url 'lab_pedidos' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M8 7h12"></path>
+                <path d="M8 12h12"></path>
+                <path d="M8 17h12"></path>
+                <path d="M4 7h.01"></path>
+                <path d="M4 12h.01"></path>
+                <path d="M4 17h.01"></path>
+            </svg>
+        </span>
+        <span>Acompanhamento</span>
+    </a>
+
+    <a class="side-link {% if active_page == 'novo_pedido' %}active{% endif %}" href="{% url 'lab_criar_pedido' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+            </svg>
+        </span>
+        <span>Novo pedido</span>
+    </a>
+
+    <a class="side-link {% if active_page == 'faturamento' %}active{% endif %}" href="{% url 'lab_pedidos_faturamento' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path>
+                <rect width="6" height="4" x="9" y="3" rx="1"></rect>
+                <path d="m9 14 2 2 4-4"></path>
+            </svg>
+        </span>
+        <span>Faturamento</span>
+    </a>
+
+    <a class="side-link {% if active_page == 'moldagens' %}active{% endif %}" href="{% url 'lab_moldagens' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <ellipse cx="12" cy="12" rx="10" ry="5"></ellipse>
+                <path d="M2 12c0 5.523 4.477 10 10 10s10-4.477 10-10"></path>
+            </svg>
+        </span>
+        <span>Moldagens</span>
+    </a>
+
+    <a class="side-link {% if active_page == 'laboratorios' %}active{% endif %}" href="{% url 'lab_laboratorios' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5m4 0h4m6-11v11m0 0h-4m4 0h4m-4 0a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4m14 0H5"></path>
+            </svg>
+        </span>
+        <span>Laboratórios</span>
+    </a>
+
+    <a class="side-link {% if active_page == 'equipes' %}active{% endif %}" href="{% url 'lab_equipes' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+        </span>
+        <span>Equipes</span>
+    </a>
+
+    <a class="side-link {% if active_page == 'pacientes' %}active{% endif %}" href="{% url 'lab_pacientes' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+        </span>
+        <span>Pacientes</span>
+    </a>
+
+    <a class="side-link side-link-return" href="{% url 'home' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M19 12H5"></path>
+                <path d="m12 19-7-7 7-7"></path>
+            </svg>
+        </span>
+        <span>Voltar ao portal</span>
+    </a>
+</nav>
