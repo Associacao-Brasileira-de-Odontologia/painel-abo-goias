@@ -101,6 +101,9 @@ class Paciente(ModeloBase):
     Armazena dados de contato, indicador de processo em aberto e previsao de
     retorno. Vinculado aos pedidos de material e moldagens para rastreio de
     quais pacientes possuem servicos em andamento.
+
+    Os campos de CPF, RG, data de nascimento, endereco e responsavel sao
+    preenchidos sob demanda via endpoint /customers/{id} ao gerar contratos.
     """
 
     nome = models.CharField(max_length=200)
@@ -114,6 +117,25 @@ class Paciente(ModeloBase):
         default=OrigemDados.DENTAL,
     )
     ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
+
+    # Dados enriquecidos via GET /customers/{id} — usados na geração de contratos
+    cpf = models.CharField(max_length=20, blank=True)
+    rg = models.CharField(max_length=30, blank=True)
+    data_nascimento = models.DateField(null=True, blank=True)
+    endereco_logradouro = models.CharField(max_length=200, blank=True)
+    endereco_numero = models.CharField(max_length=20, blank=True)
+    endereco_complemento = models.CharField(max_length=100, blank=True)
+    endereco_bairro = models.CharField(max_length=100, blank=True)
+    endereco_cidade = models.CharField(max_length=100, blank=True)
+    endereco_estado = models.CharField(max_length=2, blank=True)
+    endereco_cep = models.CharField(max_length=10, blank=True)
+    nome_responsavel = models.CharField(max_length=200, blank=True)
+    cpf_responsavel = models.CharField(max_length=20, blank=True)
+
+    @property
+    def dados_contrato_completos(self) -> bool:
+        """True se os dados mínimos para gerar um contrato estão preenchidos."""
+        return bool(self.cpf or self.rg) and bool(self.endereco_cidade)
 
     class Meta:
         ordering = ["nome"]

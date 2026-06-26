@@ -1888,6 +1888,150 @@ h3 {
 
 /* ── Etapa do timeline pendente (não feita, não atrasada) ───── */
 
+/* ── Checklist de prontidão do paciente (gestao_contratos) ─────── */
+
+.checklist-wrap {
+    margin-bottom: 28px;
+}
+
+.checklist-alert {
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+}
+
+.checklist-alert strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+
+.checklist-alert p {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: inherit;
+    opacity: 0.9;
+}
+
+.checklist-alert-ok {
+    background: rgba(57, 217, 138, 0.12);
+    border: 1px solid rgba(57, 217, 138, 0.3);
+    color: #5fe39a;
+}
+
+.checklist-alert-blocked {
+    background: rgba(255, 100, 100, 0.1);
+    border: 1px solid rgba(255, 100, 100, 0.28);
+    color: #ff9e9e;
+}
+
+.checklist-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(8, 13, 25, 0.35);
+}
+
+.checklist-item.checklist-ok {
+    border-color: rgba(57, 217, 138, 0.2);
+}
+
+.checklist-item.checklist-pendente {
+    border-color: rgba(255, 100, 100, 0.28);
+    background: rgba(255, 100, 100, 0.06);
+}
+
+.checklist-item.checklist-opcional {
+    opacity: 0.65;
+}
+
+.checklist-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+}
+
+.checklist-item.checklist-ok .checklist-icon svg {
+    stroke: #5fe39a;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    width: 18px;
+    height: 18px;
+}
+
+.checklist-item.checklist-pendente .checklist-icon svg {
+    stroke: #ff9e9e;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    width: 18px;
+    height: 18px;
+}
+
+.checklist-item.checklist-opcional .checklist-icon svg {
+    stroke: var(--muted);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    width: 18px;
+    height: 18px;
+}
+
+.checklist-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.checklist-label {
+    font-size: 0.82rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.checklist-valor {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.checklist-mensagem {
+    font-size: 0.8rem;
+    color: #ff9e9e;
+    margin-top: 2px;
+}
+
+.checklist-badge-opcional {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(154, 174, 210, 0.12);
+    color: var(--muted);
+    align-self: center;
+}
+
+/* ── Etapa do timeline pendente (não feita, não atrasada) ───── */
+
 .proxima-item.etapa-pendente {
     border-color: var(--line);
     opacity: 0.55;

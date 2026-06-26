@@ -109,6 +109,7 @@ def portal(request: HttpRequest) -> HttpResponse:
     movimentacao e sincronizacao de turmas.
     """
 
+    from gestao_contratos.models import ContratoGerado
     from gestao_lab.models import Moldagem, PedidoMaterial
 
     movimentacoes_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
@@ -132,6 +133,7 @@ def portal(request: HttpRequest) -> HttpResponse:
         "lab_moldagens_pendentes": Moldagem.objects.filter(
             ativo=True, pedido_material=None
         ).count(),
+        "contratos_gerados": ContratoGerado.objects.count(),
     }
 
     atividade_recente = []

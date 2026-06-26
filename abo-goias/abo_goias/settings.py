@@ -171,6 +171,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "gestao_cme.apps.GestaoCmeConfig",
     "gestao_lab.apps.GestaoLabConfig",
+    "gestao_contratos.apps.GestaoContratosConfig",
     "identificadores",
 ]
 

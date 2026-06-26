@@ -103,6 +103,7 @@
                             <th>Processo</th>
                             <th>Previsão de retorno</th>
                             <th>Sincronização</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -127,7 +128,7 @@
                                 </td>
                                 <td>
                                     {% if paciente.data_previsao_retorno %}
-                                        <strong {% if paciente.data_previsao_retorno < hoje %}style="color:var(--color-danger,#c0392b)"{% endif %}>
+                                        <strong {% if paciente.data_previsao_retorno < hoje %}style="color:#ff9e9e"{% endif %}>
                                             {{ paciente.data_previsao_retorno|date:"d/m/Y" }}
                                         </strong>
                                     {% else %}
@@ -141,10 +142,17 @@
                                         —
                                     {% endif %}
                                 </td>
+                                <td class="actions-cell">
+                                    <a class="button compact-button secondary"
+                                       href="{% url 'contrato_gerar' paciente.pk %}"
+                                       title="Gerar termo de consentimento">
+                                        Contrato
+                                    </a>
+                                </td>
                             </tr>
                         {% empty %}
                             <tr class="empty-row">
-                                <td colspan="5">
+                                <td colspan="6">
                                     <div class="empty-state">
                                         <strong>Nenhum paciente encontrado.</strong>
                                         <p>

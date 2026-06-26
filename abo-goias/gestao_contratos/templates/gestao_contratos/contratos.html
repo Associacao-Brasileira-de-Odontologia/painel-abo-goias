@@ -1,0 +1,146 @@
+{% extends "gestao_cme/base.html" %}
+
+{% block title %}Gestão de Contratos{% endblock %}
+{% block header_eyebrow %}ABO Goiás{% endblock %}
+{% block header_title %}Contratos e Termos{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+    <div class="layout-grid">
+        <aside class="panel config-panel">
+            <p class="section-label">Ferramenta</p>
+            <h2>Contratos</h2>
+            <p class="panel-copy">
+                Gere termos de consentimento preenchidos automaticamente com os dados
+                do paciente a partir do Dental Office.
+            </p>
+
+            <nav class="side-nav" aria-label="Navegação de contratos">
+                <a class="side-link active" href="{% url 'contratos' %}">
+                    <span class="side-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </span>
+                    <span>Gerar contrato</span>
+                </a>
+                <a class="side-link side-link-return" href="{% url 'home' %}">
+                    <span class="side-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M19 12H5"></path>
+                            <path d="m12 19-7-7 7-7"></path>
+                        </svg>
+                    </span>
+                    <span>Voltar ao portal</span>
+                </a>
+            </nav>
+
+            <div class="metric-grid" style="margin-top: 20px;">
+                <div class="metric-card">
+                    <span class="metric-label">Pacientes disponíveis</span>
+                    <strong>{{ total }}</strong>
+                </div>
+            </div>
+        </aside>
+
+        <section class="panel results-panel">
+            <div class="results-topbar">
+                <div>
+                    <p class="section-label">Termos de consentimento</p>
+                    <h2>Selecione um paciente</h2>
+                </div>
+            </div>
+
+            <form class="results-search" method="get">
+                <label class="search-label" for="results-q-contratos">Buscar paciente</label>
+                <div class="results-search-row">
+                    <div class="search-control">
+                        <input id="results-q-contratos" type="search" name="q"
+                               value="{{ busca }}"
+                               placeholder="Buscar por nome do paciente...">
+                    </div>
+                    <button class="button primary" type="submit">Buscar</button>
+                    <a class="button secondary" href="{% url 'contratos' %}">Limpar</a>
+                </div>
+            </form>
+
+            <div class="selection-summary">
+                <div class="info-chip">
+                    <span>Busca</span>
+                    <strong>{{ busca|default:"Todos os pacientes" }}</strong>
+                </div>
+                <div class="info-chip">
+                    <span>Resultado</span>
+                    <strong>{{ total }} paciente(s)</strong>
+                </div>
+            </div>
+
+            <div class="table-wrap data-table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>Celular</th>
+                            <th>Dados para contrato</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for paciente in pacientes %}
+                            <tr>
+                                <td>
+                                    <strong>{{ paciente.nome }}</strong>
+                                    {% if paciente.data_nascimento %}
+                                        <span class="cell-muted">Nasc: {{ paciente.data_nascimento|date:"d/m/Y" }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if paciente.celular %}
+                                        {{ paciente.celular }}
+                                    {% else %}
+                                        <span class="cell-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if paciente.dados_contrato_completos %}
+                                        <span class="badge badge-devolvido">Completo</span>
+                                    {% else %}
+                                        <span class="badge badge-atrasado">Busca automática</span>
+                                    {% endif %}
+                                </td>
+                                <td class="actions-cell">
+                                    <a class="button compact-button primary"
+                                       href="{% url 'contrato_gerar' paciente.pk %}">
+                                        Gerar contrato
+                                    </a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr class="empty-row">
+                                <td colspan="4">
+                                    <div class="empty-state">
+                                        <strong>Nenhum paciente encontrado.</strong>
+                                        <p>
+                                            {% if busca %}
+                                                Revise a busca ou
+                                                <a href="{% url 'contratos' %}">limpe o filtro</a>.
+                                            {% else %}
+                                                Sincronize pacientes no módulo
+                                                <a href="{% url 'lab_pacientes' %}">Gestão de Laboratório</a>.
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}
