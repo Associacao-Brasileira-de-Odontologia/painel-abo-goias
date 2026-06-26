@@ -139,6 +139,15 @@ class DentalClient:
         params = urlencode({"q": q, "page": page, "clinic_id": clinic_id})
         return self._get_autenticado(f"customers?{params}")
 
+    def buscar_detalhes_paciente(self, id_dental: int | str) -> dict[str, Any]:
+        """Busca dados completos de um paciente via GET /customers/{id}.
+
+        Retorna CPF, RG, data de nascimento, endereco e dados do responsavel
+        legal. Esses campos nao estao disponiveis na listagem paginada.
+        """
+
+        return self._get_autenticado(f"customers/{id_dental}")
+
     def listar_usuarios(
         self, user_group: int, page: int = 1, q: str = ""
     ) -> dict[str, Any]:
@@ -322,6 +331,77 @@ def normalizar_aluno_lab(item: dict[str, Any]) -> AlunoLabDental | None:
         celular=celular,
         ativo=ativo,
     )
+
+
+def normalizar_paciente_detalhado(data: dict[str, Any]) -> dict[str, Any]:
+    """Extrai campos enriquecidos da resposta do endpoint GET /customers/{id}.
+
+    Retorna um dicionario com os campos adicionais do modelo Paciente
+    (cpf, rg, data_nascimento, endereco_*, nome_responsavel, cpf_responsavel).
+    Nenhum campo e obrigatorio — valores ausentes ficam como string vazia ou None.
+    """
+
+    campos: dict[str, Any] = {}
+
+    # Documento: CPF e RG
+    doc = data.get("document_attributes") or {}
+    cpf_raw = (doc.get("cpf") or "").strip()
+    campos["cpf"] = _formatar_cpf(cpf_raw)
+    campos["rg"] = (doc.get("rg") or "").strip()
+
+    # Data de nascimento (formato ISO: YYYY-MM-DD)
+    from datetime import date as _date
+
+    nascimento_raw = (data.get("birth_date") or "").strip()
+    try:
+        campos["data_nascimento"] = (
+            _date.fromisoformat(nascimento_raw) if nascimento_raw else None
+        )
+    except ValueError:
+        campos["data_nascimento"] = None
+
+    # Endereço (primeiro da lista)
+    enderecos = data.get("addresses_attributes") or []
+    if enderecos:
+        end = enderecos[0]
+        campos["endereco_logradouro"] = (end.get("street") or "").strip()
+        campos["endereco_numero"] = str(end.get("number") or "").strip()
+        campos["endereco_complemento"] = (end.get("complement") or "").strip()
+        campos["endereco_bairro"] = (end.get("neighborhood") or "").strip()
+        campos["endereco_cidade"] = (end.get("city") or "").strip()
+        campos["endereco_estado"] = (end.get("state") or "").strip()[:2]
+        campos["endereco_cep"] = (end.get("zipcode") or "").strip()
+    else:
+        for campo in (
+            "endereco_logradouro",
+            "endereco_numero",
+            "endereco_complemento",
+            "endereco_bairro",
+            "endereco_cidade",
+            "endereco_estado",
+            "endereco_cep",
+        ):
+            campos[campo] = ""
+
+    # Responsável legal (mãe tem prioridade; usado para menores de idade)
+    mae_nome = (data.get("mother_name") or "").strip()
+    pai_nome = (data.get("father_name") or "").strip()
+    campos["nome_responsavel"] = mae_nome or pai_nome
+
+    mae_cpf = (data.get("mother_cpf") or "").strip()
+    pai_cpf = (data.get("father_cpf") or "").strip()
+    campos["cpf_responsavel"] = _formatar_cpf(mae_cpf or pai_cpf)
+
+    return campos
+
+
+def _formatar_cpf(cpf_raw: str) -> str:
+    """Formata sequencia numerica de CPF para 000.000.000-00."""
+
+    digitos = "".join(c for c in cpf_raw if c.isdigit())
+    if len(digitos) == 11:
+        return f"{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}"
+    return cpf_raw
 
 
 def _ler_booleano(nome: str, padrao: bool = False) -> bool:
