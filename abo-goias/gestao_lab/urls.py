@@ -25,6 +25,16 @@ urlpatterns = [
         views.atualizar_faturamento,
         name="lab_atualizar_faturamento",
     ),
+    path(
+        "pedidos/<int:pk>/alternar-faturado-paciente/",
+        views.alternar_faturado_paciente,
+        name="lab_alternar_faturado_paciente",
+    ),
+    path(
+        "pedidos/<int:pk>/alternar-faturado-lab/",
+        views.alternar_faturado_lab,
+        name="lab_alternar_faturado_lab",
+    ),
     # Moldagens
     path("moldagens/", views.moldagens, name="lab_moldagens"),
     path("moldagens/nova/", views.criar_moldagem, name="lab_criar_moldagem"),
@@ -61,4 +71,13 @@ urlpatterns = [
     path("pacientes/", views.pacientes, name="lab_pacientes"),
     # Sincronização Dental Office
     path("sincronizar/", views.sincronizar_dental, name="lab_sincronizar"),
+    # Busca direcionada Dental Office (importação pontual)
+    path("buscar-paciente/", views.buscar_paciente_dental, name="lab_buscar_paciente"),
+    path("buscar-aluno/", views.buscar_aluno_dental, name="lab_buscar_aluno"),
+    # Sincronização agendada — autenticada por token (Railway Cron)
+    path(
+        "sincronizar-agendado/",
+        views.sincronizar_agendado,
+        name="lab_sincronizar_agendado",
+    ),
 ]

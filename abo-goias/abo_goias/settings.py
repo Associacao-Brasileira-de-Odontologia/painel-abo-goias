@@ -298,6 +298,7 @@ SECURE_PROXY_SSL_HEADER = (
     else None
 )
 
+DENTAL_SYNC_TOKEN = os.environ.get("DENTAL_SYNC_TOKEN", "")
 DENTAL_CLINIC_ID = int(os.environ.get("DENTAL_CLINIC_ID", "1"))
 DENTAL_USER_GROUP_ALUNO = int(os.environ.get("DENTAL_USER_GROUP_ALUNO", "8"))
 

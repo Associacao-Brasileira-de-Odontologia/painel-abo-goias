@@ -13,6 +13,8 @@
             <p class="panel-copy">Preencha os dados do pedido de material para envio ao laboratório.</p>
 
             {% include "gestao_lab/partials/menu_lab.html" with active_page="novo_pedido" %}
+
+            {% include "gestao_lab/partials/busca_dental.html" with busca_next="lab_criar_pedido" %}
         </aside>
 
         <section class="panel results-panel">

@@ -1,8 +1,101 @@
-﻿{% extends "gestao_lab/base.html" %}
-{% block title %}Equipes - ABO Goiás{% endblock %}
+{% extends "gestao_lab/base.html" %}
+{% load lab_tags %}
+
+{% block title %}Gestão de Laboratório | Equipes{% endblock %}
+{% block header_eyebrow %}Gestão de laboratório{% endblock %}
+{% block header_title %}Equipes{% endblock %}
+
 {% block content %}
-<main class="main-content">
-    <h2>Equipes</h2>
-    <p>Em implementação.</p>
+<main class="page-shell">
+    <div class="layout-grid">
+        <aside class="panel config-panel">
+            <p class="section-label">Gestão de laboratório</p>
+            <h2>Equipes</h2>
+            <p class="panel-copy">Equipes de coordenação responsáveis pelos laboratórios parceiros.</p>
+
+            {% include "gestao_lab/partials/menu_lab.html" with active_page="equipes" %}
+
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <span class="metric-label">Total de equipes</span>
+                    <strong>{{ total }}</strong>
+                </div>
+            </div>
+        </aside>
+
+        <section class="panel results-panel">
+            <div class="results-topbar">
+                <div>
+                    <p class="section-label">Cadastro</p>
+                    <h2>Equipes de coordenação</h2>
+                </div>
+                <div class="topbar-actions">
+                    <a class="button primary" href="{% url 'lab_criar_equipe' %}">Nova equipe</a>
+                </div>
+            </div>
+
+            <form class="results-search" method="get">
+                <label class="search-label" for="results-q-equipes">Buscar na listagem</label>
+                <div class="results-search-row">
+                    <div class="search-control">
+                        <input id="results-q-equipes" type="search" name="q" value="{{ busca }}" placeholder="Buscar por nome ou coordenador...">
+                    </div>
+                    <button class="button primary" type="submit">Buscar</button>
+                    <a class="button secondary" href="{% url 'lab_equipes' %}">Limpar</a>
+                </div>
+            </form>
+
+            <div class="selection-summary">
+                <div class="info-chip">
+                    <span>Busca</span>
+                    <strong>{{ busca|default:"Todas as equipes" }}</strong>
+                </div>
+                <div class="info-chip">
+                    <span>Resultado</span>
+                    <strong>{{ page_obj.paginator.count }} equipe(s)</strong>
+                </div>
+            </div>
+
+            <div class="table-wrap data-table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Equipe</th>
+                            <th>Coordenador</th>
+                            <th>WhatsApp</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for equipe in equipes %}
+                            <tr>
+                                <td><strong>{{ equipe.nome }}</strong></td>
+                                <td>{{ equipe.coordenador|default:"—" }}</td>
+                                <td>
+                                    {% if equipe.whatsapp %}
+                                        <a href="{{ equipe.whatsapp|whatsapp_url }}" target="_blank" rel="noopener">{{ equipe.whatsapp }}</a>
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td class="actions-cell">
+                                    <a class="button compact-button secondary" href="{% url 'lab_editar_equipe' equipe.pk %}">Editar</a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr class="empty-row">
+                                <td colspan="4">
+                                    <div class="empty-state">
+                                        <strong>Nenhuma equipe encontrada.</strong>
+                                        <p>Revise os filtros ou <a href="{% url 'lab_criar_equipe' %}">cadastre uma nova equipe</a>.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "gestao_cme/partials/paginacao.html" %}
+        </section>
+    </div>
 </main>
 {% endblock %}

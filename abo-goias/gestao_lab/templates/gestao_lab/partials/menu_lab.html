@@ -87,6 +87,16 @@
         <span>Pacientes</span>
     </a>
 
+    <a class="side-link {% if active_page == 'alunos' %}active{% endif %}" href="{% url 'lab_alunos' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+            </svg>
+        </span>
+        <span>Alunos</span>
+    </a>
+
     <a class="side-link side-link-return" href="{% url 'home' %}">
         <span class="side-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">

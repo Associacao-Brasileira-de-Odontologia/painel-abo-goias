@@ -1,0 +1,21 @@
+{% if historico_sync %}
+<div class="sidebar-section">
+    <p class="section-label">Histórico de sincronizações</p>
+    <ul class="sync-history-list">
+        {% for reg in historico_sync %}
+            <li class="sync-history-item {% if reg.sucesso %}sync-ok{% else %}sync-erro{% endif %}">
+                <span class="sync-date">{{ reg.criado_em|date:"d/m/Y H:i" }}</span>
+                <span class="sync-tipo">{{ reg.get_tipo_display }}</span>
+                {% if reg.sucesso %}
+                    <span class="sync-counts">
+                        +{{ reg.pacientes_criados }}P / +{{ reg.alunos_criados }}A
+                        {% if reg.duracao_segundos %}· {{ reg.duracao_segundos }}s{% endif %}
+                    </span>
+                {% else %}
+                    <span class="sync-erro-msg" title="{{ reg.erro }}">Erro</span>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets as _secrets
 from datetime import date as date_type
 
 from django.contrib import messages
@@ -9,11 +10,15 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db.models import Q
 from django.db.models.query import QuerySet
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .forms import (
+    EquipeForm,
+    LaboratorioForm,
     MoldagemForm,
     PedidoEntregaForm,
     PedidoEnvioForm,
@@ -22,9 +27,12 @@ from .forms import (
 )
 from .models import (
     AlunoLab,
+    Equipe,
+    Laboratorio,
     Moldagem,
     Paciente,
     PedidoMaterial,
+    RegistroSync,
 )
 
 REGISTROS_POR_PAGINA = 10
@@ -275,6 +283,26 @@ def atualizar_faturamento(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect(next_url)
 
 
+@login_required
+@require_POST
+def alternar_faturado_paciente(request: HttpRequest, pk: int) -> HttpResponse:
+    pedido = get_object_or_404(PedidoMaterial, pk=pk)
+    pedido.faturado_paciente = not pedido.faturado_paciente
+    pedido.save(update_fields=["faturado_paciente", "status", "atualizado_em"])
+    next_url = request.POST.get("next") or "lab_pedidos_faturamento"
+    return redirect(next_url)
+
+
+@login_required
+@require_POST
+def alternar_faturado_lab(request: HttpRequest, pk: int) -> HttpResponse:
+    pedido = get_object_or_404(PedidoMaterial, pk=pk)
+    pedido.faturado_lab = not pedido.faturado_lab
+    pedido.save(update_fields=["faturado_lab", "status", "atualizado_em"])
+    next_url = request.POST.get("next") or "lab_pedidos_faturamento"
+    return redirect(next_url)
+
+
 # ---------------------------------------------------------------------------
 # Pedidos — faturamento
 # ---------------------------------------------------------------------------
@@ -409,7 +437,7 @@ def converter_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
     if moldagem.convertida:
         messages.warning(request, f"Moldagem #{pk} já foi convertida em pedido.")
         return redirect("lab_moldagens")
-    return redirect(f"/laboratorio/pedidos/novo/?moldagem={moldagem.pk}")
+    return redirect(reverse("lab_criar_pedido") + f"?moldagem={moldagem.pk}")
 
 
 @login_required
@@ -443,17 +471,66 @@ def alternar_entregue_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def laboratorios(request: HttpRequest) -> HttpResponse:
-    return render(request, "gestao_lab/laboratorios.html")
+    busca = request.GET.get("q", "").strip()
+    qs = (
+        Laboratorio.objects.filter(ativo=True)
+        .prefetch_related("equipes")
+        .order_by("nome")
+    )
+    if busca:
+        qs = qs.filter(
+            Q(nome__icontains=busca)
+            | Q(cnpj__icontains=busca)
+            | Q(equipes__nome__icontains=busca)
+        ).distinct()
+
+    page_obj, query_string = _paginar(request, qs)
+    return render(
+        request,
+        "gestao_lab/laboratorios.html",
+        {
+            "laboratorios": page_obj,
+            "page_obj": page_obj,
+            "query_string": query_string,
+            "busca": busca,
+            "total": Laboratorio.objects.filter(ativo=True).count(),
+        },
+    )
 
 
 @login_required
 def criar_laboratorio(request: HttpRequest) -> HttpResponse:
-    return render(request, "gestao_lab/form_laboratorio.html")
+    if request.method == "POST":
+        form = LaboratorioForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Laboratório cadastrado com sucesso.")
+            return redirect("lab_laboratorios")
+    else:
+        form = LaboratorioForm()
+    return render(
+        request,
+        "gestao_lab/form_laboratorio.html",
+        {"form": form, "editando": False},
+    )
 
 
 @login_required
 def editar_laboratorio(request: HttpRequest, pk: int) -> HttpResponse:
-    return render(request, "gestao_lab/form_laboratorio.html")
+    lab = get_object_or_404(Laboratorio, pk=pk)
+    if request.method == "POST":
+        form = LaboratorioForm(request.POST, instance=lab)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Laboratório atualizado com sucesso.")
+            return redirect("lab_laboratorios")
+    else:
+        form = LaboratorioForm(instance=lab)
+    return render(
+        request,
+        "gestao_lab/form_laboratorio.html",
+        {"form": form, "editando": True, "laboratorio": lab},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -463,17 +540,58 @@ def editar_laboratorio(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def equipes(request: HttpRequest) -> HttpResponse:
-    return render(request, "gestao_lab/equipes.html")
+    busca = request.GET.get("q", "").strip()
+    qs = Equipe.objects.filter(ativo=True).order_by("nome")
+    if busca:
+        qs = qs.filter(Q(nome__icontains=busca) | Q(coordenador__icontains=busca))
+
+    page_obj, query_string = _paginar(request, qs)
+    return render(
+        request,
+        "gestao_lab/equipes.html",
+        {
+            "equipes": page_obj,
+            "page_obj": page_obj,
+            "query_string": query_string,
+            "busca": busca,
+            "total": Equipe.objects.filter(ativo=True).count(),
+        },
+    )
 
 
 @login_required
 def criar_equipe(request: HttpRequest) -> HttpResponse:
-    return render(request, "gestao_lab/form_equipe.html")
+    if request.method == "POST":
+        form = EquipeForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Equipe cadastrada com sucesso.")
+            return redirect("lab_equipes")
+    else:
+        form = EquipeForm()
+    return render(
+        request,
+        "gestao_lab/form_equipe.html",
+        {"form": form, "editando": False},
+    )
 
 
 @login_required
 def editar_equipe(request: HttpRequest, pk: int) -> HttpResponse:
-    return render(request, "gestao_lab/form_equipe.html")
+    equipe = get_object_or_404(Equipe, pk=pk)
+    if request.method == "POST":
+        form = EquipeForm(request.POST, instance=equipe)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Equipe atualizada com sucesso.")
+            return redirect("lab_equipes")
+    else:
+        form = EquipeForm(instance=equipe)
+    return render(
+        request,
+        "gestao_lab/form_equipe.html",
+        {"form": form, "editando": True, "equipe": equipe},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -483,10 +601,17 @@ def editar_equipe(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def alunos_lab(request: HttpRequest) -> HttpResponse:
+    from django.db.models import Max
+
     qs = AlunoLab.objects.filter(ativo=True).order_by("nome")
     busca = request.GET.get("q", "").strip()
     if busca:
         qs = qs.filter(Q(nome__icontains=busca) | Q(celular__icontains=busca))
+
+    total = AlunoLab.objects.filter(ativo=True).count()
+    ultima_sync = AlunoLab.objects.aggregate(s=Max("ultima_sincronizacao"))["s"]
+    historico_sync = RegistroSync.objects.all()[:5]
+
     page_obj, query_string = _paginar(request, qs)
     return render(
         request,
@@ -496,12 +621,17 @@ def alunos_lab(request: HttpRequest) -> HttpResponse:
             "page_obj": page_obj,
             "query_string": query_string,
             "busca": busca,
+            "total": total,
+            "ultima_sync": ultima_sync,
+            "historico_sync": historico_sync,
         },
     )
 
 
 @login_required
 def pacientes(request: HttpRequest) -> HttpResponse:
+    from django.db.models import Max
+
     qs = Paciente.objects.filter(ativo=True).order_by("nome")
     busca = request.GET.get("q", "").strip()
     processo = request.GET.get("processo", "").strip()
@@ -509,6 +639,12 @@ def pacientes(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(Q(nome__icontains=busca) | Q(celular__icontains=busca))
     if processo == "aberto":
         qs = qs.filter(processo_aberto=True)
+
+    total = Paciente.objects.filter(ativo=True).count()
+    total_abertos = Paciente.objects.filter(ativo=True, processo_aberto=True).count()
+    ultima_sync = Paciente.objects.aggregate(s=Max("ultima_sincronizacao"))["s"]
+    historico_sync = RegistroSync.objects.all()[:5]
+
     page_obj, query_string = _paginar(request, qs)
     return render(
         request,
@@ -520,6 +656,10 @@ def pacientes(request: HttpRequest) -> HttpResponse:
             "busca": busca,
             "processo_filtro": processo,
             "hoje": date_type.today(),
+            "total": total,
+            "total_abertos": total_abertos,
+            "ultima_sync": ultima_sync,
+            "historico_sync": historico_sync,
         },
     )
 
@@ -534,10 +674,7 @@ def pacientes(request: HttpRequest) -> HttpResponse:
 def sincronizar_dental(request: HttpRequest) -> HttpResponse:
     from django.conf import settings
     from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import (
-        sincronizar_alunos,
-        sincronizar_pacientes,
-    )
+    from gestao_lab.services.dental_sync import executar_sync_e_registrar
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
     user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
@@ -547,15 +684,169 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
         return redirect("lab_pacientes")
 
     try:
-        rp = sincronizar_pacientes(clinic_id=clinic_id)
-        ra = sincronizar_alunos(user_group=user_group)
+        registro = executar_sync_e_registrar(
+            clinic_id=clinic_id,
+            user_group=user_group,
+            disparado_por=request.user.username,
+            tipo=RegistroSync.Tipo.COMPLETA,
+        )
         messages.success(
             request,
-            f"Sincronização concluída — "
-            f"Pacientes: {rp['criados']} criado(s), {rp['atualizados']} atualizado(s). "
-            f"Alunos: {ra['criados']} criado(s), {ra['atualizados']} atualizado(s).",
+            f"Sincronização concluída em {registro.duracao_segundos}s — "
+            f"Pacientes: {registro.pacientes_criados} criado(s), "
+            f"{registro.pacientes_atualizados} atualizado(s). "
+            f"Alunos: {registro.alunos_criados} criado(s), "
+            f"{registro.alunos_atualizados} atualizado(s).",
         )
     except DentalAPIError as exc:
         messages.error(request, f"Erro na API Dental Office: {exc}")
 
     return redirect("lab_pacientes")
+
+
+# ---------------------------------------------------------------------------
+# Busca direcionada Dental Office (importação pontual durante cadastro)
+# ---------------------------------------------------------------------------
+
+_DESTINOS_VALIDOS = frozenset(
+    {"lab_criar_pedido", "lab_criar_moldagem", "lab_pacientes", "lab_alunos"}
+)
+
+
+@login_required
+def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import buscar_e_importar_pacientes
+
+    q = request.GET.get("q", "").strip()
+    next_name = request.GET.get("next", "lab_criar_pedido")
+    if next_name not in _DESTINOS_VALIDOS:
+        next_name = "lab_criar_pedido"
+
+    if not q:
+        messages.warning(request, "Informe um nome para buscar o paciente.")
+        return redirect(next_name)
+
+    clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+    if not clinic_id:
+        messages.error(request, "DENTAL_CLINIC_ID não configurado no ambiente.")
+        return redirect(next_name)
+
+    try:
+        resultado = buscar_e_importar_pacientes(q=q, clinic_id=clinic_id)
+        total = resultado["criados"] + resultado["atualizados"]
+        if total == 0:
+            messages.warning(
+                request,
+                f'Nenhum paciente encontrado para "{q}" no Dental Office.',
+            )
+        else:
+            messages.success(
+                request,
+                f'{resultado["criados"]} novo(s) paciente(s) importado(s) para "{q}". '
+                "Selecione o paciente na lista abaixo.",
+            )
+    except DentalAPIError as exc:
+        messages.error(request, f"Erro na API Dental Office: {exc}")
+
+    return redirect(next_name)
+
+
+@login_required
+def buscar_aluno_dental(request: HttpRequest) -> HttpResponse:
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import buscar_e_importar_alunos
+
+    q = request.GET.get("q", "").strip()
+    next_name = request.GET.get("next", "lab_criar_pedido")
+    if next_name not in _DESTINOS_VALIDOS:
+        next_name = "lab_criar_pedido"
+
+    if not q:
+        messages.warning(request, "Informe um nome para buscar o aluno.")
+        return redirect(next_name)
+
+    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+
+    try:
+        resultado = buscar_e_importar_alunos(q=q, user_group=user_group)
+        total = resultado["criados"] + resultado["atualizados"]
+        if total == 0:
+            messages.warning(
+                request,
+                f'Nenhum aluno encontrado para "{q}" no Dental Office.',
+            )
+        else:
+            messages.success(
+                request,
+                f'{resultado["criados"]} novo(s) aluno(s) importado(s) para "{q}". '
+                "Selecione o aluno na lista abaixo.",
+            )
+    except DentalAPIError as exc:
+        messages.error(request, f"Erro na API Dental Office: {exc}")
+
+    return redirect(next_name)
+
+
+# ---------------------------------------------------------------------------
+# Sincronização agendada — endpoint com token (Railway Cron / GitHub Actions)
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+def sincronizar_agendado(request: HttpRequest) -> JsonResponse:
+    """Endpoint de sincronização agendada autenticado por token secreto.
+
+    Uso com Railway Cron ou qualquer serviço externo:
+        POST /laboratorio/sincronizar-agendado/
+        Header: X-Sync-Token: <DENTAL_SYNC_TOKEN>
+
+    Retorna JSON com o resultado da sincronização.
+    Requer DENTAL_SYNC_TOKEN configurado nas variáveis de ambiente.
+    """
+    if request.method != "POST":
+        return JsonResponse({"erro": "Método não permitido."}, status=405)
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import executar_sync_e_registrar
+
+    token_esperado = getattr(settings, "DENTAL_SYNC_TOKEN", "")
+    token_recebido = request.headers.get("X-Sync-Token") or request.POST.get(
+        "token", ""
+    )
+
+    if not token_esperado or not _secrets.compare_digest(
+        token_recebido, token_esperado
+    ):
+        return JsonResponse({"erro": "Token inválido ou ausente."}, status=403)
+
+    clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+
+    if not clinic_id:
+        return JsonResponse({"erro": "DENTAL_CLINIC_ID não configurado."}, status=500)
+
+    try:
+        registro = executar_sync_e_registrar(
+            clinic_id=clinic_id,
+            user_group=user_group,
+            disparado_por="cron",
+            tipo=RegistroSync.Tipo.AGENDADA,
+        )
+        return JsonResponse(
+            {
+                "sucesso": True,
+                "pacientes_criados": registro.pacientes_criados,
+                "pacientes_atualizados": registro.pacientes_atualizados,
+                "alunos_criados": registro.alunos_criados,
+                "alunos_atualizados": registro.alunos_atualizados,
+                "duracao_segundos": registro.duracao_segundos,
+            }
+        )
+    except DentalAPIError as exc:
+        return JsonResponse({"sucesso": False, "erro": str(exc)}, status=502)
+    except Exception as exc:
+        return JsonResponse({"sucesso": False, "erro": str(exc)}, status=500)

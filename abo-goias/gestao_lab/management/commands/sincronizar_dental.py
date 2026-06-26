@@ -1,8 +1,11 @@
 """Management command para sincronizar alunos e pacientes do Dental Office."""
 
+import time
+
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from gestao_lab.integrations.dental import DentalAPIError
+from gestao_lab.models import RegistroSync
 from gestao_lab.services.dental_sync import sincronizar_alunos, sincronizar_pacientes
 
 
@@ -41,6 +44,13 @@ class Command(BaseCommand):
         apenas_pacientes = options["apenas_pacientes"]
         apenas_alunos = options["apenas_alunos"]
 
+        registro = RegistroSync.objects.create(
+            tipo=RegistroSync.Tipo.COMPLETA,
+            disparado_por="manage.py",
+        )
+        inicio = time.monotonic()
+        sucesso = True
+
         try:
             if not apenas_alunos:
                 if not clinic_id:
@@ -49,27 +59,40 @@ class Command(BaseCommand):
                             "Informe --clinic-id ou configure DENTAL_CLINIC_ID."
                         )
                     )
+                    registro.erro = "DENTAL_CLINIC_ID não configurado."
+                    registro.sucesso = False
+                    registro.save()
                     return
                 self.stdout.write(f"Sincronizando pacientes (clínica {clinic_id})...")
-                r = sincronizar_pacientes(clinic_id=clinic_id)
+                rp = sincronizar_pacientes(clinic_id=clinic_id)
+                registro.pacientes_criados = rp["criados"]
+                registro.pacientes_atualizados = rp["atualizados"]
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  Pacientes — criados: {r['criados']}, "
-                        f"atualizados: {r['atualizados']}, "
-                        f"ignorados: {r['ignorados']}."
+                        f"  Pacientes — criados: {rp['criados']}, "
+                        f"atualizados: {rp['atualizados']}, "
+                        f"ignorados: {rp['ignorados']}."
                     )
                 )
 
             if not apenas_pacientes:
                 self.stdout.write(f"Sincronizando alunos (grupo {user_group})...")
-                r = sincronizar_alunos(user_group=user_group)
+                ra = sincronizar_alunos(user_group=user_group)
+                registro.alunos_criados = ra["criados"]
+                registro.alunos_atualizados = ra["atualizados"]
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  Alunos — criados: {r['criados']}, "
-                        f"atualizados: {r['atualizados']}, "
-                        f"ignorados: {r['ignorados']}."
+                        f"  Alunos — criados: {ra['criados']}, "
+                        f"atualizados: {ra['atualizados']}, "
+                        f"ignorados: {ra['ignorados']}."
                     )
                 )
 
         except DentalAPIError as exc:
             self.stderr.write(self.style.ERROR(f"Erro na API Dental Office: {exc}"))
+            registro.erro = str(exc)
+            sucesso = False
+        finally:
+            registro.sucesso = sucesso
+            registro.duracao_segundos = round(time.monotonic() - inicio, 2)
+            registro.save()

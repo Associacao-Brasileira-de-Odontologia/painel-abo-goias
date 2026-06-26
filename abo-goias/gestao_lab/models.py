@@ -258,3 +258,35 @@ class Moldagem(ModeloBase):
     @property
     def convertida(self) -> bool:
         return self.pedido_material_id is not None
+
+
+class RegistroSync(ModeloBase):
+    """Auditoria de cada execução de sincronização com o Dental Office.
+
+    Registra quando a sync ocorreu, quem disparou, quantos registros foram
+    afetados e se houve erro. Usado para exibir histórico na interface e
+    diagnosticar falhas na sincronização agendada.
+    """
+
+    class Tipo(models.TextChoices):
+        COMPLETA = "COMPLETA", "Completa (manual)"
+        AGENDADA = "AGENDADA", "Agendada (automática)"
+
+    tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.COMPLETA)
+    sucesso = models.BooleanField(null=True, blank=True)
+    erro = models.TextField(blank=True)
+    pacientes_criados = models.PositiveIntegerField(default=0)
+    pacientes_atualizados = models.PositiveIntegerField(default=0)
+    alunos_criados = models.PositiveIntegerField(default=0)
+    alunos_atualizados = models.PositiveIntegerField(default=0)
+    disparado_por = models.CharField(max_length=50, blank=True)
+    duracao_segundos = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "registro de sincronização"
+        verbose_name_plural = "registros de sincronização"
+
+    def __str__(self) -> str:
+        status = "OK" if self.sucesso else "ERRO"
+        return f"Sync {self.criado_em:%d/%m/%Y %H:%M} [{status}]"

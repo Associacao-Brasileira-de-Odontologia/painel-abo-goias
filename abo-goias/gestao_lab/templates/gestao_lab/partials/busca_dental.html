@@ -1,0 +1,22 @@
+<div class="sidebar-section">
+    <p class="section-label">Busca no Dental Office</p>
+    <p class="panel-copy">Não encontrou o paciente ou aluno na lista? Digite o nome para importar diretamente do sistema externo.</p>
+
+    <form class="form-stack" method="get" action="{% url 'lab_buscar_paciente' %}">
+        <input type="hidden" name="next" value="{{ busca_next }}">
+        <div class="field">
+            <label for="q-paciente-dental">Paciente</label>
+            <input id="q-paciente-dental" type="search" name="q" placeholder="Nome do paciente...">
+        </div>
+        <button class="button secondary" type="submit">Importar paciente</button>
+    </form>
+
+    <form class="form-stack" method="get" action="{% url 'lab_buscar_aluno' %}" style="margin-top: 1rem">
+        <input type="hidden" name="next" value="{{ busca_next }}">
+        <div class="field">
+            <label for="q-aluno-dental">Aluno</label>
+            <input id="q-aluno-dental" type="search" name="q" placeholder="Nome do aluno...">
+        </div>
+        <button class="button secondary" type="submit">Importar aluno</button>
+    </form>
+</div>

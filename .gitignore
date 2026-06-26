@@ -28,3 +28,5 @@ __pycache__/
 staticfiles/
 gestao_cme/staticfiles/
 gestao_cme/identificadores/arquivos_gerados/
+# Arquivos de migração legado (dados sensíveis de pacientes)
+gestao_lab/fixtures/*.csv

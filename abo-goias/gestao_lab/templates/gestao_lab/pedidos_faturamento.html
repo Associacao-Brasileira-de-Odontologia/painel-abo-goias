@@ -86,25 +86,25 @@
                                 <td>{{ pedido.data_entrega|date:"d/m/Y"|default:"—" }}</td>
 
                                 <td>
-                                    <form method="post" action="{% url 'lab_atualizar_faturamento' pedido.pk %}" class="inline-form" id="fat-form-{{ pedido.pk }}">
+                                    <form method="post" action="{% url 'lab_alternar_faturado_paciente' pedido.pk %}" class="inline-form">
                                         {% csrf_token %}
                                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                        {% with form=forms_faturamento|default_if_none:None %}
-                                            <input type="checkbox" name="faturado_paciente"
-                                                   {% if pedido.faturado_paciente %}checked{% endif %}
-                                                   onchange="this.form.submit()"
-                                                   title="Faturado paciente">
-                                        {% endwith %}
+                                        <button class="toggle-check {% if pedido.faturado_paciente %}toggle-check--on{% endif %}"
+                                                type="submit"
+                                                title="{% if pedido.faturado_paciente %}Marcar como não faturado{% else %}Marcar como faturado{% endif %}">
+                                            {% if pedido.faturado_paciente %}&#10003;{% else %}&#9744;{% endif %}
+                                        </button>
                                     </form>
                                 </td>
                                 <td>
-                                    <form method="post" action="{% url 'lab_atualizar_faturamento' pedido.pk %}" class="inline-form">
+                                    <form method="post" action="{% url 'lab_alternar_faturado_lab' pedido.pk %}" class="inline-form">
                                         {% csrf_token %}
                                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                        <input type="checkbox" name="faturado_lab"
-                                               {% if pedido.faturado_lab %}checked{% endif %}
-                                               onchange="this.form.submit()"
-                                               title="Faturado lab">
+                                        <button class="toggle-check {% if pedido.faturado_lab %}toggle-check--on{% endif %}"
+                                                type="submit"
+                                                title="{% if pedido.faturado_lab %}Marcar como não faturado{% else %}Marcar como faturado{% endif %}">
+                                            {% if pedido.faturado_lab %}&#10003;{% else %}&#9744;{% endif %}
+                                        </button>
                                     </form>
                                 </td>
                                 <td>{{ pedido.numero_nota_fiscal|default:"—" }}</td>

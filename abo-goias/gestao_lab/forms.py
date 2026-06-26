@@ -125,3 +125,44 @@ class MoldagemForm(forms.ModelForm):
         self.fields["aluno"].empty_label = "— Selecione o aluno —"
         self.fields["faturado"].required = False
         self.fields["entregue"].required = False
+
+
+class EquipeForm(forms.ModelForm):
+    """Valida o cadastro e edicao de uma equipe de coordenacao."""
+
+    class Meta:
+        model = Equipe
+        fields = ["nome", "coordenador", "whatsapp"]
+        error_messages = {
+            "nome": {"required": "Informe o nome da equipe."},
+            "coordenador": {"required": "Informe o nome do coordenador."},
+        }
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["whatsapp"].required = False
+
+
+class LaboratorioForm(forms.ModelForm):
+    """Valida o cadastro e edicao de um laboratorio externo."""
+
+    class Meta:
+        model = Laboratorio
+        fields = ["nome", "telefone", "whatsapp", "email", "cnpj", "equipes"]
+        error_messages = {
+            "nome": {"required": "Informe o nome do laboratório."},
+        }
+        widgets = {
+            "equipes": forms.CheckboxSelectMultiple(),
+        }
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["telefone"].required = False
+        self.fields["whatsapp"].required = False
+        self.fields["email"].required = False
+        self.fields["cnpj"].required = False
+        self.fields["equipes"].required = False
+        self.fields["equipes"].queryset = Equipe.objects.filter(ativo=True).order_by(
+            "nome"
+        )
