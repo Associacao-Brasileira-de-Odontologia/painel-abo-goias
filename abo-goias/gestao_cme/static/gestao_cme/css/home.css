@@ -1864,3 +1864,31 @@ textarea:focus {
     background: #79b7ff;
     box-shadow: 0 0 0 5px rgba(47, 140, 255, 0.14);
 }
+
+/* ── Títulos h3 ─────────────────────────────────────────────── */
+
+h3 {
+    margin-top: 0;
+    margin-bottom: 0;
+    font-family: "Syne", "Segoe UI", Arial, sans-serif;
+    font-size: 1.2rem;
+    line-height: 1.2;
+    color: var(--text);
+}
+
+/* ── Erros de campo individuais em formulários ──────────────── */
+
+.field-error {
+    display: block;
+    margin-top: 4px;
+    color: #ff9e9e;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* ── Etapa do timeline pendente (não feita, não atrasada) ───── */
+
+.proxima-item.etapa-pendente {
+    border-color: var(--line);
+    opacity: 0.55;
+}

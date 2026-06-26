@@ -38,14 +38,6 @@
                 <a class="button secondary" href="{% url 'lab_pedidos' %}">Voltar</a>
             </div>
 
-            {% if messages %}
-                <div class="messages">
-                    {% for message in messages %}
-                        <div class="message {{ message.tags }}">{{ message }}</div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-
             <!-- Informações do pedido -->
             <div class="kpi-section">
                 <p class="section-label">Dados do pedido</p>
@@ -68,7 +60,7 @@
                     </div>
                     <div class="info-chip">
                         <span>Previsão de entrega</span>
-                        <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}style="color:var(--color-danger,#c0392b)"{% endif %}>
+                        <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}style="color:#ff9e9e"{% endif %}>
                             {{ pedido.previsao_entrega|date:"d/m/Y" }}
                         </strong>
                     </div>
@@ -77,7 +69,7 @@
                         <strong>{{ pedido.criado_em|date:"d/m/Y H:i" }}</strong>
                     </div>
                 </div>
-                <div style="margin-top: 12px; padding: 12px; background: var(--color-surface, #f5f5f5); border-radius: 6px;">
+                <div style="margin-top: 12px; padding: 14px; background: rgba(8, 13, 25, 0.55); border: 1px solid var(--line); border-radius: 10px;">
                     <p class="section-label">Descrição do serviço</p>
                     <p>{{ pedido.descricao_servico }}</p>
                 </div>
@@ -97,7 +89,7 @@
                         </div>
                     </div>
 
-                    <div class="proxima-item {% if not pedido.data_envio %}vencido{% endif %}">
+                    <div class="proxima-item {% if not pedido.data_envio %}etapa-pendente{% endif %}">
                         <div>
                             <strong>Envio ao laboratório</strong>
                             <span class="cell-muted">Material físico enviado ao lab</span>
@@ -111,7 +103,7 @@
                         </div>
                     </div>
 
-                    <div class="proxima-item {% if not pedido.entregue %}vencido{% endif %}">
+                    <div class="proxima-item {% if not pedido.entregue %}etapa-pendente{% endif %}">
                         <div>
                             <strong>Devolução do laboratório</strong>
                             <span class="cell-muted">Material finalizado devolvido</span>

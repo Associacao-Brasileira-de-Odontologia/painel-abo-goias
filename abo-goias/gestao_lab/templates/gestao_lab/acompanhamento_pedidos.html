@@ -11,7 +11,7 @@
         <aside class="panel config-panel">
             <p class="section-label">Gestão de laboratório</p>
             <h2>Acompanhamento</h2>
-            <p class="panel-copy">Pedidos em andamento. Registre envios e entregass diretamente na listagem.</p>
+            <p class="panel-copy">Pedidos em andamento. Registre envios e entregas diretamente na listagem.</p>
 
             {% include "gestao_lab/partials/menu_lab.html" with active_page="pedidos" %}
 
@@ -117,7 +117,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}style="color:var(--color-danger,#c0392b)"{% endif %}>
+                                    <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}style="color:#ff9e9e"{% endif %}>
                                         {{ pedido.previsao_entrega|date:"d/m/Y" }}
                                     </strong>
                                     {% if pedido.data_envio %}
