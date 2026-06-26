@@ -1,0 +1,171 @@
+{% extends "gestao_lab/base.html" %}
+{% load lab_tags %}
+
+{% block title %}Gestão de Laboratório | Pacientes{% endblock %}
+{% block header_eyebrow %}Gestão de laboratório{% endblock %}
+{% block header_title %}Pacientes{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+    <div class="layout-grid">
+        <aside class="panel config-panel">
+            <p class="section-label">Gestão de laboratório</p>
+            <h2>Pacientes</h2>
+            <p class="panel-copy">Pacientes sincronizados do Dental Office com processos ativos na clínica.</p>
+
+            {% include "gestao_lab/partials/menu_lab.html" with active_page="pacientes" %}
+
+            <form class="form-stack" method="get">
+                {% if busca %}
+                    <input type="hidden" name="q" value="{{ busca }}">
+                {% endif %}
+                <div class="field">
+                    <label for="processo">Processo</label>
+                    <select id="processo" name="processo">
+                        <option value="">Todos os pacientes</option>
+                        <option value="aberto" {% if processo_filtro == "aberto" %}selected{% endif %}>Com processo aberto</option>
+                    </select>
+                </div>
+                <button class="button primary update-first" type="submit">Aplicar filtro</button>
+                <a class="button secondary" href="{% url 'lab_pacientes' %}">Limpar filtros</a>
+            </form>
+
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <span class="metric-label">Total de pacientes</span>
+                    <strong>{{ total }}</strong>
+                </div>
+                <div class="metric-card metric-blue">
+                    <span class="metric-label">Processos abertos</span>
+                    <strong>{{ total_abertos }}</strong>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <p class="section-label">Sincronização</p>
+                {% if ultima_sync %}
+                    <p class="panel-copy">Última atualização: <strong>{{ ultima_sync|date:"d/m/Y H:i" }}</strong></p>
+                {% else %}
+                    <p class="panel-copy">Nenhuma sincronização realizada ainda.</p>
+                {% endif %}
+                <form method="post" action="{% url 'lab_sincronizar' %}">
+                    {% csrf_token %}
+                    <button class="button secondary" type="submit">Sincronizar com Dental Office</button>
+                </form>
+            </div>
+
+            {% include "gestao_lab/partials/historico_sync.html" %}
+        </aside>
+
+        <section class="panel results-panel">
+            <div class="results-topbar">
+                <div>
+                    <p class="section-label">Dental Office</p>
+                    <h2>Pacientes cadastrados</h2>
+                </div>
+            </div>
+
+            <form class="results-search" method="get">
+                {% if processo_filtro %}
+                    <input type="hidden" name="processo" value="{{ processo_filtro }}">
+                {% endif %}
+                <label class="search-label" for="results-q-pacientes">Buscar na listagem</label>
+                <div class="results-search-row">
+                    <div class="search-control">
+                        <input id="results-q-pacientes" type="search" name="q" value="{{ busca }}" placeholder="Buscar por nome ou celular...">
+                    </div>
+                    <button class="button primary" type="submit">Buscar</button>
+                    <a class="button secondary" href="{% url 'lab_pacientes' %}">Limpar</a>
+                </div>
+            </form>
+
+            <div class="selection-summary">
+                <div class="info-chip">
+                    <span>Busca</span>
+                    <strong>{{ busca|default:"Todos os pacientes" }}</strong>
+                </div>
+                <div class="info-chip">
+                    <span>Processo</span>
+                    <strong>{% if processo_filtro == "aberto" %}Com processo aberto{% else %}Todos{% endif %}</strong>
+                </div>
+                <div class="info-chip">
+                    <span>Resultado</span>
+                    <strong>{{ page_obj.paginator.count }} paciente(s)</strong>
+                </div>
+            </div>
+
+            <div class="table-wrap data-table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>Celular</th>
+                            <th>Processo</th>
+                            <th>Previsão de retorno</th>
+                            <th>Sincronização</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for paciente in pacientes %}
+                            <tr>
+                                <td><strong>{{ paciente.nome }}</strong></td>
+                                <td>
+                                    {% if paciente.celular %}
+                                        <a href="{{ paciente.celular|whatsapp_url }}" target="_blank" rel="noopener">
+                                            {{ paciente.celular }}
+                                        </a>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if paciente.processo_aberto %}
+                                        <span class="badge badge-emprestado">Aberto</span>
+                                    {% else %}
+                                        <span class="badge badge-devolvido">Concluído</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if paciente.data_previsao_retorno %}
+                                        <strong {% if paciente.data_previsao_retorno < hoje %}style="color:var(--color-danger,#c0392b)"{% endif %}>
+                                            {{ paciente.data_previsao_retorno|date:"d/m/Y" }}
+                                        </strong>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if paciente.ultima_sincronizacao %}
+                                        <span class="cell-muted">{{ paciente.ultima_sincronizacao|date:"d/m/Y" }}</span>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr class="empty-row">
+                                <td colspan="5">
+                                    <div class="empty-state">
+                                        <strong>Nenhum paciente encontrado.</strong>
+                                        <p>
+                                            {% if busca or processo_filtro %}
+                                                Revise os filtros ou
+                                                <a href="{% url 'lab_pacientes' %}">limpe a busca</a>.
+                                            {% else %}
+                                                Nenhum paciente sincronizado ainda. Use o botão
+                                                <strong>Sincronizar com Dental Office</strong> no painel lateral.
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% include "gestao_cme/partials/paginacao.html" %}
+        </section>
+    </div>
+</main>
+{% endblock %}

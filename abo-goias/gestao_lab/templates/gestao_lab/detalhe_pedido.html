@@ -1,0 +1,213 @@
+{% extends "gestao_lab/base.html" %}
+{% load lab_tags %}
+
+{% block title %}Gestão de Laboratório | Pedido #{{ pedido.pk }}{% endblock %}
+{% block header_eyebrow %}Gestão de laboratório{% endblock %}
+{% block header_title %}Pedido #{{ pedido.pk }}{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+    <div class="layout-grid">
+        <aside class="panel config-panel">
+            <p class="section-label">Gestão de laboratório</p>
+            <h2>Detalhe do pedido</h2>
+            <p class="panel-copy">Visualize o histórico e registre as etapas do pedido.</p>
+
+            {% include "gestao_lab/partials/menu_lab.html" with active_page="pedidos" %}
+
+            {% if pedido.laboratorio.whatsapp %}
+                <div class="panel-quick-actions">
+                    <a class="button secondary"
+                       href="{{ pedido.laboratorio.whatsapp|whatsapp_url_msg:pedido.laboratorio.nome }}"
+                       target="_blank" rel="noopener">
+                        WhatsApp Lab
+                    </a>
+                </div>
+            {% endif %}
+        </aside>
+
+        <section class="panel results-panel">
+            <div class="results-topbar">
+                <div>
+                    <p class="section-label">Pedido #{{ pedido.pk }}</p>
+                    <h2>
+                        {{ pedido.paciente.nome }}
+                        <span class="badge {% status_badge_class pedido.status %}">{{ pedido.get_status_display }}</span>
+                    </h2>
+                </div>
+                <a class="button secondary" href="{% url 'lab_pedidos' %}">Voltar</a>
+            </div>
+
+            <!-- Informações do pedido -->
+            <div class="kpi-section">
+                <p class="section-label">Dados do pedido</p>
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Paciente</span>
+                        <strong>{{ pedido.paciente.nome }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Aluno</span>
+                        <strong>{{ pedido.aluno.nome }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Laboratório</span>
+                        <strong>{{ pedido.laboratorio.nome }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Equipe</span>
+                        <strong>{{ pedido.equipe.nome }}</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Previsão de entrega</span>
+                        <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}style="color:#ff9e9e"{% endif %}>
+                            {{ pedido.previsao_entrega|date:"d/m/Y" }}
+                        </strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>Registrado em</span>
+                        <strong>{{ pedido.criado_em|date:"d/m/Y H:i" }}</strong>
+                    </div>
+                </div>
+                <div style="margin-top: 12px; padding: 14px; background: rgba(8, 13, 25, 0.55); border: 1px solid var(--line); border-radius: 10px;">
+                    <p class="section-label">Descrição do serviço</p>
+                    <p>{{ pedido.descricao_servico }}</p>
+                </div>
+            </div>
+
+            <!-- Linha do tempo -->
+            <div class="kpi-section">
+                <p class="section-label">Etapas do pedido</p>
+                <div class="proximas-list">
+                    <div class="proxima-item">
+                        <div>
+                            <strong>Pedido criado</strong>
+                            <span class="cell-muted">Solicitação registrada no sistema</span>
+                        </div>
+                        <div class="proxima-date">
+                            <strong>{{ pedido.criado_em|date:"d/m/Y" }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="proxima-item {% if not pedido.data_envio %}etapa-pendente{% endif %}">
+                        <div>
+                            <strong>Envio ao laboratório</strong>
+                            <span class="cell-muted">Material físico enviado ao lab</span>
+                        </div>
+                        <div class="proxima-date">
+                            {% if pedido.data_envio %}
+                                <strong>{{ pedido.data_envio|date:"d/m/Y" }}</strong>
+                            {% else %}
+                                <span class="cell-muted">Pendente</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="proxima-item {% if not pedido.entregue %}etapa-pendente{% endif %}">
+                        <div>
+                            <strong>Devolução do laboratório</strong>
+                            <span class="cell-muted">Material finalizado devolvido</span>
+                        </div>
+                        <div class="proxima-date">
+                            {% if pedido.data_entrega %}
+                                <strong>{{ pedido.data_entrega|date:"d/m/Y" }}</strong>
+                            {% else %}
+                                <span class="cell-muted">Pendente</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ação: Registrar envio -->
+            {% if not pedido.data_envio %}
+                <div class="kpi-section">
+                    <p class="section-label">Ação necessária</p>
+                    <h3 style="margin-bottom: 12px;">Registrar envio ao laboratório</h3>
+                    {% if form_envio.errors %}
+                        <div class="form-errors">
+                            <ul>{% for e in form_envio.data_envio.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        </div>
+                    {% endif %}
+                    <form method="post" action="{% url 'lab_marcar_envio' pedido.pk %}" class="form-stack">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <div class="field field-required">
+                            <label for="envio_data">Data de envio</label>
+                            <input id="envio_data" type="date" name="data_envio" value="{{ hoje|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="form-actions">
+                            <button class="button primary" type="submit">Registrar envio</button>
+                        </div>
+                    </form>
+                </div>
+            {% elif not pedido.entregue %}
+                <div class="kpi-section">
+                    <p class="section-label">Ação necessária</p>
+                    <h3 style="margin-bottom: 12px;">Registrar entrega do laboratório</h3>
+                    {% if form_entrega.errors %}
+                        <div class="form-errors">
+                            <ul>{% for e in form_entrega.data_entrega.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+                        </div>
+                    {% endif %}
+                    <form method="post" action="{% url 'lab_marcar_entrega' pedido.pk %}" class="form-stack">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <div class="field field-required">
+                            <label for="entrega_data">Data de entrega</label>
+                            <input id="entrega_data" type="date" name="data_entrega" value="{{ hoje|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="form-actions">
+                            <button class="button primary" type="submit">Registrar entrega</button>
+                        </div>
+                    </form>
+                </div>
+            {% endif %}
+
+            <!-- Faturamento -->
+            {% if pedido.entregue %}
+                <div class="kpi-section">
+                    <p class="section-label">Informações financeiras</p>
+                    <h3 style="margin-bottom: 12px;">Faturamento</h3>
+                    {% if form_faturamento.errors %}
+                        <div class="form-errors">
+                            <ul>
+                                {% for field in form_faturamento %}
+                                    {% for e in field.errors %}<li>{{ field.label }}: {{ e }}</li>{% endfor %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                    <form method="post" action="{% url 'lab_atualizar_faturamento' pedido.pk %}" class="form-stack">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <div class="field">
+                            <label>
+                                <input type="checkbox" name="faturado_paciente" {% if pedido.faturado_paciente %}checked{% endif %}>
+                                Faturado Paciente
+                            </label>
+                        </div>
+                        <div class="field">
+                            <label>
+                                <input type="checkbox" name="faturado_lab" {% if pedido.faturado_lab %}checked{% endif %}>
+                                Faturado Lab
+                            </label>
+                        </div>
+                        <div class="field">
+                            <label for="id_nf">Número da nota fiscal</label>
+                            <input id="id_nf" type="text" name="numero_nota_fiscal" value="{{ pedido.numero_nota_fiscal }}" placeholder="Ex: NF-12345">
+                        </div>
+                        <div class="field">
+                            <label for="id_vencimento">Data de vencimento</label>
+                            <input id="id_vencimento" type="date" name="data_vencimento" value="{{ pedido.data_vencimento|date:'Y-m-d'|default:'' }}">
+                        </div>
+                        <div class="form-actions">
+                            <button class="button primary" type="submit">Salvar faturamento</button>
+                        </div>
+                    </form>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+</main>
+{% endblock %}

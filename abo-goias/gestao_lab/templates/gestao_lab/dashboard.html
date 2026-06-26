@@ -1,0 +1,123 @@
+{% extends "gestao_lab/base.html" %}
+{% load lab_tags %}
+
+{% block title %}Gestão de Laboratório | Visão Geral{% endblock %}
+{% block header_eyebrow %}Gestão de laboratório{% endblock %}
+{% block header_title %}Visão Geral{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+    <div class="layout-grid">
+        <aside class="panel config-panel">
+            <p class="section-label">Gestão de laboratório</p>
+            <h2>Visão Geral</h2>
+            <p class="panel-copy">Métricas consolidadas de pedidos de material e laboratórios em andamento.</p>
+
+            {% include "gestao_lab/partials/menu_lab.html" with active_page="dashboard" %}
+
+            <div class="panel-quick-actions">
+                <a class="button primary" href="{% url 'lab_criar_pedido' %}">Novo pedido</a>
+                <a class="button secondary" href="{% url 'lab_pedidos' %}">Acompanhamento</a>
+            </div>
+        </aside>
+
+        <section class="panel results-panel">
+            <div class="results-topbar">
+                <div>
+                    <p class="section-label">Métricas operacionais</p>
+                    <h2>Visão geral do laboratório</h2>
+                </div>
+            </div>
+
+            <div class="kpi-section">
+                <p class="section-label">Pedidos em andamento</p>
+                <div class="kpi-grid">
+                    <div class="metric-card metric-success">
+                        <span class="metric-label">Em dia</span>
+                        <strong>{{ metricas.em_dia }}</strong>
+                        <span class="metric-secondary">dentro do prazo</span>
+                    </div>
+                    <div class="metric-card metric-blue">
+                        <span class="metric-label">A confirmar</span>
+                        <strong>{{ metricas.a_confirmar }}</strong>
+                        <span class="metric-secondary">aguardando devolução</span>
+                    </div>
+                    <div class="metric-card danger-metric">
+                        <span class="metric-label">Atrasados</span>
+                        <strong>{{ metricas.atrasado }}</strong>
+                        <span class="metric-secondary">fora do prazo</span>
+                    </div>
+                    <div class="metric-card metric-neutral">
+                        <span class="metric-label">Faturamento</span>
+                        <strong>{{ metricas.pendentes_faturamento }}</strong>
+                        <span class="metric-secondary">pendentes</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-split">
+                <div>
+                    <div class="activity-heading">
+                        <p class="section-label">Controle de prazos</p>
+                        <h2>Próximas entregas</h2>
+                    </div>
+                    <div class="proximas-list">
+                        {% for pedido in proximas_entregas %}
+                            <div class="proxima-item {% if pedido.previsao_entrega < hoje %}vencido{% endif %}">
+                                <div>
+                                    <strong>{{ pedido.paciente.nome }}</strong>
+                                    <span class="cell-muted">{{ pedido.laboratorio.nome }}</span>
+                                </div>
+                                <div class="proxima-date">
+                                    <strong>{{ pedido.previsao_entrega|date:"d/m/Y" }}</strong>
+                                    <span class="cell-muted">
+                                        {% if pedido.previsao_entrega < hoje %}Vencido{% else %}Previsto{% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <article class="activity-empty">
+                                <strong>Nenhum pedido em aberto</strong>
+                                <p>Todos os pedidos foram entregues ou não há pedidos registrados.</p>
+                            </article>
+                        {% endfor %}
+                    </div>
+                    {% if proximas_entregas %}
+                        <div style="margin-top: 14px;">
+                            <a class="button secondary compact-button" href="{% url 'lab_pedidos' %}">Ver todos os pedidos</a>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="activity-feed">
+                    <div class="activity-heading">
+                        <p class="section-label">Últimos registros</p>
+                        <h2>Pedidos recentes</h2>
+                    </div>
+                    <div class="activity-list">
+                        {% for pedido in recentes %}
+                            <article class="activity-item activity-entrada">
+                                <span class="activity-dot" aria-hidden="true"></span>
+                                <div>
+                                    <div class="activity-top">
+                                        <strong>{{ pedido.paciente.nome }}</strong>
+                                        <time datetime="{{ pedido.criado_em|date:'c' }}">{{ pedido.criado_em|date:"d/m H:i" }}</time>
+                                    </div>
+                                    <p>{{ pedido.laboratorio.nome }} &middot;
+                                        <span class="badge {% status_badge_class pedido.status %}">{{ pedido.get_status_display }}</span>
+                                    </p>
+                                </div>
+                            </article>
+                        {% empty %}
+                            <article class="activity-empty">
+                                <strong>Nenhum pedido registrado</strong>
+                                <p>Os pedidos aparecerão aqui após o primeiro cadastro.</p>
+                            </article>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

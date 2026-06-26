@@ -30,6 +30,10 @@
                             <span>Alunos</span>
                             <strong>{{ resumo.alunos }}</strong>
                         </div>
+                        <div class="portal-stat">
+                            <span>Pedidos de lab ativos</span>
+                            <strong>{{ resumo.lab_pedidos_ativos }}</strong>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -107,6 +111,23 @@
                         <p>Movimentações, alunos, abrigos, materiais e kits.</p>
                         <div class="system-meta">
                             <span>{{ resumo.materiais }} materiais</span>
+                            <em>
+                                Acessar
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                            </em>
+                        </div>
+                    </a>
+                    <a class="system-card" href="{% url 'lab_dashboard' %}">
+                        <span>Gestão de Laboratório</span>
+                        <strong>Pedidos e moldagens</strong>
+                        <p>Pedidos de material, moldagens e controle de faturamento com laboratórios externos.</p>
+                        <div class="system-meta">
+                            <span>
+                                {{ resumo.lab_pedidos_ativos }} pedido(s) ativo(s)
+                                {% if resumo.lab_pendentes_faturamento %}
+                                    · {{ resumo.lab_pendentes_faturamento }} com faturamento pendente
+                                {% endif %}
+                            </span>
                             <em>
                                 Acessar
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>

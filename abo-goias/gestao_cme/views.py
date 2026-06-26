@@ -109,6 +109,8 @@ def portal(request: HttpRequest) -> HttpResponse:
     movimentacao e sincronizacao de turmas.
     """
 
+    from gestao_lab.models import Moldagem, PedidoMaterial
+
     movimentacoes_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
     emprestimos_base = emprestimos_visiveis(request)
 
@@ -121,6 +123,15 @@ def portal(request: HttpRequest) -> HttpResponse:
         "materiais": Material.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
         "turmas": Turma.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
         "kits": Kit.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
+        "lab_pedidos_ativos": PedidoMaterial.objects.exclude(
+            status=PedidoMaterial.Status.CONCLUIDO
+        ).count(),
+        "lab_pendentes_faturamento": PedidoMaterial.objects.filter(entregue=True)
+        .exclude(faturado_paciente=True, faturado_lab=True)
+        .count(),
+        "lab_moldagens_pendentes": Moldagem.objects.filter(
+            ativo=True, pedido_material=None
+        ).count(),
     }
 
     atividade_recente = []

@@ -1746,3 +1746,149 @@ textarea:focus {
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Badge de status — variante concluído ───────────────────── */
+
+.badge-concluido {
+    background: rgba(247, 165, 31, 0.18);
+    color: #ffe4a0;
+}
+
+/* ── Seções do painel lateral ───────────────────────────────── */
+
+.sidebar-section {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+
+.sidebar-section .section-label {
+    margin-bottom: 8px;
+}
+
+/* ── Histórico de sincronizações ────────────────────────────── */
+
+.sync-history-list {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sync-history-item {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(8, 13, 25, 0.44);
+    font-size: 0.8rem;
+}
+
+.sync-history-item.sync-ok {
+    border-color: rgba(57, 217, 138, 0.22);
+    background: rgba(57, 217, 138, 0.05);
+}
+
+.sync-history-item.sync-erro {
+    border-color: rgba(255, 94, 94, 0.22);
+    background: rgba(255, 94, 94, 0.05);
+}
+
+.sync-date {
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.sync-tipo {
+    color: var(--muted-strong);
+    font-weight: 800;
+}
+
+.sync-counts {
+    color: var(--success);
+    font-size: 0.76rem;
+}
+
+.sync-erro-msg {
+    color: #ff9e9e;
+    font-size: 0.76rem;
+}
+
+/* ── Campos obrigatórios ────────────────────────────────────── */
+
+.field-required label::after {
+    content: " *";
+    color: #ff9e9e;
+    font-weight: 800;
+}
+
+/* ── Toggle de faturamento (checkbox estilizado) ────────────── */
+
+.toggle-check {
+    min-width: 36px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.toggle-check:hover {
+    border-color: rgba(47, 140, 255, 0.4);
+    background: var(--blue-soft);
+    color: #d9ecff;
+}
+
+.toggle-check--on {
+    border-color: rgba(57, 217, 138, 0.36);
+    background: rgba(57, 217, 138, 0.12);
+    color: var(--success);
+}
+
+.toggle-check--on:hover {
+    background: rgba(57, 217, 138, 0.2);
+}
+
+/* ── Variante de activity-dot para pedidos novos ────────────── */
+
+.activity-entrada .activity-dot {
+    background: #79b7ff;
+    box-shadow: 0 0 0 5px rgba(47, 140, 255, 0.14);
+}
+
+/* ── Títulos h3 ─────────────────────────────────────────────── */
+
+h3 {
+    margin-top: 0;
+    margin-bottom: 0;
+    font-family: "Syne", "Segoe UI", Arial, sans-serif;
+    font-size: 1.2rem;
+    line-height: 1.2;
+    color: var(--text);
+}
+
+/* ── Erros de campo individuais em formulários ──────────────── */
+
+.field-error {
+    display: block;
+    margin-top: 4px;
+    color: #ff9e9e;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* ── Etapa do timeline pendente (não feita, não atrasada) ───── */
+
+.proxima-item.etapa-pendente {
+    border-color: var(--line);
+    opacity: 0.55;
+}
