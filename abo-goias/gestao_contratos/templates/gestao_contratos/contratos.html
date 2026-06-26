@@ -7,6 +7,8 @@
 {% block content %}
 <main class="page-shell">
     <div class="layout-grid">
+
+        {# ── Barra lateral ──────────────────────────────────────────── #}
         <aside class="panel config-panel">
             <p class="section-label">Ferramenta</p>
             <h2>Contratos</h2>
@@ -18,21 +20,20 @@
             <nav class="side-nav" aria-label="Navegação de contratos">
                 <a class="side-link active" href="{% url 'contratos' %}">
                     <span class="side-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
                         </svg>
                     </span>
                     <span>Gerar contrato</span>
                 </a>
                 <a class="side-link side-link-return" href="{% url 'home' %}">
                     <span class="side-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M19 12H5"></path>
-                            <path d="m12 19-7-7 7-7"></path>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 12H5"/>
+                            <path d="m12 19-7-7 7-7"/>
                         </svg>
                     </span>
                     <span>Voltar ao portal</span>
@@ -41,12 +42,13 @@
 
             <div class="metric-grid" style="margin-top: 20px;">
                 <div class="metric-card">
-                    <span class="metric-label">Pacientes disponíveis</span>
+                    <span class="metric-label">Pacientes no sistema</span>
                     <strong>{{ total }}</strong>
                 </div>
             </div>
         </aside>
 
+        {# ── Painel principal ──────────────────────────────────────── #}
         <section class="panel results-panel">
             <div class="results-topbar">
                 <div>
@@ -55,91 +57,195 @@
                 </div>
             </div>
 
-            <form class="results-search" method="get">
+            {# Barra de busca #}
+            <form class="results-search" method="get" autocomplete="off">
                 <label class="search-label" for="results-q-contratos">Buscar paciente</label>
                 <div class="results-search-row">
                     <div class="search-control">
                         <input id="results-q-contratos" type="search" name="q"
                                value="{{ busca }}"
-                               placeholder="Buscar por nome do paciente...">
+                               placeholder="Digite o nome do paciente...">
                     </div>
                     <button class="button primary" type="submit">Buscar</button>
-                    <a class="button secondary" href="{% url 'contratos' %}">Limpar</a>
+                    {% if busca %}
+                        <a class="button secondary" href="{% url 'contratos' %}">Limpar</a>
+                    {% endif %}
                 </div>
             </form>
 
-            <div class="selection-summary">
-                <div class="info-chip">
-                    <span>Busca</span>
-                    <strong>{{ busca|default:"Todos os pacientes" }}</strong>
+            {# Chips de resumo da busca #}
+            {% if busca %}
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Buscando por</span>
+                        <strong>"{{ busca }}"</strong>
+                    </div>
+                    <div class="info-chip">
+                        <span>No sistema</span>
+                        <strong>{{ total }} resultado(s)</strong>
+                    </div>
+                    {% if pacientes_api %}
+                        <div class="info-chip">
+                            <span>No Dental Office</span>
+                            <strong>{{ pacientes_api|length }} resultado(s)</strong>
+                        </div>
+                    {% endif %}
                 </div>
-                <div class="info-chip">
-                    <span>Resultado</span>
-                    <strong>{{ total }} paciente(s)</strong>
+            {% else %}
+                <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Total de pacientes</span>
+                        <strong>{{ total }}</strong>
+                    </div>
+                    {% if page_obj.paginator.num_pages > 1 %}
+                        <div class="info-chip">
+                            <span>Página</span>
+                            <strong>{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</strong>
+                        </div>
+                    {% endif %}
                 </div>
-            </div>
+            {% endif %}
 
-            <div class="table-wrap data-table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Paciente</th>
-                            <th>Celular</th>
-                            <th>Dados para contrato</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for paciente in pacientes %}
+            {# ── Tabela de resultados locais (DB) ────────────────────── #}
+            {% if pacientes %}
+                {% if busca %}
+                    <p class="section-label" style="margin-bottom: 8px;">Encontrado no sistema</p>
+                {% endif %}
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table">
+                        <thead>
                             <tr>
-                                <td>
-                                    <strong>{{ paciente.nome }}</strong>
-                                    {% if paciente.data_nascimento %}
-                                        <span class="cell-muted">Nasc: {{ paciente.data_nascimento|date:"d/m/Y" }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if paciente.celular %}
-                                        {{ paciente.celular }}
-                                    {% else %}
-                                        <span class="cell-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if paciente.dados_contrato_completos %}
-                                        <span class="badge badge-devolvido">Completo</span>
-                                    {% else %}
-                                        <span class="badge badge-atrasado">Busca automática</span>
-                                    {% endif %}
-                                </td>
-                                <td class="actions-cell">
-                                    <a class="button compact-button primary"
-                                       href="{% url 'contrato_gerar' paciente.pk %}">
-                                        Gerar contrato
-                                    </a>
-                                </td>
+                                <th>Paciente</th>
+                                <th>Celular</th>
+                                <th>Dados para contrato</th>
+                                <th>Ação</th>
                             </tr>
-                        {% empty %}
-                            <tr class="empty-row">
-                                <td colspan="4">
-                                    <div class="empty-state">
-                                        <strong>Nenhum paciente encontrado.</strong>
-                                        <p>
-                                            {% if busca %}
-                                                Revise a busca ou
-                                                <a href="{% url 'contratos' %}">limpe o filtro</a>.
+                        </thead>
+                        <tbody>
+                            {% for paciente in pacientes %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ paciente.nome }}</strong>
+                                        {% if paciente.data_nascimento %}
+                                            <span class="cell-muted">Nasc: {{ paciente.data_nascimento|date:"d/m/Y" }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if paciente.celular %}
+                                            {{ paciente.celular }}
+                                        {% else %}
+                                            <span class="cell-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if paciente.dados_contrato_completos %}
+                                            <span class="badge badge-devolvido">Completo</span>
+                                        {% else %}
+                                            <span class="badge badge-atrasado">Busca automática</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="actions-cell">
+                                        <a class="button compact-button primary"
+                                           href="{% url 'contrato_gerar' paciente.pk %}">
+                                            Gerar contrato
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+
+            {# ── Resultados da API do Dental Office ──────────────────── #}
+            {% if pacientes_api %}
+                <div class="kpi-section" {% if pacientes %}style="margin-top: 28px;"{% endif %}>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <p class="section-label" style="margin: 0;">Encontrado no Dental Office</p>
+                        <span class="badge" style="font-size: 11px; background: rgba(247,165,31,0.1); color: #f7a51f; border-color: rgba(247,165,31,0.3);">
+                            Não importado
+                        </span>
+                    </div>
+                    <p class="panel-copy" style="margin-bottom: 14px; font-size: 0.88rem;">
+                        Ao clicar em <strong>Importar e gerar</strong>, os dados são trazidos do
+                        Dental Office automaticamente e o paciente fica disponível no sistema.
+                    </p>
+                    <div class="table-wrap data-table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Paciente</th>
+                                    <th>Celular</th>
+                                    <th>Origem</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pac in pacientes_api %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ pac.nome }}</strong>
+                                            <span class="cell-muted">ID #{{ pac.id_dental }}</span>
+                                        </td>
+                                        <td>
+                                            {% if pac.celular %}
+                                                {{ pac.celular }}
                                             {% else %}
-                                                Sincronize pacientes no módulo
-                                                <a href="{% url 'lab_pacientes' %}">Gestão de Laboratório</a>.
+                                                <span class="cell-muted">—</span>
                                             {% endif %}
-                                        </p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                                        </td>
+                                        <td>
+                                            {% if pac.ja_existe %}
+                                                <span class="badge badge-devolvido">Já no sistema</span>
+                                            {% else %}
+                                                <span class="badge" style="background: rgba(247,165,31,0.1); color: #f7a51f; border-color: rgba(247,165,31,0.3);">Dental Office</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="actions-cell">
+                                            <a class="button compact-button primary"
+                                               href="{% url 'contrato_importar' pac.id_dental %}">
+                                                {% if pac.ja_existe %}Atualizar e gerar{% else %}Importar e gerar{% endif %}
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+
+            {# Paginação da lista local #}
+            {% if pacientes %}
+                {% include "gestao_cme/partials/paginacao.html" %}
+            {% endif %}
+
+            {# ── Estado vazio ────────────────────────────────────────── #}
+            {% if not pacientes and not pacientes_api %}
+                <div class="kpi-section">
+                    <div class="empty-state">
+                        {% if erro_api %}
+                            <strong>Erro ao consultar o Dental Office</strong>
+                            <p>{{ erro_api }}</p>
+                        {% elif busca %}
+                            <strong>Nenhum paciente encontrado para "{{ busca }}"</strong>
+                            <p>
+                                O nome não foi localizado no sistema nem no Dental Office.
+                                Verifique a grafia ou
+                                <a href="{% url 'contratos' %}">limpe o filtro</a> para ver todos.
+                            </p>
+                        {% else %}
+                            <strong>Nenhum paciente no sistema</strong>
+                            <p>
+                                Sincronize pacientes no módulo
+                                <a href="{% url 'lab_pacientes' %}">Gestão de Laboratório</a>
+                                ou busque pelo nome para importar diretamente do Dental Office.
+                            </p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
         </section>
     </div>
 </main>

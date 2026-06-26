@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from gestao_lab.integrations.dental import (
     DentalAPIError,
     DentalClient,
+    normalizar_paciente,
     normalizar_paciente_detalhado,
 )
 from gestao_lab.models import Paciente
@@ -17,10 +21,12 @@ from .models import TIPOS_CONTRATO, ContratoGerado
 from .services.checklist import gerar_checklist, pendencias_obrigatorias
 from .services.documentos import gerar_contrato
 
+_PACIENTES_POR_PAGINA = 25
+
 
 @login_required
 def contratos(request: HttpRequest) -> HttpResponse:
-    """Lista pacientes disponíveis para geração de contratos."""
+    """Lista pacientes locais e, quando a busca retorna zero, consulta a API."""
 
     busca = request.GET.get("q", "").strip()
     pacientes_qs = Paciente.objects.filter(ativo=True).order_by("nome")
@@ -28,24 +34,147 @@ def contratos(request: HttpRequest) -> HttpResponse:
     if busca:
         pacientes_qs = pacientes_qs.filter(nome__icontains=busca)
 
+    pacientes_api: list[dict] = []
+    erro_api: str = ""
+
+    # Busca na API apenas quando DB retornou zero resultados com um termo ativo.
+    if busca and not pacientes_qs.exists():
+        clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+        if clinic_id:
+            try:
+                client = DentalClient()
+                resposta = client.listar_pacientes(clinic_id=clinic_id, q=busca)
+                ids_locais = set(
+                    Paciente.objects.filter(ativo=True).values_list(
+                        "id_dental", flat=True
+                    )
+                )
+                for item in resposta.get("results") or []:
+                    pac = normalizar_paciente(item)
+                    if pac:
+                        pacientes_api.append(
+                            {
+                                "id_dental": str(pac.id),
+                                "nome": pac.nome,
+                                "celular": pac.celular,
+                                "ja_existe": str(pac.id) in ids_locais,
+                            }
+                        )
+            except DentalAPIError as exc:
+                erro_api = str(exc)
+        else:
+            erro_api = "DENTAL_CLINIC_ID não configurado no ambiente."
+
+    # Paginação — aplicada depois da verificação de existência para o fallback API.
+    total = pacientes_qs.count()
+    params = request.GET.copy()
+    params.pop("page", None)
+    paginator = Paginator(pacientes_qs, _PACIENTES_POR_PAGINA)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
     return render(
         request,
         "gestao_contratos/contratos.html",
         {
-            "pacientes": pacientes_qs,
+            "pacientes": page_obj,
+            "page_obj": page_obj,
+            "query_string": params.urlencode(),
+            "pacientes_api": pacientes_api,
             "busca": busca,
-            "total": pacientes_qs.count(),
+            "total": total,
+            "erro_api": erro_api,
         },
     )
+
+
+@login_required
+def importar_e_gerar(request: HttpRequest, id_dental: str) -> HttpResponse:
+    """Importa (ou atualiza) um paciente do Dental Office e abre a tela de contrato.
+
+    Busca dados detalhados via GET /customers/{id}. Se o paciente já existir
+    no banco local, atualiza os campos enriquecidos antes de redirecionar.
+    Caso contrário, cria o registro completo e redireciona.
+    """
+
+    try:
+        client = DentalClient()
+        dados = client.buscar_detalhes_paciente(id_dental)
+    except DentalAPIError as exc:
+        messages.error(
+            request, f"Não foi possível buscar os dados no Dental Office: {exc}"
+        )
+        return redirect("contratos")
+
+    nome = (dados.get("name") or "").strip()
+    if not nome:
+        messages.error(
+            request, "O paciente selecionado não possui nome no Dental Office."
+        )
+        return redirect("contratos")
+
+    celular = ""
+    contatos = dados.get("contacts_attributes") or []
+    if contatos:
+        celular = (
+            contatos[0].get("cellphone") or contatos[0].get("phone") or ""
+        ).strip()
+
+    campos_detalhados = normalizar_paciente_detalhado(dados)
+
+    paciente, criado = Paciente.objects.get_or_create(
+        id_dental=str(id_dental),
+        defaults={
+            "nome": nome,
+            "celular": celular,
+            "ativo": bool(dados.get("active", True)),
+            "ultima_sincronizacao": timezone.now(),
+            **campos_detalhados,
+        },
+    )
+
+    if not criado:
+        # Atualiza nome, celular e campos enriquecidos em um único save.
+        paciente.nome = nome
+        paciente.celular = celular
+        paciente.ativo = bool(dados.get("active", True))
+        paciente.ultima_sincronizacao = timezone.now()
+        for campo, valor in campos_detalhados.items():
+            setattr(paciente, campo, valor)
+        paciente.save(
+            update_fields=[
+                "nome",
+                "celular",
+                "ativo",
+                "ultima_sincronizacao",
+                "cpf",
+                "rg",
+                "data_nascimento",
+                "endereco_logradouro",
+                "endereco_numero",
+                "endereco_complemento",
+                "endereco_bairro",
+                "endereco_cidade",
+                "endereco_estado",
+                "endereco_cep",
+                "nome_responsavel",
+                "cpf_responsavel",
+                "atualizado_em",
+            ]
+        )
+
+    acao = "importado" if criado else "atualizado"
+    messages.success(request, f"Paciente {nome} {acao} com sucesso.")
+    return redirect("contrato_gerar", paciente_pk=paciente.pk)
 
 
 @login_required
 def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
     """Exibe o formulário e processa a geração do contrato DOCX.
 
-    GET: Busca os dados completos do paciente via API Dental Office (se ausentes),
-    gera o checklist de prontidão e exibe o formulário. A geração fica bloqueada
-    se houver campos obrigatórios não preenchidos.
+    GET: Busca os dados completos do paciente via API Dental Office (se ausentes
+    ou se ``?sincronizar=1`` for passado). Gera o checklist de prontidão e
+    exibe o formulário. A geração fica bloqueada se houver campos obrigatórios
+    não preenchidos.
 
     POST: Revalida o checklist, gera o DOCX e retorna o arquivo para download.
     Rejeita a solicitação se o paciente ainda tiver pendências obrigatórias.
@@ -53,14 +182,16 @@ def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
 
     paciente = get_object_or_404(Paciente, pk=paciente_pk, ativo=True)
 
-    # Tenta enriquecer dados via Dental Office se campos de contrato estiverem vazios.
-    if not paciente.dados_contrato_completos:
+    forcar_sincronizacao = request.GET.get("sincronizar") == "1"
+
+    if forcar_sincronizacao or not paciente.dados_contrato_completos:
         try:
             client = DentalClient()
             dados_api = client.buscar_detalhes_paciente(paciente.id_dental)
             campos = normalizar_paciente_detalhado(dados_api)
             for campo, valor in campos.items():
                 setattr(paciente, campo, valor)
+            paciente.ultima_sincronizacao = timezone.now()
             paciente.save(
                 update_fields=[
                     "cpf",
@@ -75,9 +206,15 @@ def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
                     "endereco_cep",
                     "nome_responsavel",
                     "cpf_responsavel",
+                    "ultima_sincronizacao",
                     "atualizado_em",
                 ]
             )
+            if forcar_sincronizacao:
+                messages.success(
+                    request,
+                    "Dados atualizados com sucesso a partir do Dental Office.",
+                )
         except DentalAPIError as exc:
             messages.warning(
                 request,
@@ -115,7 +252,6 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
     garantindo que o bloqueio do checklist seja respeitado mesmo em POST direto.
     """
 
-    # Revalida no servidor — não confia apenas no estado do formulário HTML.
     pendencias = pendencias_obrigatorias(paciente)
     if pendencias:
         nomes = ", ".join(item.rotulo for item in pendencias)

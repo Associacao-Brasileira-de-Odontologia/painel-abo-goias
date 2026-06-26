@@ -1963,6 +1963,14 @@ h3 {
     width: 18px;
     height: 18px;
     margin-top: 2px;
+    overflow: hidden;
+}
+
+.checklist-icon svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+    fill: none;
 }
 
 .checklist-item.checklist-ok .checklist-icon svg {
@@ -2035,4 +2043,78 @@ h3 {
 .proxima-item.etapa-pendente {
     border-color: var(--line);
     opacity: 0.55;
+}
+
+/* ── Caixa de dados do paciente (gestao_contratos) ───────────── */
+
+.contrato-info-box {
+    padding: 14px 18px;
+    background: rgba(8, 13, 25, 0.5);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-top: 10px;
+}
+
+.contrato-info-box--blocked {
+    border-color: rgba(255, 100, 100, 0.25);
+    background: rgba(255, 100, 100, 0.05);
+}
+
+.contrato-info-text {
+    margin: 0;
+    font-size: 0.93rem;
+    line-height: 1.65;
+    color: var(--text);
+}
+
+/* ── Grid de dois campos no formulário de contrato ────────────── */
+
+.contrato-form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+    gap: 16px;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    .contrato-form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Botões com ícone inline ──────────────────────────────────── */
+
+.button svg {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 7px;
+    margin-top: -2px;
+}
+
+/* Ação de ícone sem texto — botão circular compacto */
+.icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.icon-action:hover {
+    background: rgba(47, 140, 255, 0.1);
+    border-color: rgba(47, 140, 255, 0.4);
+    color: #9fcdff;
+}
+
+.icon-action svg {
+    display: block;
+    fill: none;
 }

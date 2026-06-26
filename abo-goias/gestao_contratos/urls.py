@@ -9,4 +9,9 @@ urlpatterns = [
         views.gerar_contrato_view,
         name="contrato_gerar",
     ),
+    path(
+        "importar/<str:id_dental>/",
+        views.importar_e_gerar,
+        name="contrato_importar",
+    ),
 ]
