@@ -102,94 +102,146 @@ def emprestimos_visiveis(request: HttpRequest) -> QuerySet[Emprestimo]:
 
 @login_required
 def portal(request: HttpRequest) -> HttpResponse:
-    """Renderiza o painel inicial com indicadores e atividade recente.
-
-    Consolida totais de movimentacoes, emprestimos, alunos, materiais, turmas
-    e kits, alem de montar uma linha do tempo curta com eventos recentes de
-    movimentacao e sincronizacao de turmas.
-    """
+    """Renderiza o painel inicial com atividade recente e tarefas pendentes."""
 
     from gestao_contratos.models import ContratoGerado
     from gestao_lab.models import Moldagem, PedidoMaterial
 
+    hoje = timezone.now().date()
     movimentacoes_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
     emprestimos_base = emprestimos_visiveis(request)
 
+    emp_abertos = emprestimos_base.filter(status=Emprestimo.Status.EMPRESTADO).count()
+    emp_atrasados = emprestimos_base.filter(
+        status=Emprestimo.Status.EMPRESTADO,
+        data_prevista_devolucao__lt=hoje,
+        data_prevista_devolucao__isnull=False,
+    ).count()
+    lab_pedidos_ativos = PedidoMaterial.objects.exclude(
+        status=PedidoMaterial.Status.CONCLUIDO
+    ).count()
+    lab_faturamento_pendente = (
+        PedidoMaterial.objects.filter(entregue=True)
+        .exclude(faturado_paciente=True, faturado_lab=True)
+        .count()
+    )
+    lab_moldagens_pendentes = Moldagem.objects.filter(
+        ativo=True, pedido_material=None
+    ).count()
+    contratos_gerados = ContratoGerado.objects.count()
+
     resumo = {
-        "movimentacoes": movimentacoes_base.count(),
-        "emprestimos_abertos": emprestimos_base.filter(
-            status=Emprestimo.Status.EMPRESTADO
-        ).count(),
-        "alunos": Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
+        "emprestimos_abertos": emp_abertos,
+        "emp_atrasados": emp_atrasados,
         "materiais": Material.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
         "turmas": Turma.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
-        "kits": Kit.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
-        "lab_pedidos_ativos": PedidoMaterial.objects.exclude(
-            status=PedidoMaterial.Status.CONCLUIDO
-        ).count(),
-        "lab_pendentes_faturamento": PedidoMaterial.objects.filter(entregue=True)
-        .exclude(faturado_paciente=True, faturado_lab=True)
-        .count(),
-        "lab_moldagens_pendentes": Moldagem.objects.filter(
-            ativo=True, pedido_material=None
-        ).count(),
-        "contratos_gerados": ContratoGerado.objects.count(),
+        "lab_pedidos_ativos": lab_pedidos_ativos,
+        "lab_pendentes_faturamento": lab_faturamento_pendente,
+        "lab_moldagens_pendentes": lab_moldagens_pendentes,
+        "contratos_gerados": contratos_gerados,
     }
 
-    atividade_recente = []
-    for movimentacao in movimentacoes_base.select_related("material").order_by(
-        "-data_hora", "-id"
-    )[:8]:
-        material = (
-            movimentacao.material.nome
-            if movimentacao.material
-            else f"pacote {movimentacao.pacote_codigo}"
+    # Tarefas que requerem atenção imediata
+    tarefas_pendentes = []
+    if emp_atrasados:
+        tarefas_pendentes.append(
+            {
+                "texto": f"{emp_atrasados} empréstimo(s) com devolução em atraso",
+                "url_name": "cme_dashboard",
+                "urgente": True,
+            }
         )
-        aluno = movimentacao.aluno_nome or "Aluno não informado"
+    if lab_faturamento_pendente:
+        tarefas_pendentes.append(
+            {
+                "texto": (
+                    f"{lab_faturamento_pendente} pedido(s) de lab"
+                    " aguardando faturamento"
+                ),
+                "url_name": "lab_pedidos_faturamento",
+                "urgente": False,
+            }
+        )
+    if lab_moldagens_pendentes:
+        tarefas_pendentes.append(
+            {
+                "texto": (
+                    f"{lab_moldagens_pendentes} moldagem(ns) sem"
+                    " pedido de lab vinculado"
+                ),
+                "url_name": "lab_moldagens",
+                "urgente": False,
+            }
+        )
 
-        if movimentacao.tipo == Movimentacao.Tipo.ENTRADA:
-            categoria = "devolucao"
-            titulo = "Devolução registrada"
+    # Atividade recente — agrega dados de todos os módulos
+    atividade_recente: list[dict] = []
+
+    for mov in movimentacoes_base.select_related("material").order_by(
+        "-data_hora", "-id"
+    )[:6]:
+        material = mov.material.nome if mov.material else f"pacote {mov.pacote_codigo}"
+        aluno = mov.aluno_nome or "Aluno não informado"
+        if mov.tipo == Movimentacao.Tipo.ENTRADA:
+            categoria, titulo = "devolucao", "Devolução registrada"
             descricao = f"{aluno} devolveu {material}."
-        elif movimentacao.retirado is False:
-            categoria = "alerta"
-            titulo = "Retirada pendente"
+        elif mov.retirado is False:
+            categoria, titulo = "alerta", "Retirada pendente"
             descricao = f"{aluno} ainda não retirou {material}."
         else:
-            categoria = "alerta"
-            titulo = "Saída de material"
-            descricao = f"{material} foi separado para {aluno}."
-
+            categoria, titulo = "alerta", "Saída de material"
+            descricao = f"{material} separado para {aluno}."
         atividade_recente.append(
             {
                 "categoria": categoria,
                 "titulo": titulo,
                 "descricao": descricao,
-                "data": movimentacao.data_hora,
+                "data": mov.data_hora,
             }
         )
 
-    for turma in (
-        Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .exclude(ultima_sincronizacao__isnull=True)
-        .order_by("-ultima_sincronizacao")[:4]
-    ):
+    for emp in emprestimos_base.select_related("aluno", "kit").order_by(
+        "-data_emprestimo"
+    )[:4]:
+        kit_info = f" — kit {emp.kit.nome}" if emp.kit else ""
         atividade_recente.append(
             {
                 "categoria": "exportacao",
-                "titulo": "Turma pronta para exportação",
+                "titulo": "Empréstimo registrado",
+                "descricao": f"Empréstimo para {emp.aluno.nome}{kit_info}.",
+                "data": emp.data_emprestimo,
+            }
+        )
+
+    for pedido in PedidoMaterial.objects.select_related(
+        "paciente", "laboratorio"
+    ).order_by("-criado_em")[:5]:
+        atividade_recente.append(
+            {
+                "categoria": "exportacao",
+                "titulo": "Pedido de laboratório",
+                "descricao": (f"{pedido.paciente.nome} → {pedido.laboratorio.nome}."),
+                "data": pedido.criado_em,
+            }
+        )
+
+    for contrato in ContratoGerado.objects.select_related("paciente").order_by(
+        "-criado_em"
+    )[:4]:
+        atividade_recente.append(
+            {
+                "categoria": "devolucao",
+                "titulo": "Contrato gerado",
                 "descricao": (
-                    f"{turma.nome} foi atualizada para geração de identificadores."
+                    f"{contrato.get_tipo_display()} — {contrato.paciente.nome}."
                 ),
-                "data": turma.ultima_sincronizacao,
+                "data": contrato.criado_em,
             }
         )
 
     atividade_recente = sorted(
-        atividade_recente,
-        key=lambda atividade: atividade["data"],
-        reverse=True,
-    )[:6]
+        atividade_recente, key=lambda a: a["data"], reverse=True
+    )[:8]
 
     return render(
         request,
@@ -197,6 +249,7 @@ def portal(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "resumo": resumo,
+            "tarefas_pendentes": tarefas_pendentes,
             "atividade_recente": atividade_recente,
         },
     )

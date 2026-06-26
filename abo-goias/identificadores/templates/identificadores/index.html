@@ -2,8 +2,8 @@
 {% load static %}
 
 {% block title %}ABO Goiás | Identificadores de Bancada{% endblock %}
-{% block header_eyebrow %}Identificadores{% endblock %}
-{% block header_title %}Bancadas{% endblock %}
+{% block header_eyebrow %}ABO Goiás{% endblock %}
+{% block header_title %}Identificadores de Bancada{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'identificadores/css/identificadores.css' %}">
 {% endblock %}
@@ -13,8 +13,7 @@
         <div class="layout-grid">
             <aside class="panel config-panel">
                 <p class="section-label">Geração de arquivos</p>
-                <h2>Identificadores</h2>
-                <p class="panel-copy">Siga os passos para gerar os identificadores de bancada da turma selecionada.</p>
+                <p class="panel-copy">Selecione a turma e o modelo para gerar o arquivo de identificadores de bancada.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="identificadores" active_page="identificadores" %}
 
@@ -34,7 +33,7 @@
                 <div class="results-topbar">
                     <div>
                         <p class="section-label">Fluxo de geração</p>
-                        <h2>Identificadores de bancada</h2>
+                        <h2>Selecione turma e modelo</h2>
                     </div>
                     <div class="topbar-actions">
                         <form class="sync-form" method="post" action="{% url 'identificadores:sincronizar' %}">
