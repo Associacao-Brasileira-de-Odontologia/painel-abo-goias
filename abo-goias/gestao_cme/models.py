@@ -103,6 +103,13 @@ class Aluno(ModeloBase):
         null=True,
         blank=True,
     )
+    abrigo = models.ForeignKey(
+        "Abrigo",
+        on_delete=models.SET_NULL,
+        related_name="alunos",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ["nome"]

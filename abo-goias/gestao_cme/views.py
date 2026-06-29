@@ -22,6 +22,7 @@ from .forms import (
     CadastrarAlunoForm,
     CadastrarTurmaForm,
     EmprestimoForm,
+    EntradaForm,
     MaterialEditForm,
     MaterialForm,
     MovimentacaoForm,
@@ -107,15 +108,10 @@ def portal(request: HttpRequest) -> HttpResponse:
     from gestao_contratos.models import ContratoGerado
     from gestao_lab.models import Moldagem, PedidoMaterial
 
-    hoje = timezone.now().date()
     movimentacoes_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
-    emprestimos_base = emprestimos_visiveis(request)
 
-    emp_abertos = emprestimos_base.filter(status=Emprestimo.Status.EMPRESTADO).count()
-    emp_atrasados = emprestimos_base.filter(
-        status=Emprestimo.Status.EMPRESTADO,
-        data_prevista_devolucao__lt=hoje,
-        data_prevista_devolucao__isnull=False,
+    pacotes_pendentes = movimentacoes_base.filter(
+        tipo=Movimentacao.Tipo.ENTRADA, retirado=False
     ).count()
     lab_pedidos_ativos = PedidoMaterial.objects.exclude(
         status=PedidoMaterial.Status.CONCLUIDO
@@ -131,8 +127,7 @@ def portal(request: HttpRequest) -> HttpResponse:
     contratos_gerados = ContratoGerado.objects.count()
 
     resumo = {
-        "emprestimos_abertos": emp_abertos,
-        "emp_atrasados": emp_atrasados,
+        "pacotes_pendentes": pacotes_pendentes,
         "materiais": Material.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
         "turmas": Turma.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
         "lab_pedidos_ativos": lab_pedidos_ativos,
@@ -143,12 +138,12 @@ def portal(request: HttpRequest) -> HttpResponse:
 
     # Tarefas que requerem atenção imediata
     tarefas_pendentes = []
-    if emp_atrasados:
+    if pacotes_pendentes:
         tarefas_pendentes.append(
             {
-                "texto": f"{emp_atrasados} empréstimo(s) com devolução em atraso",
-                "url_name": "cme_dashboard",
-                "urgente": True,
+                "texto": f"{pacotes_pendentes} pacote(s) aguardando retirada",
+                "url_name": "registrar_saida",
+                "urgente": False,
             }
         )
     if lab_faturamento_pendente:
@@ -197,19 +192,6 @@ def portal(request: HttpRequest) -> HttpResponse:
                 "titulo": titulo,
                 "descricao": descricao,
                 "data": mov.data_hora,
-            }
-        )
-
-    for emp in emprestimos_base.select_related("aluno", "kit").order_by(
-        "-data_emprestimo"
-    )[:4]:
-        kit_info = f" — kit {emp.kit.nome}" if emp.kit else ""
-        atividade_recente.append(
-            {
-                "categoria": "exportacao",
-                "titulo": "Empréstimo registrado",
-                "descricao": f"Empréstimo para {emp.aluno.nome}{kit_info}.",
-                "data": emp.data_emprestimo,
             }
         )
 
@@ -727,40 +709,174 @@ def _salvar_movimentacao(
 
 
 @login_required
-def registrar_saida(request: HttpRequest) -> HttpResponse:
-    """Registra a saida de um material/pacote para um aluno."""
+def registrar_entrada(request: HttpRequest) -> HttpResponse:
+    """Registra em lote a entrada de N pacotes de um aluno para esterilizacao.
 
-    form = MovimentacaoForm(request.POST or None)
+    Cria um registro Movimentacao(ENTRADA, retirado=False) para cada pacote.
+    Os codigos sao gerados automaticamente no formato AAAAMMDD-{aluno_pk}-{n}.
+    Avisa quando o aluno nao tem abrigo cadastrado, mas nao bloqueia o registro.
+    """
+    form = EntradaForm(request.POST or None)
+    aluno_sem_abrigo = False
+
     if request.method == "POST" and form.is_valid():
-        mov = _salvar_movimentacao(form, Movimentacao.Tipo.SAIDA, retirado=None)
-        messages.success(
-            request,
-            f"Saída registrada para {mov.aluno_nome} — pacote {mov.pacote_codigo}.",
-        )
+        aluno: Aluno = form.cleaned_data["aluno"]
+        quantidade: int = form.cleaned_data["quantidade"]
+        data_hora = form.cleaned_data["data_hora"]
+        observacoes = form.cleaned_data.get("observacoes", "")
+
+        if not aluno.abrigo:
+            aluno_sem_abrigo = True
+
+        # Conta pacotes existentes do aluno na mesma data para gerar sequencia
+        existentes = Movimentacao.objects.filter(
+            aluno=aluno,
+            tipo=Movimentacao.Tipo.ENTRADA,
+            data_hora__date=data_hora.date(),
+        ).count()
+
+        prefixo = f"{data_hora.strftime('%Y%m%d')}-{aluno.pk}"
+        with transaction.atomic():
+            for i in range(1, quantidade + 1):
+                seq = existentes + i
+                Movimentacao.objects.create(
+                    data_hora=data_hora,
+                    tipo=Movimentacao.Tipo.ENTRADA,
+                    aluno=aluno,
+                    turma=aluno.turma,
+                    aluno_nome=aluno.nome,
+                    aluno_codigo_externo=aluno.matricula,
+                    turma_nome=aluno.turma.nome if aluno.turma else "",
+                    pacote_codigo=f"{prefixo}-{seq:02d}",
+                    retirado=False,
+                    arquivo_origem="painel",
+                    row_hash=_gerar_row_hash(),
+                    origem=OrigemDados.MANUAL,
+                    observacoes=observacoes,
+                )
+
+        msg = f"{quantidade} pacote(s) de entrada registrado(s) para {aluno.nome}."
+        if aluno_sem_abrigo:
+            messages.warning(
+                request,
+                f"{msg} Atenção: {aluno.nome} não tem abrigo cadastrado — "
+                "defina o abrigo na ficha do aluno.",
+            )
+        else:
+            messages.success(
+                request,
+                f"{msg} Abrigo: {aluno.abrigo.identificador}.",
+            )
         return redirect("cme_home")
+
+    alunos = (
+        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .filter(ativo=True)
+        .select_related("turma", "abrigo")
+        .order_by("turma__nome", "nome")
+    )
     return render(
         request,
-        "gestao_cme/registrar_movimentacao.html",
-        _contexto_movimentacao(request, Movimentacao.Tipo.SAIDA, form),
+        "gestao_cme/registrar_entrada.html",
+        {
+            "usuario_logado": request.user,
+            "form": form,
+            "alunos": alunos,
+            "active_page": "nova_entrada",
+        },
     )
 
 
 @login_required
-def registrar_entrada(request: HttpRequest) -> HttpResponse:
-    """Registra a entrada (devolucao) de um material/pacote por um aluno."""
+def registrar_saida(request: HttpRequest) -> HttpResponse:
+    """Registra a retirada de pacotes esterilizados baseada nas entradas pendentes.
 
-    form = MovimentacaoForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        mov = _salvar_movimentacao(form, Movimentacao.Tipo.ENTRADA, retirado=True)
-        messages.success(
-            request,
-            f"Entrada registrada para {mov.aluno_nome} — pacote {mov.pacote_codigo}.",
+    Fluxo em dois passos:
+      GET sem aluno_id  → exibe seletor de aluno.
+      GET com aluno_id  → exibe pacotes pendentes do aluno para confirmacao.
+      POST              → cria Movimentacao(SAIDA) para cada pacote selecionado
+                          e marca o ENTRADA correspondente como retirado=True.
+    """
+    aluno_id = request.GET.get("aluno_id") or request.POST.get("aluno_id")
+    aluno: Aluno | None = None
+    pacotes_pendentes: list[Movimentacao] = []
+
+    if aluno_id:
+        aluno = get_object_or_404(
+            Aluno.objects.select_related("turma", "abrigo"),
+            pk=aluno_id,
         )
-        return redirect("cme_home")
+        pacotes_pendentes = list(
+            Movimentacao.objects.filter(
+                aluno=aluno,
+                tipo=Movimentacao.Tipo.ENTRADA,
+                retirado=False,
+            ).order_by("data_hora")
+        )
+
+    if request.method == "POST" and aluno:
+        ids_selecionados = request.POST.getlist("entradas")
+        if not ids_selecionados:
+            messages.error(
+                request, "Selecione ao menos um pacote para registrar a saída."
+            )
+        else:
+            agora = timezone.now()
+            entradas_confirmadas = Movimentacao.objects.filter(
+                pk__in=ids_selecionados,
+                aluno=aluno,
+                tipo=Movimentacao.Tipo.ENTRADA,
+                retirado=False,
+            )
+            count = 0
+            with transaction.atomic():
+                for entrada in entradas_confirmadas:
+                    Movimentacao.objects.create(
+                        data_hora=agora,
+                        tipo=Movimentacao.Tipo.SAIDA,
+                        aluno=aluno,
+                        turma=aluno.turma,
+                        aluno_nome=aluno.nome,
+                        aluno_codigo_externo=aluno.matricula,
+                        turma_nome=aluno.turma.nome if aluno.turma else "",
+                        pacote_codigo=entrada.pacote_codigo,
+                        retirado=True,
+                        arquivo_origem="painel",
+                        row_hash=_gerar_row_hash(),
+                        origem=OrigemDados.MANUAL,
+                    )
+                    entrada.retirado = True
+                    entrada.save(update_fields=["retirado"])
+                    count += 1
+
+            messages.success(
+                request,
+                f"{count} pacote(s) retirado(s) por {aluno.nome} — "
+                f"registrado em {agora.strftime('%d/%m/%Y %H:%M')}.",
+            )
+            return redirect("cme_home")
+
+    alunos_com_pendencias = (
+        Aluno.objects.filter(
+            movimentacoes__tipo=Movimentacao.Tipo.ENTRADA,
+            movimentacoes__retirado=False,
+        )
+        .exclude(origem=OrigemDados.EXEMPLO)
+        .distinct()
+        .select_related("turma")
+        .order_by("nome")
+    )
     return render(
         request,
-        "gestao_cme/registrar_movimentacao.html",
-        _contexto_movimentacao(request, Movimentacao.Tipo.ENTRADA, form),
+        "gestao_cme/registrar_saida.html",
+        {
+            "usuario_logado": request.user,
+            "alunos_com_pendencias": alunos_com_pendencias,
+            "aluno": aluno,
+            "aluno_id": aluno_id or "",
+            "pacotes_pendentes": pacotes_pendentes,
+            "active_page": "nova_saida",
+        },
     )
 
 
@@ -1182,83 +1298,47 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
 
     hoje = timezone.now().date()
     mov_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
-    emp_base = emprestimos_visiveis(request)
-
-    total_emp = emp_base.count()
-    devolvidos_emp = emp_base.filter(status=Emprestimo.Status.DEVOLVIDO).count()
 
     metricas_mov = {
         "total": mov_base.count(),
         "saidas": mov_base.filter(tipo=Movimentacao.Tipo.SAIDA).count(),
         "entradas": mov_base.filter(tipo=Movimentacao.Tipo.ENTRADA).count(),
         "pendentes": mov_base.filter(
-            tipo=Movimentacao.Tipo.SAIDA, retirado=False
+            tipo=Movimentacao.Tipo.ENTRADA, retirado=False
         ).count(),
     }
-    metricas_emp = {
-        "total": total_emp,
-        "emprestados": emp_base.filter(status=Emprestimo.Status.EMPRESTADO).count(),
-        "atrasados": emp_base.filter(status=Emprestimo.Status.ATRASADO).count(),
-        "devolvidos": devolvidos_emp,
-        "taxa_devolucao": (round(devolvidos_emp / total_emp * 100) if total_emp else 0),
-    }
 
-    proximas_devolucoes = list(
-        emp_base.filter(
-            status__in=[Emprestimo.Status.EMPRESTADO, Emprestimo.Status.ATRASADO],
-            data_prevista_devolucao__isnull=False,
+    pacotes_aguardando = list(
+        mov_base.filter(
+            tipo=Movimentacao.Tipo.ENTRADA,
+            retirado=False,
         )
-        .select_related("aluno", "aluno__turma", "kit")
-        .order_by("data_prevista_devolucao")[:8]
+        .select_related("aluno", "aluno__turma", "aluno__abrigo")
+        .order_by("data_hora")[:10]
     )
 
     atividade_recente: list[dict] = []
-
-    for mov in mov_base.select_related("material").order_by("-data_hora", "-id")[:10]:
+    for mov in mov_base.select_related("material").order_by("-data_hora", "-id")[:12]:
         material = mov.material.nome if mov.material else f"pacote {mov.pacote_codigo}"
         aluno = mov.aluno_nome or "Aluno não informado"
-        if mov.tipo == Movimentacao.Tipo.ENTRADA:
-            categoria, titulo = "devolucao", "Devolução de material"
-            descricao = f"{aluno} devolveu {material}."
-        elif mov.retirado is False:
-            categoria, titulo = "alerta", "Retirada pendente"
-            descricao = f"{aluno} ainda não retirou {material}."
-        else:
-            categoria, titulo = "alerta", "Saída de material"
+        if mov.tipo == Movimentacao.Tipo.ENTRADA and mov.retirado is False:
+            categoria, titulo = "alerta", "Entrada para esterilização"
+            descricao = f"{aluno} entregou {material} para esterilização."
+        elif mov.tipo == Movimentacao.Tipo.ENTRADA and mov.retirado is True:
+            categoria, titulo = "devolucao", "Material retirado"
+            descricao = f"{aluno} retirou {material}."
+        elif mov.tipo == Movimentacao.Tipo.SAIDA:
+            categoria, titulo = "exportacao", "Saída registrada"
             descricao = f"{material} saiu para {aluno}."
+        else:
+            categoria, titulo = "alerta", "Movimentação"
+            descricao = f"{material} — {aluno}."
         atividade_recente.append(
             {
                 "categoria": categoria,
                 "titulo": titulo,
                 "descricao": descricao,
                 "data": mov.data_hora,
-            }
-        )
-
-    for emp in (
-        emp_base.filter(
-            status=Emprestimo.Status.DEVOLVIDO, data_devolucao__isnull=False
-        )
-        .select_related("aluno")
-        .order_by("-data_devolucao")[:5]
-    ):
-        atividade_recente.append(
-            {
-                "categoria": "devolucao",
-                "titulo": "Empréstimo devolvido",
-                "descricao": f"{emp.aluno.nome} devolveu o empréstimo #{emp.pk}.",
-                "data": emp.data_devolucao,
-            }
-        )
-
-    for emp in emp_base.select_related("aluno", "kit").order_by("-data_emprestimo")[:5]:
-        kit_info = f" — {emp.kit.nome}" if emp.kit else ""
-        atividade_recente.append(
-            {
-                "categoria": "exportacao",
-                "titulo": "Empréstimo registrado",
-                "descricao": f"Empréstimo #{emp.pk} para {emp.aluno.nome}{kit_info}.",
-                "data": emp.data_emprestimo,
             }
         )
 
@@ -1274,8 +1354,7 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
             "active_page": "dashboard",
             "hoje": hoje,
             "metricas_mov": metricas_mov,
-            "metricas_emp": metricas_emp,
-            "proximas_devolucoes": proximas_devolucoes,
+            "pacotes_aguardando": pacotes_aguardando,
             "atividade_recente": atividade_recente,
         },
     )

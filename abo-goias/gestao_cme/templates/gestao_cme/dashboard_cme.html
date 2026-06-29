@@ -8,14 +8,13 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="panel-copy">Métricas consolidadas de movimentações e empréstimos registrados na CME.</p>
+                <p class="panel-copy">Métricas de movimentações de esterilização registradas na CME.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="dashboard" %}
 
                 <div class="panel-quick-actions">
-                    <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída</a>
-                    <a class="button secondary" href="{% url 'registrar_entrada' %}">Nova entrada</a>
-                    <a class="button secondary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
+                    <a class="button primary" href="{% url 'registrar_saida' %}">Registrar saída</a>
+                    <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
                 </div>
             </aside>
 
@@ -44,89 +43,56 @@
                             <span class="metric-secondary">registros</span>
                         </div>
                         <div class="metric-card">
-                            <span class="metric-label">Saídas</span>
+                            <span class="metric-label">Entradas</span>
+                            <strong>{{ metricas_mov.entradas }}</strong>
+                            <span class="metric-secondary">para esterilização</span>
+                        </div>
+                        <div class="metric-card metric-blue">
+                            <span class="metric-label">Retiradas</span>
                             <strong>{{ metricas_mov.saidas }}</strong>
                             <span class="metric-secondary">materiais retirados</span>
                         </div>
-                        <div class="metric-card metric-blue">
-                            <span class="metric-label">Entradas</span>
-                            <strong>{{ metricas_mov.entradas }}</strong>
-                            <span class="metric-secondary">materiais devolvidos</span>
-                        </div>
                         <div class="metric-card danger-metric">
-                            <span class="metric-label">Pendentes</span>
+                            <span class="metric-label">Aguardando</span>
                             <strong>{{ metricas_mov.pendentes }}</strong>
-                            <span class="metric-secondary">aguardando retirada</span>
+                            <span class="metric-secondary">pacotes não retirados</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Empréstimos -->
-                <div class="kpi-section">
-                    <p class="section-label">Empréstimos</p>
-                    <div class="kpi-grid">
-                        <div class="metric-card metric-neutral">
-                            <span class="metric-label">Total</span>
-                            <strong>{{ metricas_emp.total }}</strong>
-                            <span class="metric-secondary">{{ metricas_emp.taxa_devolucao }}% devolvidos</span>
-                        </div>
-                        <div class="metric-card metric-blue">
-                            <span class="metric-label">Emprestados</span>
-                            <strong>{{ metricas_emp.emprestados }}</strong>
-                            <span class="metric-secondary">em aberto</span>
-                        </div>
-                        <div class="metric-card danger-metric">
-                            <span class="metric-label">Atrasados</span>
-                            <strong>{{ metricas_emp.atrasados }}</strong>
-                            <span class="metric-secondary">fora do prazo</span>
-                        </div>
-                        <div class="metric-card metric-success">
-                            <span class="metric-label">Devolvidos</span>
-                            <strong>{{ metricas_emp.devolvidos }}</strong>
-                            <span class="metric-secondary">concluídos</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Próximas devoluções + Atividade recente -->
+                <!-- Pacotes aguardando + Atividade recente -->
                 <div class="dashboard-split">
 
-                    <!-- Próximas devoluções -->
+                    <!-- Pacotes aguardando retirada -->
                     <div>
                         <div class="activity-heading">
-                            <h2>Próximas devoluções</h2>
+                            <h2>Aguardando retirada</h2>
                         </div>
                         <div class="proximas-list">
-                            {% for emp in proximas_devolucoes %}
-                                <div class="proxima-item {% if emp.data_prevista_devolucao < hoje %}vencido{% endif %}">
+                            {% for pacote in pacotes_aguardando %}
+                                <div class="proxima-item">
                                     <div>
-                                        <strong>{{ emp.aluno.nome }}</strong>
+                                        <strong>{{ pacote.aluno_nome }}</strong>
                                         <span class="cell-muted">
-                                            {% if emp.kit %}{{ emp.kit.nome }}{% else %}Sem kit{% endif %}
-                                            {% if emp.aluno.turma %} · {{ emp.aluno.turma.codigo }}{% endif %}
+                                            Pacote {{ pacote.pacote_codigo }}
+                                            {% if pacote.aluno and pacote.aluno.abrigo %} · Abrigo {{ pacote.aluno.abrigo.identificador }}{% endif %}
                                         </span>
                                     </div>
                                     <div class="proxima-date">
-                                        <strong>{{ emp.data_prevista_devolucao|date:"d/m/Y" }}</strong>
-                                        <span class="cell-muted">
-                                            {% if emp.data_prevista_devolucao < hoje %}
-                                                Vencido
-                                            {% else %}
-                                                Previsto
-                                            {% endif %}
-                                        </span>
+                                        <strong>{{ pacote.data_hora|date:"d/m" }}</strong>
+                                        <span class="cell-muted">{{ pacote.data_hora|date:"H:i" }}</span>
                                     </div>
                                 </div>
                             {% empty %}
                                 <article class="activity-empty">
-                                    <strong>Nenhuma devolução pendente</strong>
-                                    <p>Não há empréstimos ativos com data de devolução registrada.</p>
+                                    <strong>Nenhum pacote aguardando</strong>
+                                    <p>Todos os materiais esterilizados já foram retirados.</p>
                                 </article>
                             {% endfor %}
                         </div>
-                        {% if proximas_devolucoes %}
+                        {% if pacotes_aguardando %}
                             <div style="margin-top: 14px;">
-                                <a class="button secondary compact-button" href="{% url 'emprestimos' %}">Ver todos os empréstimos</a>
+                                <a class="button secondary compact-button" href="{% url 'registrar_saida' %}">Registrar retirada</a>
                             </div>
                         {% endif %}
                     </div>
@@ -151,7 +117,7 @@
                             {% empty %}
                                 <article class="activity-empty">
                                     <strong>Nenhuma ação recente</strong>
-                                    <p>As movimentações e empréstimos registrados aparecerão aqui.</p>
+                                    <p>As movimentações registradas aparecerão aqui.</p>
                                 </article>
                             {% endfor %}
                         </div>

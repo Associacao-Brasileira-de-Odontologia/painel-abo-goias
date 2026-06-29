@@ -57,12 +57,9 @@
                 <div class="portal-status-grid">
                     {% if 'cme' in apps_disponiveis %}
                         <div class="portal-status-item">
-                            <span>Empréstimos abertos</span>
-                            <strong {% if resumo.emp_atrasados %}style="color:#ff9e9e"{% endif %}>
-                                {{ resumo.emprestimos_abertos }}
-                                {% if resumo.emp_atrasados %}
-                                    <span style="font-size:0.75rem; font-weight:400;">({{ resumo.emp_atrasados }} em atraso)</span>
-                                {% endif %}
+                            <span>Pacotes aguardando retirada</span>
+                            <strong {% if resumo.pacotes_pendentes %}style="color:#f7a51f"{% endif %}>
+                                {{ resumo.pacotes_pendentes }}
                             </strong>
                         </div>
                     {% endif %}
@@ -94,8 +91,8 @@
                 {% else %}
                     {% if 'cme' in apps_disponiveis %}
                         <div class="portal-quick-links">
-                            <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída de material</a>
-                            <a class="button secondary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
+                            <a class="button primary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
+                            <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
                         </div>
                     {% endif %}
                 {% endif %}
