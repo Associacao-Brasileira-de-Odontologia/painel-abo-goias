@@ -8,8 +8,6 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Cadastros acadêmicos</p>
-                <h2>Nova turma</h2>
                 <p class="panel-copy">Cadastre uma turma manualmente, sem depender da sincronização com o Eduq.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="alunos" %}
@@ -18,7 +16,6 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Cadastros acadêmicos</p>
                         <h2>Cadastrar turma</h2>
                     </div>
                     <a class="button secondary" href="{% url 'alunos_por_turma' %}">Voltar à listagem</a>

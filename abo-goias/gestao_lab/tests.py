@@ -1,0 +1,762 @@
+"""Testes da aplicação de gestão de laboratório.
+
+Cobre models, views, formulários e integração com o Dental Office.
+Prioridade: views e integração Dental (maior risco de quebra) → models →
+formulários → permissões.
+"""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+from unittest.mock import MagicMock, patch
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from gestao_lab.forms import (
+    EquipeForm,
+    LaboratorioForm,
+    MoldagemForm,
+    PedidoMaterialForm,
+)
+from gestao_lab.integrations.dental import DentalAPIError
+from gestao_lab.models import (
+    AlunoLab,
+    Equipe,
+    Laboratorio,
+    Moldagem,
+    OrigemDados,
+    Paciente,
+    PedidoMaterial,
+    RegistroSync,
+)
+
+User = get_user_model()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _usuario(username: str = "coord", superuser: bool = False) -> User:
+    return User.objects.create_user(
+        username=username,
+        password="senha-segura",
+        is_superuser=superuser,
+    )
+
+
+def _paciente(**kwargs) -> Paciente:
+    defaults = {"nome": "Paciente Teste", "id_dental": "100"}
+    defaults.update(kwargs)
+    return Paciente.objects.create(**defaults)
+
+
+def _aluno(**kwargs) -> AlunoLab:
+    defaults = {"nome": "Aluno Teste", "id_dental": "200"}
+    defaults.update(kwargs)
+    return AlunoLab.objects.create(**defaults)
+
+
+def _equipe(**kwargs) -> Equipe:
+    defaults = {"nome": "Equipe A", "coordenador": "Dr. Coord"}
+    defaults.update(kwargs)
+    return Equipe.objects.create(**defaults)
+
+
+def _laboratorio(equipe: Equipe | None = None, **kwargs) -> Laboratorio:
+    defaults = {"nome": "Lab Teste"}
+    defaults.update(kwargs)
+    lab = Laboratorio.objects.create(**defaults)
+    if equipe:
+        lab.equipes.add(equipe)
+    return lab
+
+
+def _pedido(
+    paciente: Paciente, aluno: AlunoLab, lab: Laboratorio, equipe: Equipe, **kwargs
+) -> PedidoMaterial:
+    defaults = {
+        "previsao_entrega": date.today() + timedelta(days=7),
+        "descricao_servico": "Prótese total",
+    }
+    defaults.update(kwargs)
+    return PedidoMaterial.objects.create(
+        paciente=paciente,
+        aluno=aluno,
+        laboratorio=lab,
+        equipe=equipe,
+        **defaults,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Testes de Models
+# ---------------------------------------------------------------------------
+
+
+class EquipeModelTests(TestCase):
+    def test_str_retorna_nome(self) -> None:
+        equipe = Equipe.objects.create(nome="Equipe Alpha", coordenador="Dr. Alpha")
+        self.assertEqual(str(equipe), "Equipe Alpha")
+
+    def test_defaults_ativo_e_auditoria(self) -> None:
+        equipe = Equipe.objects.create(nome="Equipe Beta", coordenador="Dr. Beta")
+        self.assertTrue(equipe.ativo)
+        self.assertIsNotNone(equipe.criado_em)
+        self.assertIsNotNone(equipe.atualizado_em)
+
+    def test_whatsapp_opcional(self) -> None:
+        equipe = Equipe.objects.create(nome="Equipe Gama", coordenador="Dr. Gama")
+        self.assertEqual(equipe.whatsapp, "")
+
+
+class LaboratorioModelTests(TestCase):
+    def test_str_retorna_nome(self) -> None:
+        lab = Laboratorio.objects.create(nome="Lab Dental")
+        self.assertEqual(str(lab), "Lab Dental")
+
+    def test_vincula_multiplas_equipes(self) -> None:
+        lab = Laboratorio.objects.create(nome="Lab Multi")
+        eq1 = Equipe.objects.create(nome="Eq 1", coordenador="Coord 1")
+        eq2 = Equipe.objects.create(nome="Eq 2", coordenador="Coord 2")
+        lab.equipes.add(eq1, eq2)
+        self.assertEqual(lab.equipes.count(), 2)
+
+    def test_campos_opcionais_em_branco(self) -> None:
+        lab = Laboratorio.objects.create(nome="Lab Simples")
+        self.assertEqual(lab.telefone, "")
+        self.assertEqual(lab.cnpj, "")
+        self.assertEqual(lab.email, "")
+
+
+class AlunoLabModelTests(TestCase):
+    def test_str_retorna_nome(self) -> None:
+        aluno = AlunoLab.objects.create(nome="Ana Clara", id_dental="500")
+        self.assertEqual(str(aluno), "Ana Clara")
+
+    def test_id_dental_deve_ser_unico(self) -> None:
+        AlunoLab.objects.create(nome="Aluno 1", id_dental="duplicado")
+        from django.db import IntegrityError, transaction
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            AlunoLab.objects.create(nome="Aluno 2", id_dental="duplicado")
+
+    def test_origem_default_dental(self) -> None:
+        aluno = AlunoLab.objects.create(nome="Aluno Origem", id_dental="600")
+        self.assertEqual(aluno.origem, OrigemDados.DENTAL)
+
+
+class PacienteModelTests(TestCase):
+    def test_str_retorna_nome(self) -> None:
+        pac = _paciente(nome="Maria Silva")
+        self.assertEqual(str(pac), "Maria Silva")
+
+    def test_dados_contrato_completos_com_cpf_e_cidade(self) -> None:
+        pac = _paciente(
+            id_dental="101",
+            cpf="123.456.789-00",
+            endereco_cidade="Goiânia",
+        )
+        self.assertTrue(pac.dados_contrato_completos)
+
+    def test_dados_contrato_completos_com_rg_e_cidade(self) -> None:
+        pac = _paciente(id_dental="102", rg="1234567", endereco_cidade="Goiânia")
+        self.assertTrue(pac.dados_contrato_completos)
+
+    def test_dados_contrato_incompletos_sem_documento(self) -> None:
+        pac = _paciente(id_dental="103", endereco_cidade="Goiânia")
+        self.assertFalse(pac.dados_contrato_completos)
+
+    def test_dados_contrato_incompletos_sem_cidade(self) -> None:
+        pac = _paciente(id_dental="104", cpf="111.222.333-44")
+        self.assertFalse(pac.dados_contrato_completos)
+
+    def test_dados_contrato_incompletos_sem_nada(self) -> None:
+        pac = _paciente(id_dental="105")
+        self.assertFalse(pac.dados_contrato_completos)
+
+    def test_id_dental_unico(self) -> None:
+        _paciente(id_dental="dup")
+        from django.db import IntegrityError, transaction
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            _paciente(id_dental="dup")
+
+
+class PedidoMaterialStatusTests(TestCase):
+    def setUp(self) -> None:
+        self.pac = _paciente(id_dental="10")
+        self.aluno = _aluno(id_dental="20")
+        self.equipe = _equipe()
+        self.lab = _laboratorio(equipe=self.equipe)
+
+    def test_status_em_dia_quando_novo_e_dentro_do_prazo(self) -> None:
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            self.lab,
+            self.equipe,
+            previsao_entrega=date.today() + timedelta(days=5),
+        )
+        self.assertEqual(pedido.status, PedidoMaterial.Status.EM_DIA)
+
+    def test_status_atrasado_quando_prazo_vencido_sem_entrega(self) -> None:
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            self.lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=1),
+            entregue=False,
+        )
+        self.assertEqual(pedido.status, PedidoMaterial.Status.ATRASADO)
+
+    def test_status_a_confirmar_quando_enviado_mas_nao_entregue(self) -> None:
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            self.lab,
+            self.equipe,
+            previsao_entrega=date.today() + timedelta(days=5),
+            data_envio=date.today(),
+            entregue=False,
+        )
+        self.assertEqual(pedido.status, PedidoMaterial.Status.A_CONFIRMAR)
+
+    def test_status_concluido_quando_entregue_e_faturado(self) -> None:
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            self.lab,
+            self.equipe,
+            previsao_entrega=date.today() + timedelta(days=5),
+            entregue=True,
+            faturado_paciente=True,
+            faturado_lab=True,
+        )
+        self.assertEqual(pedido.status, PedidoMaterial.Status.CONCLUIDO)
+
+    def test_status_nao_concluido_quando_entregue_mas_faturamento_incompleto(
+        self,
+    ) -> None:
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            self.lab,
+            self.equipe,
+            previsao_entrega=date.today() + timedelta(days=5),
+            entregue=True,
+            faturado_paciente=True,
+            faturado_lab=False,
+        )
+        self.assertNotEqual(pedido.status, PedidoMaterial.Status.CONCLUIDO)
+
+    def test_str_inclui_numero_paciente_e_lab(self) -> None:
+        pedido = _pedido(self.pac, self.aluno, self.lab, self.equipe)
+        texto = str(pedido)
+        self.assertIn("Pedido #", texto)
+        self.assertIn("Paciente Teste", texto)
+        self.assertIn("Lab Teste", texto)
+
+
+class MoldagemModelTests(TestCase):
+    def setUp(self) -> None:
+        self.pac = _paciente(id_dental="30")
+        self.aluno = _aluno(id_dental="40")
+
+    def test_str_inclui_numero_paciente_e_aluno(self) -> None:
+        moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+        self.assertIn("Moldagem #", str(moldagem))
+        self.assertIn("Paciente Teste", str(moldagem))
+
+    def test_convertida_false_sem_pedido_vinculado(self) -> None:
+        moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+        self.assertFalse(moldagem.convertida)
+
+    def test_convertida_true_com_pedido_vinculado(self) -> None:
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        pedido = _pedido(self.pac, self.aluno, lab, equipe)
+        moldagem = Moldagem.objects.create(
+            paciente=self.pac, aluno=self.aluno, pedido_material=pedido
+        )
+        self.assertTrue(moldagem.convertida)
+
+
+class RegistroSyncModelTests(TestCase):
+    def test_str_com_sucesso(self) -> None:
+        sync = RegistroSync.objects.create(sucesso=True)
+        self.assertIn("OK", str(sync))
+
+    def test_str_com_erro(self) -> None:
+        sync = RegistroSync.objects.create(sucesso=False, erro="timeout")
+        self.assertIn("ERRO", str(sync))
+
+
+# ---------------------------------------------------------------------------
+# Testes de Views — autenticação
+# ---------------------------------------------------------------------------
+
+
+class AutenticacaoLabTests(TestCase):
+    """Garante que todas as views exigem login."""
+
+    def _assert_redireciona(self, url_name: str, **kwargs) -> None:
+        url = reverse(url_name, **kwargs)
+        response = self.client.get(url)
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={url}',
+            fetch_redirect_response=False,
+        )
+
+    def test_dashboard_exige_login(self) -> None:
+        self._assert_redireciona("lab_dashboard")
+
+    def test_pedidos_exige_login(self) -> None:
+        self._assert_redireciona("lab_pedidos")
+
+    def test_moldagens_exige_login(self) -> None:
+        self._assert_redireciona("lab_moldagens")
+
+    def test_laboratorios_exige_login(self) -> None:
+        self._assert_redireciona("lab_laboratorios")
+
+    def test_equipes_exige_login(self) -> None:
+        self._assert_redireciona("lab_equipes")
+
+    def test_alunos_exige_login(self) -> None:
+        self._assert_redireciona("lab_alunos")
+
+    def test_pacientes_exige_login(self) -> None:
+        self._assert_redireciona("lab_pacientes")
+
+
+# ---------------------------------------------------------------------------
+# Testes de Views — dashboard
+# ---------------------------------------------------------------------------
+
+
+class DashboardLabTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/dashboard.html")
+
+    def test_metricas_contam_pedidos_por_status(self) -> None:
+        pac = _paciente(id_dental="11")
+        aluno = _aluno(id_dental="21")
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        _pedido(
+            pac, aluno, lab, equipe, previsao_entrega=date.today() + timedelta(days=3)
+        )
+        _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            previsao_entrega=date.today() - timedelta(days=1),
+            entregue=False,
+        )
+
+        response = self.client.get(reverse("lab_dashboard"))
+
+        metricas = response.context["metricas"]
+        self.assertEqual(metricas["em_dia"], 1)
+        self.assertEqual(metricas["atrasado"], 1)
+
+
+# ---------------------------------------------------------------------------
+# Testes de Views — acompanhamento de pedidos
+# ---------------------------------------------------------------------------
+
+
+class AcompanhamentoPedidosTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+        pac = _paciente(id_dental="12")
+        aluno = _aluno(id_dental="22")
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        self.pedido_em_dia = _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            previsao_entrega=date.today() + timedelta(days=5),
+        )
+        self.pedido_atrasado = _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            previsao_entrega=date.today() - timedelta(days=2),
+            entregue=False,
+        )
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_pedidos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/acompanhamento_pedidos.html")
+
+    def test_filtra_por_status_atrasado(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos"), {"status": PedidoMaterial.Status.ATRASADO}
+        )
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(self.pedido_atrasado, pedidos)
+        self.assertNotIn(self.pedido_em_dia, pedidos)
+
+    def test_filtra_por_status_em_dia(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos"), {"status": PedidoMaterial.Status.EM_DIA}
+        )
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(self.pedido_em_dia, pedidos)
+        self.assertNotIn(self.pedido_atrasado, pedidos)
+
+    def test_busca_por_nome_do_paciente(self) -> None:
+        response = self.client.get(reverse("lab_pedidos"), {"q": "Paciente Teste"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Paciente Teste")
+
+
+# ---------------------------------------------------------------------------
+# Testes de Views — moldagens
+# ---------------------------------------------------------------------------
+
+
+class MoldagensViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+        self.pac = _paciente(id_dental="13")
+        self.aluno = _aluno(id_dental="23")
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_moldagens"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/moldagens.html")
+
+    def test_lista_moldagens_existentes(self) -> None:
+        Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+        response = self.client.get(reverse("lab_moldagens"))
+        self.assertContains(response, "Paciente Teste")
+
+    def test_filtra_por_convertidas(self) -> None:
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        pedido = _pedido(self.pac, self.aluno, lab, equipe)
+        moldagem_convertida = Moldagem.objects.create(
+            paciente=self.pac, aluno=self.aluno, pedido_material=pedido
+        )
+        moldagem_simples = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+
+        response = self.client.get(reverse("lab_moldagens"), {"filtro": "convertida"})
+        ids = [m.pk for m in response.context["moldagens"]]
+        self.assertIn(moldagem_convertida.pk, ids)
+        self.assertNotIn(moldagem_simples.pk, ids)
+
+
+# ---------------------------------------------------------------------------
+# Testes de Views — laboratórios e equipes
+# ---------------------------------------------------------------------------
+
+
+class LaboratoriosViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_laboratorios"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/laboratorios.html")
+
+    def test_lista_laboratorios_existentes(self) -> None:
+        Laboratorio.objects.create(nome="Lab Odonto")
+        response = self.client.get(reverse("lab_laboratorios"))
+        self.assertContains(response, "Lab Odonto")
+
+    def test_busca_filtra_por_nome(self) -> None:
+        Laboratorio.objects.create(nome="Lab Goias")
+        Laboratorio.objects.create(nome="Lab Nacional")
+        response = self.client.get(reverse("lab_laboratorios"), {"q": "Goias"})
+        self.assertContains(response, "Lab Goias")
+        self.assertNotContains(response, "Lab Nacional")
+
+    def test_criar_laboratorio_get_200(self) -> None:
+        response = self.client.get(reverse("lab_criar_laboratorio"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_criar_laboratorio_post_valido_redireciona(self) -> None:
+        response = self.client.post(
+            reverse("lab_criar_laboratorio"),
+            {"nome": "Lab Novo"},
+        )
+        self.assertRedirects(
+            response, reverse("lab_laboratorios"), fetch_redirect_response=False
+        )
+        self.assertTrue(Laboratorio.objects.filter(nome="Lab Novo").exists())
+
+
+class EquipesViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_equipes"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/equipes.html")
+
+    def test_lista_equipes_existentes(self) -> None:
+        Equipe.objects.create(nome="Equipe Goiania", coordenador="Dr. A")
+        response = self.client.get(reverse("lab_equipes"))
+        self.assertContains(response, "Equipe Goiania")
+
+    def test_criar_equipe_post_valido_redireciona(self) -> None:
+        response = self.client.post(
+            reverse("lab_criar_equipe"),
+            {"nome": "Equipe Nova", "coordenador": "Dr. Novo"},
+        )
+        self.assertRedirects(
+            response, reverse("lab_equipes"), fetch_redirect_response=False
+        )
+        self.assertTrue(Equipe.objects.filter(nome="Equipe Nova").exists())
+
+    def test_criar_equipe_post_invalido_exibe_erro(self) -> None:
+        response = self.client.post(reverse("lab_criar_equipe"), {"nome": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Informe o nome da equipe")
+
+
+# ---------------------------------------------------------------------------
+# Testes de Views — pacientes e alunos
+# ---------------------------------------------------------------------------
+
+
+class PacientesViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_pacientes"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/pacientes.html")
+
+    def test_lista_pacientes_ativos(self) -> None:
+        _paciente(nome="Joao Ativo", id_dental="300")
+        _paciente(nome="Maria Inativa", id_dental="301", ativo=False)
+        response = self.client.get(reverse("lab_pacientes"))
+        self.assertContains(response, "Joao Ativo")
+        self.assertNotContains(response, "Maria Inativa")
+
+    def test_filtra_pacientes_com_processo_aberto(self) -> None:
+        _paciente(nome="Com Processo", id_dental="302", processo_aberto=True)
+        _paciente(nome="Sem Processo", id_dental="303", processo_aberto=False)
+        response = self.client.get(reverse("lab_pacientes"), {"processo": "aberto"})
+        self.assertContains(response, "Com Processo")
+        self.assertNotContains(response, "Sem Processo")
+
+
+class AlunosLabViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_alunos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/alunos.html")
+
+    def test_lista_alunos_ativos(self) -> None:
+        AlunoLab.objects.create(nome="Aluno Ativo", id_dental="400")
+        AlunoLab.objects.create(nome="Aluno Inativo", id_dental="401", ativo=False)
+        response = self.client.get(reverse("lab_alunos"))
+        self.assertContains(response, "Aluno Ativo")
+        self.assertNotContains(response, "Aluno Inativo")
+
+
+# ---------------------------------------------------------------------------
+# Testes de integração — Dental Office (views com mock)
+# ---------------------------------------------------------------------------
+
+
+class SincronizarDentalViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    @override_settings(DENTAL_CLINIC_ID="clinic-test", DENTAL_USER_GROUP_ALUNO=8)
+    @patch("gestao_lab.services.dental_sync.executar_sync_e_registrar")
+    def test_sincronizacao_bem_sucedida_exibe_mensagem(
+        self, mock_sync: MagicMock
+    ) -> None:
+        mock_sync.return_value = MagicMock(
+            duracao_segundos=1.2,
+            pacientes_criados=3,
+            pacientes_atualizados=1,
+            alunos_criados=2,
+            alunos_atualizados=0,
+        )
+
+        response = self.client.post(reverse("lab_sincronizar"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sincronização concluída")
+
+    @override_settings(DENTAL_CLINIC_ID="clinic-test", DENTAL_USER_GROUP_ALUNO=8)
+    @patch("gestao_lab.services.dental_sync.executar_sync_e_registrar")
+    def test_sincronizacao_com_erro_api_exibe_mensagem_erro(
+        self, mock_sync: MagicMock
+    ) -> None:
+        mock_sync.side_effect = DentalAPIError("serviço indisponível")
+
+        response = self.client.post(reverse("lab_sincronizar"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "serviço indisponível")
+
+    @override_settings(DENTAL_CLINIC_ID=None)
+    def test_sincronizacao_sem_clinic_id_exibe_erro(self) -> None:
+        response = self.client.post(reverse("lab_sincronizar"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "DENTAL_CLINIC_ID")
+
+    @override_settings(DENTAL_CLINIC_ID="clinic-test")
+    @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
+    def test_busca_paciente_dental_importa_e_exibe_mensagem(
+        self, mock_buscar: MagicMock
+    ) -> None:
+        mock_buscar.return_value = {"criados": 1, "atualizados": 0}
+
+        response = self.client.get(
+            reverse("lab_buscar_paciente"),
+            {"q": "Carlos", "next": "lab_criar_pedido"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "importado")
+
+    @override_settings(DENTAL_CLINIC_ID="clinic-test")
+    @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
+    def test_busca_paciente_dental_sem_resultado_exibe_aviso(
+        self, mock_buscar: MagicMock
+    ) -> None:
+        mock_buscar.return_value = {"criados": 0, "atualizados": 0}
+
+        response = self.client.get(
+            reverse("lab_buscar_paciente"),
+            {"q": "Inexistente", "next": "lab_criar_pedido"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nenhum paciente encontrado")
+
+
+# ---------------------------------------------------------------------------
+# Testes de Formulários
+# ---------------------------------------------------------------------------
+
+
+class PedidoMaterialFormTests(TestCase):
+    def setUp(self) -> None:
+        self.pac = _paciente(id_dental="50")
+        self.aluno = _aluno(id_dental="60")
+        self.equipe = _equipe()
+        self.lab = _laboratorio(equipe=self.equipe)
+
+    def _dados_validos(self) -> dict:
+        return {
+            "paciente": self.pac.pk,
+            "aluno": self.aluno.pk,
+            "laboratorio": self.lab.pk,
+            "equipe": self.equipe.pk,
+            "previsao_entrega": (date.today() + timedelta(days=10)).strftime(
+                "%Y-%m-%d"
+            ),
+            "descricao_servico": "Prótese parcial removível",
+        }
+
+    def test_form_valido_com_dados_corretos(self) -> None:
+        form = PedidoMaterialForm(data=self._dados_validos())
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_form_invalido_sem_paciente(self) -> None:
+        dados = self._dados_validos()
+        dados.pop("paciente")
+        form = PedidoMaterialForm(data=dados)
+        self.assertFalse(form.is_valid())
+        self.assertIn("paciente", form.errors)
+
+    def test_form_invalido_sem_descricao(self) -> None:
+        dados = self._dados_validos()
+        dados["descricao_servico"] = ""
+        form = PedidoMaterialForm(data=dados)
+        self.assertFalse(form.is_valid())
+        self.assertIn("descricao_servico", form.errors)
+
+    def test_mensagem_erro_paciente_obrigatorio(self) -> None:
+        form = PedidoMaterialForm(data={})
+        self.assertIn("Selecione o paciente", str(form.errors.get("paciente", "")))
+
+
+class MoldagemFormTests(TestCase):
+    def test_form_valido(self) -> None:
+        pac = _paciente(id_dental="70")
+        aluno = _aluno(id_dental="80")
+        form = MoldagemForm(data={"paciente": pac.pk, "aluno": aluno.pk})
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_form_invalido_sem_aluno(self) -> None:
+        pac = _paciente(id_dental="71")
+        form = MoldagemForm(data={"paciente": pac.pk})
+        self.assertFalse(form.is_valid())
+        self.assertIn("aluno", form.errors)
+
+    def test_mensagem_erro_aluno_obrigatorio(self) -> None:
+        form = MoldagemForm(data={})
+        self.assertIn("Selecione o aluno", str(form.errors.get("aluno", "")))
+
+
+class EquipeFormTests(TestCase):
+    def test_form_valido(self) -> None:
+        form = EquipeForm(data={"nome": "Eq X", "coordenador": "Dr. X"})
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_form_invalido_sem_nome(self) -> None:
+        form = EquipeForm(data={"coordenador": "Dr. Y"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("nome", form.errors)
+
+    def test_mensagem_erro_nome_obrigatorio(self) -> None:
+        form = EquipeForm(data={})
+        self.assertIn("Informe o nome da equipe", str(form.errors.get("nome", "")))
+
+
+class LaboratorioFormTests(TestCase):
+    def test_form_valido_apenas_com_nome(self) -> None:
+        form = LaboratorioForm(data={"nome": "Lab Z"})
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_form_invalido_sem_nome(self) -> None:
+        form = LaboratorioForm(data={})
+        self.assertFalse(form.is_valid())
+        self.assertIn("nome", form.errors)
+
+    def test_mensagem_erro_nome_obrigatorio(self) -> None:
+        form = LaboratorioForm(data={})
+        self.assertIn("Informe o nome do laboratório", str(form.errors.get("nome", "")))
