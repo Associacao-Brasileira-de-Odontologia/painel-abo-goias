@@ -24,7 +24,6 @@
         <section class="panel results-panel">
             <div class="results-topbar">
                 <div>
-                    <p class="section-label">Cadastro</p>
                     <h2>Equipes de coordenação</h2>
                 </div>
                 <div class="topbar-actions">
@@ -44,10 +43,12 @@
             </form>
 
             <div class="selection-summary">
-                <div class="info-chip">
-                    <span>Busca</span>
-                    <strong>{{ busca|default:"Todas as equipes" }}</strong>
-                </div>
+                {% if busca %}
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca }}</strong>
+                    </div>
+                {% endif %}
                 <div class="info-chip">
                     <span>Resultado</span>
                     <strong>{{ page_obj.paginator.count }} equipe(s)</strong>

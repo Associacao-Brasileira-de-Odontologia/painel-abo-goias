@@ -120,7 +120,6 @@
             <!-- Ação: Registrar envio -->
             {% if not pedido.data_envio %}
                 <div class="kpi-section">
-                    <p class="section-label">Ação necessária</p>
                     <h3 style="margin-bottom: 12px;">Registrar envio ao laboratório</h3>
                     {% if form_envio.errors %}
                         <div class="form-errors">
@@ -141,7 +140,6 @@
                 </div>
             {% elif not pedido.entregue %}
                 <div class="kpi-section">
-                    <p class="section-label">Ação necessária</p>
                     <h3 style="margin-bottom: 12px;">Registrar entrega do laboratório</h3>
                     {% if form_entrega.errors %}
                         <div class="form-errors">
@@ -165,7 +163,6 @@
             <!-- Faturamento -->
             {% if pedido.entregue %}
                 <div class="kpi-section">
-                    <p class="section-label">Informações financeiras</p>
                     <h3 style="margin-bottom: 12px;">Faturamento</h3>
                     {% if form_faturamento.errors %}
                         <div class="form-errors">
