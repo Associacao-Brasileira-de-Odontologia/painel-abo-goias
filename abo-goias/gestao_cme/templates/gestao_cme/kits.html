@@ -8,8 +8,6 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Catálogo</p>
-                <h2>Kits</h2>
                 <p class="panel-copy">Consulte os kits cadastrados e os materiais vinculados a cada conjunto.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="kits" %}
@@ -37,7 +35,6 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Composição dos kits</p>
                         <h2>Kits cadastrados</h2>
                     </div>
                 </div>
@@ -54,10 +51,12 @@
                 </form>
 
                 <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Busca</span>
-                        <strong>{{ busca|default:"Todos os registros" }}</strong>
-                    </div>
+                    {% if busca %}
+                        <div class="info-chip">
+                            <span>Busca</span>
+                            <strong>{{ busca }}</strong>
+                        </div>
+                    {% endif %}
                     <div class="info-chip">
                         <span>Resultado</span>
                         <strong>{{ page_obj.paginator.count }} registro(s)</strong>
@@ -73,7 +72,6 @@
                                 <th>Materiais</th>
                                 <th>Disponíveis</th>
                                 <th>Resumo</th>
-                                <th>Origem</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -88,7 +86,6 @@
                                     <td>{{ kit.total_materiais }}</td>
                                     <td>{{ kit.materiais_disponiveis }}</td>
                                     <td>{{ kit.materiais_resumo|default:"Sem materiais vinculados" }}</td>
-                                    <td>{{ kit.get_origem_display }}</td>
                                     <td>
                                         {% if kit.ativo %}
                                             <span class="badge badge-devolvido">Ativo</span>
@@ -99,7 +96,7 @@
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="7">
+                                    <td colspan="6">
                                         <div class="empty-state">
                                             <strong>Nenhum kit encontrado.</strong>
                                             <p>Revise o termo pesquisado ou limpe a busca para visualizar todos os kits cadastrados.</p>

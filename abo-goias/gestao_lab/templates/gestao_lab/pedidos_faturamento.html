@@ -9,8 +9,6 @@
 <main class="page-shell">
     <div class="layout-grid">
         <aside class="panel config-panel">
-            <p class="section-label">Gestão de laboratório</p>
-            <h2>Faturamento</h2>
             <p class="panel-copy">Pedidos entregues que ainda precisam de informações financeiras preenchidas.</p>
 
             {% include "gestao_lab/partials/menu_lab.html" with active_page="faturamento" %}
@@ -19,7 +17,6 @@
         <section class="panel results-panel">
             <div class="results-topbar">
                 <div>
-                    <p class="section-label">Pendências financeiras</p>
                     <h2>Pedidos aguardando faturamento</h2>
                 </div>
             </div>
@@ -36,10 +33,12 @@
             </form>
 
             <div class="selection-summary">
-                <div class="info-chip">
-                    <span>Busca</span>
-                    <strong>{{ busca|default:"Todos os registros" }}</strong>
-                </div>
+                {% if busca %}
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca }}</strong>
+                    </div>
+                {% endif %}
                 <div class="info-chip">
                     <span>Resultado</span>
                     <strong>{{ page_obj.paginator.count }} pedido(s)</strong>

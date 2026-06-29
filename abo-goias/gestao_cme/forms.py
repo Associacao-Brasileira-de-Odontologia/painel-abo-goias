@@ -192,6 +192,52 @@ class MaterialEditForm(MaterialForm):
         fields = [*MaterialForm.Meta.fields, "ativo"]
 
 
+class EntradaForm(forms.Form):
+    """Valida o registro em lote de pacotes de entrada para esterilização."""
+
+    aluno = forms.ModelChoiceField(
+        queryset=Aluno.objects.none(),
+        empty_label="Selecione um aluno...",
+        error_messages={
+            "required": "Selecione um aluno.",
+            "invalid_choice": "Aluno inválido.",
+        },
+    )
+    quantidade = forms.IntegerField(
+        min_value=1,
+        max_value=50,
+        initial=1,
+        error_messages={
+            "required": "Informe a quantidade de pacotes.",
+            "min_value": "A quantidade mínima é 1.",
+            "max_value": "A quantidade máxima por registro é 50.",
+        },
+    )
+    data_hora = forms.DateTimeField(
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M"],
+        error_messages={"invalid": "Data e hora inválidas."},
+    )
+    observacoes = forms.CharField(required=False, strip=True)
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["aluno"].queryset = (
+            Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
+            .filter(ativo=True)
+            .select_related("turma", "abrigo")
+            .order_by("turma__nome", "nome")
+        )
+
+    def clean_data_hora(self) -> object:
+        data_hora = self.cleaned_data.get("data_hora")
+        if not data_hora:
+            return timezone.now()
+        if timezone.is_naive(data_hora):
+            return timezone.make_aware(data_hora)
+        return data_hora
+
+
 class EmprestimoForm(forms.Form):
     """Valida a criação de um empréstimo de kit para um aluno."""
 

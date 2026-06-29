@@ -9,8 +9,6 @@
 <main class="page-shell">
     <div class="layout-grid">
         <aside class="panel config-panel">
-            <p class="section-label">Gestão de laboratório</p>
-            <h2>Alunos</h2>
             <p class="panel-copy">Alunos sincronizados do Dental Office. Utilize a sincronização para atualizar os dados.</p>
 
             {% include "gestao_lab/partials/menu_lab.html" with active_page="alunos" %}
@@ -41,7 +39,6 @@
         <section class="panel results-panel">
             <div class="results-topbar">
                 <div>
-                    <p class="section-label">Dental Office</p>
                     <h2>Alunos cadastrados</h2>
                 </div>
             </div>
@@ -58,10 +55,12 @@
             </form>
 
             <div class="selection-summary">
-                <div class="info-chip">
-                    <span>Busca</span>
-                    <strong>{{ busca|default:"Todos os alunos" }}</strong>
-                </div>
+                {% if busca %}
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca }}</strong>
+                    </div>
+                {% endif %}
                 <div class="info-chip">
                     <span>Resultado</span>
                     <strong>{{ page_obj.paginator.count }} aluno(s)</strong>

@@ -1,26 +1,37 @@
 {% extends "gestao_cme/base.html" %}
 
-{% block title %}Gestão de CME | {{ titulo }}{% endblock %}
+{% block title %}Gestão de CME | Registrar entrada{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
-{% block header_title %}{{ titulo }}{% endblock %}
+{% block header_title %}Registrar entrada{% endblock %}
 
 {% block content %}
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="panel-copy">{{ subtitulo }}</p>
+                <p class="panel-copy">
+                    Registre a entrega de materiais de um aluno para esterilização.
+                    Informe o aluno, a quantidade de pacotes e a data — o sistema gera
+                    os códigos automaticamente.
+                </p>
 
-                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page=active_page %}
+                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="nova_entrada" %}
             </aside>
 
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Nova movimentação</p>
-                        <h2>{{ titulo }}</h2>
+                        <h2>Registrar entrada de materiais</h2>
                     </div>
                     <a class="button secondary" href="{% url 'cme_home' %}">Voltar ao histórico</a>
                 </div>
+
+                {% if messages %}
+                    <div class="messages">
+                        {% for message in messages %}
+                            <div class="message {{ message.tags }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
 
                 {% if form.errors %}
                     <div class="form-errors">
@@ -41,8 +52,8 @@
                     {% csrf_token %}
 
                     <div class="field field-required">
-                        <label for="aluno">Aluno</label>
-                        <select id="aluno" name="aluno" required>
+                        <label for="id_aluno">Aluno</label>
+                        <select id="id_aluno" name="aluno" required>
                             <option value="">Selecione um aluno...</option>
                             {% regroup alunos by turma as alunos_por_turma %}
                             {% for grupo in alunos_por_turma %}
@@ -51,6 +62,7 @@
                                         <option value="{{ aluno.pk }}"
                                             {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
                                             {{ aluno.nome }}{% if aluno.matricula %} — {{ aluno.matricula }}{% endif %}
+                                            {% if aluno.abrigo %} · Abrigo {{ aluno.abrigo.identificador }}{% else %} · Sem abrigo{% endif %}
                                         </option>
                                     {% endfor %}
                                 </optgroup>
@@ -59,35 +71,26 @@
                     </div>
 
                     <div class="field field-required">
-                        <label for="pacote_codigo">Código do pacote</label>
+                        <label for="id_quantidade">Quantidade de pacotes</label>
                         <input
-                            id="pacote_codigo"
-                            type="text"
-                            name="pacote_codigo"
-                            value="{{ form.pacote_codigo.value|default:'' }}"
-                            placeholder="Ex.: KIT-001"
+                            id="id_quantidade"
+                            type="number"
+                            name="quantidade"
+                            value="{{ form.quantidade.value|default:'1' }}"
+                            min="1"
+                            max="50"
                             required
-                            maxlength="80"
                         >
+                        <span class="field-hint">Cada pacote recebe um código único gerado automaticamente.</span>
                     </div>
 
                     <div class="field">
-                        <label for="material">Material <span class="field-optional">(opcional)</span></label>
-                        <select id="material" name="material">
-                            <option value="">Nenhum material específico</option>
-                            {% for mat in materiais %}
-                                <option value="{{ mat.pk }}"
-                                    {% if form.material.value == mat.pk|stringformat:"s" %}selected{% endif %}>
-                                    {{ mat.nome }}{% if mat.codigo %} — {{ mat.codigo }}{% endif %}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="field">
-                        <label for="data_hora">Data e hora <span class="field-optional">(opcional — padrão: agora)</span></label>
+                        <label for="id_data_hora">
+                            Data e hora
+                            <span class="field-optional">(opcional — padrão: agora)</span>
+                        </label>
                         <input
-                            id="data_hora"
+                            id="id_data_hora"
                             type="datetime-local"
                             name="data_hora"
                             value="{{ form.data_hora.value|default:'' }}"
@@ -95,17 +98,20 @@
                     </div>
 
                     <div class="field">
-                        <label for="observacoes">Observações <span class="field-optional">(opcional)</span></label>
+                        <label for="id_observacoes">
+                            Observações
+                            <span class="field-optional">(opcional)</span>
+                        </label>
                         <textarea
-                            id="observacoes"
+                            id="id_observacoes"
                             name="observacoes"
                             rows="3"
-                            placeholder="Informações adicionais sobre esta movimentação..."
+                            placeholder="Informações adicionais sobre esses pacotes..."
                         >{{ form.observacoes.value|default:'' }}</textarea>
                     </div>
 
                     <div class="form-actions">
-                        <button class="button primary" type="submit">{{ submit_label }}</button>
+                        <button class="button primary" type="submit">Registrar entrada</button>
                         <a class="button secondary" href="{% url 'cme_home' %}">Cancelar</a>
                     </div>
                 </form>

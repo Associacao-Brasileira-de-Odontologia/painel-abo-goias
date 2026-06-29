@@ -10,7 +10,7 @@
 
         {# ── Barra lateral ──────────────────────────────────────────── #}
         <aside class="panel config-panel">
-            <p class="section-label">Gestão de Contratos</p>
+            <p class="section-label">Paciente</p>
             <h2>{{ paciente.nome }}</h2>
 
             <nav class="side-nav" aria-label="Navegação de contratos">
@@ -62,7 +62,6 @@
             {# Cabeçalho com nome e badge de status #}
             <div class="results-topbar">
                 <div>
-                    <p class="section-label">Termo de consentimento</p>
                     <h2 style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         {{ paciente.nome }}
                         {% if gerado_bloqueado %}

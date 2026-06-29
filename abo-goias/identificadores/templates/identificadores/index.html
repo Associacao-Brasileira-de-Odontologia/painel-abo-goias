@@ -2,8 +2,8 @@
 {% load static %}
 
 {% block title %}ABO Goiás | Identificadores de Bancada{% endblock %}
-{% block header_eyebrow %}Identificadores{% endblock %}
-{% block header_title %}Bancadas{% endblock %}
+{% block header_eyebrow %}ABO Goiás{% endblock %}
+{% block header_title %}Identificadores de Bancada{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'identificadores/css/identificadores.css' %}">
 {% endblock %}
@@ -12,9 +12,7 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Geração de arquivos</p>
-                <h2>Identificadores</h2>
-                <p class="panel-copy">Siga os passos para gerar os identificadores de bancada da turma selecionada.</p>
+                <p class="panel-copy">Selecione a turma e o modelo para gerar o arquivo de identificadores de bancada.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="identificadores" active_page="identificadores" %}
 
@@ -33,8 +31,7 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Fluxo de geração</p>
-                        <h2>Identificadores de bancada</h2>
+                        <h2>Selecione turma e modelo</h2>
                     </div>
                     <div class="topbar-actions">
                         <form class="sync-form" method="post" action="{% url 'identificadores:sincronizar' %}">
@@ -58,9 +55,7 @@
                     <section class="identifier-step">
                         <div class="step-content">
                             <div class="step-heading">
-                                <div>
-                                    <h3>Selecionar turma</h3>
-                                </div>
+                                <h3>Selecionar turma</h3>
                             </div>
 
                             <div class="field">
@@ -80,9 +75,7 @@
                     <section class="identifier-step">
                         <div class="step-content">
                             <div class="step-heading">
-                                <div>
-                                    <h3>Escolher modelo</h3>
-                                </div>
+                                <h3>Escolher modelo</h3>
                             </div>
 
                             <div class="model-list" role="radiogroup" aria-label="Modelos de identificador">
@@ -118,12 +111,6 @@
 
                     <section class="identifier-step generate-step">
                         <div class="step-content">
-                            <div class="step-heading">
-                                <div>
-                                    <h3>Gerar identificadores</h3>
-                                </div>
-                            </div>
-
                             <button class="button primary generate-button" type="submit" disabled data-generate-button>
                                 Gerar identificadores
                             </button>
@@ -134,10 +121,7 @@
 
                 {% if resultado %}
                     <section class="generation-result" aria-label="Arquivo gerado">
-                        <div>
-                            <p class="section-label">Arquivo pronto</p>
-                            <h3>Resumo da geração</h3>
-                        </div>
+                        <h3>Arquivo pronto</h3>
 
                         <div class="result-metrics">
                             <div class="result-metric">

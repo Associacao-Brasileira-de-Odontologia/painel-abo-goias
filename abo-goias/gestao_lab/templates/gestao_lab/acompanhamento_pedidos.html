@@ -9,8 +9,6 @@
 <main class="page-shell">
     <div class="layout-grid">
         <aside class="panel config-panel">
-            <p class="section-label">Gestão de laboratório</p>
-            <h2>Acompanhamento</h2>
             <p class="panel-copy">Pedidos em andamento. Registre envios e entregas diretamente na listagem.</p>
 
             {% include "gestao_lab/partials/menu_lab.html" with active_page="pedidos" %}
@@ -51,7 +49,6 @@
         <section class="panel results-panel">
             <div class="results-topbar">
                 <div>
-                    <p class="section-label">Pedidos em andamento</p>
                     <h2>Acompanhamento de pedidos</h2>
                 </div>
                 <div class="topbar-actions">
@@ -74,14 +71,18 @@
             </form>
 
             <div class="selection-summary">
-                <div class="info-chip">
-                    <span>Busca</span>
-                    <strong>{{ busca|default:"Todos os registros" }}</strong>
-                </div>
-                <div class="info-chip">
-                    <span>Status</span>
-                    <strong>{{ status_label }}</strong>
-                </div>
+                {% if busca %}
+                    <div class="info-chip">
+                        <span>Busca</span>
+                        <strong>{{ busca }}</strong>
+                    </div>
+                {% endif %}
+                {% if status_filtro %}
+                    <div class="info-chip">
+                        <span>Status</span>
+                        <strong>{{ status_label }}</strong>
+                    </div>
+                {% endif %}
                 <div class="info-chip">
                     <span>Resultado</span>
                     <strong>{{ page_obj.paginator.count }} pedido(s)</strong>

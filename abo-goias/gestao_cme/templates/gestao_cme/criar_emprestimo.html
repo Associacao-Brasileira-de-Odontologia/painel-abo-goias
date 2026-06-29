@@ -8,8 +8,6 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Controle de materiais</p>
-                <h2>Novo empréstimo</h2>
                 <p class="panel-copy">Registre um novo empréstimo vinculando o aluno ao kit de materiais retirado.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="emprestimos_lista" %}
@@ -18,7 +16,6 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Controle de materiais</p>
                         <h2>Registrar empréstimo</h2>
                     </div>
                     <a class="button secondary" href="{% url 'emprestimos' %}">Voltar à listagem</a>

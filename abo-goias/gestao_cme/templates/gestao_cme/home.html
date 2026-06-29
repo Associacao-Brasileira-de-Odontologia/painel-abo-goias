@@ -8,8 +8,6 @@
     <main class="page-shell">
         <div class="layout-grid">
             <aside class="panel config-panel">
-                <p class="section-label">Painel do coordenador</p>
-                <h2>Histórico de movimentações</h2>
                 <p class="panel-copy">Acompanhe as saídas, entradas e pendências registradas no sistema.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="emprestimos" %}
@@ -65,7 +63,6 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Movimentações realizadas</p>
                         <h2>Histórico de movimentações</h2>
                     </div>
                     <div class="topbar-actions">
@@ -92,18 +89,24 @@
                 </form>
 
                 <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Busca</span>
-                        <strong>{{ busca|default:"Todos os registros" }}</strong>
-                    </div>
-                    <div class="info-chip">
-                        <span>Status</span>
-                        <strong>{{ status_label }}</strong>
-                    </div>
-                    <div class="info-chip">
-                        <span>Movimentação</span>
-                        <strong>{{ movimentacao_label }}</strong>
-                    </div>
+                    {% if busca %}
+                        <div class="info-chip">
+                            <span>Busca</span>
+                            <strong>{{ busca }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if status_atual %}
+                        <div class="info-chip">
+                            <span>Status</span>
+                            <strong>{{ status_label }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if movimentacao_atual %}
+                        <div class="info-chip">
+                            <span>Movimentação</span>
+                            <strong>{{ movimentacao_label }}</strong>
+                        </div>
+                    {% endif %}
                     <div class="info-chip">
                         <span>Resultado</span>
                         <strong>{{ page_obj.paginator.count }} registro(s)</strong>
@@ -119,7 +122,6 @@
                                 <th>Turma</th>
                                 <th>Movimentação</th>
                                 <th>Pacote</th>
-                                <th>Origem</th>
                                 <th>Status</th>
                                 <th>Ações</th>
                             </tr>
@@ -133,14 +135,12 @@
                                     </td>
                                     <td>
                                         <strong>{{ registro.aluno_nome }}</strong>
-                                        <span class="cell-muted">{{ registro.aluno_codigo_externo|default:"Sem código" }}</span>
                                     </td>
                                     <td>{{ registro.turma_nome|default:"-" }}</td>
                                     <td>
                                         <strong>{{ registro.get_tipo_display }}</strong>
                                     </td>
                                     <td>{{ registro.pacote_codigo }}</td>
-                                    <td>{{ registro.get_origem_display }}</td>
                                     <td>
                                         <span class="badge badge-{{ registro.status_classe }}">
                                             {{ registro.status_label }}
@@ -153,21 +153,20 @@
                                             <button
                                                 class="button compact-button {% if registro.retirado %}secondary{% else %}primary{% endif %}"
                                                 type="submit"
-                                                title="{% if registro.retirado is None %}Marcar como retirado{% elif registro.retirado %}Marcar como não retirado{% else %}Remover status{% endif %}"
                                             >
-                                                {% if registro.retirado %}&#10003;{% else %}&#9744;{% endif %}
+                                                {% if registro.retirado %}Retirado{% else %}Confirmar{% endif %}
                                             </button>
                                         </form>
                                         <form method="post" action="{% url 'excluir_movimentacao' registro.pk %}" class="inline-form" onsubmit="return confirm('Excluir esta movimentação de {{ registro.aluno_nome|escapejs }}?')">
                                             {% csrf_token %}
                                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                            <button class="button compact-button danger-button" type="submit" title="Excluir movimentação">&#10005;</button>
+                                            <button class="button compact-button danger-button" type="submit">Excluir</button>
                                         </form>
                                     </td>
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="8">
+                                    <td colspan="7">
                                         <div class="empty-state">
                                             <strong>Nenhuma movimentação encontrada.</strong>
                                             <p>Revise a busca ou limpe os filtros para consultar todas as movimentações registradas.</p>
