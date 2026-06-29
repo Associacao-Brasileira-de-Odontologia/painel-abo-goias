@@ -243,6 +243,11 @@ def portal(request: HttpRequest) -> HttpResponse:
         atividade_recente, key=lambda a: a["data"], reverse=True
     )[:8]
 
+    # Ponto único de controle de visibilidade dos apps no portal.
+    # Quando grupos de permissão forem implementados, basta filtrar este set
+    # com base em request.user.groups — o template não precisa mudar.
+    apps_disponiveis = {"cme", "lab", "bancadas", "contratos"}
+
     return render(
         request,
         "gestao_cme/portal.html",
@@ -251,6 +256,7 @@ def portal(request: HttpRequest) -> HttpResponse:
             "resumo": resumo,
             "tarefas_pendentes": tarefas_pendentes,
             "atividade_recente": atividade_recente,
+            "apps_disponiveis": apps_disponiveis,
         },
     )
 

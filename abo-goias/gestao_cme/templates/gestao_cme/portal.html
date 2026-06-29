@@ -10,12 +10,18 @@
 {% block content %}
     <main class="portal-shell">
 
-        {# ── Hero: saudação + tarefas pendentes + ações rápidas ────── #}
+        {# ── Hero: saudação + resumo contextual ───────────────────────── #}
         <section class="portal-hero">
             <div class="portal-hero-copy">
                 <p class="section-label">ABO Goiás</p>
                 <h2>Olá, {{ usuario_logado.first_name|default:usuario_logado.username }}</h2>
-                <p class="portal-intro">Sistemas internos da Associação Brasileira de Odontologia — Goiás.</p>
+                <p class="portal-intro">
+                    {% if usuario_logado.is_staff %}
+                        Visão geral dos sistemas internos — todos os módulos.
+                    {% else %}
+                        Sistemas internos da Associação Brasileira de Odontologia — Goiás.
+                    {% endif %}
+                </p>
 
                 {# Tarefas que requerem atenção #}
                 {% if tarefas_pendentes %}
@@ -44,49 +50,63 @@
                 {% endif %}
             </div>
 
-            {# Ações rápidas #}
+            {# Resumo operacional + ações contextuais #}
             <div class="portal-brand-card">
-                <div>
-                    <p class="section-label">Ações rápidas</p>
-                    <h2>Registrar</h2>
-                </div>
+                <h2>Resumo operacional</h2>
 
                 <div class="portal-status-grid">
-                    <div class="portal-status-item">
-                        <span>Empréstimos abertos</span>
-                        <strong {% if resumo.emp_atrasados %}style="color:#ff9e9e"{% endif %}>
-                            {{ resumo.emprestimos_abertos }}
-                            {% if resumo.emp_atrasados %}
-                                <span style="font-size:0.75rem; font-weight:400;">({{ resumo.emp_atrasados }} em atraso)</span>
-                            {% endif %}
-                        </strong>
-                    </div>
-                    <div class="portal-status-item">
-                        <span>Pedidos de lab ativos</span>
-                        <strong>{{ resumo.lab_pedidos_ativos }}</strong>
-                    </div>
-                    <div class="portal-status-item">
-                        <span>Contratos gerados</span>
-                        <strong>{{ resumo.contratos_gerados }}</strong>
-                    </div>
-                    <div class="portal-status-item">
-                        <span>Turmas cadastradas</span>
-                        <strong>{{ resumo.turmas }}</strong>
-                    </div>
+                    {% if 'cme' in apps_disponiveis %}
+                        <div class="portal-status-item">
+                            <span>Empréstimos abertos</span>
+                            <strong {% if resumo.emp_atrasados %}style="color:#ff9e9e"{% endif %}>
+                                {{ resumo.emprestimos_abertos }}
+                                {% if resumo.emp_atrasados %}
+                                    <span style="font-size:0.75rem; font-weight:400;">({{ resumo.emp_atrasados }} em atraso)</span>
+                                {% endif %}
+                            </strong>
+                        </div>
+                    {% endif %}
+                    {% if 'lab' in apps_disponiveis %}
+                        <div class="portal-status-item">
+                            <span>Pedidos de lab ativos</span>
+                            <strong>{{ resumo.lab_pedidos_ativos }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if 'contratos' in apps_disponiveis %}
+                        <div class="portal-status-item">
+                            <span>Contratos gerados</span>
+                            <strong>{{ resumo.contratos_gerados }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if 'bancadas' in apps_disponiveis %}
+                        <div class="portal-status-item">
+                            <span>Turmas cadastradas</span>
+                            <strong>{{ resumo.turmas }}</strong>
+                        </div>
+                    {% endif %}
                 </div>
 
-                <div class="portal-quick-links">
-                    <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída de material</a>
-                    <a class="button secondary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
-                </div>
+                {# Ações rápidas: contextuais por perfil #}
+                {% if usuario_logado.is_staff %}
+                    <div class="portal-quick-links">
+                        <a class="button secondary" href="/admin/">Gerenciar usuários</a>
+                    </div>
+                {% else %}
+                    {% if 'cme' in apps_disponiveis %}
+                        <div class="portal-quick-links">
+                            <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída de material</a>
+                            <a class="button secondary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
+                        </div>
+                    {% endif %}
+                {% endif %}
             </div>
         </section>
 
-        {# ── Painel: atividade recente + sistemas ─────────────────── #}
+        {# ── Painel: atividade recente + sistemas ─────────────────────── #}
         <section class="portal-panel panel">
             <div class="activity-feed">
                 <div class="activity-heading">
-                    <p class="section-label">Atividade recente</p>
+                    <h2>Atividade recente</h2>
                 </div>
 
                 <div class="activity-list" aria-label="Atividade recente no sistema">
@@ -112,71 +132,82 @@
 
             <div class="portal-systems">
                 <div class="portal-systems-heading">
-                    <p class="section-label">Ferramentas</p>
+                    <h2>Sistemas</h2>
                 </div>
 
                 <div class="system-grid">
-                    <a class="system-card primary-system" href="{% url 'cme_dashboard' %}">
-                        <span>CME</span>
-                        <strong>Controle de Materiais</strong>
-                        <p>Saídas, devoluções, empréstimos e kits de materiais odontológicos.</p>
-                        <div class="system-meta">
-                            <span>{{ resumo.materiais }} materiais cadastrados</span>
-                            <em>
-                                Acessar
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                </svg>
-                            </em>
-                        </div>
-                    </a>
-                    <a class="system-card" href="{% url 'lab_dashboard' %}">
-                        <span>Laboratório</span>
-                        <strong>Pedidos e Moldagens</strong>
-                        <p>Pedidos de material para laboratórios externos e controle de faturamento.</p>
-                        <div class="system-meta">
-                            <span>
-                                {{ resumo.lab_pedidos_ativos }} pedido(s) em andamento
-                                {% if resumo.lab_pendentes_faturamento %}
-                                    · {{ resumo.lab_pendentes_faturamento }} sem faturamento
-                                {% endif %}
-                            </span>
-                            <em>
-                                Acessar
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                </svg>
-                            </em>
-                        </div>
-                    </a>
-                    <a class="system-card" href="{% url 'identificadores:index' %}">
-                        <span>Bancadas</span>
-                        <strong>Identificadores de Bancada</strong>
-                        <p>Geração de arquivos PPTX com identificadores por turma e modelo.</p>
-                        <div class="system-meta">
-                            <span>{{ resumo.turmas }} turma(s) disponível(is)</span>
-                            <em>
-                                Acessar
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                </svg>
-                            </em>
-                        </div>
-                    </a>
-                    <a class="system-card" href="{% url 'contratos' %}">
-                        <span>Contratos</span>
-                        <strong>Termos de Consentimento</strong>
-                        <p>Geração automática de termos a partir dos dados do Dental Office.</p>
-                        <div class="system-meta">
-                            <span>{{ resumo.contratos_gerados }} contrato(s) gerado(s)</span>
-                            <em>
-                                Acessar
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                </svg>
-                            </em>
-                        </div>
-                    </a>
+                    {% if 'cme' in apps_disponiveis %}
+                        <a class="system-card primary-system" href="{% url 'cme_dashboard' %}">
+                            <span>CME</span>
+                            <strong>Controle de Materiais</strong>
+                            <p>Saídas, devoluções, empréstimos e kits de materiais odontológicos.</p>
+                            <div class="system-meta">
+                                <span>{{ resumo.materiais }} materiais cadastrados</span>
+                                <em>
+                                    Acessar
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                                    </svg>
+                                </em>
+                            </div>
+                        </a>
+                    {% endif %}
+
+                    {% if 'lab' in apps_disponiveis %}
+                        <a class="system-card" href="{% url 'lab_dashboard' %}">
+                            <span>Laboratório</span>
+                            <strong>Pedidos e Moldagens</strong>
+                            <p>Pedidos de material para laboratórios externos e controle de faturamento.</p>
+                            <div class="system-meta">
+                                <span>
+                                    {{ resumo.lab_pedidos_ativos }} pedido(s) em andamento
+                                    {% if resumo.lab_pendentes_faturamento %}
+                                        · {{ resumo.lab_pendentes_faturamento }} sem faturamento
+                                    {% endif %}
+                                </span>
+                                <em>
+                                    Acessar
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                                    </svg>
+                                </em>
+                            </div>
+                        </a>
+                    {% endif %}
+
+                    {% if 'bancadas' in apps_disponiveis %}
+                        <a class="system-card" href="{% url 'identificadores:index' %}">
+                            <span>Bancadas</span>
+                            <strong>Identificadores de Bancada</strong>
+                            <p>Geração de arquivos PPTX com identificadores por turma e modelo.</p>
+                            <div class="system-meta">
+                                <span>{{ resumo.turmas }} turma(s) disponível(is)</span>
+                                <em>
+                                    Acessar
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                                    </svg>
+                                </em>
+                            </div>
+                        </a>
+                    {% endif %}
+
+                    {% if 'contratos' in apps_disponiveis %}
+                        <a class="system-card" href="{% url 'contratos' %}">
+                            <span>Contratos</span>
+                            <strong>Termos de Consentimento</strong>
+                            <p>Geração automática de termos a partir dos dados do Dental Office.</p>
+                            <div class="system-meta">
+                                <span>{{ resumo.contratos_gerados }} contrato(s) gerado(s)</span>
+                                <em>
+                                    Acessar
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                                    </svg>
+                                </em>
+                            </div>
+                        </a>
+                    {% endif %}
                 </div>
             </div>
         </section>
