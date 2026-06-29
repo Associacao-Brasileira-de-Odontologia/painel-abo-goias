@@ -8,6 +8,7 @@ from .models import (
     Aluno,
     Kit,
     Material,
+    Movimentacao,
     OrigemDados,
     Turma,
 )
@@ -190,6 +191,35 @@ class MaterialEditForm(MaterialForm):
 
     class Meta(MaterialForm.Meta):
         fields = [*MaterialForm.Meta.fields, "ativo"]
+
+
+class EditarMovimentacaoForm(forms.ModelForm):
+    """Permite editar campos de uma movimentacao existente."""
+
+    data_hora = forms.DateTimeField(
+        required=True,
+        input_formats=["%Y-%m-%dT%H:%M"],
+        error_messages={
+            "invalid": "Data e hora inválidas.",
+            "required": "Informe a data e hora.",
+        },
+    )
+
+    class Meta:
+        model = Movimentacao
+        fields = ["pacote_codigo", "data_hora", "observacoes"]
+        error_messages = {
+            "pacote_codigo": {
+                "required": "Informe o código do pacote.",
+                "max_length": "O código do pacote deve ter no máximo 40 caracteres.",
+            },
+        }
+
+    def clean_data_hora(self) -> object:
+        data_hora = self.cleaned_data.get("data_hora")
+        if data_hora and timezone.is_naive(data_hora):
+            return timezone.make_aware(data_hora)
+        return data_hora
 
 
 class EntradaForm(forms.Form):

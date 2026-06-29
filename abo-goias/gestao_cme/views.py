@@ -21,6 +21,7 @@ from .forms import (
     AbrigoForm,
     CadastrarAlunoForm,
     CadastrarTurmaForm,
+    EditarMovimentacaoForm,
     EmprestimoForm,
     EntradaForm,
     MaterialEditForm,
@@ -713,7 +714,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
     """Registra em lote a entrada de N pacotes de um aluno para esterilizacao.
 
     Cria um registro Movimentacao(ENTRADA, retirado=False) para cada pacote.
-    Os codigos sao gerados automaticamente no formato AAAAMMDD-{aluno_pk}-{n}.
+    Os codigos seguem a sequencia numerica global: max(codigos numericos) + n.
     Avisa quando o aluno nao tem abrigo cadastrado, mas nao bloqueia o registro.
     """
     form = EntradaForm(request.POST or None)
@@ -728,17 +729,17 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
         if not aluno.abrigo:
             aluno_sem_abrigo = True
 
-        # Conta pacotes existentes do aluno na mesma data para gerar sequencia
-        existentes = Movimentacao.objects.filter(
-            aluno=aluno,
-            tipo=Movimentacao.Tipo.ENTRADA,
-            data_hora__date=data_hora.date(),
-        ).count()
+        # Continua a sequencia numerica global dos pacotes existentes
+        codigos_existentes = Movimentacao.objects.values_list(
+            "pacote_codigo", flat=True
+        )
+        max_seq = 0
+        for codigo in codigos_existentes:
+            if str(codigo).isdigit():
+                max_seq = max(max_seq, int(codigo))
 
-        prefixo = f"{data_hora.strftime('%Y%m%d')}-{aluno.pk}"
         with transaction.atomic():
             for i in range(1, quantidade + 1):
-                seq = existentes + i
                 Movimentacao.objects.create(
                     data_hora=data_hora,
                     tipo=Movimentacao.Tipo.ENTRADA,
@@ -747,7 +748,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
                     aluno_nome=aluno.nome,
                     aluno_codigo_externo=aluno.matricula,
                     turma_nome=aluno.turma.nome if aluno.turma else "",
-                    pacote_codigo=f"{prefixo}-{seq:02d}",
+                    pacote_codigo=str(max_seq + i),
                     retirado=False,
                     arquivo_origem="painel",
                     row_hash=_gerar_row_hash(),
@@ -908,23 +909,85 @@ def alternar_retirado(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def excluir_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
-    """Remove permanentemente uma movimentacao do sistema."""
+    """Remove permanentemente uma movimentacao do sistema.
+
+    Quando a movimentacao excluida e do tipo SAIDA, restaura o registro de
+    ENTRADA correspondente (mesmo aluno e mesmo pacote_codigo) para retirado=False,
+    sinalizando que o pacote voltou a aguardar retirada.
+    """
 
     try:
-        mov = Movimentacao.objects.get(pk=pk)
+        mov = Movimentacao.objects.select_related("aluno").get(pk=pk)
     except Movimentacao.DoesNotExist:
         messages.error(request, "Movimentação não encontrada.")
         return redirect("cme_home")
 
     nome = mov.aluno_nome or "Aluno não informado"
     pacote = mov.pacote_codigo
-    mov.delete()
-    messages.success(request, f"Movimentação de {nome} — pacote {pacote} — excluída.")
+    tipo = mov.tipo
+
+    if tipo == Movimentacao.Tipo.SAIDA:
+        # Restaura entradas correspondentes para "nao retirado"
+        restauradas = Movimentacao.objects.filter(
+            pacote_codigo=pacote,
+            aluno=mov.aluno,
+            tipo=Movimentacao.Tipo.ENTRADA,
+            retirado=True,
+        ).update(retirado=False)
+        mov.delete()
+        msg = f"Saída do pacote {pacote} de {nome} excluída."
+        if restauradas:
+            msg += " O registro de entrada voltou para 'Não retirado'."
+        messages.warning(request, msg)
+    else:
+        mov.delete()
+        messages.success(request, f"Registro do pacote {pacote} de {nome} excluído.")
 
     next_url = request.POST.get("next", "")
     if next_url.startswith("/"):
         return HttpResponseRedirect(next_url)
     return redirect("cme_home")
+
+
+@login_required
+def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exibe e processa o formulario de edicao de uma movimentacao."""
+
+    mov = get_object_or_404(
+        Movimentacao.objects.select_related("aluno", "turma"), pk=pk
+    )
+
+    if request.method == "POST":
+        form = EditarMovimentacaoForm(request.POST, instance=mov)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Registro do pacote {mov.pacote_codigo} atualizado.",
+            )
+            return redirect("cme_home")
+    else:
+        form = EditarMovimentacaoForm(instance=mov)
+
+    if mov.retirado is True:
+        status_label, status_classe = "Retirado", "devolvido"
+    elif mov.retirado is False:
+        status_label, status_classe = "Não retirado", "atrasado"
+    else:
+        status_label, status_classe = "Sem status", "emprestado"
+
+    return render(
+        request,
+        "gestao_cme/editar_movimentacao.html",
+        {
+            "usuario_logado": request.user,
+            "form": form,
+            "mov": mov,
+            "status_label": status_label,
+            "status_classe": status_classe,
+            "active_page": "emprestimos",
+        },
+    )
 
 
 # ── Fase 2: cadastros manuais e sincronização por turma ──────────────────────

@@ -91,6 +91,11 @@ urlpatterns = [
         name="excluir_movimentacao",
     ),
     path(
+        "gestao-cme/<int:pk>/editar/",
+        views.editar_movimentacao,
+        name="editar_movimentacao",
+    ),
+    path(
         "alunos-por-turma/sincronizar-alunos/<int:turma_id>/",
         views.sincronizar_alunos_turma,
         name="sincronizar_alunos_turma",

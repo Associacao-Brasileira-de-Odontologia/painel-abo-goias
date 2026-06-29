@@ -123,7 +123,7 @@
                                 <th>Movimentação</th>
                                 <th>Pacote</th>
                                 <th>Status</th>
-                                <th>Ações</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -147,21 +147,10 @@
                                         </span>
                                     </td>
                                     <td class="actions-cell">
-                                        <form method="post" action="{% url 'alternar_retirado' registro.pk %}" class="inline-form">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                            <button
-                                                class="button compact-button {% if registro.retirado %}secondary{% else %}primary{% endif %}"
-                                                type="submit"
-                                            >
-                                                {% if registro.retirado %}Retirado{% else %}Confirmar{% endif %}
-                                            </button>
-                                        </form>
-                                        <form method="post" action="{% url 'excluir_movimentacao' registro.pk %}" class="inline-form" onsubmit="return confirm('Excluir esta movimentação de {{ registro.aluno_nome|escapejs }}?')">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                            <button class="button compact-button danger-button" type="submit">Excluir</button>
-                                        </form>
+                                        <a class="button compact-button secondary"
+                                           href="{% url 'editar_movimentacao' registro.pk %}">
+                                            Editar
+                                        </a>
                                     </td>
                                 </tr>
                             {% empty %}
