@@ -52,7 +52,6 @@
             <section class="panel results-panel">
                 <div class="results-topbar">
                     <div>
-                        <p class="section-label">Estoque físico</p>
                         <h2>Mapa dos abrigos</h2>
                     </div>
                     <div class="topbar-actions">
@@ -75,14 +74,18 @@
                 </form>
 
                 <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Busca</span>
-                        <strong>{{ busca|default:"Todos os registros" }}</strong>
-                    </div>
-                    <div class="info-chip">
-                        <span>Ocupação</span>
-                        <strong>{{ ocupacao_label }}</strong>
-                    </div>
+                    {% if busca %}
+                        <div class="info-chip">
+                            <span>Busca</span>
+                            <strong>{{ busca }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if ocupacao_atual %}
+                        <div class="info-chip">
+                            <span>Ocupação</span>
+                            <strong>{{ ocupacao_label }}</strong>
+                        </div>
+                    {% endif %}
                     <div class="info-chip">
                         <span>Resultado</span>
                         <strong>{{ page_obj.paginator.count }} registro(s)</strong>
@@ -95,8 +98,7 @@
                             <tr>
                                 <th>Identificador</th>
                                 <th>Ocupação</th>
-                                <th>Origem</th>
-                                <th>Ultima sincronizacao</th>
+                                <th>Última sincronização</th>
                                 <th>Status</th>
                                 <th>Ações</th>
                             </tr>
@@ -112,7 +114,6 @@
                                             <span class="badge badge-devolvido">Livre</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ abrigo.get_origem_display }}</td>
                                     <td>{{ abrigo.ultima_sincronizacao|date:"d/m/Y H:i"|default:"-" }}</td>
                                     <td>
                                         {% if abrigo.ativo %}
@@ -127,7 +128,7 @@
                                 </tr>
                             {% empty %}
                                 <tr class="empty-row">
-                                    <td colspan="6">
+                                    <td colspan="5">
                                         <div class="empty-state">
                                             <strong>Nenhum abrigo encontrado.</strong>
                                             <p>Revise o identificador buscado ou limpe os filtros de ocupação para visualizar todos os abrigos.</p>
