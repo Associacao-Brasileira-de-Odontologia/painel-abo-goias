@@ -332,11 +332,10 @@ def home(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def alunos_por_turma(request: HttpRequest) -> HttpResponse:
-    """Exibe alunos agrupados por turma com filtros e acao de sincronizacao.
+    """Exibe alunos agrupados por turma com filtros, abrigo e contagem de movimentacoes.
 
-    A view lista cadastros academicos ativos, respeitando a visibilidade do
-    usuario logado. Tambem calcula metricas da listagem, turmas disponiveis
-    para filtro e a data mais recente de sincronizacao com fontes externas.
+    A view lista cadastros academicos ativos com o abrigo associado a cada aluno
+    (editavel inline) e o total de movimentacoes registradas.
     """
 
     busca = request.GET.get("q", "").strip()
@@ -345,7 +344,13 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     alunos = (
         Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
         .exclude(turma__origem=OrigemDados.EXEMPLO)
-        .select_related("turma")
+        .select_related("turma", "abrigo")
+        .annotate(
+            total_movimentacoes=Count(
+                "movimentacoes",
+                filter=~Q(movimentacoes__origem=OrigemDados.EXEMPLO),
+            )
+        )
         .order_by("turma__nome", "nome")
     )
     if turma_id.isdigit():
@@ -360,29 +365,10 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         )
 
     page_obj, query_string = paginar_queryset(request, alunos)
-    rows = [
-        {
-            "cells": [
-                {
-                    "primary": aluno.turma.nome if aluno.turma else "Sem turma",
-                    "secondary": aluno.turma.codigo if aluno.turma else "",
-                },
-                {"primary": aluno.nome, "secondary": aluno.matricula},
-                {"primary": aluno.email or "-", "secondary": aluno.telefone or ""},
-                {
-                    "badge": "Ativo" if aluno.ativo else "Inativo",
-                    "badge_class": (
-                        "badge-devolvido" if aluno.ativo else "badge-atrasado"
-                    ),
-                },
-            ]
-        }
-        for aluno in page_obj.object_list
-    ]
 
     turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
+    abrigos = Abrigo.objects.filter(ativo=True).order_by("identificador")
 
-    # Resolve turma selecionada para habilitar sincronizacao por turma
     turma_selecionada = None
     if turma_id.isdigit():
         try:
@@ -402,36 +388,30 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         ultima=Max("ultima_sincronizacao")
     )["ultima"]
     datas_sincronizacao = [
-        data
-        for data in (ultima_sincronizacao_alunos, ultima_sincronizacao_turmas)
-        if data
+        d for d in (ultima_sincronizacao_alunos, ultima_sincronizacao_turmas) if d
     ]
     ultima_sincronizacao = max(datas_sincronizacao) if datas_sincronizacao else None
 
-    metricas = [
-        {"label": "Alunos", "value": alunos_base.count()},
-        {"label": "Turmas", "value": turmas_base.count()},
-        {"label": "Ativos", "value": alunos_base.filter(ativo=True).count()},
-        {"label": "Filtrados", "value": page_obj.paginator.count},
-    ]
+    sem_abrigo = alunos_base.filter(ativo=True, abrigo__isnull=True).count()
 
     return render(
         request,
-        "gestao_cme/listagem.html",
+        "gestao_cme/alunos_por_turma.html",
         {
             "usuario_logado": request.user,
-            "titulo": "Alunos por turma",
-            "subtitulo": "Consulte os alunos vinculados a cada turma da pós-graduação.",
-            "section_label": "Cadastros acadêmicos",
             "active_page": "alunos",
             "busca": busca,
-            "metricas": metricas,
-            "table_headers": ["Turma", "Aluno", "Contato", "Status"],
-            "rows": rows,
+            "turma_id": turma_id,
+            "turmas": turmas,
+            "turma_selecionada": turma_selecionada,
+            "abrigos": abrigos,
             "page_obj": page_obj,
             "query_string": query_string,
-            "empty_message": "Nenhum aluno encontrado.",
-            "sync_action_url": "sincronizar_turmas_eduq",
+            "ultima_sincronizacao": ultima_sincronizacao,
+            "total_alunos": alunos_base.count(),
+            "total_turmas": turmas_base.count(),
+            "total_ativos": alunos_base.filter(ativo=True).count(),
+            "sem_abrigo": sem_abrigo,
             "sync_alunos_url": (
                 reverse(
                     "sincronizar_alunos_turma",
@@ -445,20 +425,33 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
                 if turma_selecionada
                 else None
             ),
-            "cadastrar_aluno_url": reverse("cadastrar_aluno"),
-            "cadastrar_turma_url": reverse("cadastrar_turma"),
-            "ultima_sincronizacao": ultima_sincronizacao,
-            "filter_select": {
-                "name": "turma",
-                "label": "Turma",
-                "value": turma_id,
-                "options": [
-                    {"value": str(turma.pk), "label": f"{turma.codigo} - {turma.nome}"}
-                    for turma in turmas
-                ],
-            },
         },
     )
+
+
+@login_required
+@require_POST
+def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
+    """Atribui ou remove o abrigo de um aluno diretamente na listagem."""
+
+    aluno = get_object_or_404(
+        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO), pk=aluno_id
+    )
+    abrigo_id = request.POST.get("abrigo_id", "").strip()
+
+    if abrigo_id:
+        abrigo = get_object_or_404(Abrigo, pk=abrigo_id, ativo=True)
+        aluno.abrigo = abrigo
+        messages.success(
+            request, f"Abrigo {abrigo.identificador} atribuído a {aluno.nome}."
+        )
+    else:
+        aluno.abrigo = None
+        messages.success(request, f"Abrigo removido de {aluno.nome}.")
+
+    aluno.save(update_fields=["abrigo"])
+    next_url = request.POST.get("next") or reverse("alunos_por_turma")
+    return redirect(next_url)
 
 
 @login_required
