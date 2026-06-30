@@ -2,6 +2,7 @@
 
 import hashlib
 import uuid
+from datetime import datetime
 from typing import Any
 
 from django.contrib import messages
@@ -340,6 +341,7 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
 
     busca = request.GET.get("q", "").strip()
     turma_id = request.GET.get("turma", "").strip()
+    status_aluno = request.GET.get("status", "ativo").strip()
 
     alunos = (
         Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
@@ -353,6 +355,12 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         )
         .order_by("turma__nome", "nome")
     )
+
+    if status_aluno == "ativo":
+        alunos = alunos.filter(ativo=True)
+    elif status_aluno == "inativo":
+        alunos = alunos.filter(ativo=False)
+
     if turma_id.isdigit():
         alunos = alunos.filter(turma_id=turma_id)
     if busca:
@@ -402,6 +410,7 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             "active_page": "alunos",
             "busca": busca,
             "turma_id": turma_id,
+            "status_aluno": status_aluno,
             "turmas": turmas,
             "turma_selecionada": turma_selecionada,
             "abrigos": abrigos,
@@ -1353,7 +1362,41 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
     """Exibe metricas consolidadas e atividade recente da gestao de CME."""
 
     hoje = timezone.now().date()
+
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
+
+    # Padrão: mês atual quando nenhum filtro é informado
+    if not data_inicio_str and not data_fim_str:
+        data_inicio_str = hoje.replace(day=1).strftime("%d/%m/%Y")
+        data_fim_str = hoje.strftime("%d/%m/%Y")
+
+    data_inicio = None
+    data_fim = None
+
+    if data_inicio_str:
+        try:
+            data_inicio = timezone.make_aware(
+                datetime.strptime(data_inicio_str, "%d/%m/%Y")
+            )
+        except ValueError:
+            data_inicio_str = ""
+
+    if data_fim_str:
+        try:
+            dt_fim = datetime.strptime(data_fim_str, "%d/%m/%Y").replace(
+                hour=23, minute=59, second=59
+            )
+            data_fim = timezone.make_aware(dt_fim)
+        except ValueError:
+            data_fim_str = ""
+
     mov_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
+
+    if data_inicio:
+        mov_base = mov_base.filter(data_hora__gte=data_inicio)
+    if data_fim:
+        mov_base = mov_base.filter(data_hora__lte=data_fim)
 
     metricas_mov = {
         "total": mov_base.count(),
@@ -1409,6 +1452,13 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "active_page": "dashboard",
             "hoje": hoje,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "filtro_ativo": bool(
+                request.GET.get("data_inicio") or request.GET.get("data_fim")
+            ),
             "metricas_mov": metricas_mov,
             "pacotes_aguardando": pacotes_aguardando,
             "atividade_recente": atividade_recente,

@@ -19,6 +19,14 @@
                         <input type="hidden" name="q" value="{{ busca }}">
                     {% endif %}
                     <div class="field">
+                        <label for="sel-status">Status</label>
+                        <select id="sel-status" name="status">
+                            <option value="ativo" {% if status_aluno == "ativo" %}selected{% endif %}>Somente ativos</option>
+                            <option value="inativo" {% if status_aluno == "inativo" %}selected{% endif %}>Somente inativos</option>
+                            <option value="todos" {% if status_aluno == "todos" %}selected{% endif %}>Todos</option>
+                        </select>
+                    </div>
+                    <div class="field">
                         <label for="sel-turma">Turma</label>
                         <select id="sel-turma" name="turma">
                             <option value="">Todas as turmas</option>
@@ -89,6 +97,9 @@
                     {% if turma_id %}
                         <input type="hidden" name="turma" value="{{ turma_id }}">
                     {% endif %}
+                    {% if status_aluno and status_aluno != "ativo" %}
+                        <input type="hidden" name="status" value="{{ status_aluno }}">
+                    {% endif %}
                     <label class="search-label" for="results-q-alunos">Buscar aluno</label>
                     <div class="results-search-row">
                         <div class="search-control">
@@ -103,6 +114,15 @@
 
                 {# Chips de resumo #}
                 <div class="selection-summary">
+                    <div class="info-chip">
+                        <span>Exibindo</span>
+                        <strong>
+                            {% if status_aluno == "ativo" %}Ativos
+                            {% elif status_aluno == "inativo" %}Inativos
+                            {% else %}Todos
+                            {% endif %}
+                        </strong>
+                    </div>
                     {% if busca %}
                         <div class="info-chip">
                             <span>Busca</span>

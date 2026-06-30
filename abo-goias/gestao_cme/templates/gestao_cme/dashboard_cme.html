@@ -12,6 +12,29 @@
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="dashboard" %}
 
+                <form class="form-stack" method="get">
+                    <div class="field">
+                        <label for="data_inicio">De</label>
+                        <input type="text" id="data_inicio" name="data_inicio"
+                               value="{{ data_inicio_str }}"
+                               placeholder="dd/mm/aaaa"
+                               maxlength="10"
+                               pattern="\d{2}/\d{2}/\d{4}">
+                    </div>
+                    <div class="field">
+                        <label for="data_fim">Até</label>
+                        <input type="text" id="data_fim" name="data_fim"
+                               value="{{ data_fim_str }}"
+                               placeholder="dd/mm/aaaa"
+                               maxlength="10"
+                               pattern="\d{2}/\d{2}/\d{4}">
+                    </div>
+                    <button class="button primary" type="submit">Aplicar</button>
+                    {% if filtro_ativo %}
+                        <a class="button secondary" href="{% url 'cme_dashboard' %}">Mês atual</a>
+                    {% endif %}
+                </form>
+
                 <div class="panel-quick-actions">
                     <a class="button primary" href="{% url 'registrar_saida' %}">Registrar saída</a>
                     <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
@@ -22,6 +45,25 @@
                 <div class="results-topbar">
                     <div>
                         <h2>Visão geral da CME</h2>
+                    </div>
+                </div>
+
+                <div class="selection-summary">
+                    {% if data_inicio %}
+                        <div class="info-chip">
+                            <span>De</span>
+                            <strong>{{ data_inicio|date:"d/m/Y" }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if data_fim %}
+                        <div class="info-chip">
+                            <span>Até</span>
+                            <strong>{{ data_fim|date:"d/m/Y" }}</strong>
+                        </div>
+                    {% endif %}
+                    <div class="info-chip">
+                        <span>Total no período</span>
+                        <strong>{{ metricas_mov.total }} registro(s)</strong>
                     </div>
                 </div>
 
