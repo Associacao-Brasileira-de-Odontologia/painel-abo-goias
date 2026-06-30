@@ -6,6 +6,7 @@ e expoe um cliente HTTP base para os servicos de sincronizacao usarem.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -157,6 +158,36 @@ class DentalClient:
         return self._get_autenticado(f"users?{params}")
 
     # ------------------------------------------------------------------
+    # Documentos
+    # ------------------------------------------------------------------
+
+    def enviar_documento_paciente(
+        self,
+        id_dental: int | str,
+        arquivo_bytes: bytes,
+        nome: str,
+        descricao: str = "",
+        tag_list: str = "contrato",
+    ) -> dict[str, Any]:
+        """Envia um documento para a ficha do paciente no Dental Office.
+
+        O arquivo e convertido para Base64 conforme exigido pelo endpoint
+        POST /customers/{id}/docs. Retorna o JSON de resposta da API.
+        """
+
+        arquivo_b64 = base64.b64encode(arquivo_bytes).decode("ascii")
+        payload = {
+            "customer_doc": {
+                "name": nome,
+                "description": descricao,
+                "file": arquivo_b64,
+                "tag_list": tag_list,
+            }
+        }
+        url = self.config.base_url.rstrip("/") + f"/customers/{id_dental}/docs"
+        return self._post_autenticado(url, payload)
+
+    # ------------------------------------------------------------------
     # Autenticacao
     # ------------------------------------------------------------------
 
@@ -201,6 +232,20 @@ class DentalClient:
                 cache.delete(self._cache_key)
                 token = self._renovar_token()
                 return self._get_json(path, token=token)
+            raise
+
+    def _post_autenticado(self, url: str, payload: dict[str, Any]) -> Any:
+        """Executa POST autenticado com URL absoluta, renovando token em 401/403."""
+
+        token = self._autenticar()
+        try:
+            return self._post_json(url, payload, token=token)
+        except DentalAPIError as exc:
+            mensagem = str(exc)
+            if "Erro HTTP 401" in mensagem or "Erro HTTP 403" in mensagem:
+                cache.delete(self._cache_key)
+                token = self._renovar_token()
+                return self._post_json(url, payload, token=token)
             raise
 
     def _get_json(self, path: str, token: str) -> Any:
