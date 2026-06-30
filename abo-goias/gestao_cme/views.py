@@ -2,6 +2,7 @@
 
 import hashlib
 import uuid
+from datetime import datetime
 from typing import Any
 
 from django.contrib import messages
@@ -21,6 +22,7 @@ from .forms import (
     AbrigoForm,
     CadastrarAlunoForm,
     CadastrarTurmaForm,
+    EditarMovimentacaoForm,
     EmprestimoForm,
     EntradaForm,
     MaterialEditForm,
@@ -331,22 +333,34 @@ def home(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def alunos_por_turma(request: HttpRequest) -> HttpResponse:
-    """Exibe alunos agrupados por turma com filtros e acao de sincronizacao.
+    """Exibe alunos agrupados por turma com filtros, abrigo e contagem de movimentacoes.
 
-    A view lista cadastros academicos ativos, respeitando a visibilidade do
-    usuario logado. Tambem calcula metricas da listagem, turmas disponiveis
-    para filtro e a data mais recente de sincronizacao com fontes externas.
+    A view lista cadastros academicos ativos com o abrigo associado a cada aluno
+    (editavel inline) e o total de movimentacoes registradas.
     """
 
     busca = request.GET.get("q", "").strip()
     turma_id = request.GET.get("turma", "").strip()
+    status_aluno = request.GET.get("status", "ativo").strip()
 
     alunos = (
         Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
         .exclude(turma__origem=OrigemDados.EXEMPLO)
-        .select_related("turma")
+        .select_related("turma", "abrigo")
+        .annotate(
+            total_movimentacoes=Count(
+                "movimentacoes",
+                filter=~Q(movimentacoes__origem=OrigemDados.EXEMPLO),
+            )
+        )
         .order_by("turma__nome", "nome")
     )
+
+    if status_aluno == "ativo":
+        alunos = alunos.filter(ativo=True)
+    elif status_aluno == "inativo":
+        alunos = alunos.filter(ativo=False)
+
     if turma_id.isdigit():
         alunos = alunos.filter(turma_id=turma_id)
     if busca:
@@ -359,29 +373,10 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         )
 
     page_obj, query_string = paginar_queryset(request, alunos)
-    rows = [
-        {
-            "cells": [
-                {
-                    "primary": aluno.turma.nome if aluno.turma else "Sem turma",
-                    "secondary": aluno.turma.codigo if aluno.turma else "",
-                },
-                {"primary": aluno.nome, "secondary": aluno.matricula},
-                {"primary": aluno.email or "-", "secondary": aluno.telefone or ""},
-                {
-                    "badge": "Ativo" if aluno.ativo else "Inativo",
-                    "badge_class": (
-                        "badge-devolvido" if aluno.ativo else "badge-atrasado"
-                    ),
-                },
-            ]
-        }
-        for aluno in page_obj.object_list
-    ]
 
     turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
+    abrigos = Abrigo.objects.filter(ativo=True).order_by("identificador")
 
-    # Resolve turma selecionada para habilitar sincronizacao por turma
     turma_selecionada = None
     if turma_id.isdigit():
         try:
@@ -401,36 +396,31 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         ultima=Max("ultima_sincronizacao")
     )["ultima"]
     datas_sincronizacao = [
-        data
-        for data in (ultima_sincronizacao_alunos, ultima_sincronizacao_turmas)
-        if data
+        d for d in (ultima_sincronizacao_alunos, ultima_sincronizacao_turmas) if d
     ]
     ultima_sincronizacao = max(datas_sincronizacao) if datas_sincronizacao else None
 
-    metricas = [
-        {"label": "Alunos", "value": alunos_base.count()},
-        {"label": "Turmas", "value": turmas_base.count()},
-        {"label": "Ativos", "value": alunos_base.filter(ativo=True).count()},
-        {"label": "Filtrados", "value": page_obj.paginator.count},
-    ]
+    sem_abrigo = alunos_base.filter(ativo=True, abrigo__isnull=True).count()
 
     return render(
         request,
-        "gestao_cme/listagem.html",
+        "gestao_cme/alunos_por_turma.html",
         {
             "usuario_logado": request.user,
-            "titulo": "Alunos por turma",
-            "subtitulo": "Consulte os alunos vinculados a cada turma da pós-graduação.",
-            "section_label": "Cadastros acadêmicos",
             "active_page": "alunos",
             "busca": busca,
-            "metricas": metricas,
-            "table_headers": ["Turma", "Aluno", "Contato", "Status"],
-            "rows": rows,
+            "turma_id": turma_id,
+            "status_aluno": status_aluno,
+            "turmas": turmas,
+            "turma_selecionada": turma_selecionada,
+            "abrigos": abrigos,
             "page_obj": page_obj,
             "query_string": query_string,
-            "empty_message": "Nenhum aluno encontrado.",
-            "sync_action_url": "sincronizar_turmas_eduq",
+            "ultima_sincronizacao": ultima_sincronizacao,
+            "total_alunos": alunos_base.count(),
+            "total_turmas": turmas_base.count(),
+            "total_ativos": alunos_base.filter(ativo=True).count(),
+            "sem_abrigo": sem_abrigo,
             "sync_alunos_url": (
                 reverse(
                     "sincronizar_alunos_turma",
@@ -444,20 +434,33 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
                 if turma_selecionada
                 else None
             ),
-            "cadastrar_aluno_url": reverse("cadastrar_aluno"),
-            "cadastrar_turma_url": reverse("cadastrar_turma"),
-            "ultima_sincronizacao": ultima_sincronizacao,
-            "filter_select": {
-                "name": "turma",
-                "label": "Turma",
-                "value": turma_id,
-                "options": [
-                    {"value": str(turma.pk), "label": f"{turma.codigo} - {turma.nome}"}
-                    for turma in turmas
-                ],
-            },
         },
     )
+
+
+@login_required
+@require_POST
+def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
+    """Atribui ou remove o abrigo de um aluno diretamente na listagem."""
+
+    aluno = get_object_or_404(
+        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO), pk=aluno_id
+    )
+    abrigo_id = request.POST.get("abrigo_id", "").strip()
+
+    if abrigo_id:
+        abrigo = get_object_or_404(Abrigo, pk=abrigo_id, ativo=True)
+        aluno.abrigo = abrigo
+        messages.success(
+            request, f"Abrigo {abrigo.identificador} atribuído a {aluno.nome}."
+        )
+    else:
+        aluno.abrigo = None
+        messages.success(request, f"Abrigo removido de {aluno.nome}.")
+
+    aluno.save(update_fields=["abrigo"])
+    next_url = request.POST.get("next") or reverse("alunos_por_turma")
+    return redirect(next_url)
 
 
 @login_required
@@ -713,7 +716,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
     """Registra em lote a entrada de N pacotes de um aluno para esterilizacao.
 
     Cria um registro Movimentacao(ENTRADA, retirado=False) para cada pacote.
-    Os codigos sao gerados automaticamente no formato AAAAMMDD-{aluno_pk}-{n}.
+    Os codigos seguem a sequencia numerica global: max(codigos numericos) + n.
     Avisa quando o aluno nao tem abrigo cadastrado, mas nao bloqueia o registro.
     """
     form = EntradaForm(request.POST or None)
@@ -728,17 +731,17 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
         if not aluno.abrigo:
             aluno_sem_abrigo = True
 
-        # Conta pacotes existentes do aluno na mesma data para gerar sequencia
-        existentes = Movimentacao.objects.filter(
-            aluno=aluno,
-            tipo=Movimentacao.Tipo.ENTRADA,
-            data_hora__date=data_hora.date(),
-        ).count()
+        # Continua a sequencia numerica global dos pacotes existentes
+        codigos_existentes = Movimentacao.objects.values_list(
+            "pacote_codigo", flat=True
+        )
+        max_seq = 0
+        for codigo in codigos_existentes:
+            if str(codigo).isdigit():
+                max_seq = max(max_seq, int(codigo))
 
-        prefixo = f"{data_hora.strftime('%Y%m%d')}-{aluno.pk}"
         with transaction.atomic():
             for i in range(1, quantidade + 1):
-                seq = existentes + i
                 Movimentacao.objects.create(
                     data_hora=data_hora,
                     tipo=Movimentacao.Tipo.ENTRADA,
@@ -747,7 +750,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
                     aluno_nome=aluno.nome,
                     aluno_codigo_externo=aluno.matricula,
                     turma_nome=aluno.turma.nome if aluno.turma else "",
-                    pacote_codigo=f"{prefixo}-{seq:02d}",
+                    pacote_codigo=str(max_seq + i),
                     retirado=False,
                     arquivo_origem="painel",
                     row_hash=_gerar_row_hash(),
@@ -908,23 +911,85 @@ def alternar_retirado(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def excluir_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
-    """Remove permanentemente uma movimentacao do sistema."""
+    """Remove permanentemente uma movimentacao do sistema.
+
+    Quando a movimentacao excluida e do tipo SAIDA, restaura o registro de
+    ENTRADA correspondente (mesmo aluno e mesmo pacote_codigo) para retirado=False,
+    sinalizando que o pacote voltou a aguardar retirada.
+    """
 
     try:
-        mov = Movimentacao.objects.get(pk=pk)
+        mov = Movimentacao.objects.select_related("aluno").get(pk=pk)
     except Movimentacao.DoesNotExist:
         messages.error(request, "Movimentação não encontrada.")
         return redirect("cme_home")
 
     nome = mov.aluno_nome or "Aluno não informado"
     pacote = mov.pacote_codigo
-    mov.delete()
-    messages.success(request, f"Movimentação de {nome} — pacote {pacote} — excluída.")
+    tipo = mov.tipo
+
+    if tipo == Movimentacao.Tipo.SAIDA:
+        # Restaura entradas correspondentes para "nao retirado"
+        restauradas = Movimentacao.objects.filter(
+            pacote_codigo=pacote,
+            aluno=mov.aluno,
+            tipo=Movimentacao.Tipo.ENTRADA,
+            retirado=True,
+        ).update(retirado=False)
+        mov.delete()
+        msg = f"Saída do pacote {pacote} de {nome} excluída."
+        if restauradas:
+            msg += " O registro de entrada voltou para 'Não retirado'."
+        messages.warning(request, msg)
+    else:
+        mov.delete()
+        messages.success(request, f"Registro do pacote {pacote} de {nome} excluído.")
 
     next_url = request.POST.get("next", "")
     if next_url.startswith("/"):
         return HttpResponseRedirect(next_url)
     return redirect("cme_home")
+
+
+@login_required
+def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exibe e processa o formulario de edicao de uma movimentacao."""
+
+    mov = get_object_or_404(
+        Movimentacao.objects.select_related("aluno", "turma"), pk=pk
+    )
+
+    if request.method == "POST":
+        form = EditarMovimentacaoForm(request.POST, instance=mov)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Registro do pacote {mov.pacote_codigo} atualizado.",
+            )
+            return redirect("cme_home")
+    else:
+        form = EditarMovimentacaoForm(instance=mov)
+
+    if mov.retirado is True:
+        status_label, status_classe = "Retirado", "devolvido"
+    elif mov.retirado is False:
+        status_label, status_classe = "Não retirado", "atrasado"
+    else:
+        status_label, status_classe = "Sem status", "emprestado"
+
+    return render(
+        request,
+        "gestao_cme/editar_movimentacao.html",
+        {
+            "usuario_logado": request.user,
+            "form": form,
+            "mov": mov,
+            "status_label": status_label,
+            "status_classe": status_classe,
+            "active_page": "emprestimos",
+        },
+    )
 
 
 # ── Fase 2: cadastros manuais e sincronização por turma ──────────────────────
@@ -1297,7 +1362,41 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
     """Exibe metricas consolidadas e atividade recente da gestao de CME."""
 
     hoje = timezone.now().date()
+
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
+
+    # Padrão: mês atual quando nenhum filtro é informado
+    if not data_inicio_str and not data_fim_str:
+        data_inicio_str = hoje.replace(day=1).strftime("%d/%m/%Y")
+        data_fim_str = hoje.strftime("%d/%m/%Y")
+
+    data_inicio = None
+    data_fim = None
+
+    if data_inicio_str:
+        try:
+            data_inicio = timezone.make_aware(
+                datetime.strptime(data_inicio_str, "%d/%m/%Y")
+            )
+        except ValueError:
+            data_inicio_str = ""
+
+    if data_fim_str:
+        try:
+            dt_fim = datetime.strptime(data_fim_str, "%d/%m/%Y").replace(
+                hour=23, minute=59, second=59
+            )
+            data_fim = timezone.make_aware(dt_fim)
+        except ValueError:
+            data_fim_str = ""
+
     mov_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
+
+    if data_inicio:
+        mov_base = mov_base.filter(data_hora__gte=data_inicio)
+    if data_fim:
+        mov_base = mov_base.filter(data_hora__lte=data_fim)
 
     metricas_mov = {
         "total": mov_base.count(),
@@ -1353,6 +1452,13 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "active_page": "dashboard",
             "hoje": hoje,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "filtro_ativo": bool(
+                request.GET.get("data_inicio") or request.GET.get("data_fim")
+            ),
             "metricas_mov": metricas_mov,
             "pacotes_aguardando": pacotes_aguardando,
             "atividade_recente": atividade_recente,

@@ -91,11 +91,21 @@ urlpatterns = [
         name="excluir_movimentacao",
     ),
     path(
+        "gestao-cme/<int:pk>/editar/",
+        views.editar_movimentacao,
+        name="editar_movimentacao",
+    ),
+    path(
         "alunos-por-turma/sincronizar-alunos/<int:turma_id>/",
         views.sincronizar_alunos_turma,
         name="sincronizar_alunos_turma",
     ),
     path("alunos-por-turma/novo/", views.cadastrar_aluno, name="cadastrar_aluno"),
+    path(
+        "alunos-por-turma/<int:aluno_id>/abrigo/",
+        views.atribuir_abrigo,
+        name="atribuir_abrigo",
+    ),
     path("turmas/nova/", views.cadastrar_turma, name="cadastrar_turma"),
     path("emprestimos/", views.emprestimos, name="emprestimos"),
     path("emprestimos/novo/", views.criar_emprestimo, name="criar_emprestimo"),
