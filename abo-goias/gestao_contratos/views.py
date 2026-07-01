@@ -42,14 +42,16 @@ def contratos(request: HttpRequest) -> HttpResponse:
 
     pacientes_api: list[dict] = []
     erro_api: str = ""
+    dental_pesquisado: bool = False
 
-    # Busca na API apenas quando DB retornou zero resultados com um termo ativo.
+    # Busca no Dental Office apenas quando DB retornou zero resultados.
     if busca and not pacientes_qs.exists():
         clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
         if clinic_id:
             try:
                 client = DentalClient()
                 resposta = client.listar_pacientes(clinic_id=clinic_id, q=busca)
+                dental_pesquisado = True
                 ids_locais = set(
                     Paciente.objects.filter(ativo=True).values_list(
                         "id_dental", flat=True
@@ -89,6 +91,7 @@ def contratos(request: HttpRequest) -> HttpResponse:
             "busca": busca,
             "total": total,
             "erro_api": erro_api,
+            "dental_pesquisado": dental_pesquisado,
         },
     )
 

@@ -81,11 +81,23 @@
                         <span>No sistema</span>
                         <strong>{{ total }} resultado(s)</strong>
                     </div>
-                    {% if pacientes_api %}
-                        <div class="info-chip">
-                            <span>No Dental Office</span>
-                            <strong>{{ pacientes_api|length }} resultado(s)</strong>
-                        </div>
+                    {% if dental_pesquisado %}
+                        {% if pacientes_api %}
+                            <div class="info-chip">
+                                <span>No Dental Office</span>
+                                <strong>{{ pacientes_api|length }} resultado(s)</strong>
+                            </div>
+                        {% elif erro_api %}
+                            <div class="info-chip" style="border-color: rgba(255,100,100,0.3);">
+                                <span>Dental Office</span>
+                                <strong style="color: #ff9e9e;">Erro na consulta</strong>
+                            </div>
+                        {% else %}
+                            <div class="info-chip" style="border-color: rgba(255,100,100,0.3);">
+                                <span>No Dental Office</span>
+                                <strong style="color: #ff9e9e;">Não encontrado</strong>
+                            </div>
+                        {% endif %}
                     {% endif %}
                 </div>
             {% else %}
@@ -224,12 +236,18 @@
                         {% if erro_api %}
                             <strong>Erro ao consultar o Dental Office</strong>
                             <p>{{ erro_api }}</p>
-                        {% elif busca %}
-                            <strong>Nenhum paciente encontrado para "{{ busca }}"</strong>
+                        {% elif busca and dental_pesquisado and not pacientes_api %}
+                            <strong>Paciente não cadastrado no Dental Office</strong>
                             <p>
-                                O nome não foi localizado no sistema nem no Dental Office.
-                                Verifique a grafia ou
+                                "{{ busca }}" não foi localizado no sistema nem no Dental Office.
+                                Verifique se o nome foi digitado corretamente ou
                                 <a href="{% url 'contratos' %}">limpe o filtro</a> para ver todos.
+                            </p>
+                        {% elif busca %}
+                            <strong>Nenhum resultado para "{{ busca }}"</strong>
+                            <p>
+                                Nenhum paciente encontrado no sistema com esse nome.
+                                <a href="{% url 'contratos' %}">Limpe o filtro</a> para ver todos.
                             </p>
                         {% else %}
                             <strong>Nenhum paciente no sistema</strong>
