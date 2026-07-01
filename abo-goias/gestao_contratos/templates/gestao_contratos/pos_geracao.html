@@ -107,51 +107,6 @@
                 </div>
             {% endif %}
 
-            {# ── Download ─────────────────────────────────────────── #}
-            <div class="kpi-section">
-                <p class="section-label">Baixar documento</p>
-                <p class="panel-copy">
-                    O contrato foi gerado e está disponível para download.
-                    Salve uma cópia antes de encaminhar ao paciente.
-                </p>
-                <div class="form-actions" style="margin-top: 12px; gap: 8px;">
-                    {% if contrato.arquivo_pdf %}
-                        <a class="button primary"
-                           href="{% url 'contrato_baixar_pdf' contrato.pk %}">
-                            Baixar contrato (.pdf)
-                        </a>
-                    {% endif %}
-                    <a class="button {% if contrato.arquivo_pdf %}secondary{% else %}primary{% endif %}"
-                       href="{% url 'contrato_baixar' contrato.pk %}">
-                        Baixar contrato (.docx)
-                    </a>
-                </div>
-            </div>
-
-            {# ── Envio por e-mail ─────────────────────────────────── #}
-            <div class="kpi-section">
-                <p class="section-label">Enviar por e-mail</p>
-                <p class="panel-copy">
-                    O documento será enviado como anexo ao endereço informado.
-                </p>
-                <form class="form-stack-wide" method="post"
-                      action="{% url 'contrato_enviar_email' contrato.pk %}">
-                    {% csrf_token %}
-                    <div class="field">
-                        <label for="id_email_dest">E-mail do paciente</label>
-                        <input id="id_email_dest" type="email" name="email_destinatario"
-                               value="{{ paciente.email }}"
-                               placeholder="email@exemplo.com"
-                               required>
-                    </div>
-                    <div class="form-actions">
-                        <button class="button primary" type="submit">
-                            Enviar por e-mail
-                        </button>
-                    </div>
-                </form>
-            </div>
-
             {# ── Envio por WhatsApp ───────────────────────────────── #}
             <div class="kpi-section">
                 <p class="section-label">Encaminhar pelo WhatsApp</p>
@@ -185,6 +140,51 @@
                         {% endif %}
                     </div>
                 </form>
+            </div>
+
+            {# ── Envio por e-mail ─────────────────────────────────── #}
+            <div class="kpi-section">
+                <p class="section-label">Enviar por e-mail</p>
+                <p class="panel-copy">
+                    O documento será enviado como anexo ao endereço informado.
+                </p>
+                <form class="form-stack-wide" method="post"
+                      action="{% url 'contrato_enviar_email' contrato.pk %}">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="id_email_dest">E-mail do paciente</label>
+                        <input id="id_email_dest" type="email" name="email_destinatario"
+                               value="{{ paciente.email }}"
+                               placeholder="email@exemplo.com"
+                               required>
+                    </div>
+                    <div class="form-actions">
+                        <button class="button primary" type="submit">
+                            Enviar por e-mail
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {# ── Download ─────────────────────────────────────────── #}
+            <div class="kpi-section">
+                <p class="section-label">Baixar documento</p>
+                <p class="panel-copy">
+                    O contrato foi gerado e está disponível para download.
+                    Salve uma cópia antes de encaminhar ao paciente.
+                </p>
+                <div class="form-actions" style="margin-top: 12px; gap: 8px;">
+                    {% if contrato.arquivo_pdf %}
+                        <a class="button primary"
+                           href="{% url 'contrato_baixar_pdf' contrato.pk %}">
+                            Baixar contrato (.pdf)
+                        </a>
+                    {% endif %}
+                    <a class="button {% if contrato.arquivo_pdf %}secondary{% else %}primary{% endif %}"
+                       href="{% url 'contrato_baixar' contrato.pk %}">
+                        Baixar contrato (.docx)
+                    </a>
+                </div>
             </div>
 
             {# ── Envio ao Dental Office ───────────────────────────── #}
