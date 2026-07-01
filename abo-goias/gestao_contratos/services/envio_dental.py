@@ -8,7 +8,7 @@ from datetime import date
 from django.utils import timezone
 from gestao_lab.integrations.dental import DentalAPIError, DentalClient
 
-from .documentos import gerar_contrato
+from .documentos import gerar_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +16,9 @@ logger = logging.getLogger(__name__)
 def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
     """Envia o contrato para a ficha do paciente no Dental Office.
 
-    Prefere PDF (arquivo_pdf) em relação ao DOCX (arquivo). Se nenhum arquivo
-    salvo estiver disponível, regenera o DOCX a partir dos metadados do contrato
-    e tenta converter para PDF se LibreOffice estiver disponível.
-    Retorna (True, "") em caso de sucesso ou (False, mensagem_de_erro) em falha.
+    Prefere o PDF já salvo em arquivo_pdf. Se não existir, gera o PDF
+    diretamente a partir dos metadados do contrato (via reportlab, sem
+    conversão DOCX→PDF). Retorna (True, "") em sucesso ou (False, erro).
     """
 
     paciente = contrato.paciente
@@ -32,9 +31,8 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
         _marcar_erro(contrato)
         return False, erro
 
-    # --- Obter os bytes do documento (preferência: PDF; fallback: DOCX) ---
+    # ── 1. Ler PDF já salvo ────────────────────────────────────────────
     arquivo_bytes: bytes | None = None
-    extensao = "pdf"
 
     if contrato.arquivo_pdf:
         try:
@@ -44,63 +42,37 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
         except Exception as exc:
             logger.warning(
                 "enviar_contrato_ao_dental: falha ao ler PDF salvo "
-                "(contrato_pk=%s), tentando DOCX: %s",
+                "(contrato_pk=%s): %s",
                 contrato.pk,
                 exc,
             )
             arquivo_bytes = None
 
-    if not arquivo_bytes and contrato.arquivo:
-        extensao = "docx"
-        try:
-            contrato.arquivo.open("rb")
-            arquivo_bytes = contrato.arquivo.read()
-            contrato.arquivo.close()
-        except Exception as exc:
-            logger.warning(
-                "enviar_contrato_ao_dental: falha ao ler DOCX salvo "
-                "(contrato_pk=%s), regenerando: %s",
-                contrato.pk,
-                exc,
-            )
-            arquivo_bytes = None
-
+    # ── 2. Gerar PDF diretamente se não houver arquivo salvo ──────────
     if not arquivo_bytes:
-        # Último recurso: regenera DOCX e tenta converter para PDF
-        extensao = "docx"
         try:
-            arquivo_bytes = gerar_contrato(
+            arquivo_bytes = gerar_pdf(
                 paciente=paciente,
                 tipo=contrato.tipo,
-                observacoes_clinicas=contrato.observacoes_clinicas,
                 profissional_nome=contrato.profissional_nome,
                 profissional_cro=contrato.profissional_cro,
                 local_assinatura=contrato.local_assinatura,
             )
-            from gestao_contratos.services.pdf_converter import (
-                docx_para_pdf,
-                libreoffice_disponivel,
+            logger.info(
+                "enviar_contrato_ao_dental: PDF gerado on-the-fly "
+                "(contrato_pk=%s, %d bytes)",
+                contrato.pk,
+                len(arquivo_bytes),
             )
-
-            if libreoffice_disponivel():
-                try:
-                    arquivo_bytes = docx_para_pdf(arquivo_bytes)
-                    extensao = "pdf"
-                except RuntimeError as exc:
-                    logger.warning(
-                        "enviar_contrato_ao_dental: conversão PDF falhou, "
-                        "enviando DOCX (contrato_pk=%s): %s",
-                        contrato.pk,
-                        exc,
-                    )
-        except FileNotFoundError as exc:
-            erro = f"Modelo de documento não encontrado: {exc}"
+        except Exception as exc:
+            erro = f"Falha ao gerar o PDF do contrato: {exc}"
             logger.error(
                 "enviar_contrato_ao_dental: %s (contrato_pk=%s)", erro, contrato.pk
             )
             _marcar_erro(contrato)
             return False, erro
 
+    # ── 3. Montar nome e descrição ─────────────────────────────────────
     data_geracao = (
         contrato.criado_em.strftime("%d/%m/%Y")
         if contrato.criado_em
@@ -108,13 +80,14 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
     )
     nome_arquivo = (
         f"Termo {contrato.get_tipo_display()} — "
-        f"{paciente.nome.split()[0].title()} — {data_geracao}.{extensao}"
+        f"{paciente.nome.split()[0].title()} — {data_geracao}.pdf"
     )
     descricao = (
         f"Termo de consentimento ({contrato.get_tipo_display()}) "
         f"gerado em {data_geracao} via ABO Goiás."
     )
 
+    # ── 4. Enviar à API ────────────────────────────────────────────────
     try:
         client = DentalClient()
         resposta = client.enviar_documento_paciente(
@@ -144,7 +117,6 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
         resposta,
     )
 
-    # Valida se o corpo indica falha (algumas APIs retornam HTTP 200 com erro no body)
     erro_corpo = _extrair_erro_resposta(resposta)
     if erro_corpo:
         logger.error(
@@ -169,8 +141,7 @@ def _extrair_erro_resposta(resposta: object) -> str:
 
     Verifica apenas as chaves 'errors' e 'error', que são o padrão Rails para
     erros. A chave 'message' é intencionalmente ignorada porque muitas APIs a
-    usam tanto em respostas de sucesso quanto de erro, o que causaria falsos
-    positivos — ex.: {"message": "Document created successfully"}.
+    usam tanto em respostas de sucesso quanto de erro.
     """
     if not isinstance(resposta, dict):
         return ""

@@ -1,8 +1,8 @@
-"""Geração de contratos genéricos em DOCX.
+"""Geração de contratos genéricos em DOCX e PDF.
 
-Os documentos são gerados programaticamente com python-docx, preenchidos
-apenas com informações pessoais do paciente. Nenhum arquivo de modelo
-externo é necessário.
+DOCX é gerado via python-docx.
+PDF é gerado diretamente via reportlab (sem conversão DOCX→PDF,
+sem dependência de LibreOffice ou Microsoft Word).
 """
 
 from __future__ import annotations
@@ -34,17 +34,10 @@ def gerar_e_salvar_contrato(
     local_assinatura: str = "Goiânia - GO",
     gerado_por: "User | None" = None,
 ) -> "ContratoGerado":
-    """Gera DOCX e PDF (se conversor disponível), persiste e retorna ContratoGerado."""
-    import logging
-
+    """Gera DOCX + PDF, persiste ambos e retorna o ContratoGerado."""
     from gestao_contratos.models import ContratoGerado
-    from gestao_contratos.services.pdf_converter import (
-        docx_para_pdf,
-        libreoffice_disponivel,
-    )
 
-    logger = logging.getLogger(__name__)
-
+    numero = tipo.replace("modelo_", "")
     conteudo_docx = gerar_contrato(
         paciente=paciente,
         tipo=tipo,
@@ -52,10 +45,16 @@ def gerar_e_salvar_contrato(
         profissional_cro=profissional_cro,
         local_assinatura=local_assinatura,
     )
-
-    base_nome = (
-        f"contrato_{tipo}_{paciente.nome.split()[0].lower()}_{paciente.id_dental}"
+    conteudo_pdf = gerar_pdf(
+        paciente=paciente,
+        tipo=tipo,
+        profissional_nome=profissional_nome,
+        profissional_cro=profissional_cro,
+        local_assinatura=local_assinatura,
     )
+
+    primeiro = paciente.nome.split()[0].lower()
+    base = f"contrato_modelo_{numero}_{primeiro}_{paciente.id_dental}"
 
     contrato = ContratoGerado(
         paciente=paciente,
@@ -66,17 +65,8 @@ def gerar_e_salvar_contrato(
         local_assinatura=local_assinatura,
         gerado_por=gerado_por,
     )
-    contrato.arquivo.save(f"{base_nome}.docx", ContentFile(conteudo_docx), save=False)
-
-    if libreoffice_disponivel():
-        try:
-            conteudo_pdf = docx_para_pdf(conteudo_docx)
-            contrato.arquivo_pdf.save(
-                f"{base_nome}.pdf", ContentFile(conteudo_pdf), save=False
-            )
-        except RuntimeError as exc:
-            logger.warning("gerar_e_salvar_contrato: conversão PDF falhou: %s", exc)
-
+    contrato.arquivo.save(f"{base}.docx", ContentFile(conteudo_docx), save=False)
+    contrato.arquivo_pdf.save(f"{base}.pdf", ContentFile(conteudo_pdf), save=False)
     contrato.save()
     return contrato
 
@@ -89,9 +79,9 @@ def gerar_contrato(
     profissional_cro: str = "",
     local_assinatura: str = "Goiânia - GO",
 ) -> bytes:
-    """Gera e retorna os bytes do DOCX com dados pessoais do paciente."""
+    """Gera e retorna os bytes DOCX com dados pessoais do paciente."""
     numero = tipo.replace("modelo_", "")
-    return _gerar_documento(
+    return _gerar_docx(
         numero_modelo=numero,
         paciente=paciente,
         profissional_nome=profissional_nome,
@@ -100,7 +90,28 @@ def gerar_contrato(
     )
 
 
-def _gerar_documento(
+def gerar_pdf(
+    paciente: "Paciente",
+    tipo: str,
+    profissional_nome: str = "",
+    profissional_cro: str = "",
+    local_assinatura: str = "Goiânia - GO",
+) -> bytes:
+    """Gera e retorna os bytes PDF com dados pessoais do paciente."""
+    numero = tipo.replace("modelo_", "")
+    return _gerar_pdf(
+        numero_modelo=numero,
+        paciente=paciente,
+        profissional_nome=profissional_nome,
+        profissional_cro=profissional_cro,
+        local_assinatura=local_assinatura,
+    )
+
+
+# ── Geração DOCX ─────────────────────────────────────────────────────────────
+
+
+def _gerar_docx(
     numero_modelo: str,
     paciente: "Paciente",
     profissional_nome: str,
@@ -210,6 +221,151 @@ def _linha_assinatura(doc: Document, descricao: str) -> None:
     p.paragraph_format.space_after = Pt(2)
     p2 = doc.add_paragraph(descricao)
     p2.paragraph_format.space_after = Pt(6)
+
+
+# ── Geração PDF (reportlab — sem dependência externa) ─────────────────────────
+
+
+def _gerar_pdf(
+    numero_modelo: str,
+    paciente: "Paciente",
+    profissional_nome: str,
+    profissional_cro: str,
+    local_assinatura: str,
+) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.pdfgen import canvas as rl_canvas
+
+    buf = io.BytesIO()
+    larg, alt = A4
+    c = rl_canvas.Canvas(buf, pagesize=A4)
+
+    ml = 3 * cm
+    mr = larg - 2.5 * cm
+    uw = mr - ml
+    y: list[float] = [alt - 2.5 * cm]  # lista para mutabilidade em closures
+
+    def nl(pts: float = 16.0) -> None:
+        y[0] -= pts
+
+    def _linhas(texto: str, fonte: str, sz: int, max_larg: float) -> list[str]:
+        palavras = texto.split()
+        resultado: list[str] = []
+        linha = ""
+        for p in palavras:
+            cand = f"{linha} {p}".strip()
+            if c.stringWidth(cand, fonte, sz) <= max_larg:
+                linha = cand
+            else:
+                if linha:
+                    resultado.append(linha)
+                linha = p
+        if linha:
+            resultado.append(linha)
+        return resultado or [""]
+
+    def centro(texto: str, sz: int, bold: bool = False) -> None:
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", sz)
+        c.drawCentredString(larg / 2, y[0], texto)
+        nl(sz + 5)
+
+    def esq(texto: str, sz: int, bold: bool = False) -> None:
+        c.setFont("Helvetica-Bold" if bold else "Helvetica", sz)
+        c.drawString(ml, y[0], texto)
+        nl(sz + 4)
+
+    def campo(rotulo: str, valor: str) -> None:
+        sz = 11
+        prefixo = f"{rotulo}: "
+        c.setFont("Helvetica-Bold", sz)
+        pw = c.stringWidth(prefixo, "Helvetica-Bold", sz)
+        c.drawString(ml, y[0], prefixo)
+        c.setFont("Helvetica", sz)
+        texto = valor or "—"
+        if c.stringWidth(texto, "Helvetica", sz) <= uw - pw:
+            c.drawString(ml + pw, y[0], texto)
+            nl(sz + 5)
+        else:
+            nl(sz + 4)
+            for linha in _linhas(texto, "Helvetica", sz, uw):
+                c.drawString(ml, y[0], linha)
+                nl(sz + 4)
+            nl(2)
+
+    def paragrafo(texto: str, sz: int = 11) -> None:
+        c.setFont("Helvetica", sz)
+        for linha in _linhas(texto, "Helvetica", sz, uw):
+            c.drawString(ml, y[0], linha)
+            nl(sz + 4)
+
+    def assinatura(desc: str) -> None:
+        c.setFont("Helvetica", 11)
+        c.drawString(ml, y[0], "_" * 52)
+        nl(13)
+        c.setFont("Helvetica", 10)
+        c.drawString(ml, y[0], desc)
+        nl(22)
+
+    # ── Cabeçalho ─────────────────────────────────────────────────────
+    centro(_CLINICA.upper(), 10, bold=True)
+    nl(4)
+    centro(
+        f"MODELO {numero_modelo} — DECLARAÇÃO DE CONSENTIMENTO",
+        13,
+        bold=True,
+    )
+    nl(10)
+
+    # ── Dados pessoais ─────────────────────────────────────────────────
+    esq("DADOS DO PACIENTE", 10, bold=True)
+    nl(2)
+    campo("Nome completo", paciente.nome)
+    campo("Data de nascimento", _fmt_data(paciente.data_nascimento))
+    if paciente.cpf:
+        campo("CPF", paciente.cpf)
+    elif paciente.rg:
+        campo("RG", paciente.rg)
+    endereco = _fmt_endereco(paciente)
+    if endereco:
+        campo("Endereço", endereco)
+
+    # ── Responsável legal ──────────────────────────────────────────────
+    if paciente.nome_responsavel:
+        nl(6)
+        esq("RESPONSÁVEL LEGAL", 10, bold=True)
+        nl(2)
+        campo("Nome", paciente.nome_responsavel)
+        if paciente.cpf_responsavel:
+            campo("CPF", paciente.cpf_responsavel)
+
+    nl(10)
+
+    # ── Declaração ─────────────────────────────────────────────────────
+    paragrafo(
+        "Declaro que fui devidamente informado(a) e autorizo a realização "
+        "do procedimento, estando ciente dos riscos e benefícios inerentes."
+    )
+    nl(6)
+    campo(
+        "Local e data",
+        f"{local_assinatura}, {date.today().strftime('%d/%m/%Y')}",
+    )
+    nl(25)
+
+    # ── Assinaturas ────────────────────────────────────────────────────
+    assinatura("Paciente ou responsável legal")
+    prof = profissional_nome or "Profissional responsável"
+    if profissional_cro:
+        prof += f" — CRO: {profissional_cro}"
+    assinatura(prof)
+
+    c.save()
+    buf.seek(0)
+    return buf.read()
+
+
+# ── Helpers compartilhados ────────────────────────────────────────────────────
 
 
 def _fmt_data(d: date | None) -> str:
