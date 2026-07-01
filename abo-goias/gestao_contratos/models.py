@@ -6,10 +6,10 @@ from django.db import models
 from gestao_cme.models import ModeloBase
 
 TIPOS_CONTRATO = [
-    ("bichectomia", "Bichectomia"),
-    ("toxina_botulinica", "Toxina Botulínica"),
-    ("odontopediatria", "Odontopediatria"),
-    ("endodontia", "Endodontia"),
+    ("modelo_1", "Modelo 1"),
+    ("modelo_2", "Modelo 2"),
+    ("modelo_3", "Modelo 3"),
+    ("modelo_4", "Modelo 4"),
 ]
 
 STATUS_ENVIO_DENTAL = [

@@ -1,19 +1,20 @@
-"""Geração de contratos e termos de consentimento em DOCX.
+"""Geração de contratos genéricos em DOCX.
 
-Os modelos de documento ficam em gestao_contratos/modelos/.
-A substituição de marcadores usa o formato {{ campo }} herdado do
-abo-gerador-contratos para compatibilidade com os templates existentes.
+Os documentos são gerados programaticamente com python-docx, preenchidos
+apenas com informações pessoais do paciente. Nenhum arquivo de modelo
+externo é necessário.
 """
 
 from __future__ import annotations
 
 import io
 from datetime import date
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from django.core.files.base import ContentFile
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Pt
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -21,16 +22,7 @@ if TYPE_CHECKING:
     from gestao_lab.models import Paciente
 
 
-_MODELOS_DIR = Path(__file__).resolve().parent.parent / "modelos"
-
-TIPOS_CONTRATO = [
-    ("bichectomia", "Bichectomia"),
-    ("toxina_botulinica", "Toxina Botulínica"),
-    ("odontopediatria", "Odontopediatria"),
-    ("endodontia", "Endodontia"),
-]
-
-_CLINICA = "Associação Brasileira de Odontologia Seção de Goiás"
+_CLINICA = "Associação Brasileira de Odontologia — Seção Goiás"
 
 
 def gerar_e_salvar_contrato(
@@ -42,15 +34,10 @@ def gerar_e_salvar_contrato(
     local_assinatura: str = "Goiânia - GO",
     gerado_por: "User | None" = None,
 ) -> "ContratoGerado":
-    """Gera DOCX e PDF, persiste ambos no ContratoGerado e retorna a instância.
-
-    O PDF é gerado via LibreOffice headless quando disponível. Se o LibreOffice
-    não estiver instalado, arquivo_pdf fica em branco e pode ser gerado depois.
-    Raises FileNotFoundError se o modelo DOCX não for encontrado.
-    """
+    """Gera DOCX e PDF (se conversor disponível), persiste e retorna ContratoGerado."""
     import logging
 
-    from gestao_contratos.models import ContratoGerado  # evita import circular
+    from gestao_contratos.models import ContratoGerado
     from gestao_contratos.services.pdf_converter import (
         docx_para_pdf,
         libreoffice_disponivel,
@@ -61,13 +48,14 @@ def gerar_e_salvar_contrato(
     conteudo_docx = gerar_contrato(
         paciente=paciente,
         tipo=tipo,
-        observacoes_clinicas=observacoes_clinicas,
         profissional_nome=profissional_nome,
         profissional_cro=profissional_cro,
         local_assinatura=local_assinatura,
     )
 
-    base_nome = f"termo_{tipo}_{paciente.nome.split()[0].lower()}_{paciente.id_dental}"
+    base_nome = (
+        f"contrato_{tipo}_{paciente.nome.split()[0].lower()}_{paciente.id_dental}"
+    )
 
     contrato = ContratoGerado(
         paciente=paciente,
@@ -101,141 +89,149 @@ def gerar_contrato(
     profissional_cro: str = "",
     local_assinatura: str = "Goiânia - GO",
 ) -> bytes:
-    """Gera o DOCX preenchido e retorna os bytes para download direto.
-
-    Raises FileNotFoundError se o modelo DOCX não for encontrado.
-    """
-
-    arquivo_modelo = _MODELOS_DIR / f"termo_consentimento_{tipo}.docx"
-    if not arquivo_modelo.exists():
-        raise FileNotFoundError(
-            f"Modelo de contrato não encontrado: {arquivo_modelo.name}"
-        )
-
-    doc = Document(str(arquivo_modelo))
-    substituicoes = _montar_substituicoes(
+    """Gera e retorna os bytes do DOCX com dados pessoais do paciente."""
+    numero = tipo.replace("modelo_", "")
+    return _gerar_documento(
+        numero_modelo=numero,
         paciente=paciente,
-        observacoes_clinicas=observacoes_clinicas,
         profissional_nome=profissional_nome,
         profissional_cro=profissional_cro,
         local_assinatura=local_assinatura,
     )
-    _substituir_documento(doc, substituicoes)
+
+
+def _gerar_documento(
+    numero_modelo: str,
+    paciente: "Paciente",
+    profissional_nome: str,
+    profissional_cro: str,
+    local_assinatura: str,
+) -> bytes:
+    doc = Document()
+
+    for secao in doc.sections:
+        secao.top_margin = Cm(2.5)
+        secao.bottom_margin = Cm(2.5)
+        secao.left_margin = Cm(3.0)
+        secao.right_margin = Cm(2.5)
+
+    # ── Cabeçalho ──────────────────────────────────────────────────────
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run(_CLINICA.upper())
+    r.bold = True
+    r.font.size = Pt(10)
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run(f"MODELO {numero_modelo} — DECLARAÇÃO DE CONSENTIMENTO")
+    r.bold = True
+    r.font.size = Pt(13)
+
+    doc.add_paragraph()
+
+    # ── Dados pessoais ─────────────────────────────────────────────────
+    _titulo_secao(doc, "DADOS DO PACIENTE")
+    _campo(doc, "Nome completo", paciente.nome)
+    _campo(doc, "Data de nascimento", _fmt_data(paciente.data_nascimento))
+
+    if paciente.cpf:
+        _campo(doc, "CPF", paciente.cpf)
+    elif paciente.rg:
+        _campo(doc, "RG", paciente.rg)
+
+    endereco = _fmt_endereco(paciente)
+    if endereco:
+        _campo(doc, "Endereço", endereco)
+
+    # ── Responsável legal ──────────────────────────────────────────────
+    if paciente.nome_responsavel:
+        doc.add_paragraph()
+        _titulo_secao(doc, "RESPONSÁVEL LEGAL")
+        _campo(doc, "Nome", paciente.nome_responsavel)
+        if paciente.cpf_responsavel:
+            _campo(doc, "CPF", paciente.cpf_responsavel)
+
+    doc.add_paragraph()
+
+    # ── Declaração ─────────────────────────────────────────────────────
+    p = doc.add_paragraph(
+        "Declaro que fui devidamente informado(a) e autorizo a realização "
+        "do procedimento, estando ciente dos riscos e benefícios inerentes."
+    )
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    doc.add_paragraph()
+
+    _campo(
+        doc,
+        "Local e data",
+        f"{local_assinatura}, {date.today().strftime('%d/%m/%Y')}",
+    )
+
+    doc.add_paragraph()
+    doc.add_paragraph()
+
+    # ── Assinaturas ────────────────────────────────────────────────────
+    _linha_assinatura(doc, "Paciente ou responsável legal")
+
+    doc.add_paragraph()
+
+    prof = profissional_nome or "Profissional responsável"
+    if profissional_cro:
+        prof += f" — CRO: {profissional_cro}"
+    _linha_assinatura(doc, prof)
 
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue()
 
 
-def _montar_substituicoes(
-    paciente: "Paciente",
-    observacoes_clinicas: str,
-    profissional_nome: str,
-    profissional_cro: str,
-    local_assinatura: str,
-) -> dict[str, str]:
-    """Monta o dicionário de marcadores → valores para substituição no DOCX."""
+def _titulo_secao(doc: Document, texto: str) -> None:
+    p = doc.add_paragraph()
+    r = p.add_run(texto)
+    r.bold = True
+    r.font.size = Pt(10)
+    p.paragraph_format.space_after = Pt(4)
 
-    # Tipo e número do documento principal
-    if paciente.cpf:
-        tipo_doc, num_doc = "CPF", paciente.cpf
-    elif paciente.rg:
-        tipo_doc, num_doc = "RG", paciente.rg
-    else:
-        tipo_doc, num_doc = "", ""
 
-    # Endereço formatado em linha única
-    partes_end: list[str] = []
-    logradouro = paciente.endereco_logradouro
+def _campo(doc: Document, rotulo: str, valor: str) -> None:
+    p = doc.add_paragraph()
+    r_rotulo = p.add_run(f"{rotulo}: ")
+    r_rotulo.bold = True
+    r_rotulo.font.size = Pt(11)
+    r_valor = p.add_run(valor or "—")
+    r_valor.font.size = Pt(11)
+    p.paragraph_format.space_after = Pt(2)
+
+
+def _linha_assinatura(doc: Document, descricao: str) -> None:
+    p = doc.add_paragraph("_" * 52)
+    p.paragraph_format.space_after = Pt(2)
+    p2 = doc.add_paragraph(descricao)
+    p2.paragraph_format.space_after = Pt(6)
+
+
+def _fmt_data(d: date | None) -> str:
+    return d.strftime("%d/%m/%Y") if d else "—"
+
+
+def _fmt_endereco(paciente: "Paciente") -> str:
+    partes: list[str] = []
+    logradouro = paciente.endereco_logradouro or ""
     if paciente.endereco_numero:
         logradouro = f"{logradouro}, {paciente.endereco_numero}"
     if paciente.endereco_complemento:
-        logradouro = f"{logradouro} - {paciente.endereco_complemento}"
+        logradouro = f"{logradouro} — {paciente.endereco_complemento}"
     if logradouro:
-        partes_end.append(logradouro)
+        partes.append(logradouro)
     if paciente.endereco_bairro:
-        partes_end.append(paciente.endereco_bairro)
+        partes.append(paciente.endereco_bairro)
     cidade_estado = " - ".join(
-        filter(None, [paciente.endereco_cidade, paciente.endereco_estado])
+        p for p in [paciente.endereco_cidade, paciente.endereco_estado] if p
     )
     if cidade_estado:
-        partes_end.append(cidade_estado)
+        partes.append(cidade_estado)
     if paciente.endereco_cep:
-        partes_end.append(f"CEP {paciente.endereco_cep}")
-    endereco_fmt = " | ".join(partes_end)
-
-    # Data de nascimento formatada
-    nascimento_fmt = (
-        paciente.data_nascimento.strftime("%d/%m/%Y")
-        if paciente.data_nascimento
-        else ""
-    )
-
-    # Responsável legal
-    tipo_resp = "CPF" if paciente.cpf_responsavel else ""
-
-    return {
-        "{{ paciente.nome_completo }}": paciente.nome,
-        "{{ paciente.data_nascimento }}": nascimento_fmt,
-        "{{ paciente.documento.tipo }}": tipo_doc,
-        "{{ paciente.documento.numero }}": num_doc,
-        "{{ paciente.endereco }}": endereco_fmt,
-        "{{ paciente.nome_completo_responsavel }}": paciente.nome_responsavel,
-        "{{ paciente.documento_responsavel.tipo }}": tipo_resp,
-        "{{ paciente.documento_responsavel.numero }}": paciente.cpf_responsavel,
-        "{{ paciente.clinica }}": _CLINICA,
-        "{{ paciente.numero_registro }}": str(paciente.id_dental),
-        "{{ paciente.data_cadastro }}": date.today().strftime("%d/%m/%Y"),
-        "{{ observacoes_clinicas }}": observacoes_clinicas,
-        "{{ local_assinatura }}": local_assinatura,
-        "{{ data_assinatura }}": date.today().strftime("%d/%m/%Y"),
-        "{{ profissional.nome_completo }}": profissional_nome,
-        "{{ profissional.cro }}": profissional_cro,
-    }
-
-
-def _substituir_documento(doc: Document, substituicoes: dict[str, str]) -> None:
-    """Aplica substituições em todos os parágrafos e tabelas do DOCX."""
-
-    for paragrafo in doc.paragraphs:
-        _substituir_em_paragrafo(paragrafo, substituicoes)
-
-    for tabela in doc.tables:
-        for linha in tabela.rows:
-            for celula in linha.cells:
-                for paragrafo in celula.paragraphs:
-                    _substituir_em_paragrafo(paragrafo, substituicoes)
-
-    for secao in doc.sections:
-        for paragrafo in secao.header.paragraphs:
-            _substituir_em_paragrafo(paragrafo, substituicoes)
-        for paragrafo in secao.footer.paragraphs:
-            _substituir_em_paragrafo(paragrafo, substituicoes)
-
-
-def _substituir_em_paragrafo(paragrafo, substituicoes: dict[str, str]) -> None:
-    """Substitui marcadores num parágrafo preservando a formatação.
-
-    Tenta substituição run a run (preserva formatação completa). Se algum
-    marcador ainda restar após essa passagem, o parágrafo é mesclado num
-    único run para lidar com marcadores fragmentados pelo processador de texto.
-    """
-
-    # Passagem 1: substituição por run (preserva formatação)
-    for run in paragrafo.runs:
-        for marcador, valor in substituicoes.items():
-            if marcador in run.text:
-                run.text = run.text.replace(marcador, valor)
-
-    # Passagem 2: fallback para marcadores que cruzam múltiplos runs
-    texto_completo = "".join(run.text for run in paragrafo.runs)
-    if not any(m in texto_completo for m in substituicoes):
-        return
-
-    for marcador, valor in substituicoes.items():
-        texto_completo = texto_completo.replace(marcador, valor)
-
-    if paragrafo.runs:
-        paragrafo.runs[0].text = texto_completo
-        for run in paragrafo.runs[1:]:
-            run.text = ""
+        partes.append(f"CEP {paciente.endereco_cep}")
+    return " | ".join(partes)
