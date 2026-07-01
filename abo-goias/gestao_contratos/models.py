@@ -12,13 +12,15 @@ TIPOS_CONTRATO = [
     ("endodontia", "Endodontia"),
 ]
 
+STATUS_ENVIO_DENTAL = [
+    ("nao_enviado", "Não enviado"),
+    ("enviado", "Enviado"),
+    ("erro", "Erro no envio"),
+]
+
 
 class ContratoGerado(ModeloBase):
-    """Registro de auditoria de cada contrato gerado para um paciente.
-
-    Não armazena o arquivo em si (gerado sob demanda a cada download),
-    apenas os metadados necessários para rastrear quem gerou o quê e quando.
-    """
+    """Registro de auditoria de cada contrato gerado para um paciente."""
 
     paciente = models.ForeignKey(
         "gestao_lab.Paciente",
@@ -32,6 +34,7 @@ class ContratoGerado(ModeloBase):
     observacoes_clinicas = models.TextField(blank=True)
     profissional_nome = models.CharField(max_length=200, blank=True)
     profissional_cro = models.CharField(max_length=30, blank=True)
+    local_assinatura = models.CharField(max_length=100, default="Goiânia - GO")
     gerado_por = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -39,6 +42,12 @@ class ContratoGerado(ModeloBase):
         blank=True,
         related_name="contratos_gerados",
     )
+    status_envio_dental = models.CharField(
+        max_length=20,
+        choices=STATUS_ENVIO_DENTAL,
+        default="nao_enviado",
+    )
+    enviado_dental_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-criado_em"]

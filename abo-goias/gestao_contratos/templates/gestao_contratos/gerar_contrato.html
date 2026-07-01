@@ -41,9 +41,34 @@
                     <p class="section-label">Contratos anteriores</p>
                     <ul class="sync-history-list">
                         {% for contrato in historico %}
-                            <li class="sync-history-item sync-ok">
-                                <span class="sync-tipo">{{ contrato.get_tipo_display }}</span>
-                                <span class="sync-date">{{ contrato.criado_em|date:"d/m/Y" }}</span>
+                            <li class="sync-history-item sync-ok" style="flex-direction: column; align-items: flex-start; gap: 6px; padding-bottom: 10px;">
+                                <div style="display: flex; justify-content: space-between; width: 100%;">
+                                    <span class="sync-tipo">{{ contrato.get_tipo_display }}</span>
+                                    <span class="sync-date">{{ contrato.criado_em|date:"d/m/Y" }}</span>
+                                </div>
+                                {% if contrato.status_envio_dental == "enviado" %}
+                                    <span class="badge badge-devolvido" style="font-size: 0.72rem;">
+                                        Enviado ao Dental — {{ contrato.enviado_dental_em|date:"d/m H:i" }}
+                                    </span>
+                                {% else %}
+                                    <form method="post"
+                                          action="{% url 'contrato_enviar_dental' contrato.pk %}"
+                                          style="width: 100%;">
+                                        {% csrf_token %}
+                                        <button class="button secondary compact-button"
+                                                type="submit"
+                                                style="width: 100%; font-size: 0.75rem;"
+                                                {% if contrato.status_envio_dental == "erro" %}
+                                                title="Tentativa anterior falhou — clique para reenviar"
+                                                {% endif %}>
+                                            {% if contrato.status_envio_dental == "erro" %}
+                                                Reenviar ao Dental Office
+                                            {% else %}
+                                                Enviar ao Dental Office
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                {% endif %}
                             </li>
                         {% endfor %}
                     </ul>

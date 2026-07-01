@@ -20,6 +20,7 @@ from gestao_lab.models import Paciente
 from .models import TIPOS_CONTRATO, ContratoGerado
 from .services.checklist import gerar_checklist, pendencias_obrigatorias
 from .services.documentos import gerar_contrato
+from .services.envio_dental import enviar_contrato_ao_dental
 
 _PACIENTES_POR_PAGINA = 25
 
@@ -292,6 +293,7 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
         observacoes_clinicas=observacoes,
         profissional_nome=prof_nome,
         profissional_cro=prof_cro,
+        local_assinatura=local,
         gerado_por=request.user,
     )
 
@@ -306,3 +308,35 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
     )
     response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
     return response
+
+
+@login_required
+def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Regenera o DOCX e envia para a ficha do paciente no Dental Office.
+
+    Aceita apenas POST para evitar envios acidentais por GET. Regenera o
+    documento a partir dos metadados gravados em ContratoGerado e chama
+    a API do Dental Office via DentalClient.enviar_documento_paciente().
+    """
+
+    if request.method != "POST":
+        return redirect("contratos")
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+    paciente = contrato.paciente
+
+    ok, erro = enviar_contrato_ao_dental(contrato)
+
+    if ok:
+        messages.success(
+            request,
+            f"Contrato '{contrato.get_tipo_display()}' enviado com sucesso "
+            f"para a ficha de {paciente.nome} no Dental Office.",
+        )
+    else:
+        messages.error(
+            request,
+            f"Falha ao enviar o contrato ao Dental Office: {erro}",
+        )
+
+    return redirect("contrato_gerar", paciente_pk=paciente.pk)
