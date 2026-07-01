@@ -12,10 +12,14 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from django.core.files.base import ContentFile
 from docx import Document
 
 if TYPE_CHECKING:
+    from django.contrib.auth.models import User
+    from gestao_contratos.models import ContratoGerado
     from gestao_lab.models import Paciente
+
 
 _MODELOS_DIR = Path(__file__).resolve().parent.parent / "modelos"
 
@@ -27,6 +31,66 @@ TIPOS_CONTRATO = [
 ]
 
 _CLINICA = "Associação Brasileira de Odontologia Seção de Goiás"
+
+
+def gerar_e_salvar_contrato(
+    paciente: "Paciente",
+    tipo: str,
+    observacoes_clinicas: str = "",
+    profissional_nome: str = "",
+    profissional_cro: str = "",
+    local_assinatura: str = "Goiânia - GO",
+    gerado_por: "User | None" = None,
+) -> "ContratoGerado":
+    """Gera DOCX e PDF, persiste ambos no ContratoGerado e retorna a instância.
+
+    O PDF é gerado via LibreOffice headless quando disponível. Se o LibreOffice
+    não estiver instalado, arquivo_pdf fica em branco e pode ser gerado depois.
+    Raises FileNotFoundError se o modelo DOCX não for encontrado.
+    """
+    import logging
+
+    from gestao_contratos.models import ContratoGerado  # evita import circular
+    from gestao_contratos.services.pdf_converter import (
+        docx_para_pdf,
+        libreoffice_disponivel,
+    )
+
+    logger = logging.getLogger(__name__)
+
+    conteudo_docx = gerar_contrato(
+        paciente=paciente,
+        tipo=tipo,
+        observacoes_clinicas=observacoes_clinicas,
+        profissional_nome=profissional_nome,
+        profissional_cro=profissional_cro,
+        local_assinatura=local_assinatura,
+    )
+
+    base_nome = f"termo_{tipo}_{paciente.nome.split()[0].lower()}_{paciente.id_dental}"
+
+    contrato = ContratoGerado(
+        paciente=paciente,
+        tipo=tipo,
+        observacoes_clinicas=observacoes_clinicas,
+        profissional_nome=profissional_nome,
+        profissional_cro=profissional_cro,
+        local_assinatura=local_assinatura,
+        gerado_por=gerado_por,
+    )
+    contrato.arquivo.save(f"{base_nome}.docx", ContentFile(conteudo_docx), save=False)
+
+    if libreoffice_disponivel():
+        try:
+            conteudo_pdf = docx_para_pdf(conteudo_docx)
+            contrato.arquivo_pdf.save(
+                f"{base_nome}.pdf", ContentFile(conteudo_pdf), save=False
+            )
+        except RuntimeError as exc:
+            logger.warning("gerar_e_salvar_contrato: conversão PDF falhou: %s", exc)
+
+    contrato.save()
+    return contrato
 
 
 def gerar_contrato(

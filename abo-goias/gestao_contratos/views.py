@@ -19,7 +19,12 @@ from gestao_lab.models import Paciente
 
 from .models import TIPOS_CONTRATO, ContratoGerado
 from .services.checklist import gerar_checklist, pendencias_obrigatorias
-from .services.documentos import gerar_contrato
+from .services.documentos import gerar_e_salvar_contrato
+from .services.envio import (
+    calcular_link_whatsapp,
+    enviar_contrato_email,
+    gerar_link_whatsapp,
+)
 from .services.envio_dental import enviar_contrato_ao_dental
 
 _PACIENTES_POR_PAGINA = 25
@@ -145,6 +150,7 @@ def importar_e_gerar(request: HttpRequest, id_dental: str) -> HttpResponse:
             update_fields=[
                 "nome",
                 "celular",
+                "email",
                 "ativo",
                 "ultima_sincronizacao",
                 "cpf",
@@ -195,6 +201,7 @@ def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
             paciente.ultima_sincronizacao = timezone.now()
             paciente.save(
                 update_fields=[
+                    "email",
                     "cpf",
                     "rg",
                     "data_nascimento",
@@ -268,6 +275,12 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
     prof_nome = request.POST.get("profissional_nome", "").strip()
     prof_cro = request.POST.get("profissional_cro", "").strip()
     local = request.POST.get("local_assinatura", "Goiânia - GO").strip()
+    email_form = request.POST.get("email_paciente", "").strip()
+
+    # Salva o e-mail preenchido no formulário de volta ao paciente
+    if email_form and email_form != paciente.email:
+        paciente.email = email_form
+        paciente.save(update_fields=["email", "atualizado_em"])
 
     tipos_validos = {t[0] for t in TIPOS_CONTRATO}
     if tipo not in tipos_validos:
@@ -275,35 +288,67 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
         return redirect("contrato_gerar", paciente_pk=paciente.pk)
 
     try:
-        conteudo = gerar_contrato(
+        contrato = gerar_e_salvar_contrato(
             paciente=paciente,
             tipo=tipo,
             observacoes_clinicas=observacoes,
             profissional_nome=prof_nome,
             profissional_cro=prof_cro,
             local_assinatura=local,
+            gerado_por=request.user,
         )
     except FileNotFoundError as exc:
         messages.error(request, str(exc))
         return redirect("contrato_gerar", paciente_pk=paciente.pk)
 
-    ContratoGerado.objects.create(
-        paciente=paciente,
-        tipo=tipo,
-        observacoes_clinicas=observacoes,
-        profissional_nome=prof_nome,
-        profissional_cro=prof_cro,
-        local_assinatura=local,
-        gerado_por=request.user,
+    return redirect("contrato_pos_geracao", contrato_pk=contrato.pk)
+
+
+@login_required
+def pos_geracao_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Exibe opções pós-geração: baixar, enviar por e-mail ou abrir WhatsApp."""
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+    paciente = contrato.paciente
+
+    link_whatsapp = calcular_link_whatsapp(
+        paciente.celular or "", contrato.get_tipo_display()
     )
 
+    return render(
+        request,
+        "gestao_contratos/pos_geracao.html",
+        {
+            "contrato": contrato,
+            "paciente": paciente,
+            "link_whatsapp": link_whatsapp,
+        },
+    )
+
+
+@login_required
+def baixar_contrato_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Retorna o DOCX do contrato como download."""
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+    paciente = contrato.paciente
+
+    if not contrato.arquivo:
+        messages.error(request, "Arquivo do contrato não encontrado.")
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    contrato.arquivo.open("rb")
+    conteudo = contrato.arquivo.read()
+    contrato.arquivo.close()
+
     nome_arquivo = (
-        f"termo_{tipo}_{paciente.nome.split()[0].lower()}" f"_{paciente.id_dental}.docx"
+        f"termo_{contrato.tipo}_{paciente.nome.split()[0].lower()}"
+        f"_{paciente.id_dental}.docx"
     )
     response = HttpResponse(
         conteudo,
         content_type=(
-            "application/vnd.openxmlformats-officedocument" ".wordprocessingml.document"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
     )
     response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
@@ -311,19 +356,102 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
 
 
 @login_required
-def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
-    """Regenera o DOCX e envia para a ficha do paciente no Dental Office.
+def baixar_contrato_pdf_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Retorna o PDF do contrato como download."""
 
-    Aceita apenas POST para evitar envios acidentais por GET. Regenera o
-    documento a partir dos metadados gravados em ContratoGerado e chama
-    a API do Dental Office via DentalClient.enviar_documento_paciente().
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+    paciente = contrato.paciente
+
+    if not contrato.arquivo_pdf:
+        messages.error(request, "PDF do contrato não disponível. Baixe a versão DOCX.")
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    contrato.arquivo_pdf.open("rb")
+    conteudo = contrato.arquivo_pdf.read()
+    contrato.arquivo_pdf.close()
+
+    nome_arquivo = (
+        f"termo_{contrato.tipo}_{paciente.nome.split()[0].lower()}"
+        f"_{paciente.id_dental}.pdf"
+    )
+    response = HttpResponse(conteudo, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
+    return response
+
+
+@login_required
+def enviar_email_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Envia o contrato por e-mail ao destinatário informado no formulário."""
+
+    if request.method != "POST":
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+    paciente = contrato.paciente
+    destinatario = request.POST.get("email_destinatario", "").strip()
+
+    if not destinatario:
+        messages.error(request, "Informe um e-mail válido para o envio.")
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    # Atualiza email no paciente se diferente
+    if destinatario != paciente.email:
+        paciente.email = destinatario
+        paciente.save(update_fields=["email", "atualizado_em"])
+
+    ok = enviar_contrato_email(contrato, destinatario)
+
+    if ok:
+        messages.success(
+            request,
+            f"Contrato enviado com sucesso para {destinatario}.",
+        )
+    else:
+        messages.error(
+            request,
+            "Não foi possível enviar o e-mail. Verifique as configurações de SMTP "
+            "e tente novamente.",
+        )
+
+    return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+
+@login_required
+def whatsapp_status_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Atualiza status de envio para WhatsApp e redireciona para pós-geração."""
+
+    if request.method != "POST":
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+    paciente = contrato.paciente
+    celular = request.POST.get("celular", "").strip() or paciente.celular or ""
+
+    link = gerar_link_whatsapp(celular, contrato)
+
+    if link:
+        messages.success(
+            request,
+            f"WhatsApp marcado como enviado para {celular}.",
+        )
+    else:
+        messages.warning(request, "Número de telefone inválido.")
+
+    return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+
+@login_required
+def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Envia o contrato para a ficha do paciente no Dental Office.
+
+    Usa o arquivo já salvo em ContratoGerado.arquivo (ou regenera caso ausente).
+    Redireciona para pos_geracao_view com mensagem de sucesso ou erro.
     """
 
     if request.method != "POST":
         return redirect("contratos")
 
     contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
-    paciente = contrato.paciente
 
     ok, erro = enviar_contrato_ao_dental(contrato)
 
@@ -331,7 +459,7 @@ def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpRespons
         messages.success(
             request,
             f"Contrato '{contrato.get_tipo_display()}' enviado com sucesso "
-            f"para a ficha de {paciente.nome} no Dental Office.",
+            f"para a ficha de {contrato.paciente.nome} no Dental Office.",
         )
     else:
         messages.error(
@@ -339,4 +467,4 @@ def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpRespons
             f"Falha ao enviar o contrato ao Dental Office: {erro}",
         )
 
-    return redirect("contrato_gerar", paciente_pk=paciente.pk)
+    return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)

@@ -18,6 +18,12 @@ STATUS_ENVIO_DENTAL = [
     ("erro", "Erro no envio"),
 ]
 
+STATUS_ENVIO = [
+    ("nao_enviado", "Não enviado"),
+    ("enviado_email", "Enviado por e-mail"),
+    ("enviado_whatsapp", "Enviado por WhatsApp"),
+]
+
 
 class ContratoGerado(ModeloBase):
     """Registro de auditoria de cada contrato gerado para um paciente."""
@@ -35,6 +41,14 @@ class ContratoGerado(ModeloBase):
     profissional_nome = models.CharField(max_length=200, blank=True)
     profissional_cro = models.CharField(max_length=30, blank=True)
     local_assinatura = models.CharField(max_length=100, default="Goiânia - GO")
+    arquivo = models.FileField(upload_to="contratos/docx/", blank=True)
+    arquivo_pdf = models.FileField(upload_to="contratos/pdf/", blank=True)
+    status_envio = models.CharField(
+        max_length=25,
+        choices=STATUS_ENVIO,
+        default="nao_enviado",
+    )
+    enviado_em = models.DateTimeField(null=True, blank=True)
     gerado_por = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

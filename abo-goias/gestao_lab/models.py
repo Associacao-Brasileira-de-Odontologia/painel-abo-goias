@@ -108,6 +108,7 @@ class Paciente(ModeloBase):
 
     nome = models.CharField(max_length=200)
     celular = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True, default="")
     id_dental = models.CharField(max_length=50, unique=True)
     processo_aberto = models.BooleanField(default=False)
     data_previsao_retorno = models.DateField(null=True, blank=True)

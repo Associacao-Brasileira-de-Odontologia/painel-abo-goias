@@ -250,6 +250,9 @@ STATIC_URL = "static/"
 STATIC_ROOT = _env("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles"))
 STATICFILES_DIRS = []
 
+MEDIA_ROOT = Path(_env("DJANGO_MEDIA_ROOT", str(BASE_DIR)))
+MEDIA_URL = "/media/"
+
 if importlib.util.find_spec("whitenoise"):
     STORAGES = {
         "default": {
@@ -264,16 +267,35 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"
 
-EMAIL_BACKEND = _env(
-    "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+EMAIL_HOST = _env("EMAIL_HOST") or _env("DJANGO_EMAIL_HOST")
+EMAIL_PORT = _env_int("EMAIL_PORT", 0) or _env_int("DJANGO_EMAIL_PORT", 587)
+EMAIL_HOST_USER = _env("EMAIL_HOST_USER") or _env("DJANGO_EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = _env("EMAIL_HOST_PASSWORD") or _env("DJANGO_EMAIL_HOST_PASSWORD")
+EMAIL_USE_TLS = (
+    _env_bool("EMAIL_USE_TLS", True)
+    if _env("EMAIL_USE_TLS")
+    else _env_bool("DJANGO_EMAIL_USE_TLS", True)
 )
-DEFAULT_FROM_EMAIL = _env("DJANGO_DEFAULT_FROM_EMAIL", "noreply@abogoias.local")
-EMAIL_HOST = _env("DJANGO_EMAIL_HOST")
-EMAIL_PORT = _env_int("DJANGO_EMAIL_PORT", 587)
-EMAIL_HOST_USER = _env("DJANGO_EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = _env("DJANGO_EMAIL_HOST_PASSWORD")
-EMAIL_USE_TLS = _env_bool("DJANGO_EMAIL_USE_TLS", True)
-EMAIL_USE_SSL = _env_bool("DJANGO_EMAIL_USE_SSL", False)
+EMAIL_USE_SSL = (
+    _env_bool("EMAIL_USE_SSL", False)
+    if _env("EMAIL_USE_SSL")
+    else _env_bool("DJANGO_EMAIL_USE_SSL", False)
+)
+DEFAULT_FROM_EMAIL = (
+    _env("DEFAULT_FROM_EMAIL")
+    or _env("DJANGO_DEFAULT_FROM_EMAIL")
+    or "noreply@abogoias.local"
+)
+
+# Usa SMTP automaticamente quando EMAIL_HOST estiver definido; console em DEBUG
+if _env("DJANGO_EMAIL_BACKEND"):
+    EMAIL_BACKEND = _env("DJANGO_EMAIL_BACKEND")
+elif EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+elif DEBUG:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 CSRF_TRUSTED_ORIGINS = _env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 

@@ -150,6 +150,13 @@
                         </div>
                     {% endif %}
 
+                    {% if paciente.email %}
+                        <div class="info-chip">
+                            <span>E-mail</span>
+                            <strong>{{ paciente.email }}</strong>
+                        </div>
+                    {% endif %}
+
                     <div class="info-chip">
                         <span>Registro Dental</span>
                         <strong>#{{ paciente.id_dental }}</strong>
@@ -289,6 +296,17 @@
                         <label for="id_local">Local de assinatura</label>
                         <input id="id_local" type="text" name="local_assinatura"
                                value="Goiânia - GO"
+                               {% if gerado_bloqueado %}disabled{% endif %}>
+                    </div>
+
+                    <div class="field">
+                        <label for="id_email_paciente">
+                            E-mail do paciente
+                            <span class="field-optional">(opcional — usado para envio do contrato)</span>
+                        </label>
+                        <input id="id_email_paciente" type="email" name="email_paciente"
+                               value="{{ paciente.email }}"
+                               placeholder="email@exemplo.com"
                                {% if gerado_bloqueado %}disabled{% endif %}>
                     </div>
 
