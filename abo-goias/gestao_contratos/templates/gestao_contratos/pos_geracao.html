@@ -110,11 +110,20 @@
             {# ── Envio por WhatsApp ───────────────────────────────── #}
             <div class="kpi-section">
                 <p class="section-label">Encaminhar pelo WhatsApp</p>
-                <p class="panel-copy">
-                    Confirme o número e clique em "Abrir WhatsApp".
-                    O WhatsApp será aberto em nova aba com a mensagem pré-preenchida.
-                    Anexe o arquivo baixado e envie ao paciente.
+
+                {# Texto padrão (sem suporte a Web Share) — JS oculta quando necessário #}
+                <p class="panel-copy" id="wa-copy-padrao">
+                    Confirme o número e clique em <strong>Abrir WhatsApp</strong>.
+                    O WhatsApp será aberto com mensagem pré-preenchida — anexe
+                    o arquivo baixado e envie ao paciente.
                 </p>
+                {# Texto alternativo (com suporte a Web Share) — JS exibe quando disponível #}
+                <p class="panel-copy" id="wa-copy-share" style="display:none;">
+                    Clique em <strong>Compartilhar arquivo</strong> para enviar o
+                    documento diretamente pelo WhatsApp sem precisar baixá-lo antes.
+                    Disponível em dispositivos móveis e Chrome/Safari no computador.
+                </p>
+
                 <form class="form-stack-wide" id="wa-form" method="post"
                       action="{% url 'contrato_whatsapp_status' contrato.pk %}">
                     {% csrf_token %}
@@ -125,8 +134,19 @@
                                placeholder="(62) 9 0000-0000">
                     </div>
                     <div class="form-actions">
+                        {# Botão de compartilhamento direto — exibido por JS quando suportado #}
+                        <button id="btn-wa-share"
+                                type="button"
+                                class="button primary"
+                                style="display:none;"
+                                data-url="{% if contrato.arquivo_pdf %}{% url 'contrato_baixar_pdf' contrato.pk %}{% else %}{% url 'contrato_baixar' contrato.pk %}{% endif %}"
+                                data-nome="{{ contrato.get_tipo_display }} - {{ paciente.nome }}.{% if contrato.arquivo_pdf %}pdf{% else %}docx{% endif %}">
+                            Compartilhar arquivo
+                        </button>
+                        {# Link WhatsApp com mensagem — sempre disponível como fallback #}
                         {% if link_whatsapp %}
-                            <a class="button primary"
+                            <a id="btn-wa-link"
+                               class="button primary"
                                href="{{ link_whatsapp }}"
                                target="_blank"
                                rel="noopener noreferrer"
@@ -218,4 +238,63 @@
         </section>
     </div>
 </main>
+
+<script>
+(function () {
+    var btnShare = document.getElementById('btn-wa-share');
+    if (!btnShare) return;
+
+    var suporta = typeof navigator.share === 'function'
+               && typeof navigator.canShare === 'function';
+    if (!suporta) return;
+
+    // Revelar botão e trocar textos explicativos
+    btnShare.style.display = 'inline-flex';
+    var padrao = document.getElementById('wa-copy-padrao');
+    var shareHint = document.getElementById('wa-copy-share');
+    if (padrao) padrao.style.display = 'none';
+    if (shareHint) shareHint.style.display = 'block';
+
+    // Tornar o link "Abrir WhatsApp" secundário (continua como fallback)
+    var btnLink = document.getElementById('btn-wa-link');
+    if (btnLink) {
+        btnLink.classList.remove('primary');
+        btnLink.classList.add('secondary');
+    }
+
+    btnShare.addEventListener('click', async function () {
+        var url  = btnShare.dataset.url;
+        var nome = btnShare.dataset.nome;
+
+        btnShare.disabled = true;
+        btnShare.textContent = 'Preparando arquivo…';
+
+        try {
+            var resp = await fetch(url, {credentials: 'same-origin'});
+            if (!resp.ok) throw new Error('Falha ao obter o arquivo (' + resp.status + ').');
+
+            var blob = await resp.blob();
+            var file = new File([blob], nome, {type: blob.type});
+
+            if (!navigator.canShare({files: [file]})) {
+                throw new Error('Compartilhamento de arquivos não suportado neste dispositivo.');
+            }
+
+            await navigator.share({files: [file]});
+
+            // Registrar envio no servidor
+            document.getElementById('wa-form').submit();
+
+        } catch (err) {
+            if (err.name === 'AbortError') return; // usuário cancelou
+            alert('Não foi possível compartilhar o arquivo.\n'
+                + err.message
+                + '\n\nUtilize o botão "Abrir WhatsApp" para enviar manualmente.');
+        } finally {
+            btnShare.disabled = false;
+            btnShare.textContent = 'Compartilhar arquivo';
+        }
+    });
+})();
+</script>
 {% endblock %}
