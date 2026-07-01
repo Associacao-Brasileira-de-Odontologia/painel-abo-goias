@@ -177,6 +177,15 @@ fundação      envio       assinatura     Dental Office
 O Prompt 1 é pré-requisito de todos os demais. O Prompt 2 já entrega valor sem integração paga. Os Prompts 3 e 4 requerem conta no D4Sign e confirmação da API do Dental Office respectivamente.
 
 
+-- Funcionalidades para adicionar --
+- Fazer o espelhamento do PC e tablet 
+- Fazer o cadastro dos templates necessários 
+- Todo o processo de anexar e enviar os documentos ao Dental Office de forma automática (via Webhooks de assinatura)
+- Validar o envio do documento para Intranet 
+- Quando o usuário realizar a assinatura do documento, uma cópia deve ser enviada automaticamente para o WhatsApp ou e-mail do paciente.
+
+
+
 Teste de paciente: id 31417
 
 Segue a documentação do Dental Office para cadastrar documentos a ficha do paciente:
