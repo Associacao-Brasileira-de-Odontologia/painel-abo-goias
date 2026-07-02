@@ -33,8 +33,42 @@ _MENSAGEM_WHATSAPP = (
 )
 
 
+_CONTENT_TYPE_DOCX = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+
+
+def _ler_anexo_contrato(contrato: "ContratoGerado") -> tuple[bytes, str, str] | None:
+    """Retorna (conteudo, extensao, content_type) do melhor anexo disponível.
+
+    Prefere o PDF; usa o DOCX como fallback. Retorna None se nenhum arquivo
+    puder ser lido.
+    """
+
+    candidatos = [
+        (contrato.arquivo_pdf, "pdf", "application/pdf"),
+        (contrato.arquivo, "docx", _CONTENT_TYPE_DOCX),
+    ]
+    for campo, extensao, content_type in candidatos:
+        if not campo:
+            continue
+        try:
+            campo.open("rb")
+            conteudo = campo.read()
+            campo.close()
+            return conteudo, extensao, content_type
+        except Exception as exc:
+            logger.warning(
+                "enviar_contrato_email: erro ao ler %s (contrato_pk=%s): %s",
+                extensao,
+                contrato.pk,
+                exc,
+            )
+    return None
+
+
 def enviar_contrato_email(contrato: "ContratoGerado", destinatario: str) -> bool:
-    """Envia o DOCX do contrato por e-mail e atualiza o status de envio.
+    """Envia o contrato por e-mail (PDF; DOCX como fallback) e atualiza o status.
 
     Retorna True em caso de sucesso ou False se ocorrer qualquer erro.
     """
@@ -51,33 +85,19 @@ def enviar_contrato_email(contrato: "ContratoGerado", destinatario: str) -> bool
         to=[destinatario],
     )
 
-    if contrato.arquivo:
-        try:
-            contrato.arquivo.open("rb")
-            conteudo = contrato.arquivo.read()
-            contrato.arquivo.close()
-        except Exception as exc:
-            logger.error(
-                "enviar_contrato_email: erro ao ler arquivo (contrato_pk=%s): %s",
-                contrato.pk,
-                exc,
-            )
-            return False
-
-        nome_arquivo = (
-            f"termo_{contrato.tipo}_{paciente.nome.split()[0].lower()}"
-            f"_{paciente.id_dental}.docx"
-        )
-        email.attach(
-            nome_arquivo,
-            conteudo,
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
-    else:
+    anexo = _ler_anexo_contrato(contrato)
+    if anexo is None:
         logger.warning(
             "enviar_contrato_email: contrato %s sem arquivo salvo.", contrato.pk
         )
         return False
+
+    conteudo, extensao, content_type = anexo
+    nome_arquivo = (
+        f"termo_{contrato.tipo}_{paciente.nome.split()[0].lower()}"
+        f"_{paciente.id_dental}.{extensao}"
+    )
+    email.attach(nome_arquivo, conteudo, content_type)
 
     try:
         email.send(fail_silently=False)
