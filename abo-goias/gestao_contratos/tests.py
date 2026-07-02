@@ -64,21 +64,21 @@ class ContratoGeradoModelTests(TestCase):
         pac = _paciente_completo()
         contrato = ContratoGerado.objects.create(
             paciente=pac,
-            tipo="bichectomia",
+            tipo="modelo_1",
             gerado_por=usuario,
         )
         texto = str(contrato)
-        self.assertIn("Bichectomia", texto)
+        self.assertIn("Modelo 1", texto)
         self.assertIn("João da Silva", texto)
 
     def test_ordering_mais_recente_primeiro(self) -> None:
         usuario = _usuario()
         pac = _paciente_completo()
         c1 = ContratoGerado.objects.create(
-            paciente=pac, tipo="bichectomia", gerado_por=usuario
+            paciente=pac, tipo="modelo_1", gerado_por=usuario
         )
         c2 = ContratoGerado.objects.create(
-            paciente=pac, tipo="endodontia", gerado_por=usuario
+            paciente=pac, tipo="modelo_2", gerado_por=usuario
         )
         contratos = list(ContratoGerado.objects.all())
         self.assertEqual(contratos[0], c2)
@@ -487,7 +487,7 @@ class GerarContratoPostTests(TestCase):
 
     def _dados_post(self, **kwargs) -> dict:
         base = {
-            "tipo": "bichectomia",
+            "tipo": "modelo_1",
             "observacoes_clinicas": "Sem intercorrências.",
             "profissional_nome": "Dr. Teste",
             "profissional_cro": "CRO-GO 1234",
@@ -516,9 +516,9 @@ class GerarContratoPostTests(TestCase):
         self.assertContains(response, "dados obrigatórios ausentes")
         self.assertEqual(ContratoGerado.objects.count(), 0)
 
-    @patch("gestao_contratos.views.gerar_contrato")
+    @patch("gestao_contratos.views.gerar_e_salvar_contrato")
     @patch("gestao_contratos.views.DentalClient")
-    def test_post_valido_gera_docx_e_registra_contrato(
+    def test_post_valido_registra_contrato_e_redireciona(
         self, MockDental: MagicMock, mock_gerar: MagicMock
     ) -> None:
         MockDental.return_value.buscar_detalhes_paciente.return_value = {
@@ -528,23 +528,27 @@ class GerarContratoPostTests(TestCase):
             "cpf": "123.456.789-00",
             "address_attributes": {"city": "Goiânia", "state": "GO"},
         }
-        mock_gerar.return_value = b"conteudo-docx-fake"
         pac = _paciente_completo(id_dental="301")
+        contrato = ContratoGerado.objects.create(
+            paciente=pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+        mock_gerar.return_value = contrato
 
         response = self.client.post(
             reverse("contrato_gerar", args=[pac.pk]),
             data=self._dados_post(),
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.get("Content-Type"),
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[contrato.pk]),
+            fetch_redirect_response=False,
         )
-        self.assertEqual(ContratoGerado.objects.filter(paciente=pac).count(), 1)
-        contrato = ContratoGerado.objects.get(paciente=pac)
-        self.assertEqual(contrato.tipo, "bichectomia")
-        self.assertEqual(contrato.gerado_por, self.usuario)
+        mock_gerar.assert_called_once()
+        kwargs = mock_gerar.call_args.kwargs
+        self.assertEqual(kwargs["tipo"], "modelo_1")
+        self.assertEqual(kwargs["paciente"], pac)
+        self.assertEqual(kwargs["gerado_por"], self.usuario)
 
     @patch("gestao_contratos.views.DentalClient")
     def test_post_com_tipo_invalido_redireciona_com_erro(
