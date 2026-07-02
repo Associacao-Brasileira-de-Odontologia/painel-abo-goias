@@ -17,6 +17,7 @@ from gestao_lab.integrations.dental import (
 )
 from gestao_lab.models import Paciente
 
+from .forms import PacienteConfirmacaoForm
 from .models import TIPOS_CONTRATO, ContratoGerado
 from .services.checklist import gerar_checklist, pendencias_obrigatorias
 from .services.documentos import gerar_e_salvar_contrato
@@ -43,9 +44,11 @@ def contratos(request: HttpRequest) -> HttpResponse:
     pacientes_api: list[dict] = []
     erro_api: str = ""
     dental_pesquisado: bool = False
+    busca_dental_explicita = request.GET.get("dental") == "1"
 
-    # Busca no Dental Office apenas quando DB retornou zero resultados.
-    if busca and not pacientes_qs.exists():
+    # Busca no Dental Office quando solicitado explicitamente ou como
+    # fallback quando o banco local retornou zero resultados.
+    if busca and (busca_dental_explicita or not pacientes_qs.exists()):
         clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
         if clinic_id:
             try:
@@ -173,65 +176,127 @@ def importar_e_gerar(request: HttpRequest, id_dental: str) -> HttpResponse:
         )
 
     acao = "importado" if criado else "atualizado"
-    messages.success(request, f"Paciente {nome} {acao} com sucesso.")
-    return redirect("contrato_gerar", paciente_pk=paciente.pk)
+    messages.success(
+        request,
+        f"Paciente {nome} {acao} com sucesso. Revise e confirme os dados "
+        "antes de gerar o contrato.",
+    )
+    return redirect("contrato_confirmar_dados", paciente_pk=paciente.pk)
+
+
+def _sincronizar_do_dental(paciente: Paciente) -> None:
+    """Atualiza os campos enriquecidos do paciente a partir do Dental Office.
+
+    A sincronização invalida a confirmação anterior — os dados mudaram e
+    precisam ser revisados novamente. O campo convenio não é tocado (é
+    exclusivamente local; o Dental Office não fornece essa informação).
+
+    Raises DentalAPIError em falha de comunicação.
+    """
+
+    client = DentalClient()
+    dados_api = client.buscar_detalhes_paciente(paciente.id_dental)
+    campos = normalizar_paciente_detalhado(dados_api)
+    for campo, valor in campos.items():
+        setattr(paciente, campo, valor)
+    paciente.ultima_sincronizacao = timezone.now()
+    paciente.dados_confirmados_em = None
+    paciente.dados_confirmados_por = None
+    paciente.save(
+        update_fields=[
+            "email",
+            "cpf",
+            "rg",
+            "data_nascimento",
+            "endereco_logradouro",
+            "endereco_numero",
+            "endereco_complemento",
+            "endereco_bairro",
+            "endereco_cidade",
+            "endereco_estado",
+            "endereco_cep",
+            "nome_responsavel",
+            "cpf_responsavel",
+            "ultima_sincronizacao",
+            "dados_confirmados_em",
+            "dados_confirmados_por",
+            "atualizado_em",
+        ]
+    )
 
 
 @login_required
-def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
-    """Exibe o formulário e processa a geração do contrato DOCX.
+def confirmar_dados_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
+    """Tela de revisão, edição e confirmação dos dados do paciente.
 
-    GET: Busca os dados completos do paciente via API Dental Office (se ausentes
-    ou se ``?sincronizar=1`` for passado). Gera o checklist de prontidão e
-    exibe o formulário. A geração fica bloqueada se houver campos obrigatórios
-    não preenchidos.
+    GET: Sincroniza automaticamente com o Dental Office quando os dados
+    mínimos estão ausentes ou quando ``?sincronizar=1`` é passado, e exibe
+    o formulário de edição. A sincronização invalida confirmações anteriores.
 
-    POST: Revalida o checklist, gera o DOCX e retorna o arquivo para download.
-    Rejeita a solicitação se o paciente ainda tiver pendências obrigatórias.
+    POST: Salva as edições, registra quem confirmou e quando, e redireciona
+    para a tela de geração do contrato.
     """
 
     paciente = get_object_or_404(Paciente, pk=paciente_pk, ativo=True)
 
-    forcar_sincronizacao = request.GET.get("sincronizar") == "1"
-
-    if forcar_sincronizacao or not paciente.dados_contrato_completos:
-        try:
-            client = DentalClient()
-            dados_api = client.buscar_detalhes_paciente(paciente.id_dental)
-            campos = normalizar_paciente_detalhado(dados_api)
-            for campo, valor in campos.items():
-                setattr(paciente, campo, valor)
-            paciente.ultima_sincronizacao = timezone.now()
-            paciente.save(
-                update_fields=[
-                    "email",
-                    "cpf",
-                    "rg",
-                    "data_nascimento",
-                    "endereco_logradouro",
-                    "endereco_numero",
-                    "endereco_complemento",
-                    "endereco_bairro",
-                    "endereco_cidade",
-                    "endereco_estado",
-                    "endereco_cep",
-                    "nome_responsavel",
-                    "cpf_responsavel",
-                    "ultima_sincronizacao",
-                    "atualizado_em",
-                ]
+    if request.method == "POST":
+        form = PacienteConfirmacaoForm(request.POST, instance=paciente)
+        if form.is_valid():
+            paciente = form.save(commit=False)
+            paciente.dados_confirmados_em = timezone.now()
+            paciente.dados_confirmados_por = request.user
+            paciente.save()
+            messages.success(
+                request, f"Dados de {paciente.nome} confirmados com sucesso."
             )
-            if forcar_sincronizacao:
-                messages.success(
+            return redirect("contrato_gerar", paciente_pk=paciente.pk)
+    else:
+        forcar_sincronizacao = request.GET.get("sincronizar") == "1"
+        if forcar_sincronizacao or not paciente.dados_contrato_completos:
+            try:
+                _sincronizar_do_dental(paciente)
+                if forcar_sincronizacao:
+                    messages.success(
+                        request,
+                        "Dados atualizados a partir do Dental Office. "
+                        "Revise e confirme antes de gerar o contrato.",
+                    )
+            except DentalAPIError as exc:
+                messages.warning(
                     request,
-                    "Dados atualizados com sucesso a partir do Dental Office.",
+                    f"Não foi possível buscar dados no Dental Office: {exc}. "
+                    "Preencha manualmente os campos faltantes.",
                 )
-        except DentalAPIError as exc:
-            messages.warning(
-                request,
-                f"Não foi possível buscar dados no Dental Office: {exc}. "
-                "O checklist abaixo indica quais campos estão faltando.",
-            )
+        form = PacienteConfirmacaoForm(instance=paciente)
+
+    return render(
+        request,
+        "gestao_contratos/confirmar_dados.html",
+        {
+            "paciente": paciente,
+            "form": form,
+        },
+    )
+
+
+@login_required
+def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
+    """Exibe o formulário e processa a geração do contrato.
+
+    Exige que os dados do paciente tenham sido confirmados previamente na
+    tela de confirmação — caso contrário, redireciona para lá. A geração
+    também fica bloqueada enquanto houver campos obrigatórios pendentes
+    (checklist).
+    """
+
+    paciente = get_object_or_404(Paciente, pk=paciente_pk, ativo=True)
+
+    if not paciente.dados_confirmados:
+        messages.info(
+            request,
+            "Revise e confirme os dados do paciente antes de gerar o contrato.",
+        )
+        return redirect("contrato_confirmar_dados", paciente_pk=paciente.pk)
 
     if request.method == "POST":
         return _processar_geracao(request, paciente)

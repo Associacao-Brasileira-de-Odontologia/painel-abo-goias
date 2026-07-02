@@ -64,6 +64,10 @@
                                placeholder="Digite o nome do paciente...">
                     </div>
                     <button class="button primary" type="submit">Buscar</button>
+                    <button class="button secondary" type="submit" name="dental" value="1"
+                            title="Consulta também os pacientes cadastrados no Dental Office">
+                        Buscar no Dental Office
+                    </button>
                     {% if busca %}
                         <a class="button secondary" href="{% url 'contratos' %}">Limpar</a>
                     {% endif %}

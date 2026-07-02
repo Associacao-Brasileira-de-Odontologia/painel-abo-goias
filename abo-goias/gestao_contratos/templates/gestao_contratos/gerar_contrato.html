@@ -25,6 +25,15 @@
                     </span>
                     <span>Gerar contrato</span>
                 </a>
+                <a class="side-link" href="{% url 'contrato_confirmar_dados' paciente.pk %}">
+                    <span class="side-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"/>
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                        </svg>
+                    </span>
+                    <span>Editar dados do paciente</span>
+                </a>
                 <a class="side-link side-link-return" href="{% url 'contratos' %}">
                     <span class="side-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -94,8 +103,8 @@
                     {% endif %}
                 </div>
                 <a class="icon-action"
-                   href="{% url 'contrato_gerar' paciente.pk %}?sincronizar=1"
-                   title="Atualizar dados do Dental Office"
+                   href="{% url 'contrato_confirmar_dados' paciente.pk %}?sincronizar=1"
+                   title="Atualizar dados do Dental Office (exige reconfirmação)"
                    aria-label="Atualizar dados do Dental Office">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M21.5 2v6h-6"/>
@@ -154,10 +163,24 @@
                         </div>
                     {% endif %}
 
+                    {% if paciente.convenio %}
+                        <div class="info-chip">
+                            <span>Convênio</span>
+                            <strong>{{ paciente.convenio }}</strong>
+                        </div>
+                    {% endif %}
+
                     <div class="info-chip">
                         <span>Registro Dental</span>
                         <strong>#{{ paciente.id_dental }}</strong>
                     </div>
+
+                    {% if paciente.dados_confirmados %}
+                        <div class="info-chip">
+                            <span>Dados confirmados</span>
+                            <strong>{{ paciente.dados_confirmados_em|date:"d/m/Y H:i" }}</strong>
+                        </div>
+                    {% endif %}
                 </div>
 
                 {% if paciente.endereco_logradouro or paciente.endereco_cidade %}
