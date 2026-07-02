@@ -6,6 +6,8 @@ Prioridade: views e integração Dental → checklist service → models.
 
 from __future__ import annotations
 
+import hashlib
+import tempfile
 from datetime import date
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +19,7 @@ from gestao_contratos.services.checklist import (
     gerar_checklist,
     pendencias_obrigatorias,
 )
+from gestao_contratos.services.documentos import gerar_e_salvar_contrato
 from gestao_lab.integrations.dental import DentalAPIError
 from gestao_lab.models import Paciente
 
@@ -571,3 +574,61 @@ class GerarContratoPostTests(TestCase):
 
         self.assertContains(response, "tipo de contrato válido")
         self.assertEqual(ContratoGerado.objects.count(), 0)
+
+
+# ---------------------------------------------------------------------------
+# Testes do serviço de geração — ciclo de vida (Fase 0)
+# ---------------------------------------------------------------------------
+
+
+class GerarESalvarContratoTests(TestCase):
+    """Cobre status inicial, versionamento e hash SHA-256 do PDF."""
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.pac = _paciente_completo(id_dental="400")
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        override = override_settings(MEDIA_ROOT=media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+
+    def _gerar(self, tipo: str = "modelo_1") -> ContratoGerado:
+        return gerar_e_salvar_contrato(
+            paciente=self.pac,
+            tipo=tipo,
+            gerado_por=self.usuario,
+        )
+
+    def test_salva_docx_e_pdf(self) -> None:
+        contrato = self._gerar()
+        self.assertTrue(contrato.arquivo.name.endswith(".docx"))
+        self.assertTrue(contrato.arquivo_pdf.name.endswith(".pdf"))
+
+    def test_status_inicial_gerado(self) -> None:
+        contrato = self._gerar()
+        self.assertEqual(contrato.status, "gerado")
+
+    def test_hash_sha256_corresponde_ao_pdf_salvo(self) -> None:
+        contrato = self._gerar()
+        contrato.arquivo_pdf.open("rb")
+        conteudo = contrato.arquivo_pdf.read()
+        contrato.arquivo_pdf.close()
+        self.assertEqual(len(contrato.hash_sha256), 64)
+        self.assertEqual(contrato.hash_sha256, hashlib.sha256(conteudo).hexdigest())
+
+    def test_versao_incrementa_por_paciente_e_tipo(self) -> None:
+        c1 = self._gerar()
+        c2 = self._gerar()
+        c3 = self._gerar(tipo="modelo_2")
+        self.assertEqual(c1.versao, 1)
+        self.assertEqual(c2.versao, 2)
+        self.assertEqual(c3.versao, 1)
+
+    def test_versao_independente_por_paciente(self) -> None:
+        self._gerar()
+        outro = _paciente_completo(id_dental="401")
+        contrato_outro = gerar_e_salvar_contrato(
+            paciente=outro, tipo="modelo_1", gerado_por=self.usuario
+        )
+        self.assertEqual(contrato_outro.versao, 1)

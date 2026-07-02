@@ -7,6 +7,7 @@ sem dependência de LibreOffice ou Microsoft Word).
 
 from __future__ import annotations
 
+import hashlib
 import io
 from datetime import date
 from typing import TYPE_CHECKING
@@ -56,6 +57,8 @@ def gerar_e_salvar_contrato(
     primeiro = paciente.nome.split()[0].lower()
     base = f"contrato_modelo_{numero}_{primeiro}_{paciente.id_dental}"
 
+    versao = ContratoGerado.objects.filter(paciente=paciente, tipo=tipo).count() + 1
+
     contrato = ContratoGerado(
         paciente=paciente,
         tipo=tipo,
@@ -64,6 +67,9 @@ def gerar_e_salvar_contrato(
         profissional_cro=profissional_cro,
         local_assinatura=local_assinatura,
         gerado_por=gerado_por,
+        status="gerado",
+        versao=versao,
+        hash_sha256=hashlib.sha256(conteudo_pdf).hexdigest(),
     )
     contrato.arquivo.save(f"{base}.docx", ContentFile(conteudo_docx), save=False)
     contrato.arquivo_pdf.save(f"{base}.pdf", ContentFile(conteudo_pdf), save=False)

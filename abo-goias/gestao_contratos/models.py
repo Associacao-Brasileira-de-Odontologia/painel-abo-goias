@@ -12,6 +12,13 @@ TIPOS_CONTRATO = [
     ("modelo_4", "Modelo 4"),
 ]
 
+STATUS_CONTRATO = [
+    ("gerado", "Gerado"),
+    ("aguardando_assinatura", "Aguardando assinatura"),
+    ("assinado", "Assinado"),
+    ("cancelado", "Cancelado"),
+]
+
 STATUS_ENVIO_DENTAL = [
     ("nao_enviado", "Não enviado"),
     ("enviado", "Enviado"),
@@ -43,6 +50,20 @@ class ContratoGerado(ModeloBase):
     local_assinatura = models.CharField(max_length=100, default="Goiânia - GO")
     arquivo = models.FileField(upload_to="contratos/docx/", blank=True)
     arquivo_pdf = models.FileField(upload_to="contratos/pdf/", blank=True)
+    status = models.CharField(
+        max_length=25,
+        choices=STATUS_CONTRATO,
+        default="gerado",
+    )
+    versao = models.PositiveIntegerField(
+        default=1,
+        help_text="Sequencial por paciente e tipo de contrato.",
+    )
+    hash_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="SHA-256 do PDF gerado; recalculado após a assinatura.",
+    )
     status_envio = models.CharField(
         max_length=25,
         choices=STATUS_ENVIO,
