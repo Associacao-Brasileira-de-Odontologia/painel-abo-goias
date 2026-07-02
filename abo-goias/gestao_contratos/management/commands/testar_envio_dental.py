@@ -8,7 +8,6 @@ Uso:
 
 from __future__ import annotations
 
-import base64
 import json
 
 from django.core.management.base import BaseCommand, CommandError
@@ -102,17 +101,15 @@ class Command(BaseCommand):
                 "Paciente sem id_dental — impossível enviar ao Dental Office."
             )
 
-        # ── 3. Obter bytes do documento ────────────────────────────────
+        # ── 3. Obter bytes do PDF ──────────────────────────────────────
         self.stdout.write(self.style.MIGRATE_HEADING("\n3. Leitura do arquivo"))
         arquivo_bytes: bytes | None = None
-        extensao = "docx"
 
         if contrato.arquivo_pdf:
             try:
                 contrato.arquivo_pdf.open("rb")
                 arquivo_bytes = contrato.arquivo_pdf.read()
                 contrato.arquivo_pdf.close()
-                extensao = "pdf"
                 self.stdout.write(
                     self.style.SUCCESS(f"   OK PDF lido: {len(arquivo_bytes):,} bytes")
                 )
@@ -121,76 +118,31 @@ class Command(BaseCommand):
                     self.style.WARNING(f"   AVISO Falha ao ler PDF: {exc}")
                 )
 
-        if not arquivo_bytes and contrato.arquivo:
-            try:
-                contrato.arquivo.open("rb")
-                arquivo_bytes = contrato.arquivo.read()
-                contrato.arquivo.close()
-                self.stdout.write(
-                    self.style.SUCCESS(f"   OK DOCX lido: {len(arquivo_bytes):,} bytes")
-                )
-            except Exception as exc:
-                self.stdout.write(
-                    self.style.WARNING(f"   AVISO Falha ao ler DOCX: {exc}")
-                )
-
         if not arquivo_bytes:
-            self.stdout.write("   Nenhum arquivo salvo — regenerando DOCX...")
-            from gestao_contratos.services.documentos import gerar_contrato
+            self.stdout.write("   Nenhum PDF salvo — gerando via reportlab...")
+            from gestao_contratos.services.documentos import gerar_pdf
 
             try:
-                arquivo_bytes = gerar_contrato(
+                arquivo_bytes = gerar_pdf(
                     paciente=paciente,
                     tipo=contrato.tipo,
-                    observacoes_clinicas=contrato.observacoes_clinicas,
                     profissional_nome=contrato.profissional_nome,
                     profissional_cro=contrato.profissional_cro,
                     local_assinatura=contrato.local_assinatura,
                 )
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"   OK DOCX regenerado: {len(arquivo_bytes):,} bytes"
+                        f"   OK PDF gerado: {len(arquivo_bytes):,} bytes"
                     )
                 )
             except Exception as exc:
-                raise CommandError(f"Falha ao gerar documento: {exc}")
-
-        # ── 3b. Converter para PDF se ainda for DOCX ───────────────────
-        if extensao == "docx":
-            from gestao_contratos.services.pdf_converter import (
-                docx_para_pdf,
-                pdf_converter_disponivel,
-            )
-
-            if pdf_converter_disponivel():
-                self.stdout.write("   Convertendo DOCX para PDF...")
-                try:
-                    arquivo_bytes = docx_para_pdf(arquivo_bytes)
-                    extensao = "pdf"
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"   OK PDF gerado: {len(arquivo_bytes):,} bytes"
-                        )
-                    )
-                except RuntimeError as exc:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"   AVISO Conversao PDF falhou, enviando DOCX: {exc}"
-                        )
-                    )
-            else:
-                self.stdout.write(
-                    self.style.WARNING(
-                        "   AVISO LibreOffice/Word nao disponivel"
-                        " — enviando DOCX (API pode rejeitar)."
-                    )
-                )
+                raise CommandError(f"Falha ao gerar o PDF: {exc}")
 
         # ── 4. Envio à API ─────────────────────────────────────────────
         self.stdout.write(self.style.MIGRATE_HEADING("\n4. Envio ao Dental Office"))
         nome_arquivo = (
             f"TESTE Termo {contrato.get_tipo_display()} "
-            f"{paciente.nome.split()[0].title()}.{extensao}"
+            f"{paciente.nome.split()[0].title()}.pdf"
         )
         base = config.base_url.rstrip("/")
         self.stdout.write(
@@ -198,9 +150,6 @@ class Command(BaseCommand):
         )
         self.stdout.write(f"   nome_arquivo : {nome_arquivo!r}")
         self.stdout.write(f"   tamanho      : {len(arquivo_bytes):,} bytes")
-        self.stdout.write(
-            f"   base64       : {len(base64.b64encode(arquivo_bytes)):,} chars"
-        )
 
         try:
             resposta = client.enviar_documento_paciente(
