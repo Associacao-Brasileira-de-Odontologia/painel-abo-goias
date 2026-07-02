@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Assinatura de Contrato — ABO Goiás</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            background: #f2f4f8; color: #1c2733; padding: 16px;
+            display: flex; justify-content: center;
+        }
+        .card {
+            width: 100%; max-width: 560px; background: #fff;
+            border-radius: 12px; box-shadow: 0 2px 14px rgba(20,40,70,.08);
+            padding: 22px; margin-bottom: 24px;
+        }
+        h1 { font-size: 1.15rem; margin-bottom: 4px; }
+        .eyebrow { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #5a6b80; margin-bottom: 10px; }
+        .info { background: #f4f7fb; border-radius: 8px; padding: 12px 14px; margin: 14px 0; font-size: .9rem; }
+        .info p { margin: 2px 0; }
+        .info span { color: #5a6b80; }
+        .btn {
+            display: inline-block; width: 100%; text-align: center;
+            padding: 13px 18px; border-radius: 8px; border: 0;
+            font-size: 1rem; font-weight: 600; cursor: pointer;
+            text-decoration: none;
+        }
+        .btn-primary { background: #0b6e4f; color: #fff; }
+        .btn-primary:disabled { background: #9fb7ad; cursor: not-allowed; }
+        .btn-outline { background: #fff; color: #1c2733; border: 1px solid #c6d0dc; margin-top: 8px; }
+        .canvas-wrap {
+            border: 2px dashed #b8c4d2; border-radius: 10px;
+            margin: 12px 0 8px; position: relative; background: #fdfefe;
+            touch-action: none;
+        }
+        canvas { display: block; width: 100%; height: 200px; border-radius: 8px; }
+        .canvas-hint {
+            position: absolute; inset: 0; display: flex; align-items: center;
+            justify-content: center; color: #9aa8b8; font-size: .9rem;
+            pointer-events: none;
+        }
+        .erro { background: #fdeaea; color: #a32020; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: .9rem; }
+        .rodape { text-align: center; font-size: .75rem; color: #8a97a8; margin-top: 14px; }
+    </style>
+</head>
+<body>
+<div>
+    <div class="card">
+        <p class="eyebrow">ABO Goiás — Assinatura eletrônica</p>
+        <h1>Termo de Consentimento — {{ contrato.get_tipo_display }}</h1>
+
+        <div class="info">
+            <p><span>Paciente:</span> <strong>{{ paciente.nome }}</strong></p>
+            <p><span>Documento:</span> {{ contrato.get_tipo_display }} (versão {{ contrato.versao }})</p>
+            <p><span>Gerado em:</span> {{ contrato.criado_em|date:"d/m/Y H:i" }}</p>
+        </div>
+
+        <a class="btn btn-outline" target="_blank" rel="noopener"
+           href="{% url 'assinatura_publica_pdf' token %}">
+            📄 Ler o contrato completo (PDF)
+        </a>
+    </div>
+
+    <div class="card">
+        <h1>Sua assinatura</h1>
+        <p style="font-size:.88rem; color:#5a6b80; margin-top:4px;">
+            Desenhe sua assinatura no quadro abaixo usando o dedo ou uma caneta touch.
+        </p>
+
+        {% if erro %}
+            <div class="erro" style="margin-top:10px;">{{ erro }}</div>
+        {% endif %}
+
+        <div class="canvas-wrap">
+            <canvas id="pad" width="1000" height="400"></canvas>
+            <div class="canvas-hint" id="hint">Assine aqui</div>
+        </div>
+
+        <form id="form-assinatura" method="post" action="">
+            {% csrf_token %}
+            <input type="hidden" name="assinatura" id="assinatura-data">
+            <button class="btn btn-outline" type="button" id="btn-limpar">Limpar</button>
+            <button class="btn btn-primary" type="submit" id="btn-assinar"
+                    style="margin-top:8px;" disabled>
+                Aceitar e assinar
+            </button>
+        </form>
+
+        <p class="rodape">
+            Ao tocar em "Aceitar e assinar" você declara que leu o contrato e
+            concorda com seus termos. Data, hora, IP e dispositivo serão
+            registrados para fins de auditoria.
+        </p>
+    </div>
+</div>
+
+<script>
+(function () {
+    var canvas = document.getElementById('pad');
+    var ctx = canvas.getContext('2d');
+    var hint = document.getElementById('hint');
+    var btnAssinar = document.getElementById('btn-assinar');
+    var btnLimpar = document.getElementById('btn-limpar');
+    var campo = document.getElementById('assinatura-data');
+    var form = document.getElementById('form-assinatura');
+    var desenhando = false;
+    var temTraco = false;
+
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#14263e';
+
+    function pos(evt) {
+        var r = canvas.getBoundingClientRect();
+        var p = evt.touches ? evt.touches[0] : evt;
+        return {
+            x: (p.clientX - r.left) * (canvas.width / r.width),
+            y: (p.clientY - r.top) * (canvas.height / r.height)
+        };
+    }
+
+    function comecar(evt) {
+        evt.preventDefault();
+        desenhando = true;
+        var p = pos(evt);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+    }
+
+    function mover(evt) {
+        if (!desenhando) return;
+        evt.preventDefault();
+        var p = pos(evt);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        if (!temTraco) {
+            temTraco = true;
+            hint.style.display = 'none';
+            btnAssinar.disabled = false;
+        }
+    }
+
+    function parar() { desenhando = false; }
+
+    canvas.addEventListener('mousedown', comecar);
+    canvas.addEventListener('mousemove', mover);
+    canvas.addEventListener('mouseup', parar);
+    canvas.addEventListener('mouseleave', parar);
+    canvas.addEventListener('touchstart', comecar, {passive: false});
+    canvas.addEventListener('touchmove', mover, {passive: false});
+    canvas.addEventListener('touchend', parar);
+
+    btnLimpar.addEventListener('click', function () {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        temTraco = false;
+        hint.style.display = 'flex';
+        btnAssinar.disabled = true;
+    });
+
+    form.addEventListener('submit', function (evt) {
+        if (!temTraco) {
+            evt.preventDefault();
+            return;
+        }
+        campo.value = canvas.toDataURL('image/png');
+        btnAssinar.disabled = true;
+        btnAssinar.textContent = 'Enviando…';
+    });
+})();
+</script>
+</body>
+</html>

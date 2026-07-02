@@ -1,8 +1,40 @@
 from django.urls import path
 
-from . import views
+from . import views, views_assinatura
 
 urlpatterns = [
+    # ── Assinatura remota — público (paciente, via QR Code) ────────────
+    path(
+        "assinar/<str:token>/",
+        views_assinatura.assinar_view,
+        name="assinatura_publica",
+    ),
+    path(
+        "assinar/<str:token>/pdf/",
+        views_assinatura.assinar_pdf_view,
+        name="assinatura_publica_pdf",
+    ),
+    # ── Assinatura remota — staff ───────────────────────────────────────
+    path(
+        "contrato/<int:contrato_pk>/iniciar-assinatura/",
+        views_assinatura.iniciar_assinatura_view,
+        name="contrato_iniciar_assinatura",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/cancelar-assinatura/",
+        views_assinatura.cancelar_assinatura_view,
+        name="contrato_cancelar_assinatura",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/qr-assinatura/",
+        views_assinatura.qr_assinatura_view,
+        name="contrato_qr_assinatura",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/baixar-assinado/",
+        views_assinatura.baixar_contrato_assinado_view,
+        name="contrato_baixar_assinado",
+    ),
     path("", views.contratos, name="contratos"),
     path(
         "paciente/<int:paciente_pk>/confirmar-dados/",

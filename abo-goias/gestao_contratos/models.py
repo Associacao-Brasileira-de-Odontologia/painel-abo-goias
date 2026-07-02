@@ -50,6 +50,11 @@ class ContratoGerado(ModeloBase):
     local_assinatura = models.CharField(max_length=100, default="Goiânia - GO")
     arquivo = models.FileField(upload_to="contratos/docx/", blank=True)
     arquivo_pdf = models.FileField(upload_to="contratos/pdf/", blank=True)
+    arquivo_pdf_assinado = models.FileField(
+        upload_to="contratos/assinados/",
+        blank=True,
+        help_text="PDF definitivo com a assinatura do paciente mesclada.",
+    )
     status = models.CharField(
         max_length=25,
         choices=STATUS_CONTRATO,
@@ -94,3 +99,107 @@ class ContratoGerado(ModeloBase):
             f"{self.get_tipo_display()} — {self.paciente.nome}"
             f" ({self.criado_em:%d/%m/%Y})"
         )
+
+
+STATUS_SESSAO_ASSINATURA = [
+    ("pendente", "Pendente"),
+    ("aberta", "Aberta pelo paciente"),
+    ("assinada", "Assinada"),
+    ("expirada", "Expirada"),
+    ("cancelada", "Cancelada"),
+]
+
+
+class SessaoAssinatura(ModeloBase):
+    """Sessão temporária de assinatura remota de um contrato.
+
+    O paciente acessa a URL pública (token assinado criptograficamente,
+    entregue via QR Code) em seu próprio dispositivo e assina no canvas.
+    Uma sessão permite apenas uma assinatura e expira automaticamente.
+    """
+
+    contrato = models.ForeignKey(
+        ContratoGerado,
+        on_delete=models.CASCADE,
+        related_name="sessoes_assinatura",
+    )
+    status = models.CharField(
+        max_length=15,
+        choices=STATUS_SESSAO_ASSINATURA,
+        default="pendente",
+    )
+    expira_em = models.DateTimeField()
+    criado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sessoes_assinatura_criadas",
+    )
+    aberta_em = models.DateTimeField(null=True, blank=True)
+    assinada_em = models.DateTimeField(null=True, blank=True)
+    ip_assinatura = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    assinatura_imagem = models.FileField(upload_to="assinaturas/", blank=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "sessão de assinatura"
+        verbose_name_plural = "sessões de assinatura"
+
+    def __str__(self) -> str:
+        return f"Sessão #{self.pk} — {self.contrato} [{self.status}]"
+
+    @property
+    def ativa(self) -> bool:
+        """True se a sessão ainda aceita assinatura (pendente/aberta e no prazo)."""
+        from django.utils import timezone
+
+        return self.status in ("pendente", "aberta") and timezone.now() < (
+            self.expira_em
+        )
+
+
+TIPOS_EVENTO_CONTRATO = [
+    ("sessao_criada", "Sessão de assinatura criada"),
+    ("contrato_aberto", "Contrato aberto pelo paciente"),
+    ("assinatura_concluida", "Assinatura concluída"),
+    ("documento_assinado_salvo", "Documento assinado salvo"),
+    ("sessao_expirada", "Sessão expirada"),
+    ("sessao_cancelada", "Sessão cancelada"),
+    ("envio_dental_iniciado", "Envio ao Dental Office iniciado"),
+    ("envio_dental_concluido", "Envio ao Dental Office concluído"),
+    ("envio_dental_erro", "Erro no envio ao Dental Office"),
+]
+
+
+class EventoContrato(ModeloBase):
+    """Trilha de eventos do ciclo de vida do contrato.
+
+    Alimenta a atualização de status na interface (polling/WebSocket) e
+    serve como registro de auditoria: cada transição relevante fica
+    gravada com carimbo de tempo e dados contextuais em payload.
+    """
+
+    contrato = models.ForeignKey(
+        ContratoGerado,
+        on_delete=models.CASCADE,
+        related_name="eventos",
+    )
+    sessao = models.ForeignKey(
+        SessaoAssinatura,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos",
+    )
+    tipo = models.CharField(max_length=30, choices=TIPOS_EVENTO_CONTRATO)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["criado_em", "pk"]
+        verbose_name = "evento de contrato"
+        verbose_name_plural = "eventos de contrato"
+
+    def __str__(self) -> str:
+        return f"{self.get_tipo_display()} — contrato {self.contrato_id}"

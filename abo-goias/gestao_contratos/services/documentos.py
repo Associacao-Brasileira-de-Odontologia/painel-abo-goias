@@ -16,6 +16,9 @@ from django.core.files.base import ContentFile
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas as rl_canvas
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -24,6 +27,14 @@ if TYPE_CHECKING:
 
 
 _CLINICA = "Associação Brasileira de Odontologia — Seção Goiás"
+
+# Posições absolutas do bloco de assinatura no PDF (em pontos, origem no
+# rodapé da página). São fixas para que o merge da assinatura eletrônica
+# (services/assinatura_pdf.py) saiba exatamente onde carimbar a imagem.
+PDF_MARGEM_ESQUERDA = 3.0 * cm
+PDF_ASSINATURA_LARGURA = 8.5 * cm
+PDF_ASSINATURA_PACIENTE_Y = 5.2 * cm
+PDF_ASSINATURA_PROFISSIONAL_Y = 3.0 * cm
 
 
 def gerar_e_salvar_contrato(
@@ -239,15 +250,11 @@ def _gerar_pdf(
     profissional_cro: str,
     local_assinatura: str,
 ) -> bytes:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import cm
-    from reportlab.pdfgen import canvas as rl_canvas
-
     buf = io.BytesIO()
     larg, alt = A4
     c = rl_canvas.Canvas(buf, pagesize=A4)
 
-    ml = 3 * cm
+    ml = PDF_MARGEM_ESQUERDA
     mr = larg - 2.5 * cm
     uw = mr - ml
     y: list[float] = [alt - 2.5 * cm]  # lista para mutabilidade em closures
@@ -305,13 +312,12 @@ def _gerar_pdf(
             c.drawString(ml, y[0], linha)
             nl(sz + 4)
 
-    def assinatura(desc: str) -> None:
-        c.setFont("Helvetica", 11)
-        c.drawString(ml, y[0], "_" * 52)
-        nl(13)
+    def bloco_assinatura(y_linha: float, descricao: str) -> None:
+        """Linha de assinatura em posição fixa, ancorada ao rodapé."""
+        c.setLineWidth(0.7)
+        c.line(ml, y_linha, ml + PDF_ASSINATURA_LARGURA, y_linha)
         c.setFont("Helvetica", 10)
-        c.drawString(ml, y[0], desc)
-        nl(22)
+        c.drawString(ml, y_linha - 13, descricao)
 
     # ── Cabeçalho ─────────────────────────────────────────────────────
     centro(_CLINICA.upper(), 10, bold=True)
@@ -357,14 +363,12 @@ def _gerar_pdf(
         "Local e data",
         f"{local_assinatura}, {date.today().strftime('%d/%m/%Y')}",
     )
-    nl(25)
-
-    # ── Assinaturas ────────────────────────────────────────────────────
-    assinatura("Paciente ou responsável legal")
+    # ── Assinaturas (posição fixa, ancoradas ao rodapé) ────────────────
+    bloco_assinatura(PDF_ASSINATURA_PACIENTE_Y, "Paciente ou responsável legal")
     prof = profissional_nome or "Profissional responsável"
     if profissional_cro:
         prof += f" — CRO: {profissional_cro}"
-    assinatura(prof)
+    bloco_assinatura(PDF_ASSINATURA_PROFISSIONAL_Y, prof)
 
     c.save()
     buf.seek(0)

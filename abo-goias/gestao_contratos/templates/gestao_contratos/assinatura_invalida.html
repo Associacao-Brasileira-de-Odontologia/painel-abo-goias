@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Link indisponível — ABO Goiás</title>
+    <style>
+        body {
+            font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            background: #f2f4f8; color: #1c2733; padding: 24px;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 90vh; margin: 0;
+        }
+        .card {
+            max-width: 480px; background: #fff; border-radius: 12px;
+            box-shadow: 0 2px 14px rgba(20,40,70,.08); padding: 28px;
+            text-align: center;
+        }
+        h1 { font-size: 1.2rem; margin: 12px 0 8px; }
+        p { color: #5a6b80; font-size: .95rem; line-height: 1.5; }
+        .icone { font-size: 2.6rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icone">⚠️</div>
+        {% if motivo == "expirada" %}
+            <h1>Este link de assinatura expirou</h1>
+            <p>Por segurança, o link tem validade limitada.
+               Peça à recepção para gerar um novo QR Code.</p>
+        {% elif motivo == "ja_assinada" %}
+            <h1>Contrato já assinado</h1>
+            <p>Este documento já recebeu uma assinatura.
+               Se precisar de uma cópia, fale com a recepção.</p>
+        {% elif motivo == "cancelada" %}
+            <h1>Sessão de assinatura cancelada</h1>
+            <p>Esta sessão foi cancelada pela recepção.
+               Solicite um novo QR Code se ainda precisar assinar.</p>
+        {% else %}
+            <h1>Link de assinatura inválido</h1>
+            <p>O endereço acessado não corresponde a nenhuma sessão de
+               assinatura. Confira o QR Code e tente novamente.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

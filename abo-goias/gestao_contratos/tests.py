@@ -6,16 +6,28 @@ Prioridade: views e integração Dental → checklist service → models.
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import io
 import tempfile
 from datetime import date
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from gestao_contratos.models import ContratoGerado
+from gestao_contratos.models import ContratoGerado, EventoContrato
+from gestao_contratos.services.assinatura import (
+    AssinaturaInvalida,
+    SessaoInvalida,
+    criar_sessao,
+    gerar_token,
+    processar_assinatura,
+    resolver_token,
+    sessao_ativa,
+)
 from gestao_contratos.services.checklist import (
     gerar_checklist,
     pendencias_obrigatorias,
@@ -759,3 +771,307 @@ class GerarESalvarContratoTests(TestCase):
             paciente=outro, tipo="modelo_1", gerado_por=self.usuario
         )
         self.assertEqual(contrato_outro.versao, 1)
+
+
+# ---------------------------------------------------------------------------
+# Testes de assinatura remota (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+def _assinatura_data_url() -> str:
+    """PNG realista de assinatura, como o canvas enviaria (data URL)."""
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGBA", (300, 100), (0, 0, 0, 0))
+    desenho = ImageDraw.Draw(img)
+    desenho.line(
+        [(10, 60), (80, 30), (150, 70), (280, 40)], fill=(20, 38, 62, 255), width=4
+    )
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+class AssinaturaBaseTests(TestCase):
+    """Base: contrato real (com PDF) em MEDIA_ROOT temporário."""
+
+    def setUp(self) -> None:
+        cache.clear()
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        override = override_settings(MEDIA_ROOT=media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.pac = _paciente_completo(id_dental="600")
+        self.contrato = gerar_e_salvar_contrato(
+            paciente=self.pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+
+
+class SessaoAssinaturaServiceTests(AssinaturaBaseTests):
+    def test_criar_sessao_define_estado_e_evento(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        self.assertEqual(sessao.status, "pendente")
+        self.assertGreater(sessao.expira_em, timezone.now())
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status, "aguardando_assinatura")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="sessao_criada"
+            ).exists()
+        )
+
+    def test_criar_nova_sessao_cancela_anterior(self) -> None:
+        antiga = criar_sessao(self.contrato, criado_por=self.usuario)
+        nova = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        antiga.refresh_from_db()
+        self.assertEqual(antiga.status, "cancelada")
+        self.assertEqual(nova.status, "pendente")
+        self.assertEqual(sessao_ativa(self.contrato), nova)
+
+    def test_resolver_token_valido(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        resolvida = resolver_token(gerar_token(sessao))
+        self.assertEqual(resolvida.pk, sessao.pk)
+
+    def test_resolver_token_adulterado_invalido(self) -> None:
+        with self.assertRaises(SessaoInvalida) as ctx:
+            resolver_token("token-adulterado")
+        self.assertEqual(ctx.exception.motivo, "invalida")
+
+    def test_resolver_token_sessao_expirada(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        sessao.expira_em = timezone.now() - timezone.timedelta(minutes=1)
+        sessao.save(update_fields=["expira_em"])
+
+        with self.assertRaises(SessaoInvalida) as ctx:
+            resolver_token(gerar_token(sessao))
+
+        self.assertEqual(ctx.exception.motivo, "expirada")
+        sessao.refresh_from_db()
+        self.assertEqual(sessao.status, "expirada")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                sessao=sessao, tipo="sessao_expirada"
+            ).exists()
+        )
+
+    def test_resolver_token_sessao_cancelada(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        criar_sessao(self.contrato, criado_por=self.usuario)  # cancela a antiga
+
+        with self.assertRaises(SessaoInvalida) as ctx:
+            resolver_token(token)
+        self.assertEqual(ctx.exception.motivo, "cancelada")
+
+
+class ProcessarAssinaturaTests(AssinaturaBaseTests):
+    def test_assinatura_valida_gera_pdf_assinado(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        hash_original = self.contrato.hash_sha256
+
+        processar_assinatura(
+            sessao,
+            _assinatura_data_url(),
+            ip="203.0.113.10",
+            user_agent="TesteAgente/1.0",
+        )
+
+        self.contrato.refresh_from_db()
+        sessao.refresh_from_db()
+
+        self.assertEqual(self.contrato.status, "assinado")
+        self.assertTrue(self.contrato.arquivo_pdf_assinado.name.endswith(".pdf"))
+        self.contrato.arquivo_pdf_assinado.open("rb")
+        conteudo = self.contrato.arquivo_pdf_assinado.read()
+        self.contrato.arquivo_pdf_assinado.close()
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+        self.assertNotEqual(self.contrato.hash_sha256, hash_original)
+        self.assertEqual(
+            self.contrato.hash_sha256, hashlib.sha256(conteudo).hexdigest()
+        )
+
+        self.assertEqual(sessao.status, "assinada")
+        self.assertEqual(sessao.ip_assinatura, "203.0.113.10")
+        self.assertEqual(sessao.user_agent, "TesteAgente/1.0")
+        self.assertTrue(sessao.assinatura_imagem.name)
+
+        tipos = set(
+            EventoContrato.objects.filter(contrato=self.contrato).values_list(
+                "tipo", flat=True
+            )
+        )
+        self.assertIn("assinatura_concluida", tipos)
+        self.assertIn("documento_assinado_salvo", tipos)
+
+    def test_segunda_assinatura_rejeitada(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        processar_assinatura(
+            sessao, _assinatura_data_url(), ip="203.0.113.10", user_agent="X"
+        )
+
+        with self.assertRaises(SessaoInvalida) as ctx:
+            processar_assinatura(
+                sessao, _assinatura_data_url(), ip="203.0.113.11", user_agent="Y"
+            )
+        self.assertEqual(ctx.exception.motivo, "ja_assinada")
+
+    def test_imagem_invalida_rejeitada_sem_consumir_sessao(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        with self.assertRaises(AssinaturaInvalida):
+            processar_assinatura(
+                sessao, "data:image/png;base64,bm90cG5n", ip=None, user_agent=""
+            )
+
+        sessao.refresh_from_db()
+        self.assertEqual(sessao.status, "pendente")
+        self.assertIsNotNone(sessao_ativa(self.contrato))
+
+
+class AssinaturaPublicaViewTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        self.sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        self.token = gerar_token(self.sessao)
+        self.url = reverse("assinatura_publica", args=[self.token])
+
+    def test_get_nao_exige_login(self) -> None:
+        self.client.logout()
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinar.html")
+
+    def test_get_marca_sessao_como_aberta(self) -> None:
+        self.client.logout()
+        self.client.get(self.url)
+        self.sessao.refresh_from_db()
+        self.assertEqual(self.sessao.status, "aberta")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                sessao=self.sessao, tipo="contrato_aberto"
+            ).exists()
+        )
+
+    def test_get_token_invalido_retorna_410(self) -> None:
+        self.client.logout()
+        response = self.client.get(
+            reverse("assinatura_publica", args=["token-invalido"])
+        )
+        self.assertEqual(response.status_code, 410)
+
+    def test_pdf_publico_acessivel(self) -> None:
+        self.client.logout()
+        response = self.client.get(reverse("assinatura_publica_pdf", args=[self.token]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_post_assina_e_exibe_confirmacao(self) -> None:
+        self.client.logout()
+        response = self.client.post(
+            self.url, data={"assinatura": _assinatura_data_url()}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinatura_concluida.html")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status, "assinado")
+
+    def test_acesso_apos_assinatura_retorna_410(self) -> None:
+        self.client.logout()
+        self.client.post(self.url, data={"assinatura": _assinatura_data_url()})
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 410)
+
+    def test_post_imagem_invalida_reexibe_pagina_com_erro(self) -> None:
+        self.client.logout()
+        response = self.client.post(self.url, data={"assinatura": "lixo"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinar.html")
+        self.contrato.refresh_from_db()
+        self.assertNotEqual(self.contrato.status, "assinado")
+
+
+class AssinaturaStaffViewTests(AssinaturaBaseTests):
+    def test_iniciar_assinatura_cria_sessao(self) -> None:
+        response = self.client.post(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk])
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+        self.assertIsNotNone(sessao_ativa(self.contrato))
+
+    def test_qr_exige_login(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+        self.client.logout()
+        url = reverse("contrato_qr_assinatura", args=[self.contrato.pk])
+        response = self.client.get(url)
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={url}',
+            fetch_redirect_response=False,
+        )
+
+    def test_qr_retorna_png(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+        response = self.client.get(
+            reverse("contrato_qr_assinatura", args=[self.contrato.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+
+    def test_qr_sem_sessao_ativa_retorna_404(self) -> None:
+        response = self.client.get(
+            reverse("contrato_qr_assinatura", args=[self.contrato.pk])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_cancelar_sessao_restaura_status(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+
+        self.client.post(
+            reverse("contrato_cancelar_assinatura", args=[self.contrato.pk])
+        )
+
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status, "gerado")
+        self.assertIsNone(sessao_ativa(self.contrato))
+
+    def test_baixar_assinado_apos_assinatura(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        response = self.client.get(
+            reverse("contrato_baixar_assinado", args=[self.contrato.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_baixar_assinado_sem_assinatura_redireciona(self) -> None:
+        response = self.client.get(
+            reverse("contrato_baixar_assinado", args=[self.contrato.pk])
+        )
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_pos_geracao_exibe_qr_quando_sessao_ativa(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+        self.assertContains(response, "contratos/assinar/")
+        self.assertContains(response, "Cancelar sessão de assinatura")

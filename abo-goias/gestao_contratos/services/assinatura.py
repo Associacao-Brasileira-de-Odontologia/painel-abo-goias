@@ -1,0 +1,339 @@
+"""Sessões de assinatura remota: tokens, ciclo de vida e processamento.
+
+O token da URL pública é gerado com django.core.signing (HMAC com a
+SECRET_KEY) — nenhum segredo é armazenado em banco, e o token pode ser
+regenerado a qualquer momento para reexibir o QR Code. A validade real é
+controlada por SessaoAssinatura.expira_em; o uso único é garantido por
+uma transição de status atômica no banco.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import io
+import logging
+from typing import TYPE_CHECKING
+
+from django.core import signing
+from django.core.files.base import ContentFile
+from django.utils import timezone
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import User
+    from gestao_contratos.models import ContratoGerado, SessaoAssinatura
+
+logger = logging.getLogger(__name__)
+
+_SALT_TOKEN = "gestao_contratos.assinatura"
+
+VALIDADE_SESSAO_MINUTOS = 30
+
+# Limites da imagem de assinatura enviada pelo canvas
+_ASSINATURA_MAX_BYTES = 800_000
+_ASSINATURA_MIN_LARGURA = 80
+_ASSINATURA_MIN_ALTURA = 30
+
+
+class SessaoInvalida(Exception):
+    """Sessão inexistente, expirada, cancelada ou já utilizada.
+
+    ``motivo`` é um código estável para a interface: "invalida",
+    "expirada", "cancelada" ou "ja_assinada".
+    """
+
+    def __init__(self, motivo: str) -> None:
+        self.motivo = motivo
+        super().__init__(motivo)
+
+
+class AssinaturaInvalida(Exception):
+    """Imagem de assinatura ausente, corrompida ou fora dos limites."""
+
+
+# ── Tokens ────────────────────────────────────────────────────────────────────
+
+
+def gerar_token(sessao: "SessaoAssinatura") -> str:
+    """Gera o token assinado da URL pública para a sessão."""
+
+    return signing.dumps(sessao.pk, salt=_SALT_TOKEN)
+
+
+def resolver_token(token: str) -> "SessaoAssinatura":
+    """Resolve o token e valida o estado da sessão.
+
+    Marca a sessão como expirada (com evento) se o prazo venceu.
+    Raises SessaoInvalida com o motivo em caso de qualquer problema.
+    """
+
+    from gestao_contratos.models import SessaoAssinatura
+
+    try:
+        pk = signing.loads(token, salt=_SALT_TOKEN, max_age=60 * 60 * 24)
+    except signing.BadSignature:
+        raise SessaoInvalida("invalida")
+
+    try:
+        sessao = SessaoAssinatura.objects.select_related(
+            "contrato", "contrato__paciente"
+        ).get(pk=pk)
+    except SessaoAssinatura.DoesNotExist:
+        raise SessaoInvalida("invalida")
+
+    if sessao.status == "assinada":
+        raise SessaoInvalida("ja_assinada")
+    if sessao.status == "cancelada":
+        raise SessaoInvalida("cancelada")
+    if sessao.status == "expirada":
+        raise SessaoInvalida("expirada")
+
+    if timezone.now() >= sessao.expira_em:
+        sessao.status = "expirada"
+        sessao.save(update_fields=["status", "atualizado_em"])
+        registrar_evento(sessao.contrato, "sessao_expirada", sessao=sessao)
+        raise SessaoInvalida("expirada")
+
+    return sessao
+
+
+# ── Ciclo de vida ─────────────────────────────────────────────────────────────
+
+
+def criar_sessao(
+    contrato: "ContratoGerado",
+    criado_por: "User | None" = None,
+    validade_minutos: int = VALIDADE_SESSAO_MINUTOS,
+) -> "SessaoAssinatura":
+    """Cria uma sessão de assinatura, cancelando sessões ativas anteriores."""
+
+    from gestao_contratos.models import SessaoAssinatura
+
+    cancelar_sessoes_ativas(contrato)
+
+    sessao = SessaoAssinatura.objects.create(
+        contrato=contrato,
+        criado_por=criado_por,
+        expira_em=timezone.now() + timezone.timedelta(minutes=validade_minutos),
+    )
+    contrato.status = "aguardando_assinatura"
+    contrato.save(update_fields=["status", "atualizado_em"])
+    registrar_evento(
+        contrato,
+        "sessao_criada",
+        sessao=sessao,
+        validade_minutos=validade_minutos,
+    )
+    return sessao
+
+
+def cancelar_sessoes_ativas(contrato: "ContratoGerado") -> int:
+    """Cancela todas as sessões pendentes/abertas do contrato."""
+
+    from gestao_contratos.models import SessaoAssinatura
+
+    sessoes = SessaoAssinatura.objects.filter(
+        contrato=contrato, status__in=["pendente", "aberta"]
+    )
+    canceladas = 0
+    for sessao in sessoes:
+        sessao.status = "cancelada"
+        sessao.save(update_fields=["status", "atualizado_em"])
+        registrar_evento(contrato, "sessao_cancelada", sessao=sessao)
+        canceladas += 1
+    return canceladas
+
+
+def sessao_ativa(contrato: "ContratoGerado") -> "SessaoAssinatura | None":
+    """Retorna a sessão ativa (pendente/aberta e no prazo) do contrato."""
+
+    from gestao_contratos.models import SessaoAssinatura
+
+    return (
+        SessaoAssinatura.objects.filter(
+            contrato=contrato,
+            status__in=["pendente", "aberta"],
+            expira_em__gt=timezone.now(),
+        )
+        .order_by("-criado_em")
+        .first()
+    )
+
+
+def registrar_abertura(sessao: "SessaoAssinatura") -> None:
+    """Marca a primeira abertura da página de assinatura pelo paciente."""
+
+    if sessao.status != "pendente":
+        return
+    sessao.status = "aberta"
+    sessao.aberta_em = timezone.now()
+    sessao.save(update_fields=["status", "aberta_em", "atualizado_em"])
+    registrar_evento(sessao.contrato, "contrato_aberto", sessao=sessao)
+
+
+def processar_assinatura(
+    sessao: "SessaoAssinatura",
+    assinatura_data_url: str,
+    ip: str | None,
+    user_agent: str,
+) -> "ContratoGerado":
+    """Valida a imagem, faz o claim atômico da sessão e gera o PDF assinado.
+
+    Raises AssinaturaInvalida (imagem ruim) ou SessaoInvalida (corrida com
+    outra assinatura / sessão não mais ativa).
+    """
+
+    from gestao_contratos.models import SessaoAssinatura
+
+    from .assinatura_pdf import aplicar_assinatura_no_pdf
+
+    png_bytes = _validar_png(assinatura_data_url)
+
+    # Claim atômico: apenas uma requisição consegue a transição → assinada.
+    agora = timezone.now()
+    claimed = SessaoAssinatura.objects.filter(
+        pk=sessao.pk,
+        status__in=["pendente", "aberta"],
+        expira_em__gt=agora,
+    ).update(
+        status="assinada",
+        assinada_em=agora,
+        ip_assinatura=ip,
+        user_agent=user_agent[:2000],
+    )
+    if not claimed:
+        raise SessaoInvalida("ja_assinada")
+
+    sessao.refresh_from_db()
+    contrato = sessao.contrato
+    registrar_evento(sessao.contrato, "assinatura_concluida", sessao=sessao, ip=ip)
+
+    try:
+        pdf_original = _obter_pdf_original(contrato)
+        carimbo = (
+            f"Assinado eletronicamente pelo paciente em "
+            f"{agora.astimezone().strftime('%d/%m/%Y %H:%M')}"
+            f"{f' — IP {ip}' if ip else ''} — ABO Goiás"
+        )
+        pdf_assinado = aplicar_assinatura_no_pdf(pdf_original, png_bytes, carimbo)
+    except Exception:
+        # Reverte o claim para permitir nova tentativa do paciente.
+        sessao.status = "aberta"
+        sessao.assinada_em = None
+        sessao.save(update_fields=["status", "assinada_em", "atualizado_em"])
+        logger.exception(
+            "processar_assinatura: falha ao gerar PDF assinado (sessao=%s)",
+            sessao.pk,
+        )
+        raise
+
+    base_nome = contrato.arquivo_pdf.name.rsplit("/", 1)[-1].removesuffix(".pdf")
+    if not base_nome:
+        base_nome = f"contrato_{contrato.pk}"
+
+    hash_original = contrato.hash_sha256
+    sessao.assinatura_imagem.save(
+        f"assinatura_sessao_{sessao.pk}.png", ContentFile(png_bytes), save=True
+    )
+    contrato.arquivo_pdf_assinado.save(
+        f"{base_nome}_assinado.pdf", ContentFile(pdf_assinado), save=False
+    )
+    contrato.status = "assinado"
+    contrato.hash_sha256 = hashlib.sha256(pdf_assinado).hexdigest()
+    contrato.save()
+
+    registrar_evento(
+        contrato,
+        "documento_assinado_salvo",
+        sessao=sessao,
+        hash_original=hash_original,
+        hash_assinado=contrato.hash_sha256,
+    )
+    return contrato
+
+
+def _obter_pdf_original(contrato: "ContratoGerado") -> bytes:
+    """Lê o PDF salvo do contrato ou o regenera a partir dos metadados."""
+
+    from .documentos import gerar_pdf
+
+    if contrato.arquivo_pdf:
+        try:
+            contrato.arquivo_pdf.open("rb")
+            conteudo = contrato.arquivo_pdf.read()
+            contrato.arquivo_pdf.close()
+            return conteudo
+        except Exception:
+            logger.warning(
+                "assinatura: PDF salvo ilegível (contrato=%s), regenerando",
+                contrato.pk,
+            )
+
+    return gerar_pdf(
+        paciente=contrato.paciente,
+        tipo=contrato.tipo,
+        profissional_nome=contrato.profissional_nome,
+        profissional_cro=contrato.profissional_cro,
+        local_assinatura=contrato.local_assinatura,
+    )
+
+
+# ── Eventos ───────────────────────────────────────────────────────────────────
+
+
+def registrar_evento(
+    contrato: "ContratoGerado",
+    tipo: str,
+    sessao: "SessaoAssinatura | None" = None,
+    **payload,
+) -> None:
+    """Grava um evento na trilha do contrato (auditoria + status na UI)."""
+
+    from gestao_contratos.models import EventoContrato
+
+    EventoContrato.objects.create(
+        contrato=contrato,
+        sessao=sessao,
+        tipo=tipo,
+        payload=payload,
+    )
+
+
+# ── Validação da imagem ───────────────────────────────────────────────────────
+
+
+def _validar_png(data_url: str) -> bytes:
+    """Decodifica e valida o PNG do canvas; retorna os bytes da imagem."""
+
+    if not data_url:
+        raise AssinaturaInvalida("Nenhuma assinatura foi enviada.")
+
+    conteudo = data_url
+    if conteudo.startswith("data:"):
+        _, _, conteudo = conteudo.partition(",")
+
+    try:
+        png_bytes = base64.b64decode(conteudo, validate=True)
+    except (binascii.Error, ValueError):
+        raise AssinaturaInvalida("Assinatura em formato inválido.")
+
+    if len(png_bytes) > _ASSINATURA_MAX_BYTES:
+        raise AssinaturaInvalida("Imagem de assinatura muito grande.")
+
+    try:
+        from PIL import Image
+
+        imagem = Image.open(io.BytesIO(png_bytes))
+        imagem.verify()
+        formato = imagem.format
+        largura, altura = imagem.size
+    except Exception:
+        raise AssinaturaInvalida("Imagem de assinatura corrompida.")
+
+    if formato != "PNG":
+        raise AssinaturaInvalida("A assinatura deve ser uma imagem PNG.")
+    if largura < _ASSINATURA_MIN_LARGURA or altura < _ASSINATURA_MIN_ALTURA:
+        raise AssinaturaInvalida("Assinatura muito pequena — tente novamente.")
+
+    return png_bytes
