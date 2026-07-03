@@ -405,7 +405,12 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 200
 # CELERY_TASK_EAGER_PROPAGATES fica no padrão (False) de propósito: .delay()
 # é fire-and-forget tanto em produção quanto em teste — uma falha dentro da
 # tarefa nunca deve estourar no código que a disparou.
-if TESTING:
+#
+# Fora dos testes, o mesmo modo pode ser ligado via CELERY_TASK_ALWAYS_EAGER=true
+# no .env — útil para rodar o servidor de desenvolvimento (runserver) sem
+# precisar de um Redis local. Em produção (Railway) essa variável deve ficar
+# ausente, para que as tarefas realmente rodem no worker dedicado.
+if TESTING or _env_bool("CELERY_TASK_ALWAYS_EAGER", False):
     CELERY_TASK_ALWAYS_EAGER = True
 
 CELERY_BEAT_SCHEDULE = {

@@ -313,10 +313,29 @@ def processar_assinatura(
     # Dispara o upload ao Dental Office em segundo plano (Celery), com
     # retry automático — o paciente não espera por isso, e uma falha
     # temporária de rede não perde o documento assinado.
+    #
+    # O enfileiramento em si (.delay) roda de forma síncrona nesta mesma
+    # requisição e pode falhar se o broker/Redis estiver indisponível —
+    # isso NUNCA pode derrubar a confirmação de assinatura do paciente,
+    # que já foi salva com sucesso acima. Em caso de falha, registra o
+    # evento e segue: o envio manual ("Enviar para o Dental Office")
+    # continua disponível para o staff.
     if contrato.paciente.id_dental:
-        from gestao_contratos.tasks import enviar_dental_task
+        try:
+            from gestao_contratos.tasks import enviar_dental_task
 
-        enviar_dental_task.delay(contrato.pk)
+            enviar_dental_task.delay(contrato.pk)
+        except Exception as exc:
+            logger.exception(
+                "processar_assinatura: falha ao agendar envio ao Dental "
+                "Office (contrato=%s)",
+                contrato.pk,
+            )
+            registrar_evento(
+                contrato,
+                "envio_dental_erro",
+                erro=f"Falha ao agendar envio automático: {exc}",
+            )
     else:
         logger.info(
             "processar_assinatura: paciente sem id_dental — upload ao "

@@ -965,6 +965,31 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
 
         self.mock_enviar_dental_delay.assert_not_called()
 
+    def test_falha_ao_enfileirar_nao_quebra_a_assinatura(self) -> None:
+        """Regressão: broker/Redis indisponível não pode derrubar a assinatura.
+
+        Reproduz o bug relatado em produção — .delay() lançando exceção
+        (ex.: Redis inacessível) não pode impedir que a assinatura do
+        paciente seja salva com sucesso.
+        """
+        self.mock_enviar_dental_delay.side_effect = RuntimeError(
+            "Retry limit exceeded while trying to reconnect to the Celery "
+            "result store backend. The Celery application must be restarted."
+        )
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        contrato = processar_assinatura(
+            sessao, _assinatura_data_url(), ip=None, user_agent=""
+        )
+
+        self.assertEqual(contrato.status, "assinado")
+        self.assertTrue(contrato.arquivo_pdf_assinado.name)
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=contrato, tipo="envio_dental_erro"
+            ).exists()
+        )
+
 
 class AssinaturaPublicaViewTests(AssinaturaBaseTests):
     def setUp(self) -> None:
@@ -1020,6 +1045,25 @@ class AssinaturaPublicaViewTests(AssinaturaBaseTests):
         self.client.post(self.url, data={"assinatura": _assinatura_data_url()})
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 410)
+
+    def test_paciente_ve_confirmacao_mesmo_com_broker_indisponivel(self) -> None:
+        """Regressão: o paciente não pode ver uma tela de erro por falha no
+        Celery/Redis — a assinatura já foi salva e isso é o que importa
+        para ele."""
+        self.mock_enviar_dental_delay.side_effect = RuntimeError(
+            "Retry limit exceeded while trying to reconnect to the Celery "
+            "result store backend."
+        )
+        self.client.logout()
+
+        response = self.client.post(
+            self.url, data={"assinatura": _assinatura_data_url()}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinatura_concluida.html")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status, "assinado")
 
     def test_post_imagem_invalida_reexibe_pagina_com_erro(self) -> None:
         self.client.logout()
