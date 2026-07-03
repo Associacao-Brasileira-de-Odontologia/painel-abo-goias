@@ -1,8 +1,17 @@
 {% extends "gestao_cme/base.html" %}
+{% load static %}
 
 {% block title %}Confirmar Dados — {{ paciente.nome }}{% endblock %}
 {% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
 {% block header_title %}Confirmar Dados{% endblock %}
+{% block body_class %}gestao-contratos{% endblock %}
+
+{% block extra_css %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/contratos.css' %}">
+{% endblock %}
 
 {% block content %}
 <main class="page-shell">
@@ -33,20 +42,19 @@
                 </a>
             </nav>
 
-            <div class="sidebar-section" style="margin-top: 20px;">
+            <div class="sidebar-section gc-mt-lg">
                 <p class="section-label">Sincronização</p>
                 {% if paciente.ultima_sincronizacao %}
-                    <p class="panel-copy" style="font-size: 0.85rem;">
+                    <p class="panel-copy gc-text-muted-sm">
                         Dados do Dental Office obtidos em
                         {{ paciente.ultima_sincronizacao|date:"d/m/Y H:i" }}.
                     </p>
                 {% else %}
-                    <p class="panel-copy" style="font-size: 0.85rem; color: var(--muted);">
+                    <p class="panel-copy gc-text-muted-sm">
                         Paciente ainda não sincronizado com o Dental Office.
                     </p>
                 {% endif %}
-                <a class="button secondary compact-button"
-                   style="margin-top: 8px; width: 100%;"
+                <a class="button secondary compact-button gc-full-width gc-mt-md"
                    href="{% url 'contrato_confirmar_dados' paciente.pk %}?sincronizar=1">
                     Atualizar do Dental Office
                 </a>
@@ -57,7 +65,7 @@
         <section class="panel results-panel">
 
             <div class="results-topbar">
-                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="gc-row-tight">
                     {% if paciente.dados_confirmados %}
                         <span class="badge badge-devolvido">
                             Confirmados em {{ paciente.dados_confirmados_em|date:"d/m/Y H:i" }}
@@ -70,7 +78,7 @@
 
             <div class="kpi-section">
                 <p class="section-label">Revise e confirme os dados do paciente</p>
-                <p class="panel-copy" style="margin-bottom: 16px;">
+                <p class="panel-copy gc-mt-md" style="margin-bottom: 16px;">
                     Os campos abaixo preencherão o contrato. Corrija o que for
                     necessário e clique em <strong>Confirmar dados</strong> para
                     liberar a geração. O convênio é um dado local — não vem do
@@ -128,14 +136,14 @@
                         </div>
                     </div>
 
-                    <p class="section-label" style="margin-top: 10px;">Endereço</p>
+                    <p class="section-label gc-mt-sm">Endereço</p>
 
-                    <div class="contrato-form-row">
-                        <div class="field" style="flex: 3;">
+                    <div class="gc-row-logradouro">
+                        <div class="field">
                             <label for="{{ form.endereco_logradouro.id_for_label }}">Logradouro</label>
                             {{ form.endereco_logradouro }}
                         </div>
-                        <div class="field" style="flex: 1;">
+                        <div class="field">
                             <label for="{{ form.endereco_numero.id_for_label }}">Número</label>
                             {{ form.endereco_numero }}
                         </div>
@@ -152,22 +160,22 @@
                         </div>
                     </div>
 
-                    <div class="contrato-form-row">
-                        <div class="field" style="flex: 2;">
+                    <div class="gc-row-endereco-3">
+                        <div class="field">
                             <label for="{{ form.endereco_cidade.id_for_label }}">Cidade</label>
                             {{ form.endereco_cidade }}
                         </div>
-                        <div class="field" style="flex: 1;">
+                        <div class="field">
                             <label for="{{ form.endereco_estado.id_for_label }}">UF</label>
                             {{ form.endereco_estado }}
                         </div>
-                        <div class="field" style="flex: 1;">
+                        <div class="field">
                             <label for="{{ form.endereco_cep.id_for_label }}">CEP</label>
                             {{ form.endereco_cep }}
                         </div>
                     </div>
 
-                    <p class="section-label" style="margin-top: 10px;">
+                    <p class="section-label gc-mt-sm">
                         Responsável legal
                         <span class="field-optional">(obrigatório para menores de 18 anos)</span>
                     </p>

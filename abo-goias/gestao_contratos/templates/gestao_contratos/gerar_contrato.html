@@ -1,8 +1,17 @@
 {% extends "gestao_cme/base.html" %}
+{% load static %}
 
 {% block title %}Gerar Contrato — {{ paciente.nome }}{% endblock %}
 {% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
 {% block header_title %}Gerar Contrato{% endblock %}
+{% block body_class %}gestao-contratos{% endblock %}
+
+{% block extra_css %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/contratos.css' %}">
+{% endblock %}
 
 {% block content %}
 <main class="page-shell">
@@ -50,23 +59,22 @@
                     <p class="section-label">Contratos anteriores</p>
                     <ul class="sync-history-list">
                         {% for contrato in historico %}
-                            <li class="sync-history-item sync-ok" style="flex-direction: column; align-items: flex-start; gap: 6px; padding-bottom: 10px;">
-                                <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <li class="sync-history-item sync-ok gc-historico-item">
+                                <div class="gc-historico-cabecalho">
                                     <span class="sync-tipo">{{ contrato.get_tipo_display }}</span>
                                     <span class="sync-date">{{ contrato.criado_em|date:"d/m/Y" }}</span>
                                 </div>
                                 {% if contrato.status_envio_dental == "enviado" %}
-                                    <span class="badge badge-devolvido" style="font-size: 0.72rem;">
+                                    <span class="badge badge-devolvido gc-badge-sm">
                                         Enviado ao Dental — {{ contrato.enviado_dental_em|date:"d/m H:i" }}
                                     </span>
                                 {% else %}
                                     <form method="post"
                                           action="{% url 'contrato_enviar_dental' contrato.pk %}"
-                                          style="width: 100%;">
+                                          class="gc-full-width">
                                         {% csrf_token %}
-                                        <button class="button secondary compact-button"
+                                        <button class="button secondary compact-button gc-full-width gc-btn-sm"
                                                 type="submit"
-                                                style="width: 100%; font-size: 0.75rem;"
                                                 {% if contrato.status_envio_dental == "erro" %}
                                                 title="Tentativa anterior falhou — clique para reenviar"
                                                 {% endif %}>
@@ -95,7 +103,7 @@
 
             {# Cabeçalho com badge de status #}
             <div class="results-topbar">
-                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="gc-row-tight">
                     {% if gerado_bloqueado %}
                         <span class="badge badge-atrasado">Dados incompletos</span>
                     {% else %}
@@ -131,9 +139,9 @@
                             <strong>{{ paciente.rg }}</strong>
                         </div>
                     {% else %}
-                        <div class="info-chip" style="border-color: rgba(255,100,100,0.3);">
+                        <div class="info-chip gc-danger-chip">
                             <span>Documento</span>
-                            <strong style="color: #ff9e9e;">Não encontrado</strong>
+                            <strong class="gc-danger-text">Não encontrado</strong>
                         </div>
                     {% endif %}
 
@@ -143,9 +151,9 @@
                             <strong>{{ paciente.data_nascimento|date:"d/m/Y" }}</strong>
                         </div>
                     {% else %}
-                        <div class="info-chip" style="border-color: rgba(255,100,100,0.3);">
+                        <div class="info-chip gc-danger-chip">
                             <span>Nascimento</span>
-                            <strong style="color: #ff9e9e;">Não informado</strong>
+                            <strong class="gc-danger-text">Não informado</strong>
                         </div>
                     {% endif %}
 
@@ -185,7 +193,7 @@
 
                 {% if paciente.endereco_logradouro or paciente.endereco_cidade %}
                     <div class="contrato-info-box">
-                        <p class="section-label" style="margin-bottom: 6px;">Endereço</p>
+                        <p class="section-label gc-mt-sm">Endereço</p>
                         <p class="contrato-info-text">
                             {% if paciente.endereco_logradouro %}
                                 {{ paciente.endereco_logradouro }}{% if paciente.endereco_numero %}, {{ paciente.endereco_numero }}{% endif %}{% if paciente.endereco_complemento %} — {{ paciente.endereco_complemento }}{% endif %}
@@ -198,16 +206,16 @@
                     </div>
                 {% else %}
                     <div class="contrato-info-box contrato-info-box--blocked">
-                        <p class="section-label" style="margin-bottom: 4px;">Endereço</p>
-                        <p class="contrato-info-text" style="color: #ff9e9e;">
+                        <p class="section-label gc-mt-sm">Endereço</p>
+                        <p class="contrato-info-text gc-danger-text">
                             Endereço não encontrado no Dental Office. Preencha a ficha do paciente e volte a esta tela.
                         </p>
                     </div>
                 {% endif %}
 
                 {% if paciente.nome_responsavel %}
-                    <div class="contrato-info-box" style="margin-top: 10px;">
-                        <p class="section-label" style="margin-bottom: 6px;">Responsável legal</p>
+                    <div class="contrato-info-box gc-mt-md">
+                        <p class="section-label gc-mt-sm">Responsável legal</p>
                         <p class="contrato-info-text">
                             {{ paciente.nome_responsavel }}
                             {% if paciente.cpf_responsavel %}
@@ -223,7 +231,7 @@
                 <p class="section-label">Verificação dos campos obrigatórios</p>
 
                 {% if gerado_bloqueado %}
-                    <div class="checklist-alert checklist-alert-blocked" style="margin-bottom: 12px;">
+                    <div class="checklist-alert checklist-alert-blocked gc-mt-md">
                         <strong>{{ pendencias|length }} campo(s) obrigatório(s) ausente(s)</strong>
                         <p>
                             Corrija os campos abaixo na ficha do Dental Office e recarregue — a
@@ -272,7 +280,7 @@
                 <p class="section-label">Modelo e profissional</p>
 
                 {% if gerado_bloqueado %}
-                    <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 16px;">
+                    <p class="gc-text-muted-sm" style="margin-bottom: 16px;">
                         Complete os dados do paciente no Dental Office para habilitar a geração.
                     </p>
                 {% endif %}
@@ -327,8 +335,7 @@
 
                     <div class="form-actions">
                         {% if gerado_bloqueado %}
-                            <button class="button primary" type="button" disabled
-                                    style="opacity: 0.45; cursor: not-allowed;">
+                            <button class="button primary gc-btn-disabled-look" type="button" disabled>
                                 Dados incompletos — geração bloqueada
                             </button>
                         {% else %}

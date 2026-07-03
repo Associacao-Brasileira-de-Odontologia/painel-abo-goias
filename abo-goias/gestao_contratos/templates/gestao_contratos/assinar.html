@@ -1,53 +1,17 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="robots" content="noindex, nofollow">
     <title>Assinatura de Contrato — ABO Goiás</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-            background: #f2f4f8; color: #1c2733; padding: 16px;
-            display: flex; justify-content: center;
-        }
-        .card {
-            width: 100%; max-width: 560px; background: #fff;
-            border-radius: 12px; box-shadow: 0 2px 14px rgba(20,40,70,.08);
-            padding: 22px; margin-bottom: 24px;
-        }
-        h1 { font-size: 1.15rem; margin-bottom: 4px; }
-        .eyebrow { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #5a6b80; margin-bottom: 10px; }
-        .info { background: #f4f7fb; border-radius: 8px; padding: 12px 14px; margin: 14px 0; font-size: .9rem; }
-        .info p { margin: 2px 0; }
-        .info span { color: #5a6b80; }
-        .btn {
-            display: inline-block; width: 100%; text-align: center;
-            padding: 13px 18px; border-radius: 8px; border: 0;
-            font-size: 1rem; font-weight: 600; cursor: pointer;
-            text-decoration: none;
-        }
-        .btn-primary { background: #0b6e4f; color: #fff; }
-        .btn-primary:disabled { background: #9fb7ad; cursor: not-allowed; }
-        .btn-outline { background: #fff; color: #1c2733; border: 1px solid #c6d0dc; margin-top: 8px; }
-        .canvas-wrap {
-            border: 2px dashed #b8c4d2; border-radius: 10px;
-            margin: 12px 0 8px; position: relative; background: #fdfefe;
-            touch-action: none;
-        }
-        canvas { display: block; width: 100%; height: 200px; border-radius: 8px; }
-        .canvas-hint {
-            position: absolute; inset: 0; display: flex; align-items: center;
-            justify-content: center; color: #9aa8b8; font-size: .9rem;
-            pointer-events: none;
-        }
-        .erro { background: #fdeaea; color: #a32020; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: .9rem; }
-        .rodape { text-align: center; font-size: .75rem; color: #8a97a8; margin-top: 14px; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/assinatura.css' %}">
 </head>
 <body>
-<div>
+<div class="gc-wrap">
     <div class="card">
         <p class="eyebrow">ABO Goiás — Assinatura eletrônica</p>
         <h1>Termo de Consentimento — {{ contrato.get_tipo_display }}</h1>
@@ -66,7 +30,7 @@
 
     <div class="card">
         <h1>Sua assinatura</h1>
-        <p style="font-size:.88rem; color:#5a6b80; margin-top:4px;">
+        <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
             Desenhe sua assinatura no quadro abaixo usando o dedo ou uma caneta touch.
         </p>
 
@@ -75,7 +39,8 @@
         {% endif %}
 
         <div class="canvas-wrap">
-            <canvas id="pad" width="1000" height="400"></canvas>
+            <canvas id="pad" width="1000" height="400"
+                    aria-label="Área para desenhar sua assinatura com o dedo ou caneta touch — requer dispositivo com toque ou mouse"></canvas>
             <div class="canvas-hint" id="hint">Assine aqui</div>
         </div>
 

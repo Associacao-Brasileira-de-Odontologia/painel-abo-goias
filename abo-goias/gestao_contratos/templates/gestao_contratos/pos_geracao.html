@@ -4,6 +4,14 @@
 {% block title %}Contrato Gerado — {{ paciente.nome }}{% endblock %}
 {% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
 {% block header_title %}Contrato Gerado{% endblock %}
+{% block body_class %}gestao-contratos{% endblock %}
+
+{% block extra_css %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/contratos.css' %}">
+{% endblock %}
 
 {% block content %}
 <main class="page-shell">
@@ -47,34 +55,34 @@
                 </a>
             </nav>
 
-            <div class="sidebar-section" style="margin-top: 20px;">
+            <div class="sidebar-section gc-mt-lg">
                 <p class="section-label">Contrato gerado</p>
                 <div class="info-chip">
                     <span>Tipo</span>
                     <strong>{{ contrato.get_tipo_display }}</strong>
                 </div>
-                <div class="info-chip" style="margin-top: 6px;">
+                <div class="info-chip gc-mt-sm">
                     <span>Data</span>
                     <strong>{{ contrato.criado_em|date:"d/m/Y H:i" }}</strong>
                 </div>
                 {% if contrato.profissional_nome %}
-                    <div class="info-chip" style="margin-top: 6px;">
+                    <div class="info-chip gc-mt-sm">
                         <span>Profissional</span>
                         <strong>{{ contrato.profissional_nome }}</strong>
                     </div>
                 {% endif %}
             </div>
 
-            <div class="sidebar-section" style="margin-top: 16px;">
+            <div class="sidebar-section gc-mt-md">
                 <p class="section-label">Status de envio</p>
                 {% if contrato.status_envio == "enviado_email" %}
                     <span class="badge badge-devolvido">E-mail enviado</span>
-                    <p class="panel-copy" style="margin-top: 4px; font-size: 0.8rem;">
+                    <p class="panel-copy gc-mt-sm" style="font-size: 0.8rem;">
                         {{ contrato.enviado_em|date:"d/m/Y H:i" }}
                     </p>
                 {% elif contrato.status_envio == "enviado_whatsapp" %}
                     <span class="badge badge-devolvido">WhatsApp marcado</span>
-                    <p class="panel-copy" style="margin-top: 4px; font-size: 0.8rem;">
+                    <p class="panel-copy gc-mt-sm" style="font-size: 0.8rem;">
                         {{ contrato.enviado_em|date:"d/m/Y H:i" }}
                     </p>
                 {% else %}
@@ -82,9 +90,9 @@
                 {% endif %}
 
                 {% if contrato.status_envio_dental == "enviado" %}
-                    <p class="section-label" style="margin-top: 12px;">Dental Office</p>
+                    <p class="section-label gc-mt-md">Dental Office</p>
                     <span class="badge badge-devolvido">Enviado ao Dental</span>
-                    <p class="panel-copy" style="margin-top: 4px; font-size: 0.8rem;">
+                    <p class="panel-copy gc-mt-sm" style="font-size: 0.8rem;">
                         {{ contrato.enviado_dental_em|date:"d/m/Y H:i" }}
                     </p>
                 {% endif %}
@@ -100,13 +108,8 @@
                 </div>
             </div>
 
-            {% if messages %}
-                <div class="messages">
-                    {% for message in messages %}
-                        <div class="message {{ message.tags }}">{{ message }}</div>
-                    {% endfor %}
-                </div>
-            {% endif %}
+            {# As mensagens já aparecem via .messages-banner global (base.html) —
+               não duplicar aqui. #}
 
             {# ── Assinatura do paciente (QR Code + polling HTMX) ──── #}
             {% include "gestao_contratos/_status_assinatura_fragment.html" %}
@@ -122,7 +125,7 @@
                     o arquivo baixado e envie ao paciente.
                 </p>
                 {# Texto alternativo (com suporte a Web Share) — JS exibe quando disponível #}
-                <p class="panel-copy" id="wa-copy-share" style="display:none;">
+                <p class="panel-copy gc-hidden" id="wa-copy-share">
                     Clique em <strong>Compartilhar arquivo</strong> para enviar o
                     documento diretamente pelo WhatsApp sem precisar baixá-lo antes.
                     Disponível em dispositivos móveis e Chrome/Safari no computador.
@@ -141,8 +144,7 @@
                         {# Botão de compartilhamento direto — exibido por JS quando suportado #}
                         <button id="btn-wa-share"
                                 type="button"
-                                class="button primary"
-                                style="display:none;"
+                                class="button primary gc-hidden"
                                 data-url="{% if contrato.arquivo_pdf %}{% url 'contrato_baixar_pdf' contrato.pk %}{% else %}{% url 'contrato_baixar' contrato.pk %}{% endif %}"
                                 data-nome="{{ contrato.get_tipo_display }} - {{ paciente.nome }}.{% if contrato.arquivo_pdf %}pdf{% else %}docx{% endif %}">
                             Compartilhar arquivo
@@ -197,7 +199,7 @@
                     O contrato foi gerado e está disponível para download.
                     Salve uma cópia antes de encaminhar ao paciente.
                 </p>
-                <div class="form-actions" style="margin-top: 12px; gap: 8px;">
+                <div class="form-actions gc-mt-md" style="gap: 8px;">
                     {% if contrato.arquivo_pdf %}
                         <a class="button primary"
                            href="{% url 'contrato_baixar_pdf' contrato.pk %}">
@@ -253,11 +255,15 @@
     if (!suporta) return;
 
     // Revelar botão e trocar textos explicativos
+    btnShare.classList.remove('gc-hidden');
     btnShare.style.display = 'inline-flex';
     var padrao = document.getElementById('wa-copy-padrao');
     var shareHint = document.getElementById('wa-copy-share');
     if (padrao) padrao.style.display = 'none';
-    if (shareHint) shareHint.style.display = 'block';
+    if (shareHint) {
+        shareHint.classList.remove('gc-hidden');
+        shareHint.style.display = 'block';
+    }
 
     // Tornar o link "Abrir WhatsApp" secundário (continua como fallback)
     var btnLink = document.getElementById('btn-wa-link');

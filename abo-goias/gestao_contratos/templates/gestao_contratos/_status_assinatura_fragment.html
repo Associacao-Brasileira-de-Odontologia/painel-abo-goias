@@ -5,6 +5,7 @@ O elemento raiz só carrega hx-trigger enquanto o contrato aguarda
 assinatura; ao mudar de status, o polling para automaticamente.
 {% endcomment %}
 <div class="kpi-section" id="status-assinatura-section"
+     aria-live="polite" aria-atomic="true"
      {% if poll_status_assinatura %}
      hx-get="{% url 'contrato_status_assinatura_fragment' contrato.pk %}"
      hx-trigger="every 3s"
@@ -17,8 +18,8 @@ assinatura; ao mudar de status, o polling para automaticamente.
             <strong>Contrato assinado pelo paciente</strong>
             <p>A versão assinada está disponível para download e envio.</p>
         </div>
-        <div class="form-actions" style="margin-top: 12px;">
-            <a class="button primary"
+        <div class="form-actions gc-mt-md">
+            <a class="button gc-selar"
                href="{% url 'contrato_baixar_assinado' contrato.pk %}">
                 Baixar contrato assinado (.pdf)
             </a>
@@ -30,22 +31,22 @@ assinatura; ao mudar de status, o polling para automaticamente.
             <strong>{{ sessao_assinatura.expira_em|date:"H:i" }}</strong>.
             Esta seção se atualiza automaticamente assim que ele assinar.
         </p>
-        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-top: 12px;">
+        <div class="gc-row gc-mt-md">
             <img src="{% url 'contrato_qr_assinatura' contrato.pk %}"
                  alt="QR Code para assinatura"
                  width="180" height="180"
-                 style="border-radius: 10px; background: #fff; padding: 6px;">
-            <div style="flex: 1; min-width: 240px;">
-                <p class="section-label" style="margin-bottom: 6px;">
+                 class="gc-qr-frame gc-qr-pulsando">
+            <div class="gc-col">
+                <p class="section-label gc-mt-sm">
                     Ou envie o link diretamente
                 </p>
                 <input type="text" readonly
                        value="{{ link_assinatura }}"
                        onclick="this.select();"
-                       style="width: 100%; font-size: 0.78rem;">
+                       class="gc-full-width gc-mono" style="font-size: 0.78rem;">
                 <form method="post"
                       action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
-                      style="margin-top: 12px;">
+                      class="gc-mt-md">
                     {% csrf_token %}
                     <button class="button secondary compact-button" type="submit">
                         Cancelar sessão de assinatura
@@ -61,8 +62,8 @@ assinatura; ao mudar de status, o polling para automaticamente.
         <form method="post"
               action="{% url 'contrato_iniciar_assinatura' contrato.pk %}">
             {% csrf_token %}
-            <div class="form-actions" style="margin-top: 8px;">
-                <button class="button primary" type="submit">
+            <div class="form-actions gc-mt-sm">
+                <button class="button gc-selar" type="submit">
                     Gerar QR Code de assinatura
                 </button>
             </div>
@@ -70,10 +71,10 @@ assinatura; ao mudar de status, o polling para automaticamente.
     {% endif %}
 
     {% if eventos_assinatura %}
-        <p class="section-label" style="margin-top: 18px;">Linha do tempo</p>
-        <ul class="checklist-list" style="margin-top: 6px;">
+        <p class="section-label gc-mt-lg">Linha do tempo</p>
+        <ul class="checklist-list gc-mt-sm">
             {% for evento in eventos_assinatura %}
-                <li class="checklist-item checklist-ok" style="padding: 8px 10px;">
+                <li class="checklist-item checklist-ok gc-timeline-item">
                     <div class="checklist-body">
                         <span class="checklist-label" style="font-size: 0.85rem;">
                             {{ evento.get_tipo_display }}

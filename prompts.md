@@ -184,32 +184,53 @@ O Prompt 1 é pré-requisito de todos os demais. O Prompt 2 já entrega valor se
 - Validar o envio do documento para Intranet 
 - Quando o usuário realizar a assinatura do documento, uma cópia deve ser enviada automaticamente para o WhatsApp ou e-mail do paciente.
 
+A fazer: 
 
+- Fazer o levantamento sobre quais as informações são necessárias para preenchimento do contrato
+- Pesquisar sobre a legimitidade da implementação e assinatura pelo forma fornecida
+- Explorar outras possibilidades de implementação da aplicação de assinatura
+- Fazer a refatoração do frontend todas as aplicações retirando a estética AI
+- Avaliar possíveis melhorias a serem implementadas nas outras aplicações
+- Realizar a implementação da aplicação para produção
+- Fazer o levantamento técnico de todas as aplicações para possível integração com a intranet
+- Pesquisar e documentar os custos totais associados para funcionamento da aplicação
+- Explorar quantos usuários estarão acessando a aplicação diariamente
 
-Teste de paciente: id 31417
+Atue como especialista em front-end para aplicações Django.
 
-Segue a documentação do Dental Office para cadastrar documentos a ficha do paciente:
+<context>
+- Sistema modular para instituição de ensino em saúde (foco: Odontologia, graduação e pós)
+- Stack: [Django templates]
+- Público da app de contratos: [equipe administrativa / alunos / ambos]
 
-Endpoint: Cadastrar Documentos
-Descricao: Adiciona documentos a um determinado paciente
+TAREFA:
+Refatorar apenas a aplicação de "gestão de contratos" (telas: listagem, 
+detalhe, criação/edição, [outras]) antes de expandir para o restante do sistema.
 
-Path Paramenters:
-	- customer_id: integer number
+RESTRIÇÕES:
+- Preservar toda lógica de backend e comportamento funcional existente
+- Seguir WCAG AA de acessibilidade (contraste, foco, leitura por teclado)
+- Interface em pt-BR, formatos de data/moeda brasileiros
+- Respeitar identidade visual: [cores/logo institucional]
 
-Body: 
-	- file: documento em base 64
-	- name: nome do documento
-	- description: descricao do documento
+Antes de propor código, explore os templates/arquivos atuais em [caminho] 
+para entender a estrutura existente.
+</context>
 
-curl https://demo.api.app.dentaloffice.com.br/v1/customers/customer_id/docs \
-  --request POST \
-  --header 'Content-Type: application/json' \
-  --header 'Authorization: Bearer YOUR_SECRET_TOKEN' \
-  --data '{
-  "customer_doc": {
-    "description": "Descrição do doc",
-    "file": "(conteúdo binário do documento)",
-    "name": "Teste de Docs",
-    "tag_list": "radiografia"
-  }
-}'
+<frontend_aesthetics>
+Você tende a convergir para resultados genéricos e padronizados. No design de frontend, isso cria o que os usuários chamam de estética de "conteúdo genérico de IA" (*AI slop*). Evite isso: crie frontends criativos e distintos que surpreendam e encantem.
+
+Foque em:
+- Tipografia: Escolha fontes que sejam bonitas, únicas e interessantes. Evite fontes genéricas como Arial e Inter; opte por escolhas distintas que elevem a estética do frontend.
+- Cores e Tema: Comprometa-se com uma estética coesa. Use variáveis ​​CSS para garantir consistência. Cores dominantes com detalhes de destaque (*accents*) funcionam melhor do que paletas tímidas e distribuídas de forma uniforme. Busque inspiração em temas de IDEs e estéticas culturais.
+- Movimento: Use animações para efeitos e microinterações. Priorize soluções apenas com CSS para HTML. Use bibliotecas de movimento disponíveis para o projeto atual. Concentre-se em momentos de alto impacto: um carregamento de página bem orquestrado, com revelações escalonadas (*animation-delay*), gera mais encantamento do que microinterações dispersas.
+- Planos de fundo: Crie atmosfera e profundidade em vez de recorrer apenas a cores sólidas. Sobreponha gradientes CSS, use padrões geométricos ou adicione efeitos contextuais que combinem com a estética geral.
+
+Evite estéticas genéricas geradas por IA:
+- Famílias de fontes muito utilizadas (Inter, Roboto, Arial, fontes do sistema)
+- Esquemas de cores clichês (particularmente gradientes roxos em fundos brancos)
+- Layouts e padrões de componentes previsíveis
+- Design padronizado e repetitivo, sem personalidade específica para o contexto
+
+Interprete de forma criativa e faça escolhas inesperadas que pareçam genuinamente projetadas para o contexto. Alterne entre temas claros e escuros, fontes diferentes e estéticas variadas. Você ainda tende a convergir para escolhas comuns (como Space Grotesk, por exemplo) entre as gerações. Evite isso: é fundamental pensar fora da caixa!
+</frontend_aesthetics>
