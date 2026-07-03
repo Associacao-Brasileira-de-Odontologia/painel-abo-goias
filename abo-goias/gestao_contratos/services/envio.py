@@ -148,10 +148,13 @@ def calcular_link_whatsapp(celular: str, tipo_display: str) -> str:
 def gerar_link_whatsapp(celular: str, contrato: "ContratoGerado") -> str:
     """Gera o link wa.me e atualiza o status do contrato para enviado_whatsapp.
 
-    Retorna string vazia se o número for inválido.
+    Retorna string vazia se o número for inválido — nesse caso o contrato
+    NÃO é marcado como enviado, já que nada foi de fato encaminhado.
     """
 
     link = calcular_link_whatsapp(celular, contrato.get_tipo_display())
+    if not link:
+        return ""
 
     contrato.status_envio = "enviado_whatsapp"
     contrato.enviado_em = timezone.now()

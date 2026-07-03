@@ -24,6 +24,7 @@ from gestao_contratos.models import ContratoGerado, EventoContrato, SessaoAssina
 from gestao_contratos.services.assinatura import (
     AssinaturaInvalida,
     SessaoInvalida,
+    _validar_png,
     criar_sessao,
     expirar_sessoes_globalmente,
     gerar_token,
@@ -32,10 +33,15 @@ from gestao_contratos.services.assinatura import (
     sessao_ativa,
 )
 from gestao_contratos.services.checklist import (
+    bloqueado,
     gerar_checklist,
     pendencias_obrigatorias,
 )
-from gestao_contratos.services.documentos import gerar_e_salvar_contrato
+from gestao_contratos.services.documentos import (
+    gerar_contrato,
+    gerar_e_salvar_contrato,
+    gerar_pdf,
+)
 from gestao_contratos.services.envio import normalizar_celular
 from gestao_contratos.services.whatsapp import enviar_whatsapp_contrato
 from gestao_contratos.services.whatsapp.meta_cloud import (
@@ -706,6 +712,56 @@ class GerarContratoPostTests(TestCase):
         self.assertEqual(kwargs["tipo"], "modelo_1")
         self.assertEqual(kwargs["paciente"], pac)
         self.assertEqual(kwargs["gerado_por"], self.usuario)
+
+    @patch("gestao_contratos.views.gerar_e_salvar_contrato")
+    @patch("gestao_contratos.views.DentalClient")
+    def test_post_com_email_diferente_atualiza_paciente(
+        self, MockDental: MagicMock, mock_gerar: MagicMock
+    ) -> None:
+        MockDental.return_value.buscar_detalhes_paciente.return_value = {
+            "name": "Joao Completo",
+            "active": True,
+            "contacts_attributes": [],
+            "cpf": "123.456.789-00",
+            "address_attributes": {"city": "Goiânia", "state": "GO"},
+        }
+        pac = _paciente_completo(id_dental="303")
+        contrato = ContratoGerado.objects.create(
+            paciente=pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+        mock_gerar.return_value = contrato
+
+        self.client.post(
+            reverse("contrato_gerar", args=[pac.pk]),
+            data=self._dados_post(email_paciente="novo@example.com"),
+        )
+
+        pac.refresh_from_db()
+        self.assertEqual(pac.email, "novo@example.com")
+
+    @patch("gestao_contratos.views.gerar_e_salvar_contrato")
+    @patch("gestao_contratos.views.DentalClient")
+    def test_post_arquivo_modelo_ausente_redireciona_com_erro(
+        self, MockDental: MagicMock, mock_gerar: MagicMock
+    ) -> None:
+        MockDental.return_value.buscar_detalhes_paciente.return_value = {
+            "name": "Joao Completo",
+            "active": True,
+            "contacts_attributes": [],
+            "cpf": "123.456.789-00",
+            "address_attributes": {"city": "Goiânia", "state": "GO"},
+        }
+        pac = _paciente_completo(id_dental="304")
+        mock_gerar.side_effect = FileNotFoundError("Modelo de contrato não encontrado")
+
+        response = self.client.post(
+            reverse("contrato_gerar", args=[pac.pk]),
+            data=self._dados_post(),
+            follow=True,
+        )
+
+        self.assertContains(response, "Modelo de contrato não encontrado")
+        self.assertEqual(ContratoGerado.objects.count(), 0)
 
     @patch("gestao_contratos.views.DentalClient")
     def test_post_com_tipo_invalido_redireciona_com_erro(
@@ -1927,3 +1983,830 @@ class EnviarWhatsappTaskTests(TestCase):
         ) as mock_enviar:
             enviar_whatsapp_task.delay(999_999)
             mock_enviar.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — views de ação da pós-geração
+# ---------------------------------------------------------------------------
+
+
+class PosGeracaoActionViewsTests(AssinaturaBaseTests):
+    """Download, e-mail, WhatsApp manual e envio ao Dental — sem nenhuma
+    cobertura anterior apesar de serem os fluxos mais usados pelo staff."""
+
+    def test_baixar_docx(self) -> None:
+        response = self.client.get(reverse("contrato_baixar", args=[self.contrato.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+    def test_baixar_docx_sem_arquivo_redireciona(self) -> None:
+        self.contrato.arquivo = None
+        self.contrato.save(update_fields=["arquivo"])
+
+        response = self.client.get(reverse("contrato_baixar", args=[self.contrato.pk]))
+
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_baixar_pdf(self) -> None:
+        response = self.client.get(
+            reverse("contrato_baixar_pdf", args=[self.contrato.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_baixar_pdf_sem_arquivo_redireciona(self) -> None:
+        self.contrato.arquivo_pdf = None
+        self.contrato.save(update_fields=["arquivo_pdf"])
+
+        response = self.client.get(
+            reverse("contrato_baixar_pdf", args=[self.contrato.pk])
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_enviar_email_sucesso(self) -> None:
+        response = self.client.post(
+            reverse("contrato_enviar_email", args=[self.contrato.pk]),
+            data={"email_destinatario": "paciente@example.com"},
+            follow=True,
+        )
+
+        self.assertContains(response, "enviado com sucesso")
+        self.assertEqual(len(mail.outbox), 1)
+        self.pac.refresh_from_db()
+        self.assertEqual(self.pac.email, "paciente@example.com")
+
+    def test_enviar_email_sem_destinatario(self) -> None:
+        response = self.client.post(
+            reverse("contrato_enviar_email", args=[self.contrato.pk]),
+            data={"email_destinatario": ""},
+            follow=True,
+        )
+        self.assertContains(response, "Informe um e-mail válido")
+
+    def test_enviar_email_get_redireciona(self) -> None:
+        response = self.client.get(
+            reverse("contrato_enviar_email", args=[self.contrato.pk])
+        )
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    @patch("gestao_contratos.views.enviar_contrato_email")
+    def test_enviar_email_falha_exibe_erro(self, mock_enviar: MagicMock) -> None:
+        mock_enviar.return_value = False
+
+        response = self.client.post(
+            reverse("contrato_enviar_email", args=[self.contrato.pk]),
+            data={"email_destinatario": "paciente@example.com"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Não foi possível enviar o e-mail")
+
+    def test_whatsapp_status_numero_valido(self) -> None:
+        response = self.client.post(
+            reverse("contrato_whatsapp_status", args=[self.contrato.pk]),
+            data={"celular": "62999998888"},
+            follow=True,
+        )
+
+        self.assertContains(response, "marcado como enviado")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_envio, "enviado_whatsapp")
+
+    def test_whatsapp_status_numero_invalido_nao_marca_enviado(self) -> None:
+        """Regressão: número inválido não pode marcar o contrato como
+        enviado — nada foi de fato encaminhado."""
+        response = self.client.post(
+            reverse("contrato_whatsapp_status", args=[self.contrato.pk]),
+            data={"celular": ""},
+            follow=True,
+        )
+
+        self.assertContains(response, "Número de telefone inválido")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_envio, "nao_enviado")
+        self.assertIsNone(self.contrato.enviado_em)
+
+    def test_whatsapp_status_get_redireciona(self) -> None:
+        response = self.client.get(
+            reverse("contrato_whatsapp_status", args=[self.contrato.pk])
+        )
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    @patch("gestao_contratos.views.enviar_contrato_ao_dental")
+    def test_enviar_ao_dental_sucesso(self, mock_enviar: MagicMock) -> None:
+        mock_enviar.return_value = (True, "")
+
+        response = self.client.post(
+            reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
+        )
+
+        self.assertContains(response, "enviado com sucesso")
+
+    @patch("gestao_contratos.views.enviar_contrato_ao_dental")
+    def test_enviar_ao_dental_falha(self, mock_enviar: MagicMock) -> None:
+        mock_enviar.return_value = (False, "erro simulado")
+
+        response = self.client.post(
+            reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
+        )
+
+        self.assertContains(response, "Falha ao enviar o contrato")
+        self.assertContains(response, "erro simulado")
+
+    def test_enviar_ao_dental_get_redireciona(self) -> None:
+        response = self.client.get(
+            reverse("contrato_enviar_dental", args=[self.contrato.pk])
+        )
+        self.assertRedirects(
+            response, reverse("contratos"), fetch_redirect_response=False
+        )
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — link manual de WhatsApp (envio.py)
+# ---------------------------------------------------------------------------
+
+
+class WhatsappLinkTests(AssinaturaBaseTests):
+    def test_calcular_link_com_numero_valido(self) -> None:
+        from gestao_contratos.services.envio import calcular_link_whatsapp
+
+        link = calcular_link_whatsapp("62999998888", "Modelo 1")
+
+        self.assertTrue(link.startswith("https://wa.me/5562999998888"))
+
+    def test_calcular_link_com_numero_invalido_retorna_vazio(self) -> None:
+        from gestao_contratos.services.envio import calcular_link_whatsapp
+
+        self.assertEqual(calcular_link_whatsapp("", "Modelo 1"), "")
+
+    def test_gerar_link_marca_contrato_como_enviado(self) -> None:
+        from gestao_contratos.services.envio import gerar_link_whatsapp
+
+        link = gerar_link_whatsapp("62999998888", self.contrato)
+
+        self.assertTrue(link)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_envio, "enviado_whatsapp")
+        self.assertIsNotNone(self.contrato.enviado_em)
+
+    def test_gerar_link_com_numero_invalido_nao_marca_contrato(self) -> None:
+        """Regressão: número inválido não deve marcar o contrato como
+        enviado — antes desta correção, o status era sempre sobrescrito."""
+        from gestao_contratos.services.envio import gerar_link_whatsapp
+
+        link = gerar_link_whatsapp("", self.contrato)
+
+        self.assertEqual(link, "")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_envio, "nao_enviado")
+        self.assertIsNone(self.contrato.enviado_em)
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — e-mail: fallback DOCX e falhas
+# ---------------------------------------------------------------------------
+
+
+class EnviarContratoEmailEdgeCasesTests(AssinaturaBaseTests):
+    def test_usa_docx_quando_nao_ha_nenhum_pdf(self) -> None:
+        from gestao_contratos.services.envio import enviar_contrato_email
+
+        self.contrato.arquivo_pdf = None
+        self.contrato.arquivo_pdf_assinado = None
+        self.contrato.save(update_fields=["arquivo_pdf", "arquivo_pdf_assinado"])
+
+        ok = enviar_contrato_email(self.contrato, "paciente@example.com")
+
+        self.assertTrue(ok)
+        nome, _, content_type = mail.outbox[0].attachments[0]
+        self.assertTrue(nome.endswith(".docx"))
+        self.assertEqual(
+            content_type,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+    def test_sem_nenhum_arquivo_retorna_false(self) -> None:
+        from gestao_contratos.services.envio import enviar_contrato_email
+
+        self.contrato.arquivo = None
+        self.contrato.arquivo_pdf = None
+        self.contrato.arquivo_pdf_assinado = None
+        self.contrato.save(
+            update_fields=["arquivo", "arquivo_pdf", "arquivo_pdf_assinado"]
+        )
+
+        ok = enviar_contrato_email(self.contrato, "paciente@example.com")
+
+        self.assertFalse(ok)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_docx_ilegivel_retorna_false(self) -> None:
+        import os
+
+        from gestao_contratos.services.envio import enviar_contrato_email
+
+        self.contrato.arquivo_pdf = None
+        self.contrato.arquivo_pdf_assinado = None
+        self.contrato.save(update_fields=["arquivo_pdf", "arquivo_pdf_assinado"])
+        os.remove(self.contrato.arquivo.path)
+
+        ok = enviar_contrato_email(self.contrato, "paciente@example.com")
+
+        self.assertFalse(ok)
+
+    def test_pdf_assinado_ilegivel_cai_para_original(self) -> None:
+        import os
+
+        from django.core.files.base import ContentFile
+
+        self.contrato.arquivo_pdf_assinado.save(
+            "assinado.pdf", ContentFile(b"%PDF-fake-assinado"), save=True
+        )
+        caminho_assinado = self.contrato.arquivo_pdf_assinado.path
+        os.remove(caminho_assinado)
+
+        from gestao_contratos.services.documentos import obter_melhor_pdf_bytes
+
+        conteudo = obter_melhor_pdf_bytes(self.contrato)
+
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+        self.assertNotEqual(conteudo, b"%PDF-fake-assinado")
+
+    def test_falha_no_envio_smtp_retorna_false(self) -> None:
+        from gestao_contratos.services.envio import enviar_contrato_email
+
+        with patch("gestao_contratos.services.envio.EmailMessage") as MockEmailMessage:
+            MockEmailMessage.return_value.send.side_effect = Exception(
+                "SMTP indisponível"
+            )
+            ok = enviar_contrato_email(self.contrato, "paciente@example.com")
+
+        self.assertFalse(ok)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_envio, "nao_enviado")
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — geração de documentos, combinações de dados
+# ---------------------------------------------------------------------------
+
+
+class GeracaoDocumentosEdgeCasesTests(TestCase):
+    def test_docx_com_rg_sem_cpf(self) -> None:
+        pac = _paciente(id_dental="D1", rg="1234567", nome="Paciente RG")
+        conteudo = gerar_contrato(paciente=pac, tipo="modelo_1")
+        self.assertTrue(conteudo.startswith(b"PK"))  # DOCX é um zip
+
+    def test_pdf_com_rg_sem_cpf(self) -> None:
+        pac = _paciente(id_dental="D2", rg="1234567", nome="Paciente RG")
+        conteudo = gerar_pdf(paciente=pac, tipo="modelo_1")
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+
+    def test_docx_com_responsavel_legal(self) -> None:
+        pac = _paciente(
+            id_dental="D3",
+            cpf="111.222.333-44",
+            nome_responsavel="Mãe Responsável",
+            cpf_responsavel="999.888.777-66",
+        )
+        conteudo = gerar_contrato(paciente=pac, tipo="modelo_2")
+        self.assertTrue(conteudo.startswith(b"PK"))
+
+    def test_pdf_com_responsavel_legal(self) -> None:
+        pac = _paciente(
+            id_dental="D4",
+            cpf="111.222.333-44",
+            nome_responsavel="Mãe Responsável",
+            cpf_responsavel="999.888.777-66",
+        )
+        conteudo = gerar_pdf(paciente=pac, tipo="modelo_2")
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+
+    def test_docx_sem_endereco(self) -> None:
+        pac = _paciente(id_dental="D5", cpf="111.222.333-44")
+        conteudo = gerar_contrato(paciente=pac, tipo="modelo_1")
+        self.assertTrue(conteudo.startswith(b"PK"))
+
+    def test_pdf_sem_endereco(self) -> None:
+        pac = _paciente(id_dental="D6", cpf="111.222.333-44")
+        conteudo = gerar_pdf(paciente=pac, tipo="modelo_1")
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+
+    def _paciente_endereco_completo(self, id_dental: str):
+        return _paciente(
+            id_dental=id_dental,
+            cpf="111.222.333-44",
+            endereco_logradouro="Avenida Goiás",
+            endereco_numero="123",
+            endereco_complemento="Apto 45",
+            endereco_bairro="Setor Central",
+            endereco_cidade="Goiânia",
+            endereco_estado="GO",
+            endereco_cep="74000-000",
+        )
+
+    def test_docx_com_endereco_completo_e_cro(self) -> None:
+        pac = self._paciente_endereco_completo("D7")
+        conteudo = gerar_contrato(
+            paciente=pac, tipo="modelo_1", profissional_cro="CRO-GO 12345"
+        )
+        self.assertTrue(conteudo.startswith(b"PK"))
+
+    def test_pdf_com_endereco_completo_e_cro(self) -> None:
+        pac = self._paciente_endereco_completo("D8")
+        conteudo = gerar_pdf(
+            paciente=pac, tipo="modelo_1", profissional_cro="CRO-GO 12345"
+        )
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+
+    def test_pdf_com_valor_longo_quebra_linha(self) -> None:
+        """Cobre o fallback de quebra de linha do helper campo() no PDF,
+        quando o valor não cabe na largura disponível ao lado do rótulo."""
+        pac = _paciente(
+            id_dental="D9",
+            cpf="111.222.333-44",
+            endereco_logradouro="Rua " + ("Muito Longa " * 20),
+            endereco_cidade="Goiânia",
+            endereco_estado="GO",
+        )
+        conteudo = gerar_pdf(paciente=pac, tipo="modelo_1")
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — validação da imagem de assinatura
+# ---------------------------------------------------------------------------
+
+
+class ValidarPngEdgeCasesTests(TestCase):
+    def test_data_url_vazia(self) -> None:
+        with self.assertRaises(AssinaturaInvalida):
+            _validar_png("")
+
+    def test_base64_invalido(self) -> None:
+        with self.assertRaises(AssinaturaInvalida):
+            _validar_png("data:image/png;base64,***invalido***")
+
+    def test_imagem_maior_que_limite(self) -> None:
+        from gestao_contratos.services import assinatura as assinatura_mod
+
+        grande = base64.b64encode(b"0" * (assinatura_mod._ASSINATURA_MAX_BYTES + 1))
+        with self.assertRaises(AssinaturaInvalida):
+            _validar_png("data:image/png;base64," + grande.decode())
+
+    def test_imagem_nao_e_png(self) -> None:
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (200, 100), (255, 0, 0)).save(buf, format="JPEG")
+        dado = base64.b64encode(buf.getvalue()).decode()
+        with self.assertRaises(AssinaturaInvalida):
+            _validar_png("data:image/jpeg;base64," + dado)
+
+    def test_imagem_muito_pequena(self) -> None:
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGBA", (20, 10), (0, 0, 0, 0)).save(buf, format="PNG")
+        dado = base64.b64encode(buf.getvalue()).decode()
+        with self.assertRaises(AssinaturaInvalida):
+            _validar_png("data:image/png;base64," + dado)
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — casos de borda de assinatura.py
+# ---------------------------------------------------------------------------
+
+
+class ResolverTokenEdgeCasesTests(AssinaturaBaseTests):
+    def test_token_valido_mas_sessao_removida(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        sessao.delete()
+
+        with self.assertRaises(SessaoInvalida) as ctx:
+            resolver_token(token)
+        self.assertEqual(ctx.exception.motivo, "invalida")
+
+    def test_sessao_ja_marcada_expirada_no_banco(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        sessao.status = "expirada"
+        sessao.save(update_fields=["status"])
+
+        with self.assertRaises(SessaoInvalida) as ctx:
+            resolver_token(token)
+        self.assertEqual(ctx.exception.motivo, "expirada")
+
+    def test_expirar_se_vencida_ainda_no_prazo_nao_expira(self) -> None:
+        from gestao_contratos.services.assinatura import expirar_se_vencida
+
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        self.assertFalse(expirar_se_vencida(sessao))
+        sessao.refresh_from_db()
+        self.assertEqual(sessao.status, "pendente")
+
+    def test_expirar_se_vencida_em_status_terminal_e_no_op(self) -> None:
+        from gestao_contratos.services.assinatura import expirar_se_vencida
+
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        sessao.status = "cancelada"
+        sessao.save(update_fields=["status"])
+
+        self.assertFalse(expirar_se_vencida(sessao))
+
+
+class ObterPdfOriginalEdgeCaseTests(AssinaturaBaseTests):
+    def test_arquivo_ilegivel_regenera_pdf(self) -> None:
+        import os
+
+        from gestao_contratos.services.assinatura import _obter_pdf_original
+
+        caminho = self.contrato.arquivo_pdf.path
+        os.remove(caminho)
+
+        conteudo = _obter_pdf_original(self.contrato)
+
+        self.assertTrue(conteudo.startswith(b"%PDF"))
+
+    def test_sem_nome_de_arquivo_usa_fallback_no_pos_assinatura(self) -> None:
+        self.contrato.arquivo_pdf = None
+        self.contrato.save(update_fields=["arquivo_pdf"])
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        contrato = processar_assinatura(
+            sessao, _assinatura_data_url(), ip=None, user_agent=""
+        )
+
+        self.assertIn(f"contrato_{contrato.pk}", contrato.arquivo_pdf_assinado.name)
+
+
+class RegistrarAberturaEdgeCaseTests(AssinaturaBaseTests):
+    def test_nao_reabre_sessao_ja_aberta(self) -> None:
+        from gestao_contratos.services.assinatura import registrar_abertura
+
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        sessao.status = "aberta"
+        sessao.aberta_em = timezone.now()
+        sessao.save(update_fields=["status", "aberta_em"])
+        eventos_antes = EventoContrato.objects.filter(
+            sessao=sessao, tipo="contrato_aberto"
+        ).count()
+
+        registrar_abertura(sessao)
+
+        eventos_depois = EventoContrato.objects.filter(
+            sessao=sessao, tipo="contrato_aberto"
+        ).count()
+        self.assertEqual(eventos_antes, eventos_depois)
+
+
+class ProcessarAssinaturaFalhaNaGeracaoTests(AssinaturaBaseTests):
+    @patch("gestao_contratos.services.assinatura_pdf.aplicar_assinatura_no_pdf")
+    def test_falha_ao_gerar_pdf_reverte_o_claim(self, mock_aplicar: MagicMock) -> None:
+        mock_aplicar.side_effect = RuntimeError("falha ao mesclar PDF")
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        with self.assertRaises(RuntimeError):
+            processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        sessao.refresh_from_db()
+        self.assertEqual(sessao.status, "aberta")
+        self.assertIsNone(sessao.assinada_em)
+        self.contrato.refresh_from_db()
+        self.assertNotEqual(self.contrato.status, "assinado")
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — envio_dental.py: regeneração e erro no corpo
+# ---------------------------------------------------------------------------
+
+
+class EnviarDentalEdgeCasesTests(AssinaturaBaseTests):
+    @patch("gestao_contratos.services.envio_dental.DentalClient")
+    def test_regenera_pdf_quando_nao_ha_arquivo_salvo(
+        self, MockDental: MagicMock
+    ) -> None:
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        self.contrato.arquivo_pdf = None
+        self.contrato.arquivo_pdf_assinado = None
+        self.contrato.save(update_fields=["arquivo_pdf", "arquivo_pdf_assinado"])
+        MockDental.return_value.enviar_documento_paciente.return_value = {"id": 1}
+
+        ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertTrue(ok)
+        kwargs = MockDental.return_value.enviar_documento_paciente.call_args.kwargs
+        self.assertTrue(kwargs["arquivo_bytes"].startswith(b"%PDF"))
+
+    def test_falha_ao_regenerar_pdf_retorna_erro(self) -> None:
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        self.contrato.arquivo_pdf = None
+        self.contrato.arquivo_pdf_assinado = None
+        self.contrato.save(update_fields=["arquivo_pdf", "arquivo_pdf_assinado"])
+
+        with patch(
+            "gestao_contratos.services.envio_dental.gerar_pdf",
+            side_effect=RuntimeError("modelo corrompido"),
+        ):
+            ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertFalse(ok)
+        self.assertIn("modelo corrompido", erro)
+
+    @patch("gestao_contratos.services.envio_dental.DentalClient")
+    def test_erro_no_corpo_da_resposta_com_lista(self, MockDental: MagicMock) -> None:
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        MockDental.return_value.enviar_documento_paciente.return_value = {
+            "errors": ["nome muito longo", "arquivo inválido"]
+        }
+
+        ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertFalse(ok)
+        self.assertIn("nome muito longo", erro)
+        self.assertIn("arquivo inválido", erro)
+
+
+class ExtrairErroRespostaTests(TestCase):
+    def test_resposta_nao_dict_retorna_vazio(self) -> None:
+        from gestao_contratos.services.envio_dental import _extrair_erro_resposta
+
+        self.assertEqual(_extrair_erro_resposta("string qualquer"), "")
+        self.assertEqual(_extrair_erro_resposta(None), "")
+
+    def test_chave_error_como_string(self) -> None:
+        from gestao_contratos.services.envio_dental import _extrair_erro_resposta
+
+        self.assertEqual(
+            _extrair_erro_resposta({"error": "falha pontual"}), "falha pontual"
+        )
+
+    def test_sem_chaves_de_erro_retorna_vazio(self) -> None:
+        from gestao_contratos.services.envio_dental import _extrair_erro_resposta
+
+        self.assertEqual(
+            _extrair_erro_resposta({"message": "Document created successfully"}), ""
+        )
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — cliente Meta: erros de conexão e resposta
+# ---------------------------------------------------------------------------
+
+
+class MetaWhatsAppClientEdgeCasesTests(TestCase):
+    def _config(self):
+        with patch.dict(
+            "os.environ",
+            {
+                "WHATSAPP_META_TOKEN": "tok",
+                "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
+            },
+            clear=True,
+        ):
+            return carregar_config_meta()
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_falha_de_conexao_vira_meta_whatsapp_error(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        from urllib.error import URLError
+
+        mock_urlopen.side_effect = URLError("timeout")
+
+        client = MetaWhatsAppClient(self._config())
+        with self.assertRaises(MetaWhatsAppError):
+            client.enviar_documento(
+                destinatario="5562999998888",
+                arquivo_bytes=b"%PDF-fake",
+                nome_arquivo="contrato.pdf",
+                nome_paciente="Maria",
+            )
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_corpo_vazio_retorna_dict_vazio(self, mock_urlopen: MagicMock) -> None:
+        cm = MagicMock()
+        cm.__enter__.return_value.read.return_value = b""
+        mock_urlopen.return_value = cm
+
+        client = MetaWhatsAppClient(self._config())
+        with self.assertRaises(MetaWhatsAppError):
+            # upload de mídia sem 'id' na resposta (corpo vazio → {})
+            client.enviar_documento(
+                destinatario="5562999998888",
+                arquivo_bytes=b"%PDF-fake",
+                nome_arquivo="contrato.pdf",
+                nome_paciente="Maria",
+            )
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_resposta_nao_json_vira_meta_whatsapp_error(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        cm = MagicMock()
+        cm.__enter__.return_value.read.return_value = b"<html>erro</html>"
+        mock_urlopen.return_value = cm
+
+        client = MetaWhatsAppClient(self._config())
+        with self.assertRaises(MetaWhatsAppError):
+            client.enviar_documento(
+                destinatario="5562999998888",
+                arquivo_bytes=b"%PDF-fake",
+                nome_arquivo="contrato.pdf",
+                nome_paciente="Maria",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — views_assinatura.py: rate-limit e guardas
+# ---------------------------------------------------------------------------
+
+
+class ViewsAssinaturaEdgeCasesTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        cache.clear()
+
+    def test_ip_via_x_forwarded_for(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        self.client.logout()
+
+        response = self.client.get(
+            reverse("assinatura_publica", args=[token]),
+            HTTP_X_FORWARDED_FOR="203.0.113.5, 10.0.0.1",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_rate_limit_excedido_retorna_429(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        self.client.logout()
+        url = reverse("assinatura_publica", args=[token])
+
+        chave = "assinatura_rl_assinar_127.0.0.1"
+        cache.set(chave, 30, 60)
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 429)
+
+    def test_pdf_publico_com_token_invalido_retorna_404(self) -> None:
+        self.client.logout()
+        response = self.client.get(
+            reverse("assinatura_publica_pdf", args=["token-invalido"])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_iniciar_assinatura_get_redireciona(self) -> None:
+        response = self.client.get(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk])
+        )
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_iniciar_assinatura_ja_assinado_nao_cria_sessao(self) -> None:
+        self.contrato.status = "assinado"
+        self.contrato.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk]),
+            follow=True,
+        )
+
+        self.assertContains(response, "já foi assinado")
+        self.assertIsNone(sessao_ativa(self.contrato))
+
+    def test_cancelar_assinatura_get_redireciona(self) -> None:
+        response = self.client.get(
+            reverse("contrato_cancelar_assinatura", args=[self.contrato.pk])
+        )
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_pdf_publico_rate_limit_excedido(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        self.client.logout()
+        cache.set("assinatura_rl_pdf_127.0.0.1", 30, 60)
+
+        response = self.client.get(reverse("assinatura_publica_pdf", args=[token]))
+
+        self.assertEqual(response.status_code, 429)
+
+    def test_rate_limit_recupera_de_condicao_de_corrida_no_incr(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        self.client.logout()
+
+        with patch(
+            "gestao_contratos.views_assinatura.cache.incr",
+            side_effect=ValueError,
+        ):
+            response = self.client.get(reverse("assinatura_publica", args=[token]))
+
+        self.assertEqual(response.status_code, 200)
+
+    @patch("gestao_contratos.views_assinatura.processar_assinatura")
+    def test_post_sessaoinvalida_durante_processamento_retorna_410(
+        self, mock_processar: MagicMock
+    ) -> None:
+        mock_processar.side_effect = SessaoInvalida("ja_assinada")
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        token = gerar_token(sessao)
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("assinatura_publica", args=[token]),
+            data={"assinatura": _assinatura_data_url()},
+        )
+
+        self.assertEqual(response.status_code, 410)
+
+
+# ---------------------------------------------------------------------------
+# Cobertura adicional (Fase 6) — __str__ dos modelos e checklist
+# ---------------------------------------------------------------------------
+
+
+class ModelosStrTests(AssinaturaBaseTests):
+    def test_sessao_assinatura_str(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        texto = str(sessao)
+        self.assertIn(f"Sessão #{sessao.pk}", texto)
+        self.assertIn("pendente", texto)
+
+    def test_sessao_assinatura_ativa(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        self.assertTrue(sessao.ativa)
+        sessao.status = "assinada"
+        sessao.save(update_fields=["status"])
+        self.assertFalse(sessao.ativa)
+
+    def test_evento_contrato_str(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        evento = EventoContrato.objects.filter(
+            contrato=self.contrato, sessao=sessao
+        ).first()
+        self.assertIn("contrato", str(evento))
+        self.assertIn(str(self.contrato.pk), str(evento))
+
+
+class ChecklistEdgeCasesTests(TestCase):
+    def test_bloqueado_true_com_pendencias(self) -> None:
+        pac = _paciente(id_dental="CH1")
+        self.assertTrue(bloqueado(pac))
+
+    def test_bloqueado_false_sem_pendencias(self) -> None:
+        pac = _paciente_completo(id_dental="CH2")
+        self.assertFalse(bloqueado(pac))
+
+    def test_menor_com_aniversario_ainda_nao_ocorrido_no_ano(self) -> None:
+        """Cobre o ramo em que o aniversário deste ano ainda não chegou."""
+        hoje = date.today()
+        proximo_mes = 12 if hoje.month == 12 else hoje.month + 1
+        nascimento = date(hoje.year - 10, proximo_mes, 1)
+        pac = _paciente(
+            id_dental="CH3",
+            data_nascimento=nascimento,
+            cpf="111.222.333-44",
+            endereco_cidade="Goiânia",
+        )
+        itens = gerar_checklist(pac)
+        item_resp = next(
+            i for i in itens if "Responsável" in i.rotulo and "nome" in i.rotulo
+        )
+        self.assertTrue(item_resp.obrigatorio)  # confirma que foi tratado como menor

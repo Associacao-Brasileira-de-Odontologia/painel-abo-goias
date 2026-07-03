@@ -7,3 +7,6 @@ reportlab>=4.0
 pypdf>=4.0
 qrcode>=7.4
 celery[redis]>=5.4,<6
+
+# Desenvolvimento/CI apenas — não é necessário em produção
+coverage>=7.0
