@@ -1,4 +1,5 @@
 {% extends "gestao_cme/base.html" %}
+{% load static %}
 
 {% block title %}Contrato Gerado — {{ paciente.nome }}{% endblock %}
 {% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
@@ -107,67 +108,8 @@
                 </div>
             {% endif %}
 
-            {# ── Assinatura do paciente (QR Code) ─────────────────── #}
-            <div class="kpi-section">
-                <p class="section-label">Assinatura do paciente</p>
-
-                {% if contrato.status == "assinado" %}
-                    <div class="checklist-alert checklist-alert-ok">
-                        <strong>Contrato assinado pelo paciente</strong>
-                        <p>A versão assinada está disponível para download e envio.</p>
-                    </div>
-                    <div class="form-actions" style="margin-top: 12px;">
-                        <a class="button primary"
-                           href="{% url 'contrato_baixar_assinado' contrato.pk %}">
-                            Baixar contrato assinado (.pdf)
-                        </a>
-                    </div>
-                {% elif sessao_assinatura %}
-                    <p class="panel-copy">
-                        Peça ao paciente para escanear o QR Code abaixo com a câmera
-                        do celular. A sessão expira em
-                        <strong>{{ sessao_assinatura.expira_em|date:"H:i" }}</strong>.
-                        Após a assinatura, recarregue esta página.
-                    </p>
-                    <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-top: 12px;">
-                        <img src="{% url 'contrato_qr_assinatura' contrato.pk %}"
-                             alt="QR Code para assinatura"
-                             width="180" height="180"
-                             style="border-radius: 10px; background: #fff; padding: 6px;">
-                        <div style="flex: 1; min-width: 240px;">
-                            <p class="section-label" style="margin-bottom: 6px;">
-                                Ou envie o link diretamente
-                            </p>
-                            <input type="text" readonly
-                                   value="{{ link_assinatura }}"
-                                   onclick="this.select();"
-                                   style="width: 100%; font-size: 0.78rem;">
-                            <form method="post"
-                                  action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
-                                  style="margin-top: 12px;">
-                                {% csrf_token %}
-                                <button class="button secondary compact-button" type="submit">
-                                    Cancelar sessão de assinatura
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                {% else %}
-                    <p class="panel-copy">
-                        Gere um QR Code para o paciente assinar o contrato no
-                        próprio celular ou tablet — sem login e sem baixar nada.
-                    </p>
-                    <form method="post"
-                          action="{% url 'contrato_iniciar_assinatura' contrato.pk %}">
-                        {% csrf_token %}
-                        <div class="form-actions" style="margin-top: 8px;">
-                            <button class="button primary" type="submit">
-                                Gerar QR Code de assinatura
-                            </button>
-                        </div>
-                    </form>
-                {% endif %}
-            </div>
+            {# ── Assinatura do paciente (QR Code + polling HTMX) ──── #}
+            {% include "gestao_contratos/_status_assinatura_fragment.html" %}
 
             {# ── Envio por WhatsApp ───────────────────────────────── #}
             <div class="kpi-section">
@@ -359,4 +301,8 @@
     });
 })();
 </script>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'gestao_contratos/js/htmx.min.js' %}"></script>
 {% endblock %}

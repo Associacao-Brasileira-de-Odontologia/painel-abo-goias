@@ -89,13 +89,38 @@ def resolver_token(token: str) -> "SessaoAssinatura":
     if sessao.status == "expirada":
         raise SessaoInvalida("expirada")
 
-    if timezone.now() >= sessao.expira_em:
-        sessao.status = "expirada"
-        sessao.save(update_fields=["status", "atualizado_em"])
-        registrar_evento(sessao.contrato, "sessao_expirada", sessao=sessao)
+    if expirar_se_vencida(sessao):
         raise SessaoInvalida("expirada")
 
     return sessao
+
+
+def expirar_se_vencida(sessao: "SessaoAssinatura") -> bool:
+    """Marca a sessão como expirada (e registra o evento) se o prazo já passou.
+
+    Idempotente e seguro de chamar repetidamente — usado tanto na resolução
+    do token público quanto no polling de status da tela de staff, para que
+    a expiração seja refletida mesmo sem o paciente acessar o link.
+    Retorna True se a sessão estava (e foi marcada como) vencida.
+    """
+
+    if sessao.status not in ("pendente", "aberta"):
+        return False
+    if timezone.now() < sessao.expira_em:
+        return False
+
+    sessao.status = "expirada"
+    sessao.save(update_fields=["status", "atualizado_em"])
+    registrar_evento(sessao.contrato, "sessao_expirada", sessao=sessao)
+
+    # Sem sessão ativa restante, o contrato volta a "gerado" — evita polling
+    # indefinido na tela de staff e libera a geração de um novo QR Code.
+    contrato = sessao.contrato
+    if contrato.status == "aguardando_assinatura":
+        contrato.status = "gerado"
+        contrato.save(update_fields=["status", "atualizado_em"])
+
+    return True
 
 
 # ── Ciclo de vida ─────────────────────────────────────────────────────────────
@@ -146,9 +171,19 @@ def cancelar_sessoes_ativas(contrato: "ContratoGerado") -> int:
 
 
 def sessao_ativa(contrato: "ContratoGerado") -> "SessaoAssinatura | None":
-    """Retorna a sessão ativa (pendente/aberta e no prazo) do contrato."""
+    """Retorna a sessão ativa (pendente/aberta e no prazo) do contrato.
+
+    Antes de consultar, expira lazy qualquer sessão pendente/aberta vencida,
+    para que o status refletido na tela de staff fique correto mesmo que o
+    paciente nunca tenha acessado o link (sem depender do beat da Fase 4).
+    """
 
     from gestao_contratos.models import SessaoAssinatura
+
+    for pendente in SessaoAssinatura.objects.filter(
+        contrato=contrato, status__in=["pendente", "aberta"]
+    ):
+        expirar_se_vencida(pendente)
 
     return (
         SessaoAssinatura.objects.filter(
@@ -159,6 +194,12 @@ def sessao_ativa(contrato: "ContratoGerado") -> "SessaoAssinatura | None":
         .order_by("-criado_em")
         .first()
     )
+
+
+def eventos_recentes(contrato: "ContratoGerado", limite: int = 8) -> list:
+    """Retorna os últimos eventos do contrato, mais recente primeiro."""
+
+    return list(contrato.eventos.order_by("-criado_em", "-pk")[:limite])
 
 
 def registrar_abertura(sessao: "SessaoAssinatura") -> None:

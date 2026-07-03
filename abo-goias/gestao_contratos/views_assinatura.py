@@ -22,6 +22,7 @@ from .services.assinatura import (
     SessaoInvalida,
     cancelar_sessoes_ativas,
     criar_sessao,
+    eventos_recentes,
     gerar_token,
     processar_assinatura,
     registrar_abertura,
@@ -149,6 +150,54 @@ def assinar_pdf_view(request: HttpRequest, token: str) -> HttpResponse:
 
 
 # ── Views de staff ────────────────────────────────────────────────────────────
+
+
+def contexto_status_assinatura(request: HttpRequest, contrato: ContratoGerado) -> dict:
+    """Monta o contexto do bloco de status de assinatura.
+
+    Compartilhado entre a renderização inicial da pós-geração e o fragmento
+    de polling HTMX, garantindo que ambos exibam exatamente a mesma coisa.
+    """
+
+    sessao = sessao_ativa(contrato)  # já expira sessões vencidas (lazy)
+
+    # sessao_ativa() pode ter alterado contrato.status como efeito colateral
+    # (via sessao.contrato, uma instância Python distinta desta mesma linha).
+    # Recarrega para refletir a mudança no objeto que a view já carregou.
+    contrato.refresh_from_db(fields=["status"])
+
+    link_assinatura = ""
+    if sessao is not None:
+        link_assinatura = request.build_absolute_uri(
+            reverse("assinatura_publica", args=[gerar_token(sessao)])
+        )
+
+    return {
+        "contrato": contrato,
+        "sessao_assinatura": sessao,
+        "link_assinatura": link_assinatura,
+        "eventos_assinatura": eventos_recentes(contrato),
+        "poll_status_assinatura": contrato.status == "aguardando_assinatura",
+    }
+
+
+@login_required
+def status_assinatura_fragment_view(
+    request: HttpRequest, contrato_pk: int
+) -> HttpResponse:
+    """Fragmento HTML consultado via polling HTMX na tela de pós-geração.
+
+    Retorna apenas o bloco de status de assinatura. O elemento raiz só leva
+    o atributo hx-trigger enquanto o contrato aguarda assinatura — quando o
+    status muda (assinado, cancelado), o fragmento seguinte já não o inclui
+    e o polling para sozinho, sem JavaScript adicional.
+    """
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+    contexto = contexto_status_assinatura(request, contrato)
+    return render(
+        request, "gestao_contratos/_status_assinatura_fragment.html", contexto
+    )
 
 
 @login_required

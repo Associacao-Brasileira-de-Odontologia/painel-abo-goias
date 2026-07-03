@@ -16,6 +16,11 @@ urlpatterns = [
     ),
     # ── Assinatura remota — staff ───────────────────────────────────────
     path(
+        "contrato/<int:contrato_pk>/status-assinatura/",
+        views_assinatura.status_assinatura_fragment_view,
+        name="contrato_status_assinatura_fragment",
+    ),
+    path(
         "contrato/<int:contrato_pk>/iniciar-assinatura/",
         views_assinatura.iniciar_assinatura_view,
         name="contrato_iniciar_assinatura",

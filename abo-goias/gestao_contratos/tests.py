@@ -1075,3 +1075,147 @@ class AssinaturaStaffViewTests(AssinaturaBaseTests):
         )
         self.assertContains(response, "contratos/assinar/")
         self.assertContains(response, "Cancelar sessão de assinatura")
+
+
+# ---------------------------------------------------------------------------
+# Testes do polling de status em tempo real (Fase 3)
+# ---------------------------------------------------------------------------
+
+
+class StatusAssinaturaFragmentTests(AssinaturaBaseTests):
+    def _url(self) -> str:
+        return reverse("contrato_status_assinatura_fragment", args=[self.contrato.pk])
+
+    def test_exige_login(self) -> None:
+        self.client.logout()
+        response = self.client.get(self._url())
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={self._url()}',
+            fetch_redirect_response=False,
+        )
+
+    def test_retorna_fragmento_correto(self) -> None:
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(
+            response, "gestao_contratos/_status_assinatura_fragment.html"
+        )
+        # O fragmento não estende base.html — não deve haver <header> do app.
+        self.assertNotContains(response, "<header")
+
+    def test_inclui_hx_trigger_quando_aguardando_assinatura(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+        response = self.client.get(self._url())
+        self.assertContains(response, "hx-trigger")
+        self.assertContains(response, "status-assinatura-section")
+
+    def test_sem_hx_trigger_quando_assinado(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+        response = self.client.get(self._url())
+        self.assertNotContains(response, "hx-trigger")
+        self.assertContains(response, "Baixar contrato assinado")
+
+    def test_sem_hx_trigger_sem_sessao_ativa(self) -> None:
+        response = self.client.get(self._url())
+        self.assertNotContains(response, "hx-trigger")
+        self.assertContains(response, "Gerar QR Code de assinatura")
+
+    def test_exibe_timeline_de_eventos(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+        response = self.client.get(self._url())
+        self.assertContains(response, "Linha do tempo")
+        self.assertContains(response, "Sessão de assinatura criada")
+
+    def test_sessao_vencida_expira_e_contrato_volta_a_gerado(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        sessao.expira_em = timezone.now() - timezone.timedelta(minutes=1)
+        sessao.save(update_fields=["expira_em"])
+
+        response = self.client.get(self._url())
+
+        sessao.refresh_from_db()
+        self.contrato.refresh_from_db()
+        self.assertEqual(sessao.status, "expirada")
+        self.assertEqual(self.contrato.status, "gerado")
+        self.assertNotContains(response, "hx-trigger")
+        self.assertContains(response, "Gerar QR Code de assinatura")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                sessao=sessao, tipo="sessao_expirada"
+            ).exists()
+        )
+
+    def test_pos_geracao_para_de_pollar_apos_assinatura(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+        self.assertContains(response, "hx-trigger")
+
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+        self.assertNotContains(response, "hx-trigger")
+
+
+class EnvioDentalEventosTests(AssinaturaBaseTests):
+    """Cobre a instrumentação de EventoContrato no serviço de envio ao Dental."""
+
+    @patch("gestao_contratos.services.envio_dental.DentalClient")
+    def test_sucesso_registra_eventos_iniciado_e_concluido(
+        self, MockDental: MagicMock
+    ) -> None:
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        self.pac.id_dental = "600"
+        MockDental.return_value.enviar_documento_paciente.return_value = {
+            "id": 1,
+            "message": "Document created successfully",
+        }
+
+        ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertTrue(ok)
+        self.assertEqual(erro, "")
+        tipos = list(
+            EventoContrato.objects.filter(contrato=self.contrato).values_list(
+                "tipo", flat=True
+            )
+        )
+        self.assertIn("envio_dental_iniciado", tipos)
+        self.assertIn("envio_dental_concluido", tipos)
+
+    @patch("gestao_contratos.services.envio_dental.DentalClient")
+    def test_erro_da_api_registra_evento_de_erro(self, MockDental: MagicMock) -> None:
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        MockDental.return_value.enviar_documento_paciente.side_effect = DentalAPIError(
+            "indisponível"
+        )
+
+        ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertFalse(ok)
+        evento = EventoContrato.objects.filter(
+            contrato=self.contrato, tipo="envio_dental_erro"
+        ).first()
+        self.assertIsNotNone(evento)
+        self.assertIn("indisponível", evento.payload.get("erro", ""))
+
+    def test_sem_id_dental_registra_evento_de_erro(self) -> None:
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        self.pac.id_dental = ""
+        self.pac.save(update_fields=["id_dental"])
+
+        ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertFalse(ok)
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="envio_dental_erro"
+            ).exists()
+        )

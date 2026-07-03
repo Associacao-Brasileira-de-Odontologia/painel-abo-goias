@@ -8,6 +8,7 @@ from datetime import date
 from django.utils import timezone
 from gestao_lab.integrations.dental import DentalAPIError, DentalClient
 
+from .assinatura import registrar_evento
 from .documentos import gerar_pdf
 
 logger = logging.getLogger(__name__)
@@ -19,16 +20,21 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
     Prefere o PDF já salvo em arquivo_pdf. Se não existir, gera o PDF
     diretamente a partir dos metadados do contrato (via reportlab, sem
     conversão DOCX→PDF). Retorna (True, "") em sucesso ou (False, erro).
+
+    Cada tentativa registra um EventoContrato (iniciado/concluído/erro),
+    alimentando a trilha de auditoria e o status em tempo real da tela
+    de pós-geração.
     """
 
     paciente = contrato.paciente
+    registrar_evento(contrato, "envio_dental_iniciado")
 
     if not paciente.id_dental:
         erro = "Paciente sem id_dental — não é possível enviar ao Dental Office."
         logger.error(
             "enviar_contrato_ao_dental: %s (contrato_pk=%s)", erro, contrato.pk
         )
-        _marcar_erro(contrato)
+        _marcar_erro(contrato, erro)
         return False, erro
 
     # ── 1. Ler PDF já salvo ────────────────────────────────────────────
@@ -69,7 +75,7 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
             logger.error(
                 "enviar_contrato_ao_dental: %s (contrato_pk=%s)", erro, contrato.pk
             )
-            _marcar_erro(contrato)
+            _marcar_erro(contrato, erro)
             return False, erro
 
     # ── 3. Montar nome e descrição ─────────────────────────────────────
@@ -106,7 +112,7 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
             paciente.id_dental,
             erro,
         )
-        _marcar_erro(contrato)
+        _marcar_erro(contrato, erro)
         return False, erro
 
     logger.info(
@@ -125,7 +131,7 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
             contrato.pk,
             erro_corpo,
         )
-        _marcar_erro(contrato)
+        _marcar_erro(contrato, erro_corpo)
         return False, erro_corpo
 
     contrato.status_envio_dental = "enviado"
@@ -133,6 +139,7 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
     contrato.save(
         update_fields=["status_envio_dental", "enviado_dental_em", "atualizado_em"]
     )
+    registrar_evento(contrato, "envio_dental_concluido")
     return True, ""
 
 
@@ -154,6 +161,7 @@ def _extrair_erro_resposta(resposta: object) -> str:
     return ""
 
 
-def _marcar_erro(contrato) -> None:
+def _marcar_erro(contrato, erro: str) -> None:
     contrato.status_envio_dental = "erro"
     contrato.save(update_fields=["status_envio_dental", "atualizado_em"])
+    registrar_evento(contrato, "envio_dental_erro", erro=erro)

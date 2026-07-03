@@ -376,9 +376,7 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
 def pos_geracao_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
     """Exibe opções pós-geração: assinatura, baixar, e-mail, WhatsApp, Dental."""
 
-    from django.urls import reverse
-
-    from .services.assinatura import gerar_token, sessao_ativa
+    from .views_assinatura import contexto_status_assinatura
 
     contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
     paciente = contrato.paciente
@@ -387,24 +385,13 @@ def pos_geracao_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
         paciente.celular or "", contrato.get_tipo_display()
     )
 
-    sessao = sessao_ativa(contrato)
-    link_assinatura = ""
-    if sessao is not None:
-        link_assinatura = request.build_absolute_uri(
-            reverse("assinatura_publica", args=[gerar_token(sessao)])
-        )
+    contexto = {
+        "paciente": paciente,
+        "link_whatsapp": link_whatsapp,
+    }
+    contexto.update(contexto_status_assinatura(request, contrato))
 
-    return render(
-        request,
-        "gestao_contratos/pos_geracao.html",
-        {
-            "contrato": contrato,
-            "paciente": paciente,
-            "link_whatsapp": link_whatsapp,
-            "sessao_assinatura": sessao,
-            "link_assinatura": link_assinatura,
-        },
-    )
+    return render(request, "gestao_contratos/pos_geracao.html", contexto)
 
 
 @login_required
