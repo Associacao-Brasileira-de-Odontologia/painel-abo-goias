@@ -1,5 +1,6 @@
 ﻿import importlib.util
 import os
+import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
@@ -376,4 +377,40 @@ EDUQ_USE_PROXY = os.environ.get("EDUQ_USE_PROXY", "").strip().lower() in {
     "yes",
     "sim",
     "on",
+}
+
+# ──────────────────────────────────────────────────────────────────────────
+# Celery — processamento assíncrono (envio ao Dental Office, limpeza de
+# sessões de assinatura vencidas). Broker e result backend usam Redis;
+# REDIS_URL é preenchida automaticamente pelo plugin Redis do Railway.
+# ──────────────────────────────────────────────────────────────────────────
+TESTING = "test" in sys.argv or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+CELERY_BROKER_URL = _env("CELERY_BROKER_URL") or _env(
+    "REDIS_URL", "redis://localhost:6379/0"
+)
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+# Só confirma a tarefa ao worker depois de concluída — uma queda do processo
+# no meio da execução devolve a tarefa para a fila em vez de perdê-la.
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 200
+
+# Em testes, executa as tarefas de forma síncrona e imediata, sem exigir um
+# broker Redis rodando — mantém a suíte determinística e independente de infra.
+# CELERY_TASK_EAGER_PROPAGATES fica no padrão (False) de propósito: .delay()
+# é fire-and-forget tanto em produção quanto em teste — uma falha dentro da
+# tarefa nunca deve estourar no código que a disparou.
+if TESTING:
+    CELERY_TASK_ALWAYS_EAGER = True
+
+CELERY_BEAT_SCHEDULE = {
+    "expirar-sessoes-assinatura-vencidas": {
+        "task": "gestao_contratos.tasks.expirar_sessoes_vencidas_task",
+        "schedule": 300.0,  # a cada 5 minutos
+    },
 }

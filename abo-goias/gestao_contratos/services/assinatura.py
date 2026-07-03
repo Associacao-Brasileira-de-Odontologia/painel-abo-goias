@@ -174,8 +174,9 @@ def sessao_ativa(contrato: "ContratoGerado") -> "SessaoAssinatura | None":
     """Retorna a sessão ativa (pendente/aberta e no prazo) do contrato.
 
     Antes de consultar, expira lazy qualquer sessão pendente/aberta vencida,
-    para que o status refletido na tela de staff fique correto mesmo que o
-    paciente nunca tenha acessado o link (sem depender do beat da Fase 4).
+    para que o status refletido na tela de staff fique correto mesmo que
+    ninguém tenha visitado esta tela desde o vencimento — redundante com
+    (mas independente de) a limpeza periódica do Celery Beat.
     """
 
     from gestao_contratos.models import SessaoAssinatura
@@ -200,6 +201,23 @@ def eventos_recentes(contrato: "ContratoGerado", limite: int = 8) -> list:
     """Retorna os últimos eventos do contrato, mais recente primeiro."""
 
     return list(contrato.eventos.order_by("-criado_em", "-pk")[:limite])
+
+
+def expirar_sessoes_globalmente() -> int:
+    """Expira, em lote, todas as sessões pendentes/abertas vencidas do sistema.
+
+    Executado periodicamente pelo Celery Beat como rede de segurança —
+    o polling da tela de staff já expira sob demanda (função acima), mas
+    esta tarefa garante a limpeza mesmo que ninguém volte a abrir a tela.
+    Retorna quantas sessões foram expiradas.
+    """
+
+    from gestao_contratos.models import SessaoAssinatura
+
+    vencidas = SessaoAssinatura.objects.filter(
+        status__in=["pendente", "aberta"], expira_em__lte=timezone.now()
+    )
+    return sum(1 for sessao in vencidas if expirar_se_vencida(sessao))
 
 
 def registrar_abertura(sessao: "SessaoAssinatura") -> None:
@@ -291,6 +309,21 @@ def processar_assinatura(
         hash_original=hash_original,
         hash_assinado=contrato.hash_sha256,
     )
+
+    # Dispara o upload ao Dental Office em segundo plano (Celery), com
+    # retry automático — o paciente não espera por isso, e uma falha
+    # temporária de rede não perde o documento assinado.
+    if contrato.paciente.id_dental:
+        from gestao_contratos.tasks import enviar_dental_task
+
+        enviar_dental_task.delay(contrato.pk)
+    else:
+        logger.info(
+            "processar_assinatura: paciente sem id_dental — upload ao "
+            "Dental Office não agendado (contrato=%s)",
+            contrato.pk,
+        )
+
     return contrato
 
 

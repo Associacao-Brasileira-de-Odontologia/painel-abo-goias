@@ -18,11 +18,12 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from gestao_contratos.models import ContratoGerado, EventoContrato
+from gestao_contratos.models import ContratoGerado, EventoContrato, SessaoAssinatura
 from gestao_contratos.services.assinatura import (
     AssinaturaInvalida,
     SessaoInvalida,
     criar_sessao,
+    expirar_sessoes_globalmente,
     gerar_token,
     processar_assinatura,
     resolver_token,
@@ -33,6 +34,7 @@ from gestao_contratos.services.checklist import (
     pendencias_obrigatorias,
 )
 from gestao_contratos.services.documentos import gerar_e_salvar_contrato
+from gestao_contratos.tasks import enviar_dental_task, expirar_sessoes_vencidas_task
 from gestao_lab.integrations.dental import DentalAPIError
 from gestao_lab.models import Paciente
 
@@ -793,7 +795,15 @@ def _assinatura_data_url() -> str:
 
 
 class AssinaturaBaseTests(TestCase):
-    """Base: contrato real (com PDF) em MEDIA_ROOT temporário."""
+    """Base: contrato real (com PDF) em MEDIA_ROOT temporário.
+
+    ``enviar_dental_task.delay`` é mockado aqui porque, em CELERY_TASK_ALWAYS_EAGER
+    (ativo durante os testes), qualquer chamada real executaria a tarefa
+    de forma síncrona — incluindo uma tentativa de rede à API real do
+    Dental Office, já que este projeto tem um .env com credenciais válidas.
+    O comportamento real da tarefa é coberto isoladamente em
+    EnviarDentalTaskTests, que não herda desta base.
+    """
 
     def setUp(self) -> None:
         cache.clear()
@@ -808,6 +818,10 @@ class AssinaturaBaseTests(TestCase):
         self.contrato = gerar_e_salvar_contrato(
             paciente=self.pac, tipo="modelo_1", gerado_por=self.usuario
         )
+
+        patcher = patch("gestao_contratos.tasks.enviar_dental_task.delay")
+        self.mock_enviar_dental_delay = patcher.start()
+        self.addCleanup(patcher.stop)
 
 
 class SessaoAssinaturaServiceTests(AssinaturaBaseTests):
@@ -932,6 +946,24 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
         sessao.refresh_from_db()
         self.assertEqual(sessao.status, "pendente")
         self.assertIsNotNone(sessao_ativa(self.contrato))
+
+    def test_assinatura_concluida_agenda_envio_ao_dental(self) -> None:
+        """Fase 4: assinar deve enfileirar enviar_dental_task com o pk do contrato."""
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.mock_enviar_dental_delay.assert_called_once_with(self.contrato.pk)
+
+    def test_assinatura_sem_id_dental_nao_agenda_envio(self) -> None:
+        """Sem id_dental, não há como enviar — a tarefa não deve ser enfileirada."""
+        self.pac.id_dental = ""
+        self.pac.save(update_fields=["id_dental"])
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.mock_enviar_dental_delay.assert_not_called()
 
 
 class AssinaturaPublicaViewTests(AssinaturaBaseTests):
@@ -1219,3 +1251,126 @@ class EnvioDentalEventosTests(AssinaturaBaseTests):
                 contrato=self.contrato, tipo="envio_dental_erro"
             ).exists()
         )
+
+
+# ---------------------------------------------------------------------------
+# Testes das tarefas Celery (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+class EnviarDentalTaskTests(TestCase):
+    """Testa enviar_dental_task diretamente — sem herdar de AssinaturaBaseTests,
+    já que aquela base mocka justamente ``enviar_dental_task.delay`` para
+    proteger os testes de assinatura de disparar a tarefa de verdade.
+    """
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        override = override_settings(MEDIA_ROOT=media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.pac = _paciente_completo(id_dental="700")
+        self.contrato = gerar_e_salvar_contrato(
+            paciente=self.pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+
+    @patch("gestao_contratos.services.envio_dental.enviar_contrato_ao_dental")
+    def test_sucesso_chama_uma_unica_vez(self, mock_enviar: MagicMock) -> None:
+        mock_enviar.return_value = (True, "")
+
+        enviar_dental_task.delay(self.contrato.pk)
+
+        mock_enviar.assert_called_once_with(self.contrato)
+
+    @patch("gestao_contratos.services.envio_dental.enviar_contrato_ao_dental")
+    def test_recupera_apos_falha_temporaria(self, mock_enviar: MagicMock) -> None:
+        mock_enviar.side_effect = [(False, "timeout"), (True, "")]
+
+        enviar_dental_task.delay(self.contrato.pk)
+
+        self.assertEqual(mock_enviar.call_count, 2)
+
+    @patch("gestao_contratos.services.envio_dental.enviar_contrato_ao_dental")
+    def test_falha_persistente_esgota_tentativas_sem_propagar(
+        self, mock_enviar: MagicMock
+    ) -> None:
+        mock_enviar.return_value = (False, "Dental Office fora do ar")
+
+        # .delay() é fire-and-forget — uma falha na tarefa nunca deve
+        # estourar no código que a disparou (aqui, o próprio teste).
+        enviar_dental_task.delay(self.contrato.pk)
+
+        # 1 tentativa inicial + max_retries (5) configurados na tarefa.
+        self.assertEqual(mock_enviar.call_count, 6)
+
+    def test_contrato_inexistente_nao_chama_a_api(self) -> None:
+        with patch(
+            "gestao_contratos.services.envio_dental.enviar_contrato_ao_dental"
+        ) as mock_enviar:
+            enviar_dental_task.delay(999_999)
+            mock_enviar.assert_not_called()
+
+
+class ExpirarSessoesVencidasTaskTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        override = override_settings(MEDIA_ROOT=media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.pac = _paciente_completo(id_dental="701")
+        self.contrato = gerar_e_salvar_contrato(
+            paciente=self.pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+        self.contrato.status = "aguardando_assinatura"
+        self.contrato.save(update_fields=["status"])
+
+    def test_expira_vencidas_e_ignora_validas(self) -> None:
+        vencida = SessaoAssinatura.objects.create(
+            contrato=self.contrato,
+            expira_em=timezone.now() - timezone.timedelta(minutes=1),
+        )
+
+        outro_pac = _paciente_completo(id_dental="702")
+        outro_contrato = gerar_e_salvar_contrato(
+            paciente=outro_pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+        valida = SessaoAssinatura.objects.create(
+            contrato=outro_contrato,
+            expira_em=timezone.now() + timezone.timedelta(minutes=30),
+        )
+
+        total = expirar_sessoes_globalmente()
+
+        self.assertEqual(total, 1)
+        vencida.refresh_from_db()
+        valida.refresh_from_db()
+        self.assertEqual(vencida.status, "expirada")
+        self.assertEqual(valida.status, "pendente")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status, "gerado")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                sessao=vencida, tipo="sessao_expirada"
+            ).exists()
+        )
+
+    def test_sem_sessoes_vencidas_retorna_zero(self) -> None:
+        SessaoAssinatura.objects.create(
+            contrato=self.contrato,
+            expira_em=timezone.now() + timezone.timedelta(minutes=30),
+        )
+        self.assertEqual(expirar_sessoes_globalmente(), 0)
+
+    def test_task_delega_para_expirar_sessoes_globalmente(self) -> None:
+        SessaoAssinatura.objects.create(
+            contrato=self.contrato,
+            expira_em=timezone.now() - timezone.timedelta(minutes=1),
+        )
+
+        resultado = expirar_sessoes_vencidas_task.delay()
+
+        self.assertEqual(resultado.get(), 1)
