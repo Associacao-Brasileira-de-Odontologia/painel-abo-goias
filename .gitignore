@@ -18,6 +18,8 @@ abo-goias/gestao_cme/staticfiles/
 abo-goias/media/
 abo-goias/contratos/
 contratos/
+abo-goias/assinaturas/
+assinaturas/
 
 ### Dados sensíveis de pacientes — fixtures legado ###
 abo-goias/gestao_lab/fixtures/*.csv
