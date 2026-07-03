@@ -1296,6 +1296,53 @@ class EnvioDentalEventosTests(AssinaturaBaseTests):
             ).exists()
         )
 
+    @patch("gestao_contratos.services.envio_dental.DentalClient")
+    def test_prefere_pdf_assinado_quando_disponivel(
+        self, MockDental: MagicMock
+    ) -> None:
+        """Regressão: o envio ao Dental Office enviava o PDF original (sem
+        assinatura) mesmo quando o contrato já havia sido assinado."""
+        from django.core.files.base import ContentFile
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        self.contrato.arquivo_pdf.open("rb")
+        conteudo_original = self.contrato.arquivo_pdf.read()
+        self.contrato.arquivo_pdf.close()
+
+        # Simula o PDF já mesclado com a assinatura (bytes distintos do original).
+        conteudo_assinado = conteudo_original + b"-ASSINADO"
+        self.contrato.arquivo_pdf_assinado.save(
+            "assinado.pdf", ContentFile(conteudo_assinado), save=True
+        )
+
+        MockDental.return_value.enviar_documento_paciente.return_value = {"id": 1}
+
+        ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertTrue(ok)
+        kwargs = MockDental.return_value.enviar_documento_paciente.call_args.kwargs
+        self.assertEqual(kwargs["arquivo_bytes"], conteudo_assinado)
+        self.assertIn("(assinado)", kwargs["nome"])
+
+    @patch("gestao_contratos.services.envio_dental.DentalClient")
+    def test_usa_pdf_original_quando_ainda_nao_assinado(
+        self, MockDental: MagicMock
+    ) -> None:
+        from gestao_contratos.services.envio_dental import enviar_contrato_ao_dental
+
+        self.contrato.arquivo_pdf.open("rb")
+        conteudo_original = self.contrato.arquivo_pdf.read()
+        self.contrato.arquivo_pdf.close()
+
+        MockDental.return_value.enviar_documento_paciente.return_value = {"id": 1}
+
+        ok, erro = enviar_contrato_ao_dental(self.contrato)
+
+        self.assertTrue(ok)
+        kwargs = MockDental.return_value.enviar_documento_paciente.call_args.kwargs
+        self.assertEqual(kwargs["arquivo_bytes"], conteudo_original)
+        self.assertNotIn("(assinado)", kwargs["nome"])
+
 
 # ---------------------------------------------------------------------------
 # Testes das tarefas Celery (Fase 4)

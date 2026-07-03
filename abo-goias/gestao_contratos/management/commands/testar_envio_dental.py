@@ -92,30 +92,44 @@ class Command(BaseCommand):
         self.stdout.write(f"   id_dental    : {paciente.id_dental!r}")
         arq = contrato.arquivo.name if contrato.arquivo else "(vazio)"
         arq_pdf = contrato.arquivo_pdf.name if contrato.arquivo_pdf else "(vazio)"
-        self.stdout.write(f"   arquivo      : {arq}")
-        self.stdout.write(f"   arquivo_pdf  : {arq_pdf}")
-        self.stdout.write(f"   status_dental: {contrato.status_envio_dental}")
+        arq_pdf_assinado = (
+            contrato.arquivo_pdf_assinado.name
+            if contrato.arquivo_pdf_assinado
+            else "(vazio)"
+        )
+        self.stdout.write(f"   arquivo         : {arq}")
+        self.stdout.write(f"   arquivo_pdf     : {arq_pdf}")
+        self.stdout.write(f"   arquivo_pdf_ass.: {arq_pdf_assinado}")
+        self.stdout.write(f"   status_dental   : {contrato.status_envio_dental}")
 
         if not paciente.id_dental:
             raise CommandError(
                 "Paciente sem id_dental — impossível enviar ao Dental Office."
             )
 
-        # ── 3. Obter bytes do PDF ──────────────────────────────────────
+        # ── 3. Obter bytes do PDF (assinado tem prioridade) ────────────
         self.stdout.write(self.style.MIGRATE_HEADING("\n3. Leitura do arquivo"))
         arquivo_bytes: bytes | None = None
 
-        if contrato.arquivo_pdf:
+        for campo, rotulo in (
+            (contrato.arquivo_pdf_assinado, "assinado"),
+            (contrato.arquivo_pdf, "original"),
+        ):
+            if not campo:
+                continue
             try:
-                contrato.arquivo_pdf.open("rb")
-                arquivo_bytes = contrato.arquivo_pdf.read()
-                contrato.arquivo_pdf.close()
+                campo.open("rb")
+                arquivo_bytes = campo.read()
+                campo.close()
                 self.stdout.write(
-                    self.style.SUCCESS(f"   OK PDF lido: {len(arquivo_bytes):,} bytes")
+                    self.style.SUCCESS(
+                        f"   OK PDF {rotulo} lido: {len(arquivo_bytes):,} bytes"
+                    )
                 )
+                break
             except Exception as exc:
                 self.stdout.write(
-                    self.style.WARNING(f"   AVISO Falha ao ler PDF: {exc}")
+                    self.style.WARNING(f"   AVISO Falha ao ler PDF {rotulo}: {exc}")
                 )
 
         if not arquivo_bytes:

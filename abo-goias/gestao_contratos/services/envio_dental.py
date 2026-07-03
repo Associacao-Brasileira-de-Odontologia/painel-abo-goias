@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
     """Envia o contrato para a ficha do paciente no Dental Office.
 
-    Prefere o PDF já salvo em arquivo_pdf. Se não existir, gera o PDF
-    diretamente a partir dos metadados do contrato (via reportlab, sem
-    conversão DOCX→PDF). Retorna (True, "") em sucesso ou (False, erro).
+    Prefere o PDF assinado (arquivo_pdf_assinado), quando o contrato já foi
+    assinado pelo paciente. Cai para o PDF original (arquivo_pdf) quando
+    ainda não há assinatura, e gera o PDF na hora como último recurso.
+    Retorna (True, "") em sucesso ou (False, erro).
 
     Cada tentativa registra um EventoContrato (iniciado/concluído/erro),
     alimentando a trilha de auditoria e o status em tempo real da tela
@@ -37,18 +38,31 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
         _marcar_erro(contrato, erro)
         return False, erro
 
-    # ── 1. Ler PDF já salvo ────────────────────────────────────────────
+    # ── 1. Ler o melhor PDF já salvo (assinado tem prioridade) ─────────
     arquivo_bytes: bytes | None = None
 
-    if contrato.arquivo_pdf:
+    for campo, rotulo in (
+        (contrato.arquivo_pdf_assinado, "assinado"),
+        (contrato.arquivo_pdf, "original"),
+    ):
+        if not campo:
+            continue
         try:
-            contrato.arquivo_pdf.open("rb")
-            arquivo_bytes = contrato.arquivo_pdf.read()
-            contrato.arquivo_pdf.close()
+            campo.open("rb")
+            arquivo_bytes = campo.read()
+            campo.close()
+            logger.info(
+                "enviar_contrato_ao_dental: PDF %s lido (contrato_pk=%s, " "%d bytes)",
+                rotulo,
+                contrato.pk,
+                len(arquivo_bytes),
+            )
+            break
         except Exception as exc:
             logger.warning(
-                "enviar_contrato_ao_dental: falha ao ler PDF salvo "
+                "enviar_contrato_ao_dental: falha ao ler PDF %s "
                 "(contrato_pk=%s): %s",
+                rotulo,
                 contrato.pk,
                 exc,
             )
@@ -79,18 +93,21 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
             return False, erro
 
     # ── 3. Montar nome e descrição ─────────────────────────────────────
+    assinado = bool(contrato.arquivo_pdf_assinado)
     data_geracao = (
         contrato.criado_em.strftime("%d/%m/%Y")
         if contrato.criado_em
         else date.today().strftime("%d/%m/%Y")
     )
+    sufixo_nome = " (assinado)" if assinado else ""
     nome_arquivo = (
-        f"Termo {contrato.get_tipo_display()} — "
+        f"Termo {contrato.get_tipo_display()}{sufixo_nome} — "
         f"{paciente.nome.split()[0].title()} — {data_geracao}.pdf"
     )
     descricao = (
         f"Termo de consentimento ({contrato.get_tipo_display()}) "
-        f"gerado em {data_geracao} via ABO Goiás."
+        f"{'assinado eletronicamente pelo paciente' if assinado else 'gerado'} "
+        f"em {data_geracao} via ABO Goiás."
     )
 
     # ── 4. Enviar à API ────────────────────────────────────────────────
