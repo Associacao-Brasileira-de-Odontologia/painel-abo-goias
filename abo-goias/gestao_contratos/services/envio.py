@@ -10,6 +10,8 @@ from urllib.parse import quote
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
+from .documentos import obter_melhor_pdf_bytes
+
 if TYPE_CHECKING:
     from gestao_contratos.models import ContratoGerado
 
@@ -41,26 +43,23 @@ _CONTENT_TYPE_DOCX = (
 def _ler_anexo_contrato(contrato: "ContratoGerado") -> tuple[bytes, str, str] | None:
     """Retorna (conteudo, extensao, content_type) do melhor anexo disponível.
 
-    Prefere o PDF; usa o DOCX como fallback. Retorna None se nenhum arquivo
-    puder ser lido.
+    Prefere o PDF (assinado, se houver, sobre o original); usa o DOCX como
+    último recurso. Retorna None se nenhum arquivo puder ser lido.
     """
 
-    candidatos = [
-        (contrato.arquivo_pdf, "pdf", "application/pdf"),
-        (contrato.arquivo, "docx", _CONTENT_TYPE_DOCX),
-    ]
-    for campo, extensao, content_type in candidatos:
-        if not campo:
-            continue
+    pdf_bytes = obter_melhor_pdf_bytes(contrato)
+    if pdf_bytes is not None:
+        return pdf_bytes, "pdf", "application/pdf"
+
+    if contrato.arquivo:
         try:
-            campo.open("rb")
-            conteudo = campo.read()
-            campo.close()
-            return conteudo, extensao, content_type
+            contrato.arquivo.open("rb")
+            conteudo = contrato.arquivo.read()
+            contrato.arquivo.close()
+            return conteudo, "docx", _CONTENT_TYPE_DOCX
         except Exception as exc:
             logger.warning(
-                "enviar_contrato_email: erro ao ler %s (contrato_pk=%s): %s",
-                extensao,
+                "enviar_contrato_email: erro ao ler docx (contrato_pk=%s): %s",
                 contrato.pk,
                 exc,
             )
@@ -116,11 +115,12 @@ def enviar_contrato_email(contrato: "ContratoGerado", destinatario: str) -> bool
     return True
 
 
-def calcular_link_whatsapp(celular: str, tipo_display: str) -> str:
-    """Calcula o link wa.me sem efeitos colaterais no banco de dados.
+def normalizar_celular(celular: str) -> str:
+    """Normaliza um celular para dígitos com DDI 55 (padrão E.164 sem '+').
 
-    Normaliza o número (remove não-dígitos, adiciona 55 se necessário).
-    Retorna string vazia se o número for inválido.
+    Remove não-dígitos e adiciona o 55 se ausente. Retorna string vazia se
+    não houver nenhum dígito. Compartilhado entre o link wa.me e o envio
+    automático via Meta Cloud API — ambos precisam do mesmo formato.
     """
 
     digitos = re.sub(r"\D", "", celular)
@@ -128,6 +128,19 @@ def calcular_link_whatsapp(celular: str, tipo_display: str) -> str:
         return ""
     if not digitos.startswith("55"):
         digitos = "55" + digitos
+    return digitos
+
+
+def calcular_link_whatsapp(celular: str, tipo_display: str) -> str:
+    """Calcula o link wa.me sem efeitos colaterais no banco de dados.
+
+    Normaliza o número (remove não-dígitos, adiciona 55 se necessário).
+    Retorna string vazia se o número for inválido.
+    """
+
+    digitos = normalizar_celular(celular)
+    if not digitos:
+        return ""
     mensagem = _MENSAGEM_WHATSAPP.format(tipo=tipo_display)
     return f"https://wa.me/{digitos}?text={quote(mensagem)}"
 

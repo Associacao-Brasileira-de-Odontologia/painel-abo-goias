@@ -343,6 +343,31 @@ def processar_assinatura(
             contrato.pk,
         )
 
+    # Dispara o envio por WhatsApp em segundo plano, independente do envio
+    # ao Dental Office — o paciente deve receber sua cópia mesmo que a
+    # integração com o Dental falhe. Só é agendado quando a Meta Cloud API
+    # está configurada (sem credenciais, o fluxo manual — link wa.me na
+    # tela de pós-geração — continua sendo o único caminho) e o paciente
+    # tem celular cadastrado.
+    from .whatsapp import whatsapp_configurado
+
+    if whatsapp_configurado() and contrato.paciente.celular:
+        try:
+            from gestao_contratos.tasks import enviar_whatsapp_task
+
+            enviar_whatsapp_task.delay(contrato.pk)
+        except Exception as exc:
+            logger.exception(
+                "processar_assinatura: falha ao agendar envio por WhatsApp "
+                "(contrato=%s)",
+                contrato.pk,
+            )
+            registrar_evento(
+                contrato,
+                "whatsapp_erro",
+                erro=f"Falha ao agendar envio automático: {exc}",
+            )
+
     return contrato
 
 

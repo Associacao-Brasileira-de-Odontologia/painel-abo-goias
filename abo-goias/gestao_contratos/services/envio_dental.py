@@ -9,7 +9,7 @@ from django.utils import timezone
 from gestao_lab.integrations.dental import DentalAPIError, DentalClient
 
 from .assinatura import registrar_evento
-from .documentos import gerar_pdf
+from .documentos import gerar_pdf, obter_melhor_pdf_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -39,34 +39,7 @@ def enviar_contrato_ao_dental(contrato) -> tuple[bool, str]:
         return False, erro
 
     # ── 1. Ler o melhor PDF já salvo (assinado tem prioridade) ─────────
-    arquivo_bytes: bytes | None = None
-
-    for campo, rotulo in (
-        (contrato.arquivo_pdf_assinado, "assinado"),
-        (contrato.arquivo_pdf, "original"),
-    ):
-        if not campo:
-            continue
-        try:
-            campo.open("rb")
-            arquivo_bytes = campo.read()
-            campo.close()
-            logger.info(
-                "enviar_contrato_ao_dental: PDF %s lido (contrato_pk=%s, " "%d bytes)",
-                rotulo,
-                contrato.pk,
-                len(arquivo_bytes),
-            )
-            break
-        except Exception as exc:
-            logger.warning(
-                "enviar_contrato_ao_dental: falha ao ler PDF %s "
-                "(contrato_pk=%s): %s",
-                rotulo,
-                contrato.pk,
-                exc,
-            )
-            arquivo_bytes = None
+    arquivo_bytes = obter_melhor_pdf_bytes(contrato)
 
     # ── 2. Gerar PDF diretamente se não houver arquivo salvo ──────────
     if not arquivo_bytes:

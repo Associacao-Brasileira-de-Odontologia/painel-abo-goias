@@ -170,6 +170,9 @@ TIPOS_EVENTO_CONTRATO = [
     ("envio_dental_iniciado", "Envio ao Dental Office iniciado"),
     ("envio_dental_concluido", "Envio ao Dental Office concluído"),
     ("envio_dental_erro", "Erro no envio ao Dental Office"),
+    ("whatsapp_iniciado", "Envio por WhatsApp iniciado"),
+    ("whatsapp_concluido", "Envio por WhatsApp concluído"),
+    ("whatsapp_erro", "Erro no envio por WhatsApp"),
 ]
 
 

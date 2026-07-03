@@ -125,6 +125,41 @@ def gerar_pdf(
     )
 
 
+def obter_melhor_pdf_bytes(contrato: "ContratoGerado") -> bytes | None:
+    """Retorna os bytes do melhor PDF já salvo do contrato.
+
+    Prioriza o PDF assinado (arquivo_pdf_assinado) sobre o original
+    (arquivo_pdf) — usado por todos os canais de envio (Dental Office,
+    e-mail, WhatsApp) para garantir que, uma vez assinado, é sempre a
+    versão assinada que circula. Não regenera na hora: retorna None se
+    nenhum dos dois arquivos existir ou puder ser lido, cabendo ao
+    chamador decidir se regenera via gerar_pdf() (sempre sem assinatura).
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    for campo, rotulo in (
+        (contrato.arquivo_pdf_assinado, "assinado"),
+        (contrato.arquivo_pdf, "original"),
+    ):
+        if not campo:
+            continue
+        try:
+            campo.open("rb")
+            conteudo = campo.read()
+            campo.close()
+            return conteudo
+        except Exception as exc:
+            logger.warning(
+                "obter_melhor_pdf_bytes: falha ao ler PDF %s (contrato_pk=%s): %s",
+                rotulo,
+                contrato.pk,
+                exc,
+            )
+    return None
+
+
 # ── Geração DOCX ─────────────────────────────────────────────────────────────
 
 

@@ -45,6 +45,36 @@ def enviar_dental_task(self, contrato_pk: int) -> None:
         raise RuntimeError(erro)
 
 
+@shared_task(
+    bind=True,
+    autoretry_for=(RuntimeError,),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+    max_retries=5,
+)
+def enviar_whatsapp_task(self, contrato_pk: int) -> None:
+    """Envia o PDF assinado ao paciente via WhatsApp, com retry automático.
+
+    Disparada logo após a conclusão da assinatura (services/assinatura.py),
+    apenas quando a Meta Cloud API está configurada — sem credenciais, essa
+    tarefa nunca é agendada e o fluxo manual (link wa.me) segue intacto.
+    """
+
+    from .models import ContratoGerado
+    from .services.whatsapp import enviar_whatsapp_contrato
+
+    try:
+        contrato = ContratoGerado.objects.select_related("paciente").get(pk=contrato_pk)
+    except ContratoGerado.DoesNotExist:
+        logger.error("enviar_whatsapp_task: contrato %s não encontrado", contrato_pk)
+        return
+
+    ok, erro = enviar_whatsapp_contrato(contrato)
+    if not ok:
+        raise RuntimeError(erro)
+
+
 @shared_task
 def expirar_sessoes_vencidas_task() -> int:
     """Limpeza periódica (Celery Beat) das sessões de assinatura vencidas.

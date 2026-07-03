@@ -9,11 +9,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
 import tempfile
 from datetime import date
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -34,7 +36,18 @@ from gestao_contratos.services.checklist import (
     pendencias_obrigatorias,
 )
 from gestao_contratos.services.documentos import gerar_e_salvar_contrato
-from gestao_contratos.tasks import enviar_dental_task, expirar_sessoes_vencidas_task
+from gestao_contratos.services.envio import normalizar_celular
+from gestao_contratos.services.whatsapp import enviar_whatsapp_contrato
+from gestao_contratos.services.whatsapp.meta_cloud import (
+    MetaWhatsAppClient,
+    MetaWhatsAppError,
+    carregar_config_meta,
+)
+from gestao_contratos.tasks import (
+    enviar_dental_task,
+    enviar_whatsapp_task,
+    expirar_sessoes_vencidas_task,
+)
 from gestao_lab.integrations.dental import DentalAPIError
 from gestao_lab.models import Paciente
 
@@ -797,12 +810,13 @@ def _assinatura_data_url() -> str:
 class AssinaturaBaseTests(TestCase):
     """Base: contrato real (com PDF) em MEDIA_ROOT temporário.
 
-    ``enviar_dental_task.delay`` é mockado aqui porque, em CELERY_TASK_ALWAYS_EAGER
-    (ativo durante os testes), qualquer chamada real executaria a tarefa
-    de forma síncrona — incluindo uma tentativa de rede à API real do
-    Dental Office, já que este projeto tem um .env com credenciais válidas.
-    O comportamento real da tarefa é coberto isoladamente em
-    EnviarDentalTaskTests, que não herda desta base.
+    ``enviar_dental_task.delay`` e ``enviar_whatsapp_task.delay`` são
+    mockadas aqui porque, em CELERY_TASK_ALWAYS_EAGER (ativo durante os
+    testes), qualquer chamada real executaria a tarefa de forma síncrona —
+    incluindo uma tentativa de rede à API real do Dental Office, já que
+    este projeto tem um .env com credenciais válidas. O comportamento real
+    de cada tarefa é coberto isoladamente em EnviarDentalTaskTests e
+    EnviarWhatsappTaskTests, que não herdam desta base.
     """
 
     def setUp(self) -> None:
@@ -822,6 +836,10 @@ class AssinaturaBaseTests(TestCase):
         patcher = patch("gestao_contratos.tasks.enviar_dental_task.delay")
         self.mock_enviar_dental_delay = patcher.start()
         self.addCleanup(patcher.stop)
+
+        patcher_wa = patch("gestao_contratos.tasks.enviar_whatsapp_task.delay")
+        self.mock_enviar_whatsapp_delay = patcher_wa.start()
+        self.addCleanup(patcher_wa.stop)
 
 
 class SessaoAssinaturaServiceTests(AssinaturaBaseTests):
@@ -987,6 +1005,77 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
         self.assertTrue(
             EventoContrato.objects.filter(
                 contrato=contrato, tipo="envio_dental_erro"
+            ).exists()
+        )
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WHATSAPP_META_TOKEN": "token-teste",
+            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
+        },
+    )
+    def test_assinatura_agenda_envio_whatsapp_quando_configurado_e_com_celular(
+        self,
+    ) -> None:
+        self.pac.celular = "62999998888"
+        self.pac.save(update_fields=["celular"])
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.mock_enviar_whatsapp_delay.assert_called_once_with(self.contrato.pk)
+
+    def test_assinatura_nao_agenda_whatsapp_sem_meta_configurado(self) -> None:
+        """Sem credenciais da Meta, o envio automático fica desativado —
+        mesmo com celular cadastrado."""
+        self.pac.celular = "62999998888"
+        self.pac.save(update_fields=["celular"])
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.mock_enviar_whatsapp_delay.assert_not_called()
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WHATSAPP_META_TOKEN": "token-teste",
+            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
+        },
+    )
+    def test_assinatura_nao_agenda_whatsapp_sem_celular(self) -> None:
+        """Configurado, mas sem celular do paciente, não há para quem enviar."""
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.mock_enviar_whatsapp_delay.assert_not_called()
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WHATSAPP_META_TOKEN": "token-teste",
+            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
+        },
+    )
+    def test_falha_ao_enfileirar_whatsapp_nao_quebra_a_assinatura(self) -> None:
+        self.pac.celular = "62999998888"
+        self.pac.save(update_fields=["celular"])
+        self.mock_enviar_whatsapp_delay.side_effect = RuntimeError(
+            "Retry limit exceeded while trying to reconnect to the Celery "
+            "result store backend."
+        )
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        contrato = processar_assinatura(
+            sessao, _assinatura_data_url(), ip=None, user_agent=""
+        )
+
+        self.assertEqual(contrato.status, "assinado")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=contrato, tipo="whatsapp_erro"
             ).exists()
         )
 
@@ -1344,6 +1433,42 @@ class EnvioDentalEventosTests(AssinaturaBaseTests):
         self.assertNotIn("(assinado)", kwargs["nome"])
 
 
+class EnviarContratoEmailTests(AssinaturaBaseTests):
+    """Regressão: o e-mail também não priorizava o PDF assinado."""
+
+    def test_prefere_pdf_assinado_quando_disponivel(self) -> None:
+        from django.core.files.base import ContentFile
+        from gestao_contratos.services.envio import enviar_contrato_email
+
+        self.contrato.arquivo_pdf.open("rb")
+        conteudo_original = self.contrato.arquivo_pdf.read()
+        self.contrato.arquivo_pdf.close()
+        conteudo_assinado = conteudo_original + b"-ASSINADO"
+        self.contrato.arquivo_pdf_assinado.save(
+            "assinado.pdf", ContentFile(conteudo_assinado), save=True
+        )
+
+        ok = enviar_contrato_email(self.contrato, "paciente@example.com")
+
+        self.assertTrue(ok)
+        self.assertEqual(len(mail.outbox), 1)
+        _, conteudo_enviado, _ = mail.outbox[0].attachments[0]
+        self.assertEqual(conteudo_enviado, conteudo_assinado)
+
+    def test_usa_pdf_original_quando_ainda_nao_assinado(self) -> None:
+        from gestao_contratos.services.envio import enviar_contrato_email
+
+        self.contrato.arquivo_pdf.open("rb")
+        conteudo_original = self.contrato.arquivo_pdf.read()
+        self.contrato.arquivo_pdf.close()
+
+        ok = enviar_contrato_email(self.contrato, "paciente@example.com")
+
+        self.assertTrue(ok)
+        _, conteudo_enviado, _ = mail.outbox[0].attachments[0]
+        self.assertEqual(conteudo_enviado, conteudo_original)
+
+
 # ---------------------------------------------------------------------------
 # Testes das tarefas Celery (Fase 4)
 # ---------------------------------------------------------------------------
@@ -1465,3 +1590,340 @@ class ExpirarSessoesVencidasTaskTests(TestCase):
         resultado = expirar_sessoes_vencidas_task.delay()
 
         self.assertEqual(resultado.get(), 1)
+
+
+# ---------------------------------------------------------------------------
+# Testes do envio automático por WhatsApp — Meta Cloud API (Fase 5)
+# ---------------------------------------------------------------------------
+
+
+class NormalizarCelularTests(TestCase):
+    def test_remove_nao_digitos(self) -> None:
+        self.assertEqual(normalizar_celular("(62) 9 9999-8888"), "5562999998888")
+
+    def test_adiciona_55_se_ausente(self) -> None:
+        self.assertEqual(normalizar_celular("62999998888"), "5562999998888")
+
+    def test_mantem_55_se_ja_presente(self) -> None:
+        self.assertEqual(normalizar_celular("5562999998888"), "5562999998888")
+
+    def test_vazio_para_string_vazia(self) -> None:
+        self.assertEqual(normalizar_celular(""), "")
+
+    def test_vazio_para_string_sem_digitos(self) -> None:
+        self.assertEqual(normalizar_celular("abc"), "")
+
+
+class CarregarConfigMetaTests(TestCase):
+    @patch.dict("os.environ", {}, clear=True)
+    def test_sem_variaveis_retorna_none(self) -> None:
+        self.assertIsNone(carregar_config_meta())
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WHATSAPP_META_TOKEN": "tok",
+            "WHATSAPP_META_PHONE_NUMBER_ID": "123",
+        },
+        clear=True,
+    )
+    def test_com_variaveis_obrigatorias_usa_padroes_para_opcionais(self) -> None:
+        config = carregar_config_meta()
+        self.assertIsNotNone(config)
+        self.assertEqual(config.token, "tok")
+        self.assertEqual(config.phone_number_id, "123")
+        self.assertEqual(config.api_version, "v21.0")
+        self.assertEqual(config.template_lang, "pt_BR")
+        self.assertEqual(config.template_name, "")
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WHATSAPP_META_TOKEN": "tok",
+            "WHATSAPP_META_PHONE_NUMBER_ID": "123",
+            "WHATSAPP_META_TEMPLATE_NAME": "contrato_assinado",
+            "WHATSAPP_META_TEMPLATE_LANG": "pt_PT",
+            "WHATSAPP_META_API_VERSION": "v20.0",
+        },
+        clear=True,
+    )
+    def test_respeita_variaveis_opcionais_quando_definidas(self) -> None:
+        config = carregar_config_meta()
+        self.assertEqual(config.template_name, "contrato_assinado")
+        self.assertEqual(config.template_lang, "pt_PT")
+        self.assertEqual(config.api_version, "v20.0")
+
+    @patch.dict("os.environ", {"WHATSAPP_META_TOKEN": "tok"}, clear=True)
+    def test_apenas_token_sem_phone_number_id_retorna_none(self) -> None:
+        self.assertIsNone(carregar_config_meta())
+
+
+def _fake_http_response(corpo: dict) -> MagicMock:
+    """Simula o context manager retornado por urlopen()."""
+    cm = MagicMock()
+    cm.__enter__.return_value.read.return_value = json.dumps(corpo).encode("utf-8")
+    return cm
+
+
+def _fake_http_error(status: int, corpo: str):
+    from urllib.error import HTTPError
+
+    fp = io.BytesIO(corpo.encode("utf-8"))
+    return HTTPError(
+        url="https://graph.facebook.com/teste",
+        code=status,
+        msg="erro",
+        hdrs=None,
+        fp=fp,
+    )
+
+
+class MetaWhatsAppClientTests(TestCase):
+    def _config(self, **kwargs):
+        with patch.dict(
+            "os.environ",
+            {
+                "WHATSAPP_META_TOKEN": "tok",
+                "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
+                **kwargs,
+            },
+            clear=True,
+        ):
+            return carregar_config_meta()
+
+    def test_sem_config_levanta_erro_ao_instanciar(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaises(MetaWhatsAppError):
+                MetaWhatsAppClient()
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_envia_via_template_quando_configurado(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        config = self._config(WHATSAPP_META_TEMPLATE_NAME="contrato_assinado")
+        mock_urlopen.side_effect = [
+            _fake_http_response({"id": "media-1"}),
+            _fake_http_response({"messages": [{"id": "wamid.1"}]}),
+        ]
+
+        client = MetaWhatsAppClient(config)
+        message_id = client.enviar_documento(
+            destinatario="5562999998888",
+            arquivo_bytes=b"%PDF-fake",
+            nome_arquivo="contrato.pdf",
+            nome_paciente="Maria",
+        )
+
+        self.assertEqual(message_id, "wamid.1")
+        self.assertEqual(mock_urlopen.call_count, 2)
+
+        segunda_chamada = mock_urlopen.call_args_list[1][0][0]
+        payload = json.loads(segunda_chamada.data)
+        self.assertEqual(payload["type"], "template")
+        self.assertEqual(payload["template"]["name"], "contrato_assinado")
+        header = payload["template"]["components"][0]
+        self.assertEqual(header["parameters"][0]["document"]["id"], "media-1")
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_envia_como_documento_de_sessao_sem_template(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        config = self._config()
+        mock_urlopen.side_effect = [
+            _fake_http_response({"id": "media-1"}),
+            _fake_http_response({"messages": [{"id": "wamid.2"}]}),
+        ]
+
+        client = MetaWhatsAppClient(config)
+        message_id = client.enviar_documento(
+            destinatario="5562999998888",
+            arquivo_bytes=b"%PDF-fake",
+            nome_arquivo="contrato.pdf",
+            nome_paciente="Maria",
+        )
+
+        self.assertEqual(message_id, "wamid.2")
+        segunda_chamada = mock_urlopen.call_args_list[1][0][0]
+        payload = json.loads(segunda_chamada.data)
+        self.assertEqual(payload["type"], "document")
+        self.assertEqual(payload["document"]["id"], "media-1")
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_upload_sem_id_levanta_erro(self, mock_urlopen: MagicMock) -> None:
+        config = self._config()
+        mock_urlopen.return_value = _fake_http_response({"erro": "sem id"})
+
+        client = MetaWhatsAppClient(config)
+        with self.assertRaises(MetaWhatsAppError):
+            client.enviar_documento(
+                destinatario="5562999998888",
+                arquivo_bytes=b"%PDF-fake",
+                nome_arquivo="contrato.pdf",
+                nome_paciente="Maria",
+            )
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_resposta_sem_messages_levanta_erro(self, mock_urlopen: MagicMock) -> None:
+        config = self._config()
+        mock_urlopen.side_effect = [
+            _fake_http_response({"id": "media-1"}),
+            _fake_http_response({"algo": "inesperado"}),
+        ]
+
+        client = MetaWhatsAppClient(config)
+        with self.assertRaises(MetaWhatsAppError):
+            client.enviar_documento(
+                destinatario="5562999998888",
+                arquivo_bytes=b"%PDF-fake",
+                nome_arquivo="contrato.pdf",
+                nome_paciente="Maria",
+            )
+
+    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
+    def test_http_error_vira_meta_whatsapp_error(self, mock_urlopen: MagicMock) -> None:
+        config = self._config()
+        mock_urlopen.side_effect = _fake_http_error(401, '{"error": "token invalido"}')
+
+        client = MetaWhatsAppClient(config)
+        with self.assertRaises(MetaWhatsAppError):
+            client.enviar_documento(
+                destinatario="5562999998888",
+                arquivo_bytes=b"%PDF-fake",
+                nome_arquivo="contrato.pdf",
+                nome_paciente="Maria",
+            )
+
+
+class EnviarWhatsappContratoTests(AssinaturaBaseTests):
+    """Testa enviar_whatsapp_contrato() mockando o cliente Meta inteiro —
+    a comunicação HTTP em si já é coberta por MetaWhatsAppClientTests."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.pac.celular = "62999998888"
+        self.pac.save(update_fields=["celular"])
+
+    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
+    def test_sucesso_atualiza_status_e_registra_evento(
+        self, MockClient: MagicMock
+    ) -> None:
+        MockClient.return_value.enviar_documento.return_value = "wamid.123"
+
+        ok, erro = enviar_whatsapp_contrato(self.contrato)
+
+        self.assertTrue(ok)
+        self.assertEqual(erro, "")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_envio, "enviado_whatsapp")
+        evento = EventoContrato.objects.filter(
+            contrato=self.contrato, tipo="whatsapp_concluido"
+        ).first()
+        self.assertIsNotNone(evento)
+        self.assertEqual(evento.payload.get("message_id"), "wamid.123")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="whatsapp_iniciado"
+            ).exists()
+        )
+
+    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
+    def test_erro_da_api_registra_evento_de_erro(self, MockClient: MagicMock) -> None:
+        MockClient.return_value.enviar_documento.side_effect = MetaWhatsAppError(
+            "falha simulada"
+        )
+
+        ok, erro = enviar_whatsapp_contrato(self.contrato)
+
+        self.assertFalse(ok)
+        self.assertIn("falha simulada", erro)
+        evento = EventoContrato.objects.filter(
+            contrato=self.contrato, tipo="whatsapp_erro"
+        ).first()
+        self.assertIsNotNone(evento)
+        self.assertIn("falha simulada", evento.payload.get("erro", ""))
+
+    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
+    def test_sem_celular_nao_chama_a_api(self, MockClient: MagicMock) -> None:
+        self.pac.celular = ""
+        self.pac.save(update_fields=["celular"])
+
+        ok, erro = enviar_whatsapp_contrato(self.contrato)
+
+        self.assertFalse(ok)
+        MockClient.assert_not_called()
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="whatsapp_erro"
+            ).exists()
+        )
+
+    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
+    def test_prefere_pdf_assinado_quando_disponivel(
+        self, MockClient: MagicMock
+    ) -> None:
+        from django.core.files.base import ContentFile
+
+        self.contrato.arquivo_pdf.open("rb")
+        conteudo_original = self.contrato.arquivo_pdf.read()
+        self.contrato.arquivo_pdf.close()
+        conteudo_assinado = conteudo_original + b"-ASSINADO"
+        self.contrato.arquivo_pdf_assinado.save(
+            "assinado.pdf", ContentFile(conteudo_assinado), save=True
+        )
+        MockClient.return_value.enviar_documento.return_value = "wamid.999"
+
+        ok, erro = enviar_whatsapp_contrato(self.contrato)
+
+        self.assertTrue(ok)
+        kwargs = MockClient.return_value.enviar_documento.call_args.kwargs
+        self.assertEqual(kwargs["arquivo_bytes"], conteudo_assinado)
+
+
+class EnviarWhatsappTaskTests(TestCase):
+    """Testa enviar_whatsapp_task diretamente — sem herdar de
+    AssinaturaBaseTests, que mocka justamente ``.delay()`` desta tarefa."""
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        override = override_settings(MEDIA_ROOT=media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.pac = _paciente_completo(id_dental="710", celular="62999998888")
+        self.contrato = gerar_e_salvar_contrato(
+            paciente=self.pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+
+    @patch("gestao_contratos.services.whatsapp.enviar_whatsapp_contrato")
+    def test_sucesso_chama_uma_unica_vez(self, mock_enviar: MagicMock) -> None:
+        mock_enviar.return_value = (True, "")
+
+        enviar_whatsapp_task.delay(self.contrato.pk)
+
+        mock_enviar.assert_called_once_with(self.contrato)
+
+    @patch("gestao_contratos.services.whatsapp.enviar_whatsapp_contrato")
+    def test_recupera_apos_falha_temporaria(self, mock_enviar: MagicMock) -> None:
+        mock_enviar.side_effect = [(False, "timeout"), (True, "")]
+
+        enviar_whatsapp_task.delay(self.contrato.pk)
+
+        self.assertEqual(mock_enviar.call_count, 2)
+
+    @patch("gestao_contratos.services.whatsapp.enviar_whatsapp_contrato")
+    def test_falha_persistente_esgota_tentativas_sem_propagar(
+        self, mock_enviar: MagicMock
+    ) -> None:
+        mock_enviar.return_value = (False, "Meta Cloud API fora do ar")
+
+        enviar_whatsapp_task.delay(self.contrato.pk)
+
+        self.assertEqual(mock_enviar.call_count, 6)
+
+    def test_contrato_inexistente_nao_chama_a_api(self) -> None:
+        with patch(
+            "gestao_contratos.services.whatsapp.enviar_whatsapp_contrato"
+        ) as mock_enviar:
+            enviar_whatsapp_task.delay(999_999)
+            mock_enviar.assert_not_called()
