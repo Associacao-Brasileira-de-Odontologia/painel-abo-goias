@@ -244,6 +244,17 @@ def assinar_pdf_view(request: HttpRequest, token: str) -> HttpResponse:
     return response
 
 
+def politica_privacidade_view(request: HttpRequest) -> HttpResponse:
+    """Política de privacidade do fluxo de assinatura eletrônica.
+
+    Página pública e estática (sem token/sessão) — linkada a partir de
+    assinar.html e acessível a qualquer momento, inclusive fora do fluxo
+    de assinatura em si.
+    """
+
+    return render(request, "gestao_contratos/politica_privacidade.html")
+
+
 # ── Views de staff ────────────────────────────────────────────────────────────
 
 

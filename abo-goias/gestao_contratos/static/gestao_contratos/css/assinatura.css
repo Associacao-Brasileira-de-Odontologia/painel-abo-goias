@@ -58,6 +58,37 @@ p {
     max-width: 560px;
 }
 
+.gc-wrap-larga {
+    max-width: 720px;
+}
+
+.politica h2 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gc-paper-ink);
+    margin: 22px 0 8px;
+}
+
+.politica p,
+.politica ul {
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.politica ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.politica li {
+    margin-bottom: 8px;
+}
+
+.politica li:last-child {
+    margin-bottom: 0;
+}
+
 .card {
     width: 100%;
     background: var(--gc-paper-card);

@@ -14,6 +14,11 @@ urlpatterns = [
         views_assinatura.assinar_pdf_view,
         name="assinatura_publica_pdf",
     ),
+    path(
+        "politica-privacidade/",
+        views_assinatura.politica_privacidade_view,
+        name="contratos_politica_privacidade",
+    ),
     # ── Assinatura remota — staff ───────────────────────────────────────
     path(
         "contrato/<int:contrato_pk>/status-assinatura/",

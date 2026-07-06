@@ -3362,3 +3362,26 @@ class CarimboTempoViewsTests(AssinaturaBaseTests):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"token-tsr-fake")
         self.assertEqual(response["Content-Type"], "application/timestamp-reply")
+
+
+class PoliticaPrivacidadeViewTests(TestCase):
+    def test_get_nao_exige_login_e_renderiza(self) -> None:
+        response = self.client.get(reverse("contratos_politica_privacidade"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/politica_privacidade.html")
+        self.assertContains(response, "Política de Privacidade")
+        self.assertContains(response, "LGPD")
+
+
+class AssinarLinkaPoliticaPrivacidadeTests(AssinaturaBaseTests):
+    def test_rodape_linka_politica_de_privacidade(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        _confirmar_identidade_sessao(sessao)
+        self.client.logout()
+
+        response = self.client.get(
+            reverse("assinatura_publica", args=[gerar_token(sessao)])
+        )
+
+        self.assertContains(response, reverse("contratos_politica_privacidade"))
