@@ -141,6 +141,15 @@ class SessaoAssinatura(ModeloBase):
     ip_assinatura = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
     assinatura_imagem = models.FileField(upload_to="assinaturas/", blank=True)
+    identidade_confirmada_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Momento em que o paciente confirmou a data de nascimento "
+            "cadastrada — obrigatório antes de liberar o canvas de assinatura."
+        ),
+    )
+    tentativas_identidade = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         ordering = ["-criado_em"]
@@ -159,6 +168,10 @@ class SessaoAssinatura(ModeloBase):
             self.expira_em
         )
 
+    @property
+    def identidade_confirmada(self) -> bool:
+        return self.identidade_confirmada_em is not None
+
 
 TIPOS_EVENTO_CONTRATO = [
     ("sessao_criada", "Sessão de assinatura criada"),
@@ -167,6 +180,11 @@ TIPOS_EVENTO_CONTRATO = [
     ("documento_assinado_salvo", "Documento assinado salvo"),
     ("sessao_expirada", "Sessão expirada"),
     ("sessao_cancelada", "Sessão cancelada"),
+    ("identidade_confirmada", "Identidade do paciente confirmada"),
+    (
+        "identidade_bloqueada",
+        "Verificação de identidade bloqueada por excesso de tentativas",
+    ),
     ("envio_dental_iniciado", "Envio ao Dental Office iniciado"),
     ("envio_dental_concluido", "Envio ao Dental Office concluído"),
     ("envio_dental_erro", "Erro no envio ao Dental Office"),

@@ -1,0 +1,45 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Confirme sua identidade — ABO Goiás</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/assinatura.css' %}">
+</head>
+<body class="tela-cheia">
+    <div class="gc-wrap">
+        <div class="card">
+            <p class="eyebrow">ABO Goiás — Verificação de identidade</p>
+            <h1>Confirme sua data de nascimento</h1>
+            <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+                Para sua segurança, confirme a data de nascimento cadastrada
+                antes de assinar o termo de {{ contrato.get_tipo_display }}
+                de <strong>{{ paciente.nome }}</strong>.
+            </p>
+
+            {% if erro %}
+                <div class="erro" style="margin-top:10px;">{{ erro }}</div>
+            {% endif %}
+
+            <form method="post" action="">
+                {% csrf_token %}
+                <div class="campo-data">
+                    <label for="nascimento">Data de nascimento</label>
+                    <input type="date" id="nascimento" name="nascimento" required>
+                </div>
+                <button class="btn btn-primary" type="submit">Confirmar e continuar</button>
+            </form>
+
+            <p class="rodape">
+                Este link é pessoal e intransferível. Após várias tentativas
+                incorretas, ele será bloqueado por segurança e a recepção
+                precisará gerar um novo QR Code.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

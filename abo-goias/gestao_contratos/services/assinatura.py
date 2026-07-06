@@ -14,6 +14,7 @@ import binascii
 import hashlib
 import io
 import logging
+from datetime import date
 from typing import TYPE_CHECKING
 
 from django.core import signing
@@ -29,6 +30,11 @@ logger = logging.getLogger(__name__)
 _SALT_TOKEN = "gestao_contratos.assinatura"
 
 VALIDADE_SESSAO_MINUTOS = 30
+
+# Tentativas permitidas para confirmar a data de nascimento antes de a
+# sessão ser cancelada — limita a adivinhação por força bruta (soma-se ao
+# rate-limit por IP já aplicado nas views públicas).
+LIMITE_TENTATIVAS_IDENTIDADE = 5
 
 # Limites da imagem de assinatura enviada pelo canvas
 _ASSINATURA_MAX_BYTES = 800_000
@@ -229,6 +235,47 @@ def registrar_abertura(sessao: "SessaoAssinatura") -> None:
     sessao.aberta_em = timezone.now()
     sessao.save(update_fields=["status", "aberta_em", "atualizado_em"])
     registrar_evento(sessao.contrato, "contrato_aberto", sessao=sessao)
+
+
+def confirmar_identidade(
+    sessao: "SessaoAssinatura", data_informada: date | None
+) -> bool:
+    """Confirma a data de nascimento informada pelo paciente antes de assinar.
+
+    Retorna True se a data confere com o cadastro do paciente no Dental
+    Office (``Paciente.data_nascimento``, obrigatório para gerar qualquer
+    contrato — ver services/checklist.py). Em caso de erro, incrementa o
+    contador de tentativas da sessão e, ao atingir o limite, cancela a
+    sessão e levanta SessaoInvalida("identidade_bloqueada") — impede
+    adivinhação por força bruta (a data de nascimento tem baixa entropia).
+    """
+
+    nascimento = sessao.contrato.paciente.data_nascimento
+    if nascimento is not None and data_informada == nascimento:
+        sessao.identidade_confirmada_em = timezone.now()
+        sessao.save(update_fields=["identidade_confirmada_em", "atualizado_em"])
+        registrar_evento(sessao.contrato, "identidade_confirmada", sessao=sessao)
+        return True
+
+    sessao.tentativas_identidade += 1
+    sessao.save(update_fields=["tentativas_identidade", "atualizado_em"])
+
+    if sessao.tentativas_identidade >= LIMITE_TENTATIVAS_IDENTIDADE:
+        sessao.status = "cancelada"
+        sessao.save(update_fields=["status", "atualizado_em"])
+        registrar_evento(
+            sessao.contrato,
+            "identidade_bloqueada",
+            sessao=sessao,
+            tentativas=sessao.tentativas_identidade,
+        )
+        contrato = sessao.contrato
+        if contrato.status == "aguardando_assinatura":
+            contrato.status = "gerado"
+            contrato.save(update_fields=["status", "atualizado_em"])
+        raise SessaoInvalida("identidade_bloqueada")
+
+    return False
 
 
 def processar_assinatura(

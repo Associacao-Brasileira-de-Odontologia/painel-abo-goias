@@ -176,6 +176,37 @@ canvas {
     pointer-events: none;
 }
 
+.campo-data {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 16px 0 14px;
+    text-align: left;
+}
+
+.campo-data label {
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--gc-ink-onlight);
+}
+
+.campo-data input[type="date"] {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--gc-paper-line);
+    background: #fff;
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 1rem;
+    color: var(--gc-paper-ink);
+}
+
+.campo-data input[type="date"]:focus-visible {
+    outline: 3px solid var(--gc-ink-onlight);
+    outline-offset: 2px;
+}
+
 .erro {
     background: var(--gc-erro-bg);
     color: var(--gc-erro);

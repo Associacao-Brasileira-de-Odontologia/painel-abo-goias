@@ -22,9 +22,11 @@ from django.urls import reverse
 from django.utils import timezone
 from gestao_contratos.models import ContratoGerado, EventoContrato, SessaoAssinatura
 from gestao_contratos.services.assinatura import (
+    LIMITE_TENTATIVAS_IDENTIDADE,
     AssinaturaInvalida,
     SessaoInvalida,
     _validar_png,
+    confirmar_identidade,
     criar_sessao,
     expirar_sessoes_globalmente,
     gerar_token,
@@ -863,6 +865,17 @@ def _assinatura_data_url() -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+def _confirmar_identidade_sessao(sessao: SessaoAssinatura) -> None:
+    """Marca a identidade como já confirmada, sem passar pela tela.
+
+    Usado por testes cujo foco é o comportamento pós-verificação (ex.:
+    assinatura em si) — o fluxo de verificação de identidade tem sua
+    própria suíte dedicada (VerificarIdentidadeTests).
+    """
+    sessao.identidade_confirmada_em = timezone.now()
+    sessao.save(update_fields=["identidade_confirmada_em", "atualizado_em"])
+
+
 class AssinaturaBaseTests(TestCase):
     """Base: contrato real (com PDF) em MEDIA_ROOT temporário.
 
@@ -1147,6 +1160,13 @@ class AssinaturaPublicaViewTests(AssinaturaBaseTests):
         self.client.logout()
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+
+    def test_get_apos_identidade_confirmada_exibe_assinar(self) -> None:
+        self.client.logout()
+        _confirmar_identidade_sessao(self.sessao)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_contratos/assinar.html")
 
     def test_get_marca_sessao_como_aberta(self) -> None:
@@ -1176,6 +1196,7 @@ class AssinaturaPublicaViewTests(AssinaturaBaseTests):
 
     def test_post_assina_e_exibe_confirmacao(self) -> None:
         self.client.logout()
+        _confirmar_identidade_sessao(self.sessao)
         response = self.client.post(
             self.url, data={"assinatura": _assinatura_data_url()}
         )
@@ -1187,6 +1208,7 @@ class AssinaturaPublicaViewTests(AssinaturaBaseTests):
 
     def test_acesso_apos_assinatura_retorna_410(self) -> None:
         self.client.logout()
+        _confirmar_identidade_sessao(self.sessao)
         self.client.post(self.url, data={"assinatura": _assinatura_data_url()})
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 410)
@@ -1200,6 +1222,7 @@ class AssinaturaPublicaViewTests(AssinaturaBaseTests):
             "result store backend."
         )
         self.client.logout()
+        _confirmar_identidade_sessao(self.sessao)
 
         response = self.client.post(
             self.url, data={"assinatura": _assinatura_data_url()}
@@ -1212,11 +1235,122 @@ class AssinaturaPublicaViewTests(AssinaturaBaseTests):
 
     def test_post_imagem_invalida_reexibe_pagina_com_erro(self) -> None:
         self.client.logout()
+        _confirmar_identidade_sessao(self.sessao)
         response = self.client.post(self.url, data={"assinatura": "lixo"})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_contratos/assinar.html")
         self.contrato.refresh_from_db()
         self.assertNotEqual(self.contrato.status, "assinado")
+
+
+class VerificarIdentidadeTests(AssinaturaBaseTests):
+    """Confirmação da data de nascimento antes de liberar o canvas.
+
+    ``_paciente_completo`` cadastra data_nascimento=1990-05-15 — usada
+    como a data "correta" nestes testes.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        self.token = gerar_token(self.sessao)
+        self.url = reverse("assinatura_publica", args=[self.token])
+        self.client.logout()
+
+    def test_get_exibe_formulario_sem_expor_contrato(self) -> None:
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+        self.assertNotContains(response, 'id="pad"')
+
+    def test_data_correta_confirma_e_libera_assinatura(self) -> None:
+        response = self.client.post(self.url, data={"nascimento": "1990-05-15"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinar.html")
+        self.assertContains(response, 'id="pad"')
+
+        self.sessao.refresh_from_db()
+        self.assertIsNotNone(self.sessao.identidade_confirmada_em)
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                sessao=self.sessao, tipo="identidade_confirmada"
+            ).exists()
+        )
+
+    def test_data_incorreta_reexibe_formulario_com_erro(self) -> None:
+        response = self.client.post(self.url, data={"nascimento": "2000-01-01"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+        self.assertContains(response, "incorreta")
+
+        self.sessao.refresh_from_db()
+        self.assertIsNone(self.sessao.identidade_confirmada_em)
+        self.assertEqual(self.sessao.tentativas_identidade, 1)
+
+    def test_data_em_formato_invalido_e_tratada_como_incorreta(self) -> None:
+        response = self.client.post(self.url, data={"nascimento": "não é uma data"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+        self.sessao.refresh_from_db()
+        self.assertEqual(self.sessao.tentativas_identidade, 1)
+
+    def test_bloqueia_apos_exceder_tentativas(self) -> None:
+        for _ in range(LIMITE_TENTATIVAS_IDENTIDADE - 1):
+            response = self.client.post(self.url, data={"nascimento": "2000-01-01"})
+            self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(self.url, data={"nascimento": "2000-01-01"})
+
+        self.assertEqual(response.status_code, 410)
+        self.assertTemplateUsed(response, "gestao_contratos/assinatura_invalida.html")
+        self.assertContains(response, "bloqueada", status_code=410)
+
+        self.sessao.refresh_from_db()
+        self.assertEqual(self.sessao.status, "cancelada")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status, "gerado")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                sessao=self.sessao, tipo="identidade_bloqueada"
+            ).exists()
+        )
+
+    def test_get_apos_bloqueio_retorna_410(self) -> None:
+        for _ in range(LIMITE_TENTATIVAS_IDENTIDADE):
+            self.client.post(self.url, data={"nascimento": "2000-01-01"})
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 410)
+
+    def test_assinatura_direta_sem_confirmar_identidade_nao_assina(self) -> None:
+        """Defesa em profundidade: mesmo pulando a tela e enviando o campo
+        'assinatura' diretamente, sem confirmar a identidade, o contrato
+        não é assinado."""
+        response = self.client.post(
+            self.url, data={"assinatura": _assinatura_data_url()}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+        self.contrato.refresh_from_db()
+        self.assertNotEqual(self.contrato.status, "assinado")
+        self.sessao.refresh_from_db()
+        self.assertIsNone(self.sessao.identidade_confirmada_em)
+
+    def test_confirmar_identidade_sem_data_nascimento_cadastrada(self) -> None:
+        """Unidade: sem data de nascimento cadastrada, confirmar_identidade
+        nunca deve confirmar (evita comparar None == None e liberar a
+        assinatura sem checagem real)."""
+        self.pac.data_nascimento = None
+        self.pac.save(update_fields=["data_nascimento"])
+
+        self.assertFalse(confirmar_identidade(self.sessao, None))
+        self.sessao.refresh_from_db()
+        self.assertIsNone(self.sessao.identidade_confirmada_em)
 
 
 class AssinaturaStaffViewTests(AssinaturaBaseTests):
@@ -2746,6 +2880,7 @@ class ViewsAssinaturaEdgeCasesTests(AssinaturaBaseTests):
     ) -> None:
         mock_processar.side_effect = SessaoInvalida("ja_assinada")
         sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        _confirmar_identidade_sessao(sessao)
         token = gerar_token(sessao)
         self.client.logout()
 

@@ -8,6 +8,7 @@ rate-limit por IP. Views de staff gerenciam sessões e exibem o QR Code.
 from __future__ import annotations
 
 import io
+from datetime import date
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -18,9 +19,11 @@ from django.urls import reverse
 
 from .models import ContratoGerado
 from .services.assinatura import (
+    LIMITE_TENTATIVAS_IDENTIDADE,
     AssinaturaInvalida,
     SessaoInvalida,
     cancelar_sessoes_ativas,
+    confirmar_identidade,
     criar_sessao,
     eventos_recentes,
     gerar_token,
@@ -64,8 +67,16 @@ def _excedeu_rate_limit(request: HttpRequest, escopo: str) -> bool:
 def assinar_view(request: HttpRequest, token: str) -> HttpResponse:
     """Página pública de assinatura acessada via QR Code.
 
-    GET: exibe o contrato e a área de assinatura (canvas).
-    POST: recebe o PNG do canvas e conclui a assinatura.
+    Antes de liberar o canvas, exige a confirmação da data de nascimento
+    cadastrada (ver ``_tela_verificar_identidade``) — sem isso, nenhum POST
+    chega a ``processar_assinatura``, mesmo que enviado diretamente sem
+    passar pela tela.
+
+    GET: exibe a verificação de identidade ou, já confirmada, o contrato e
+    a área de assinatura (canvas).
+    POST: enquanto a identidade não for confirmada, trata o POST como uma
+    tentativa de verificação; depois de confirmada, recebe o PNG do canvas
+    e conclui a assinatura.
     """
 
     if _excedeu_rate_limit(request, "assinar"):
@@ -83,6 +94,11 @@ def assinar_view(request: HttpRequest, token: str) -> HttpResponse:
 
     contrato = sessao.contrato
     paciente = contrato.paciente
+
+    registrar_abertura(sessao)
+
+    if not sessao.identidade_confirmada_em:
+        return _tela_verificar_identidade(request, sessao, contrato, paciente, token)
 
     if request.method == "POST":
         try:
@@ -117,10 +133,80 @@ def assinar_view(request: HttpRequest, token: str) -> HttpResponse:
             {"contrato": contrato, "paciente": paciente},
         )
 
-    registrar_abertura(sessao)
     return render(
         request,
         "gestao_contratos/assinar.html",
+        {
+            "sessao": sessao,
+            "contrato": contrato,
+            "paciente": paciente,
+            "token": token,
+        },
+    )
+
+
+def _tela_verificar_identidade(
+    request: HttpRequest,
+    sessao,
+    contrato: ContratoGerado,
+    paciente,
+    token: str,
+) -> HttpResponse:
+    """Pede a data de nascimento cadastrada antes de exibir o contrato.
+
+    Reforça que quem assina é o paciente correto (e não apenas quem tem
+    acesso ao link/QR Code) — ver EventoContrato "identidade_confirmada"
+    e "identidade_bloqueada" para a trilha de auditoria correspondente.
+    """
+
+    if request.method == "POST":
+        bruto = request.POST.get("nascimento", "")
+        try:
+            data_informada = date.fromisoformat(bruto)
+        except ValueError:
+            data_informada = None
+
+        try:
+            confirmado = confirmar_identidade(sessao, data_informada)
+        except SessaoInvalida as exc:
+            return render(
+                request,
+                "gestao_contratos/assinatura_invalida.html",
+                {"motivo": exc.motivo},
+                status=410,
+            )
+
+        if confirmado:
+            return render(
+                request,
+                "gestao_contratos/assinar.html",
+                {
+                    "sessao": sessao,
+                    "contrato": contrato,
+                    "paciente": paciente,
+                    "token": token,
+                },
+            )
+
+        sessao.refresh_from_db()
+        restantes = LIMITE_TENTATIVAS_IDENTIDADE - sessao.tentativas_identidade
+        return render(
+            request,
+            "gestao_contratos/verificar_identidade.html",
+            {
+                "sessao": sessao,
+                "contrato": contrato,
+                "paciente": paciente,
+                "token": token,
+                "erro": (
+                    "Data de nascimento incorreta. " f"Restam {restantes} tentativa(s)."
+                ),
+            },
+        )
+
+    return render(
+        request,
+        "gestao_contratos/verificar_identidade.html",
         {
             "sessao": sessao,
             "contrato": contrato,

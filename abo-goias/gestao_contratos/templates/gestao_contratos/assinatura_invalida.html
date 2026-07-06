@@ -25,6 +25,11 @@
             <h1>Sessão de assinatura cancelada</h1>
             <p>Esta sessão foi cancelada pela recepção.
                Solicite um novo QR Code se ainda precisar assinar.</p>
+        {% elif motivo == "identidade_bloqueada" %}
+            <h1>Verificação de identidade bloqueada</h1>
+            <p>O número de tentativas para confirmar a data de nascimento
+               foi excedido. Por segurança, este link foi bloqueado — peça
+               à recepção para gerar um novo QR Code.</p>
         {% else %}
             <h1>Link de assinatura inválido</h1>
             <p>O endereço acessado não corresponde a nenhuma sessão de
