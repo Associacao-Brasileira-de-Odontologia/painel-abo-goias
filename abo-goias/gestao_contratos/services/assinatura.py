@@ -25,7 +25,11 @@ from .checklist import eh_menor_de_idade
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
-    from gestao_contratos.models import ContratoGerado, SessaoAssinatura
+    from gestao_contratos.models import (
+        ContratoGerado,
+        SessaoAssinatura,
+        TerminalAssinatura,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +143,7 @@ def criar_sessao(
     criado_por: "User | None" = None,
     validade_minutos: int = VALIDADE_SESSAO_MINUTOS,
     identidade_presencial_confirmada_em=None,
+    terminal: "TerminalAssinatura | None" = None,
 ) -> "SessaoAssinatura":
     """Cria uma sessão de assinatura, cancelando sessões ativas anteriores.
 
@@ -150,6 +155,12 @@ def criar_sessao(
     conferência presencial passa a ser o controle de identidade mais
     forte da sessão. A view que chama esta função (iniciar_assinatura_view)
     é quem decide se exige essa confirmação antes de chamar aqui.
+
+    ``terminal``, quando informado, associa a sessão a um
+    TerminalAssinatura — a tela de espera daquele terminal (ver
+    views_terminal.py) passa a detectá-la via sessao_ativa_para_terminal()
+    e redireciona automaticamente para a assinatura, sem precisar de QR
+    Code.
     """
 
     from gestao_contratos.models import SessaoAssinatura
@@ -161,6 +172,7 @@ def criar_sessao(
         criado_por=criado_por,
         expira_em=timezone.now() + timezone.timedelta(minutes=validade_minutos),
         identidade_presencial_confirmada_em=identidade_presencial_confirmada_em,
+        terminal=terminal,
     )
     contrato.status = "aguardando_assinatura"
     contrato.save(update_fields=["status", "atualizado_em"])
@@ -216,6 +228,32 @@ def sessao_ativa(contrato: "ContratoGerado") -> "SessaoAssinatura | None":
     return (
         SessaoAssinatura.objects.filter(
             contrato=contrato,
+            status__in=["pendente", "aberta"],
+            expira_em__gt=timezone.now(),
+        )
+        .order_by("-criado_em")
+        .first()
+    )
+
+
+def sessao_ativa_para_terminal(
+    terminal: "TerminalAssinatura",
+) -> "SessaoAssinatura | None":
+    """Retorna a sessão ativa (pendente/aberta e no prazo) enviada a este
+    terminal — consultada pela tela de espera do tablet (polling) para
+    saber quando redirecionar automaticamente para a assinatura.
+    """
+
+    from gestao_contratos.models import SessaoAssinatura
+
+    for pendente in SessaoAssinatura.objects.filter(
+        terminal=terminal, status__in=["pendente", "aberta"]
+    ):
+        expirar_se_vencida(pendente)
+
+    return (
+        SessaoAssinatura.objects.filter(
+            terminal=terminal,
             status__in=["pendente", "aberta"],
             expira_em__gt=timezone.now(),
         )

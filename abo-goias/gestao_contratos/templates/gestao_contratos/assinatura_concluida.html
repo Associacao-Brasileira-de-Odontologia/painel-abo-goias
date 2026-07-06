@@ -9,6 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'gestao_contratos/css/assinatura.css' %}">
+    {% if sessao.terminal %}
+        <meta http-equiv="refresh" content="8;url={% url 'terminal_assinatura' sessao.terminal.token %}">
+    {% endif %}
 </head>
 <body class="tela-cheia">
     <div class="card centro card-narrow">
@@ -27,10 +30,17 @@
                 ({{ contrato.get_tipo_display }}) foi assinado e salvo.
             </p>
         {% endif %}
-        <p class="mt-sm">
-            Você já pode fechar esta página. A recepção dará continuidade
-            ao atendimento.
-        </p>
+        {% if sessao.terminal %}
+            <p class="mt-sm">
+                Pode devolver o tablet à recepção — esta tela volta a
+                ficar pronta para o próximo atendimento em alguns segundos.
+            </p>
+        {% else %}
+            <p class="mt-sm">
+                Você já pode fechar esta página. A recepção dará continuidade
+                ao atendimento.
+            </p>
+        {% endif %}
     </div>
 </body>
 </html>

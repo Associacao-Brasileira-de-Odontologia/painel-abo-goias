@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_assinatura
+from . import views, views_assinatura, views_terminal
 
 urlpatterns = [
     # ── Assinatura remota — público (paciente, via QR Code) ────────────
@@ -18,6 +18,17 @@ urlpatterns = [
         "politica-privacidade/",
         views_assinatura.politica_privacidade_view,
         name="contratos_politica_privacidade",
+    ),
+    # ── Terminal de assinatura dedicado (ex.: tablet da recepção) ───────
+    path(
+        "terminal/<str:token>/",
+        views_terminal.terminal_assinatura_view,
+        name="terminal_assinatura",
+    ),
+    path(
+        "terminal/<str:token>/status/",
+        views_terminal.terminal_status_fragment_view,
+        name="terminal_status_fragment",
     ),
     # ── Assinatura remota — staff ───────────────────────────────────────
     path(

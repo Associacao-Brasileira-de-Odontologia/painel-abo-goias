@@ -59,35 +59,53 @@ assinatura; ao mudar de status, o polling para automaticamente.
             </div>
         {% endif %}
     {% elif sessao_assinatura %}
-        <p class="panel-copy">
-            Peça ao paciente para escanear o QR Code abaixo com a câmera
-            do celular. A sessão expira em
-            <strong>{{ sessao_assinatura.expira_em|date:"H:i" }}</strong>.
-            Esta seção se atualiza automaticamente assim que ele assinar.
-        </p>
-        <div class="gc-row gc-mt-md">
-            <img src="{% url 'contrato_qr_assinatura' contrato.pk %}"
-                 alt="QR Code para assinatura"
-                 width="180" height="180"
-                 class="gc-qr-frame gc-qr-pulsando">
-            <div class="gc-col">
-                <p class="section-label gc-mt-sm">
-                    Ou envie o link diretamente
-                </p>
-                <input type="text" readonly
-                       value="{{ link_assinatura }}"
-                       onclick="this.select();"
-                       class="gc-full-width gc-mono" style="font-size: 0.78rem;">
-                <form method="post"
-                      action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
-                      class="gc-mt-md">
-                    {% csrf_token %}
-                    <button class="button secondary compact-button" type="submit">
-                        Cancelar sessão de assinatura
-                    </button>
-                </form>
+        {% if sessao_assinatura.terminal %}
+            <p class="panel-copy">
+                Assinatura enviada para o terminal
+                <strong>{{ sessao_assinatura.terminal.nome }}</strong> —
+                entregue o tablet ao paciente. A sessão expira em
+                <strong>{{ sessao_assinatura.expira_em|date:"H:i" }}</strong>.
+                Esta seção se atualiza automaticamente assim que ele assinar.
+            </p>
+            <form method="post"
+                  action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
+                  class="gc-mt-md">
+                {% csrf_token %}
+                <button class="button secondary compact-button" type="submit">
+                    Cancelar sessão de assinatura
+                </button>
+            </form>
+        {% else %}
+            <p class="panel-copy">
+                Peça ao paciente para escanear o QR Code abaixo com a câmera
+                do celular. A sessão expira em
+                <strong>{{ sessao_assinatura.expira_em|date:"H:i" }}</strong>.
+                Esta seção se atualiza automaticamente assim que ele assinar.
+            </p>
+            <div class="gc-row gc-mt-md">
+                <img src="{% url 'contrato_qr_assinatura' contrato.pk %}"
+                     alt="QR Code para assinatura"
+                     width="180" height="180"
+                     class="gc-qr-frame gc-qr-pulsando">
+                <div class="gc-col">
+                    <p class="section-label gc-mt-sm">
+                        Ou envie o link diretamente
+                    </p>
+                    <input type="text" readonly
+                           value="{{ link_assinatura }}"
+                           onclick="this.select();"
+                           class="gc-full-width gc-mono" style="font-size: 0.78rem;">
+                    <form method="post"
+                          action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
+                          class="gc-mt-md">
+                        {% csrf_token %}
+                        <button class="button secondary compact-button" type="submit">
+                            Cancelar sessão de assinatura
+                        </button>
+                    </form>
+                </div>
             </div>
-        </div>
+        {% endif %}
     {% else %}
         <p class="panel-copy">
             Gere um QR Code para o paciente assinar o contrato no
@@ -96,6 +114,17 @@ assinatura; ao mudar de status, o polling para automaticamente.
         <form method="post"
               action="{% url 'contrato_iniciar_assinatura' contrato.pk %}">
             {% csrf_token %}
+            {% if terminais_disponiveis %}
+                <div class="field gc-mt-sm">
+                    <label for="id_terminal_pk">Onde o paciente vai assinar?</label>
+                    <select id="id_terminal_pk" name="terminal_pk">
+                        <option value="">QR Code (celular do paciente)</option>
+                        {% for terminal in terminais_disponiveis %}
+                            <option value="{{ terminal.pk }}">{{ terminal.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
             <div class="field field-checkbox gc-mt-sm">
                 <label for="id_identidade_presencial_confirmada">
                     <input type="checkbox" id="id_identidade_presencial_confirmada"
@@ -106,7 +135,11 @@ assinatura; ao mudar de status, o polling para automaticamente.
             </div>
             <div class="form-actions gc-mt-sm">
                 <button class="button gc-selar" type="submit">
-                    Gerar QR Code de assinatura
+                    {% if terminais_disponiveis %}
+                        Iniciar assinatura
+                    {% else %}
+                        Gerar QR Code de assinatura
+                    {% endif %}
                 </button>
             </div>
         </form>

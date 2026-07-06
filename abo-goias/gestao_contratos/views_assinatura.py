@@ -17,7 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import ContratoGerado
+from .models import ContratoGerado, TerminalAssinatura
 from .services.assinatura import (
     LIMITE_TENTATIVAS_IDENTIDADE,
     AssinaturaInvalida,
@@ -288,6 +288,7 @@ def contexto_status_assinatura(request: HttpRequest, contrato: ContratoGerado) -
         "eventos_assinatura": eventos_recentes(contrato),
         "poll_status_assinatura": contrato.status == "aguardando_assinatura",
         "carimbo_tempo_configurado": carimbo_tempo_configurado(),
+        "terminais_disponiveis": TerminalAssinatura.objects.filter(ativo=True),
     }
 
 
@@ -338,15 +339,28 @@ def iniciar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpRespo
         )
         return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
 
+    terminal = None
+    terminal_pk = request.POST.get("terminal_pk", "").strip()
+    if terminal_pk:
+        terminal = get_object_or_404(TerminalAssinatura, pk=terminal_pk, ativo=True)
+
     criar_sessao(
         contrato,
         criado_por=request.user,
         identidade_presencial_confirmada_em=timezone.now(),
+        terminal=terminal,
     )
-    messages.success(
-        request,
-        "Sessão de assinatura criada. Peça ao paciente para escanear o QR Code.",
-    )
+    if terminal:
+        messages.success(
+            request,
+            f'Sessão de assinatura enviada para o terminal "{terminal.nome}". '
+            "Entregue o tablet ao paciente.",
+        )
+    else:
+        messages.success(
+            request,
+            "Sessão de assinatura criada. Peça ao paciente para escanear o QR Code.",
+        )
     return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
 
 
