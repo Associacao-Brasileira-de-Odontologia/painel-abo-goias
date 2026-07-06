@@ -138,8 +138,19 @@ def criar_sessao(
     contrato: "ContratoGerado",
     criado_por: "User | None" = None,
     validade_minutos: int = VALIDADE_SESSAO_MINUTOS,
+    identidade_presencial_confirmada_em=None,
 ) -> "SessaoAssinatura":
-    """Cria uma sessão de assinatura, cancelando sessões ativas anteriores."""
+    """Cria uma sessão de assinatura, cancelando sessões ativas anteriores.
+
+    ``identidade_presencial_confirmada_em`` registra que o colaborador
+    (``criado_por``) atestou ter verificado presencialmente a identidade
+    de quem vai assinar antes de iniciar a sessão — reforço relevante
+    quando o dispositivo de assinatura é compartilhado (ex.: tablet da
+    recepção) em vez do celular pessoal do paciente, cenário em que essa
+    conferência presencial passa a ser o controle de identidade mais
+    forte da sessão. A view que chama esta função (iniciar_assinatura_view)
+    é quem decide se exige essa confirmação antes de chamar aqui.
+    """
 
     from gestao_contratos.models import SessaoAssinatura
 
@@ -149,6 +160,7 @@ def criar_sessao(
         contrato=contrato,
         criado_por=criado_por,
         expira_em=timezone.now() + timezone.timedelta(minutes=validade_minutos),
+        identidade_presencial_confirmada_em=identidade_presencial_confirmada_em,
     )
     contrato.status = "aguardando_assinatura"
     contrato.save(update_fields=["status", "atualizado_em"])
@@ -158,6 +170,13 @@ def criar_sessao(
         sessao=sessao,
         validade_minutos=validade_minutos,
     )
+    if identidade_presencial_confirmada_em is not None:
+        registrar_evento(
+            contrato,
+            "identidade_presencial_confirmada",
+            sessao=sessao,
+            confirmada_por=criado_por.username if criado_por else None,
+        )
     return sessao
 
 

@@ -949,6 +949,32 @@ class SessaoAssinaturaServiceTests(AssinaturaBaseTests):
             ).exists()
         )
 
+    def test_criar_sessao_sem_confirmacao_presencial_nao_registra_evento(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        self.assertIsNone(sessao.identidade_presencial_confirmada_em)
+        self.assertFalse(sessao.identidade_presencial_confirmada)
+        self.assertFalse(
+            EventoContrato.objects.filter(
+                sessao=sessao, tipo="identidade_presencial_confirmada"
+            ).exists()
+        )
+
+    def test_criar_sessao_com_confirmacao_presencial_registra_evento(self) -> None:
+        agora = timezone.now()
+        sessao = criar_sessao(
+            self.contrato,
+            criado_por=self.usuario,
+            identidade_presencial_confirmada_em=agora,
+        )
+
+        self.assertEqual(sessao.identidade_presencial_confirmada_em, agora)
+        self.assertTrue(sessao.identidade_presencial_confirmada)
+        evento = EventoContrato.objects.get(
+            sessao=sessao, tipo="identidade_presencial_confirmada"
+        )
+        self.assertEqual(evento.payload.get("confirmada_por"), self.usuario.username)
+
     def test_criar_nova_sessao_cancela_anterior(self) -> None:
         antiga = criar_sessao(self.contrato, criado_por=self.usuario)
         nova = criar_sessao(self.contrato, criado_por=self.usuario)
@@ -1504,7 +1530,8 @@ class VerificarIdentidadeMenorTests(AssinaturaBaseTests):
 class AssinaturaStaffViewTests(AssinaturaBaseTests):
     def test_iniciar_assinatura_cria_sessao(self) -> None:
         response = self.client.post(
-            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk])
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk]),
+            data={"identidade_presencial_confirmada": "on"},
         )
 
         self.assertRedirects(
@@ -1512,7 +1539,25 @@ class AssinaturaStaffViewTests(AssinaturaBaseTests):
             reverse("contrato_pos_geracao", args=[self.contrato.pk]),
             fetch_redirect_response=False,
         )
-        self.assertIsNotNone(sessao_ativa(self.contrato))
+        sessao = sessao_ativa(self.contrato)
+        self.assertIsNotNone(sessao)
+        self.assertIsNotNone(sessao.identidade_presencial_confirmada_em)
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                sessao=sessao, tipo="identidade_presencial_confirmada"
+            ).exists()
+        )
+
+    def test_iniciar_assinatura_sem_confirmacao_presencial_nao_cria_sessao(
+        self,
+    ) -> None:
+        response = self.client.post(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk]),
+            follow=True,
+        )
+
+        self.assertContains(response, "Confirme que verificou a identidade")
+        self.assertIsNone(sessao_ativa(self.contrato))
 
     def test_qr_exige_login(self) -> None:
         criar_sessao(self.contrato, criado_por=self.usuario)

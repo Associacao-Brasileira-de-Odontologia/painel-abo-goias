@@ -1,5 +1,7 @@
 """Modelos de auditoria para geração de contratos e termos de consentimento."""
 
+import secrets
+
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -132,6 +134,34 @@ class ContratoGerado(ModeloBase):
         )
 
 
+class TerminalAssinatura(ModeloBase):
+    """Dispositivo dedicado (ex.: tablet da recepção) para o paciente
+    assinar no local, sem precisar de QR Code/link no próprio celular.
+
+    O ``token`` é a única credencial de acesso à URL pública do terminal
+    — longo e aleatório (não um segredo assinado como o das sessões),
+    porque o terminal fica com o navegador aberto indefinidamente, sem
+    login. Deve ser tratado como sensível (não divulgado publicamente),
+    da mesma forma que o link de assinatura de um paciente.
+    """
+
+    nome = models.CharField(max_length=100)
+    token = models.CharField(max_length=64, unique=True, editable=False)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name = "terminal de assinatura"
+        verbose_name_plural = "terminais de assinatura"
+
+    def __str__(self) -> str:
+        return self.nome
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.token:
+            self.token = secrets.token_urlsafe(24)
+        super().save(*args, **kwargs)
+
+
 STATUS_SESSAO_ASSINATURA = [
     ("pendente", "Pendente"),
     ("aberta", "Aberta pelo paciente"),
@@ -145,14 +175,24 @@ class SessaoAssinatura(ModeloBase):
     """Sessão temporária de assinatura remota de um contrato.
 
     O paciente acessa a URL pública (token assinado criptograficamente,
-    entregue via QR Code) em seu próprio dispositivo e assina no canvas.
-    Uma sessão permite apenas uma assinatura e expira automaticamente.
+    entregue via QR Code ou espelhada em um TerminalAssinatura) em seu
+    próprio dispositivo ou no terminal dedicado da clínica, e assina no
+    canvas. Uma sessão permite apenas uma assinatura e expira
+    automaticamente.
     """
 
     contrato = models.ForeignKey(
         ContratoGerado,
         on_delete=models.CASCADE,
         related_name="sessoes_assinatura",
+    )
+    terminal = models.ForeignKey(
+        TerminalAssinatura,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sessoes",
+        help_text="Terminal dedicado para o qual esta sessão foi enviada, se houver.",
     )
     status = models.CharField(
         max_length=15,
@@ -195,6 +235,16 @@ class SessaoAssinatura(ModeloBase):
         ),
     )
     tentativas_identidade = models.PositiveSmallIntegerField(default=0)
+    identidade_presencial_confirmada_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Momento em que o colaborador (criado_por) atestou ter "
+            "verificado presencialmente a identidade de quem vai assinar, "
+            "antes de iniciar a sessão — relevante quando o dispositivo de "
+            "assinatura é compartilhado (ex.: tablet da recepção)."
+        ),
+    )
 
     class Meta:
         ordering = ["-criado_em"]
@@ -218,6 +268,10 @@ class SessaoAssinatura(ModeloBase):
         return self.identidade_confirmada_em is not None
 
     @property
+    def identidade_presencial_confirmada(self) -> bool:
+        return self.identidade_presencial_confirmada_em is not None
+
+    @property
     def assinado_por_responsavel(self) -> bool:
         return self.identidade_confirmada_como == "responsavel_legal"
 
@@ -233,6 +287,10 @@ TIPOS_EVENTO_CONTRATO = [
     (
         "identidade_bloqueada",
         "Verificação de identidade bloqueada por excesso de tentativas",
+    ),
+    (
+        "identidade_presencial_confirmada",
+        "Identidade confirmada presencialmente pelo colaborador",
     ),
     ("envio_dental_iniciado", "Envio ao Dental Office iniciado"),
     ("envio_dental_concluido", "Envio ao Dental Office concluído"),
@@ -266,7 +324,7 @@ class EventoContrato(ModeloBase):
         blank=True,
         related_name="eventos",
     )
-    tipo = models.CharField(max_length=30, choices=TIPOS_EVENTO_CONTRATO)
+    tipo = models.CharField(max_length=40, choices=TIPOS_EVENTO_CONTRATO)
     payload = models.JSONField(default=dict, blank=True)
 
     class Meta:

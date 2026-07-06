@@ -15,6 +15,7 @@ from django.core.cache import cache
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import ContratoGerado
 from .services.assinatura import (
@@ -311,7 +312,14 @@ def status_assinatura_fragment_view(
 
 @login_required
 def iniciar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
-    """Cria (ou renova) a sessão de assinatura e volta à pós-geração."""
+    """Cria (ou renova) a sessão de assinatura e volta à pós-geração.
+
+    Exige que o colaborador confirme ter verificado presencialmente a
+    identidade do paciente antes de iniciar a sessão — sem essa
+    confirmação, nenhuma sessão é criada. Esse é o controle de identidade
+    mais forte quando o dispositivo de assinatura é compartilhado (ex.:
+    tablet da recepção) em vez do celular pessoal do paciente.
+    """
 
     if request.method != "POST":
         return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
@@ -322,7 +330,19 @@ def iniciar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpRespo
         messages.info(request, "Este contrato já foi assinado.")
         return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
 
-    criar_sessao(contrato, criado_por=request.user)
+    if request.POST.get("identidade_presencial_confirmada") != "on":
+        messages.error(
+            request,
+            "Confirme que verificou a identidade do paciente presencialmente "
+            "antes de iniciar a assinatura.",
+        )
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    criar_sessao(
+        contrato,
+        criado_por=request.user,
+        identidade_presencial_confirmada_em=timezone.now(),
+    )
     messages.success(
         request,
         "Sessão de assinatura criada. Peça ao paciente para escanear o QR Code.",

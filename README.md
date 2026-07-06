@@ -265,6 +265,8 @@ Os quatro modelos de contrato disponíveis (`Modelo 1`–`Modelo 4`) são gerado
 
 ### Assinatura remota
 
+Validade de documentos assinados digitalmente: https://www.clicksign.com/blog/assinatura-digital-guia-completo
+
 O paciente nunca assina no computador do colaborador. Ao clicar em "Gerar QR Code de assinatura" na tela de pós-geração:
 
 1. O sistema cria uma `SessaoAssinatura` e exibe um QR Code apontando para uma URL pública (`/contratos/assinar/<token>/`) — sem exigir login.

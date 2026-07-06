@@ -96,6 +96,14 @@ assinatura; ao mudar de status, o polling para automaticamente.
         <form method="post"
               action="{% url 'contrato_iniciar_assinatura' contrato.pk %}">
             {% csrf_token %}
+            <div class="field field-checkbox gc-mt-sm">
+                <label for="id_identidade_presencial_confirmada">
+                    <input type="checkbox" id="id_identidade_presencial_confirmada"
+                           name="identidade_presencial_confirmada" required>
+                    Confirmo que verifiquei presencialmente a identidade de
+                    {{ contrato.paciente.nome }} antes de iniciar a assinatura.
+                </label>
+            </div>
             <div class="form-actions gc-mt-sm">
                 <button class="button gc-selar" type="submit">
                     Gerar QR Code de assinatura
@@ -118,6 +126,9 @@ assinatura; ao mudar de status, o polling para automaticamente.
                             {% if evento.payload.erro %} — {{ evento.payload.erro }}{% endif %}
                             {% if evento.payload.confirmado_como == "responsavel_legal" or evento.payload.assinado_como == "responsavel_legal" %}
                                 — responsável legal
+                            {% endif %}
+                            {% if evento.payload.confirmada_por %}
+                                — por {{ evento.payload.confirmada_por }}
                             {% endif %}
                         </span>
                     </div>
