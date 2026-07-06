@@ -3176,6 +3176,10 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
     ) -> None:
         from datetime import datetime as dt
 
+        from pypdf import PdfReader
+
+        hash_antes_do_carimbo = self.contrato.hash_sha256
+
         MockTimestamper.return_value.timestamp.return_value = b"token-tsr-fake"
         mock_get_timestamp.return_value = dt(2026, 7, 6, 12, 0, 0)
 
@@ -3199,6 +3203,17 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
             ).exists()
         )
 
+        # O PDF assinado passa a levar o token embutido como anexo — o
+        # hash salvo continua sendo o que a TSA efetivamente atestou
+        # (calculado antes deste anexo), e não deve mudar.
+        self.assertEqual(self.contrato.hash_sha256, hash_antes_do_carimbo)
+        self.contrato.arquivo_pdf_assinado.open("rb")
+        pdf_bytes = self.contrato.arquivo_pdf_assinado.read()
+        self.contrato.arquivo_pdf_assinado.close()
+        leitor = PdfReader(io.BytesIO(pdf_bytes))
+        self.assertEqual(leitor.attachments["carimbo_tempo.tsr"], [b"token-tsr-fake"])
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+
     @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
     @patch("rfc3161ng.RemoteTimestamper")
     def test_falha_na_tsa_marca_erro(self, MockTimestamper: MagicMock) -> None:
@@ -3217,6 +3232,29 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
                 contrato=self.contrato, tipo="carimbo_tempo_erro"
             ).exists()
         )
+
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @patch("rfc3161ng.get_timestamp")
+    @patch("rfc3161ng.RemoteTimestamper")
+    def test_sucesso_sem_pdf_assinado_nao_quebra(
+        self, MockTimestamper: MagicMock, mock_get_timestamp: MagicMock
+    ) -> None:
+        """Defensivo: sem PDF assinado salvo (não deveria ocorrer na prática,
+        já que solicitar_carimbo só é chamada após a assinatura), o carimbo
+        em si continua sendo obtido e salvo normalmente."""
+        from datetime import datetime as dt
+
+        self.contrato.arquivo_pdf_assinado.delete(save=True)
+
+        MockTimestamper.return_value.timestamp.return_value = b"token-tsr-fake"
+        mock_get_timestamp.return_value = dt(2026, 7, 6, 12, 0, 0)
+
+        ok, erro = solicitar_carimbo(self.contrato)
+
+        self.assertTrue(ok)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_carimbo_tempo, "concluido")
+        self.assertFalse(self.contrato.arquivo_pdf_assinado)
 
 
 class SolicitarCarimboTempoTaskTests(TestCase):
@@ -3362,6 +3400,30 @@ class CarimboTempoViewsTests(AssinaturaBaseTests):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"token-tsr-fake")
         self.assertEqual(response["Content-Type"], "application/timestamp-reply")
+
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @patch("rfc3161ng.get_timestamp")
+    @patch("rfc3161ng.RemoteTimestamper")
+    def test_baixar_contrato_assinado_ja_leva_o_carimbo_embutido(
+        self, MockTimestamper: MagicMock, mock_get_timestamp: MagicMock
+    ) -> None:
+        """Fim a fim: depois do carimbo, o PDF servido pelo botão normal de
+        download ("Baixar contrato assinado") já é o autocontido."""
+        from datetime import datetime as dt
+
+        from pypdf import PdfReader
+
+        MockTimestamper.return_value.timestamp.return_value = b"token-tsr-fake"
+        mock_get_timestamp.return_value = dt(2026, 7, 6, 12, 0, 0)
+        solicitar_carimbo(self.contrato)
+
+        response = self.client.get(
+            reverse("contrato_baixar_assinado", args=[self.contrato.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        leitor = PdfReader(io.BytesIO(response.content))
+        self.assertEqual(leitor.attachments["carimbo_tempo.tsr"], [b"token-tsr-fake"])
 
 
 class PoliticaPrivacidadeViewTests(TestCase):

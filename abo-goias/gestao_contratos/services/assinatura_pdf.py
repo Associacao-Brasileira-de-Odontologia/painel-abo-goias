@@ -69,3 +69,30 @@ def aplicar_assinatura_no_pdf(
     saida = io.BytesIO()
     writer.write(saida)
     return saida.getvalue()
+
+
+def anexar_carimbo_tempo(
+    pdf_bytes: bytes,
+    token: bytes,
+    nome_arquivo: str = "carimbo_tempo.tsr",
+) -> bytes:
+    """Retorna um novo PDF com o token de carimbo de tempo (RFC 3161)
+    embutido como arquivo anexado — o PDF passa a carregar sua própria
+    prova de data/hora, sem depender de um .tsr avulso.
+
+    Importante: isto altera os bytes do arquivo, então o hash SHA-256
+    salvo em ContratoGerado.hash_sha256 (calculado antes deste anexo, e é
+    justamente o hash que a TSA atestou) deixa de corresponder ao hash do
+    arquivo resultante — isso é esperado e não deve ser recalculado aqui.
+    O conteúdo visível (páginas, texto, assinatura) permanece idêntico;
+    apenas um anexo invisível é adicionado.
+    """
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    writer.append(reader)
+    writer.add_attachment(nome_arquivo, token)
+
+    saida = io.BytesIO()
+    writer.write(saida)
+    return saida.getvalue()

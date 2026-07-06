@@ -5,7 +5,10 @@ relógio do servidor: uma autoridade de carimbo do tempo (TSA) de terceiros
 atesta, de forma criptograficamente verificável, que aquele hash já
 existia em determinado momento. O token (TSR) recebido é armazenado
 integralmente — ele é a própria evidência, verificável mais tarde com o
-certificado público da TSA, independente deste sistema.
+certificado público da TSA, independente deste sistema — e também
+embutido como anexo no próprio PDF assinado (ver
+_embutir_carimbo_no_pdf_assinado), para que o documento baixado já leve
+sua prova de data/hora, sem depender de um .tsr avulso.
 
 Desativado por padrão: sem CARIMBO_TEMPO_TSA_URL configurada,
 carimbo_tempo_configurado() retorna False e nenhuma chamada externa é
@@ -118,12 +121,16 @@ def solicitar_carimbo(contrato: "ContratoGerado") -> tuple[bool, str]:
     contrato.carimbo_tempo_em = atestado_em_utc
     contrato.carimbo_tempo_tsa = config.url
     contrato.status_carimbo_tempo = "concluido"
+
+    _embutir_carimbo_no_pdf_assinado(contrato, token)
+
     contrato.save(
         update_fields=[
             "carimbo_tempo",
             "carimbo_tempo_em",
             "carimbo_tempo_tsa",
             "status_carimbo_tempo",
+            "arquivo_pdf_assinado",
             "atualizado_em",
         ]
     )
@@ -134,6 +141,46 @@ def solicitar_carimbo(contrato: "ContratoGerado") -> tuple[bool, str]:
         carimbo_tempo_em=contrato.carimbo_tempo_em.isoformat(),
     )
     return True, ""
+
+
+def _embutir_carimbo_no_pdf_assinado(contrato: "ContratoGerado", token: bytes) -> None:
+    """Reescreve o PDF assinado embutindo o token como anexo — o arquivo
+    passa a ser autocontido, sem depender do .tsr avulso para carregar a
+    prova do carimbo de tempo.
+
+    Passo de melhor esforço: uma falha aqui não desfaz o carimbo em si
+    (já salvo em contrato.carimbo_tempo) nem impede solicitar_carimbo()
+    de retornar sucesso — apenas fica registrada em log.
+    """
+
+    if not contrato.arquivo_pdf_assinado:
+        logger.warning(
+            "solicitar_carimbo: sem PDF assinado para embutir o carimbo "
+            "(contrato=%s)",
+            contrato.pk,
+        )
+        return
+
+    from .assinatura_pdf import anexar_carimbo_tempo
+
+    try:
+        contrato.arquivo_pdf_assinado.open("rb")
+        pdf_atual = contrato.arquivo_pdf_assinado.read()
+        contrato.arquivo_pdf_assinado.close()
+        pdf_com_carimbo = anexar_carimbo_tempo(pdf_atual, token)
+    except Exception:
+        logger.exception(
+            "solicitar_carimbo: falha ao embutir o carimbo no PDF assinado "
+            "(contrato=%s)",
+            contrato.pk,
+        )
+        return
+
+    nome_arquivo = contrato.arquivo_pdf_assinado.name.rsplit("/", 1)[-1]
+    contrato.arquivo_pdf_assinado.delete(save=False)
+    contrato.arquivo_pdf_assinado.save(
+        nome_arquivo, ContentFile(pdf_com_carimbo), save=False
+    )
 
 
 def _marcar_erro(contrato: "ContratoGerado", erro: str) -> None:
