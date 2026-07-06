@@ -31,6 +31,12 @@ STATUS_ENVIO = [
     ("enviado_whatsapp", "Enviado por WhatsApp"),
 ]
 
+STATUS_CARIMBO_TEMPO = [
+    ("nao_solicitado", "Não solicitado"),
+    ("concluido", "Concluído"),
+    ("erro", "Erro ao solicitar"),
+]
+
 
 class ContratoGerado(ModeloBase):
     """Registro de auditoria de cada contrato gerado para um paciente."""
@@ -88,6 +94,31 @@ class ContratoGerado(ModeloBase):
         default="nao_enviado",
     )
     enviado_dental_em = models.DateTimeField(null=True, blank=True)
+    carimbo_tempo = models.FileField(
+        upload_to="contratos/carimbos/",
+        blank=True,
+        help_text=(
+            "Token RFC 3161 (TSR) emitido por uma autoridade de carimbo do "
+            "tempo sobre o hash do PDF assinado — evidência independente "
+            "do relógio do servidor de que o documento já existia naquele "
+            "momento."
+        ),
+    )
+    carimbo_tempo_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Data/hora atestada pela autoridade de carimbo do tempo.",
+    )
+    carimbo_tempo_tsa = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="URL da autoridade de carimbo do tempo que emitiu o token.",
+    )
+    status_carimbo_tempo = models.CharField(
+        max_length=20,
+        choices=STATUS_CARIMBO_TEMPO,
+        default="nao_solicitado",
+    )
 
     class Meta:
         ordering = ["-criado_em"]
@@ -145,8 +176,22 @@ class SessaoAssinatura(ModeloBase):
         null=True,
         blank=True,
         help_text=(
-            "Momento em que o paciente confirmou a data de nascimento "
-            "cadastrada — obrigatório antes de liberar o canvas de assinatura."
+            "Momento em que a identidade de quem assina foi confirmada — "
+            "obrigatório antes de liberar o canvas de assinatura."
+        ),
+    )
+    identidade_confirmada_como = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=[
+            ("paciente", "Paciente"),
+            ("responsavel_legal", "Responsável legal"),
+        ],
+        help_text=(
+            "Quem confirmou a identidade nesta sessão — o próprio paciente "
+            "(data de nascimento) ou o responsável legal (CPF), quando o "
+            "paciente é menor de idade. Fixado no momento da confirmação, "
+            "independente de mudanças posteriores no cadastro."
         ),
     )
     tentativas_identidade = models.PositiveSmallIntegerField(default=0)
@@ -172,6 +217,10 @@ class SessaoAssinatura(ModeloBase):
     def identidade_confirmada(self) -> bool:
         return self.identidade_confirmada_em is not None
 
+    @property
+    def assinado_por_responsavel(self) -> bool:
+        return self.identidade_confirmada_como == "responsavel_legal"
+
 
 TIPOS_EVENTO_CONTRATO = [
     ("sessao_criada", "Sessão de assinatura criada"),
@@ -191,6 +240,9 @@ TIPOS_EVENTO_CONTRATO = [
     ("whatsapp_iniciado", "Envio por WhatsApp iniciado"),
     ("whatsapp_concluido", "Envio por WhatsApp concluído"),
     ("whatsapp_erro", "Erro no envio por WhatsApp"),
+    ("carimbo_tempo_iniciado", "Solicitação de carimbo de tempo iniciada"),
+    ("carimbo_tempo_concluido", "Carimbo de tempo obtido"),
+    ("carimbo_tempo_erro", "Erro ao obter carimbo de tempo"),
 ]
 
 

@@ -20,6 +20,9 @@
             <p><span>Paciente:</span> <strong>{{ paciente.nome }}</strong></p>
             <p><span>Documento:</span> {{ contrato.get_tipo_display }} (versão {{ contrato.versao }})</p>
             <p><span>Gerado em:</span> {{ contrato.criado_em|date:"d/m/Y H:i" }}</p>
+            {% if sessao.assinado_por_responsavel %}
+                <p><span>Responsável legal:</span> <strong>{{ paciente.nome_responsavel }}</strong></p>
+            {% endif %}
         </div>
 
         <a class="btn btn-outline" target="_blank" rel="noopener"
@@ -29,10 +32,19 @@
     </div>
 
     <div class="card">
-        <h1>Sua assinatura</h1>
-        <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
-            Desenhe sua assinatura no quadro abaixo usando o dedo ou uma caneta touch.
-        </p>
+        {% if sessao.assinado_por_responsavel %}
+            <h1>Assinatura do responsável legal</h1>
+            <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+                Desenhe a assinatura de {{ paciente.nome_responsavel }},
+                responsável legal por {{ paciente.nome }}, no quadro abaixo
+                usando o dedo ou uma caneta touch.
+            </p>
+        {% else %}
+            <h1>Sua assinatura</h1>
+            <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+                Desenhe sua assinatura no quadro abaixo usando o dedo ou uma caneta touch.
+            </p>
+        {% endif %}
 
         {% if erro %}
             <div class="erro" style="margin-top:10px;">{{ erro }}</div>
@@ -55,9 +67,16 @@
         </form>
 
         <p class="rodape">
-            Ao tocar em "Aceitar e assinar" você declara que leu o contrato e
-            concorda com seus termos. Data, hora, IP e dispositivo serão
-            registrados para fins de auditoria.
+            {% if sessao.assinado_por_responsavel %}
+                Ao tocar em "Aceitar e assinar" você declara, na qualidade de
+                responsável legal por {{ paciente.nome }}, que leu o contrato
+                e concorda com seus termos em nome dele(a). Data, hora, IP e
+                dispositivo serão registrados para fins de auditoria.
+            {% else %}
+                Ao tocar em "Aceitar e assinar" você declara que leu o contrato e
+                concorda com seus termos. Data, hora, IP e dispositivo serão
+                registrados para fins de auditoria.
+            {% endif %}
         </p>
     </div>
 </div>

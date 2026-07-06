@@ -8,7 +8,6 @@ rate-limit por IP. Views de staff gerenciam sessões e exibem o QR Code.
 from __future__ import annotations
 
 import io
-from datetime import date
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -32,6 +31,7 @@ from .services.assinatura import (
     resolver_token,
     sessao_ativa,
 )
+from .services.checklist import eh_menor_de_idade
 
 _RATE_LIMIT_REQUISICOES = 30
 _RATE_LIMIT_JANELA_SEGUNDOS = 60
@@ -130,7 +130,7 @@ def assinar_view(request: HttpRequest, token: str) -> HttpResponse:
         return render(
             request,
             "gestao_contratos/assinatura_concluida.html",
-            {"contrato": contrato, "paciente": paciente},
+            {"sessao": sessao, "contrato": contrato, "paciente": paciente},
         )
 
     return render(
@@ -152,22 +152,26 @@ def _tela_verificar_identidade(
     paciente,
     token: str,
 ) -> HttpResponse:
-    """Pede a data de nascimento cadastrada antes de exibir o contrato.
+    """Confirma quem vai assinar antes de exibir o contrato.
 
-    Reforça que quem assina é o paciente correto (e não apenas quem tem
+    Paciente maior de idade: pede a própria data de nascimento cadastrada.
+    Paciente menor de idade: quem assina é o responsável legal — pede o
+    CPF do responsável cadastrado (obrigatório para gerar o contrato de
+    um menor, ver services/checklist.py).
+
+    Reforça que quem assina é a pessoa correta (e não apenas quem tem
     acesso ao link/QR Code) — ver EventoContrato "identidade_confirmada"
     e "identidade_bloqueada" para a trilha de auditoria correspondente.
     """
 
+    menor = bool(eh_menor_de_idade(paciente.data_nascimento))
+    campo = "cpf_responsavel" if menor else "nascimento"
+
     if request.method == "POST":
-        bruto = request.POST.get("nascimento", "")
-        try:
-            data_informada = date.fromisoformat(bruto)
-        except ValueError:
-            data_informada = None
+        bruto = request.POST.get(campo, "")
 
         try:
-            confirmado = confirmar_identidade(sessao, data_informada)
+            confirmado = confirmar_identidade(sessao, bruto)
         except SessaoInvalida as exc:
             return render(
                 request,
@@ -190,6 +194,11 @@ def _tela_verificar_identidade(
 
         sessao.refresh_from_db()
         restantes = LIMITE_TENTATIVAS_IDENTIDADE - sessao.tentativas_identidade
+        mensagem = (
+            "CPF do responsável legal incorreto."
+            if menor
+            else "Data de nascimento incorreta."
+        )
         return render(
             request,
             "gestao_contratos/verificar_identidade.html",
@@ -198,9 +207,8 @@ def _tela_verificar_identidade(
                 "contrato": contrato,
                 "paciente": paciente,
                 "token": token,
-                "erro": (
-                    "Data de nascimento incorreta. " f"Restam {restantes} tentativa(s)."
-                ),
+                "menor": menor,
+                "erro": f"{mensagem} Restam {restantes} tentativa(s).",
             },
         )
 
@@ -212,6 +220,7 @@ def _tela_verificar_identidade(
             "contrato": contrato,
             "paciente": paciente,
             "token": token,
+            "menor": menor,
         },
     )
 
@@ -258,12 +267,15 @@ def contexto_status_assinatura(request: HttpRequest, contrato: ContratoGerado) -
             reverse("assinatura_publica", args=[gerar_token(sessao)])
         )
 
+    from .services.carimbo_tempo import carimbo_tempo_configurado
+
     return {
         "contrato": contrato,
         "sessao_assinatura": sessao,
         "link_assinatura": link_assinatura,
         "eventos_assinatura": eventos_recentes(contrato),
         "poll_status_assinatura": contrato.status == "aguardando_assinatura",
+        "carimbo_tempo_configurado": carimbo_tempo_configurado(),
     }
 
 

@@ -34,6 +34,11 @@ from gestao_contratos.services.assinatura import (
     resolver_token,
     sessao_ativa,
 )
+from gestao_contratos.services.carimbo_tempo import (
+    carimbo_tempo_configurado,
+    carregar_config_carimbo_tempo,
+    solicitar_carimbo,
+)
 from gestao_contratos.services.checklist import (
     bloqueado,
     gerar_checklist,
@@ -55,6 +60,7 @@ from gestao_contratos.tasks import (
     enviar_dental_task,
     enviar_whatsapp_task,
     expirar_sessoes_vencidas_task,
+    solicitar_carimbo_tempo_task,
 )
 from gestao_lab.integrations.dental import DentalAPIError
 from gestao_lab.models import Paciente
@@ -865,27 +871,39 @@ def _assinatura_data_url() -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def _confirmar_identidade_sessao(sessao: SessaoAssinatura) -> None:
+def _confirmar_identidade_sessao(
+    sessao: SessaoAssinatura, como: str = "paciente"
+) -> None:
     """Marca a identidade como já confirmada, sem passar pela tela.
 
     Usado por testes cujo foco é o comportamento pós-verificação (ex.:
     assinatura em si) — o fluxo de verificação de identidade tem sua
-    própria suíte dedicada (VerificarIdentidadeTests).
+    própria suíte dedicada (VerificarIdentidadeTests / VerificarIdentidadeMenorTests).
     """
     sessao.identidade_confirmada_em = timezone.now()
-    sessao.save(update_fields=["identidade_confirmada_em", "atualizado_em"])
+    sessao.identidade_confirmada_como = como
+    sessao.save(
+        update_fields=[
+            "identidade_confirmada_em",
+            "identidade_confirmada_como",
+            "atualizado_em",
+        ]
+    )
 
 
 class AssinaturaBaseTests(TestCase):
     """Base: contrato real (com PDF) em MEDIA_ROOT temporário.
 
-    ``enviar_dental_task.delay`` e ``enviar_whatsapp_task.delay`` são
-    mockadas aqui porque, em CELERY_TASK_ALWAYS_EAGER (ativo durante os
-    testes), qualquer chamada real executaria a tarefa de forma síncrona —
-    incluindo uma tentativa de rede à API real do Dental Office, já que
-    este projeto tem um .env com credenciais válidas. O comportamento real
-    de cada tarefa é coberto isoladamente em EnviarDentalTaskTests e
-    EnviarWhatsappTaskTests, que não herdam desta base.
+    ``enviar_dental_task.delay``, ``enviar_whatsapp_task.delay`` e
+    ``solicitar_carimbo_tempo_task.delay`` são mockadas aqui porque, em
+    CELERY_TASK_ALWAYS_EAGER (ativo durante os testes), qualquer chamada
+    real executaria a tarefa de forma síncrona — incluindo uma tentativa
+    de rede à API real do Dental Office, já que este projeto tem um .env
+    com credenciais válidas (e, no dia em que CARIMBO_TEMPO_TSA_URL for
+    configurada em produção, uma tentativa de rede real à TSA). O
+    comportamento real de cada tarefa é coberto isoladamente em
+    EnviarDentalTaskTests, EnviarWhatsappTaskTests e
+    SolicitarCarimboTempoTaskTests, que não herdam desta base.
     """
 
     def setUp(self) -> None:
@@ -909,6 +927,12 @@ class AssinaturaBaseTests(TestCase):
         patcher_wa = patch("gestao_contratos.tasks.enviar_whatsapp_task.delay")
         self.mock_enviar_whatsapp_delay = patcher_wa.start()
         self.addCleanup(patcher_wa.stop)
+
+        patcher_carimbo = patch(
+            "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"
+        )
+        self.mock_solicitar_carimbo_delay = patcher_carimbo.start()
+        self.addCleanup(patcher_carimbo.stop)
 
 
 class SessaoAssinaturaServiceTests(AssinaturaBaseTests):
@@ -1348,9 +1372,133 @@ class VerificarIdentidadeTests(AssinaturaBaseTests):
         self.pac.data_nascimento = None
         self.pac.save(update_fields=["data_nascimento"])
 
-        self.assertFalse(confirmar_identidade(self.sessao, None))
+        self.assertFalse(confirmar_identidade(self.sessao, ""))
         self.sessao.refresh_from_db()
         self.assertIsNone(self.sessao.identidade_confirmada_em)
+
+
+class VerificarIdentidadeMenorTests(AssinaturaBaseTests):
+    """Paciente menor de idade — quem assina é o responsável legal,
+    confirmando o CPF cadastrado em vez da data de nascimento."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        hoje = date.today()
+        nascimento_menor = date(hoje.year - 10, hoje.month, hoje.day)
+        self.pac_menor = _paciente_completo(
+            id_dental="700",
+            data_nascimento=nascimento_menor,
+            nome_responsavel="Maria Responsável",
+            cpf_responsavel="999.888.777-66",
+        )
+        self.contrato_menor = gerar_e_salvar_contrato(
+            paciente=self.pac_menor, tipo="modelo_1", gerado_por=self.usuario
+        )
+        self.sessao = criar_sessao(self.contrato_menor, criado_por=self.usuario)
+        self.token = gerar_token(self.sessao)
+        self.url = reverse("assinatura_publica", args=[self.token])
+        self.client.logout()
+
+    def test_get_exibe_formulario_de_cpf_do_responsavel(self) -> None:
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+        self.assertContains(response, "responsável legal")
+        self.assertNotContains(response, 'name="nascimento"')
+        self.assertContains(response, 'name="cpf_responsavel"')
+
+    def test_cpf_correto_confirma_como_responsavel_legal(self) -> None:
+        response = self.client.post(self.url, data={"cpf_responsavel": "99988877766"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinar.html")
+        self.assertContains(response, "responsável legal")
+
+        self.sessao.refresh_from_db()
+        self.assertIsNotNone(self.sessao.identidade_confirmada_em)
+        self.assertEqual(self.sessao.identidade_confirmada_como, "responsavel_legal")
+        self.assertTrue(self.sessao.assinado_por_responsavel)
+        evento = EventoContrato.objects.get(
+            sessao=self.sessao, tipo="identidade_confirmada"
+        )
+        self.assertEqual(evento.payload.get("confirmado_como"), "responsavel_legal")
+
+    def test_cpf_com_pontuacao_tambem_confere(self) -> None:
+        response = self.client.post(
+            self.url, data={"cpf_responsavel": "999.888.777-66"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinar.html")
+
+    def test_cpf_incorreto_reexibe_formulario_do_responsavel(self) -> None:
+        response = self.client.post(self.url, data={"cpf_responsavel": "00000000000"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+        self.assertContains(response, "CPF do responsável legal incorreto")
+
+        self.sessao.refresh_from_db()
+        self.assertIsNone(self.sessao.identidade_confirmada_em)
+        self.assertEqual(self.sessao.tentativas_identidade, 1)
+
+    def test_data_de_nascimento_nao_confirma_identidade_do_menor(self) -> None:
+        """O campo relevante para um menor é o CPF do responsável — enviar
+        a própria data de nascimento (paciente errado) não deve confirmar."""
+        response = self.client.post(
+            self.url,
+            data={"nascimento": self.pac_menor.data_nascimento.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/verificar_identidade.html")
+        self.sessao.refresh_from_db()
+        self.assertIsNone(self.sessao.identidade_confirmada_em)
+
+    def test_bloqueia_apos_exceder_tentativas(self) -> None:
+        for _ in range(LIMITE_TENTATIVAS_IDENTIDADE - 1):
+            response = self.client.post(
+                self.url, data={"cpf_responsavel": "00000000000"}
+            )
+            self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(self.url, data={"cpf_responsavel": "00000000000"})
+
+        self.assertEqual(response.status_code, 410)
+        self.assertTemplateUsed(response, "gestao_contratos/assinatura_invalida.html")
+
+        self.sessao.refresh_from_db()
+        self.assertEqual(self.sessao.status, "cancelada")
+        self.contrato_menor.refresh_from_db()
+        self.assertEqual(self.contrato_menor.status, "gerado")
+
+    def test_assinatura_concluida_menciona_responsavel_legal(self) -> None:
+        self.client.post(self.url, data={"cpf_responsavel": "99988877766"})
+
+        response = self.client.post(
+            self.url, data={"assinatura": _assinatura_data_url()}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinatura_concluida.html")
+        self.assertContains(response, "responsável legal")
+        self.contrato_menor.refresh_from_db()
+        self.assertEqual(self.contrato_menor.status, "assinado")
+
+    def test_processar_assinatura_registra_evento_com_papel_do_responsavel(
+        self,
+    ) -> None:
+        _confirmar_identidade_sessao(self.sessao, como="responsavel_legal")
+
+        processar_assinatura(
+            self.sessao, _assinatura_data_url(), ip="203.0.113.10", user_agent="X"
+        )
+
+        evento = EventoContrato.objects.get(
+            sessao=self.sessao, tipo="assinatura_concluida"
+        )
+        self.assertEqual(evento.payload.get("assinado_como"), "responsavel_legal")
 
 
 class AssinaturaStaffViewTests(AssinaturaBaseTests):
@@ -2945,3 +3093,272 @@ class ChecklistEdgeCasesTests(TestCase):
             i for i in itens if "Responsável" in i.rotulo and "nome" in i.rotulo
         )
         self.assertTrue(item_resp.obrigatorio)  # confirma que foi tratado como menor
+
+
+# ---------------------------------------------------------------------------
+# Carimbo de tempo (RFC 3161)
+# ---------------------------------------------------------------------------
+
+_TSA_URL = "https://freetsa.org/tsr"
+
+
+class CarimboTempoConfigTests(TestCase):
+    @patch.dict("os.environ", {}, clear=True)
+    def test_sem_tsa_url_fica_desativado(self) -> None:
+        self.assertIsNone(carregar_config_carimbo_tempo())
+        self.assertFalse(carimbo_tempo_configurado())
+
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    def test_com_tsa_url_fica_ativado(self) -> None:
+        config = carregar_config_carimbo_tempo()
+        self.assertIsNotNone(config)
+        self.assertEqual(config.url, _TSA_URL)
+        self.assertEqual(config.timeout, 30)
+        self.assertTrue(carimbo_tempo_configurado())
+
+    @patch.dict(
+        "os.environ",
+        {
+            "CARIMBO_TEMPO_TSA_URL": _TSA_URL,
+            "CARIMBO_TEMPO_TSA_USERNAME": "user",
+            "CARIMBO_TEMPO_TSA_PASSWORD": "pass",
+            "CARIMBO_TEMPO_TIMEOUT": "45",
+        },
+        clear=True,
+    )
+    def test_credenciais_e_timeout_customizados(self) -> None:
+        config = carregar_config_carimbo_tempo()
+        self.assertEqual(config.username, "user")
+        self.assertEqual(config.password, "pass")
+        self.assertEqual(config.timeout, 45)
+
+
+class SolicitarCarimboTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+        self.contrato.refresh_from_db()
+
+    def test_sem_tsa_configurada_retorna_erro_sem_solicitar(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            ok, erro = solicitar_carimbo(self.contrato)
+
+        self.assertFalse(ok)
+        self.assertIn("não configurado", erro)
+        self.assertFalse(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="carimbo_tempo_iniciado"
+            ).exists()
+        )
+
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    def test_sem_hash_calculado_marca_erro(self) -> None:
+        self.contrato.hash_sha256 = ""
+        self.contrato.save(update_fields=["hash_sha256"])
+
+        ok, erro = solicitar_carimbo(self.contrato)
+
+        self.assertFalse(ok)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_carimbo_tempo, "erro")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="carimbo_tempo_erro"
+            ).exists()
+        )
+
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @patch("rfc3161ng.get_timestamp")
+    @patch("rfc3161ng.RemoteTimestamper")
+    def test_sucesso_salva_token_e_data_atestada(
+        self, MockTimestamper: MagicMock, mock_get_timestamp: MagicMock
+    ) -> None:
+        from datetime import datetime as dt
+
+        MockTimestamper.return_value.timestamp.return_value = b"token-tsr-fake"
+        mock_get_timestamp.return_value = dt(2026, 7, 6, 12, 0, 0)
+
+        ok, erro = solicitar_carimbo(self.contrato)
+
+        self.assertTrue(ok)
+        self.assertEqual(erro, "")
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_carimbo_tempo, "concluido")
+        self.assertEqual(self.contrato.carimbo_tempo_tsa, _TSA_URL)
+        self.assertEqual(
+            self.contrato.carimbo_tempo_em.isoformat(), "2026-07-06T12:00:00+00:00"
+        )
+        self.contrato.carimbo_tempo.open("rb")
+        conteudo = self.contrato.carimbo_tempo.read()
+        self.contrato.carimbo_tempo.close()
+        self.assertEqual(conteudo, b"token-tsr-fake")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="carimbo_tempo_concluido"
+            ).exists()
+        )
+
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @patch("rfc3161ng.RemoteTimestamper")
+    def test_falha_na_tsa_marca_erro(self, MockTimestamper: MagicMock) -> None:
+        MockTimestamper.return_value.timestamp.side_effect = RuntimeError(
+            "TSA indisponível"
+        )
+
+        ok, erro = solicitar_carimbo(self.contrato)
+
+        self.assertFalse(ok)
+        self.assertIn("TSA indisponível", erro)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status_carimbo_tempo, "erro")
+        self.assertTrue(
+            EventoContrato.objects.filter(
+                contrato=self.contrato, tipo="carimbo_tempo_erro"
+            ).exists()
+        )
+
+
+class SolicitarCarimboTempoTaskTests(TestCase):
+    """Testa solicitar_carimbo_tempo_task diretamente — sem herdar de
+    AssinaturaBaseTests, já que aquela base não mocka esta tarefa (o
+    carimbo só é agendado quando configurado, o que os testes de
+    assinatura não fazem por padrão)."""
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        override = override_settings(MEDIA_ROOT=media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.pac = _paciente_completo(id_dental="702")
+        self.contrato = gerar_e_salvar_contrato(
+            paciente=self.pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+
+    @patch("gestao_contratos.services.carimbo_tempo.solicitar_carimbo")
+    def test_sucesso_chama_uma_unica_vez(self, mock_solicitar: MagicMock) -> None:
+        mock_solicitar.return_value = (True, "")
+
+        solicitar_carimbo_tempo_task.delay(self.contrato.pk)
+
+        mock_solicitar.assert_called_once_with(self.contrato)
+
+    @patch("gestao_contratos.services.carimbo_tempo.solicitar_carimbo")
+    def test_recupera_apos_falha_temporaria(self, mock_solicitar: MagicMock) -> None:
+        mock_solicitar.side_effect = [(False, "timeout"), (True, "")]
+
+        solicitar_carimbo_tempo_task.delay(self.contrato.pk)
+
+        self.assertEqual(mock_solicitar.call_count, 2)
+
+    @patch("gestao_contratos.services.carimbo_tempo.solicitar_carimbo")
+    def test_falha_persistente_esgota_tentativas_sem_propagar(
+        self, mock_solicitar: MagicMock
+    ) -> None:
+        mock_solicitar.return_value = (False, "TSA fora do ar")
+
+        solicitar_carimbo_tempo_task.delay(self.contrato.pk)
+
+        self.assertEqual(mock_solicitar.call_count, 6)
+
+    def test_contrato_inexistente_nao_chama_o_servico(self) -> None:
+        with patch(
+            "gestao_contratos.services.carimbo_tempo.solicitar_carimbo"
+        ) as mock_solicitar:
+            solicitar_carimbo_tempo_task.delay(999_999)
+            mock_solicitar.assert_not_called()
+
+
+class ProcessarAssinaturaCarimboTempoTests(AssinaturaBaseTests):
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    def test_agenda_carimbo_quando_configurado(self) -> None:
+        with patch(
+            "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"
+        ) as mock_delay:
+            sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+            processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        mock_delay.assert_called_once_with(self.contrato.pk)
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_nao_agenda_carimbo_quando_nao_configurado(self) -> None:
+        with patch(
+            "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"
+        ) as mock_delay:
+            sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+            processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        mock_delay.assert_not_called()
+
+
+class CarimboTempoViewsTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+        self.contrato.refresh_from_db()
+
+    @patch("gestao_contratos.views.solicitar_carimbo")
+    def test_post_sucesso_mostra_mensagem_de_sucesso(
+        self, mock_solicitar: MagicMock
+    ) -> None:
+        mock_solicitar.return_value = (True, "")
+
+        response = self.client.post(
+            reverse("contrato_solicitar_carimbo_tempo", args=[self.contrato.pk]),
+            follow=True,
+        )
+
+        self.assertContains(response, "Carimbo de tempo obtido com sucesso")
+
+    @patch("gestao_contratos.views.solicitar_carimbo")
+    def test_post_falha_mostra_mensagem_de_erro(
+        self, mock_solicitar: MagicMock
+    ) -> None:
+        mock_solicitar.return_value = (False, "TSA indisponível")
+
+        response = self.client.post(
+            reverse("contrato_solicitar_carimbo_tempo", args=[self.contrato.pk]),
+            follow=True,
+        )
+
+        self.assertContains(response, "TSA indisponível")
+
+    def test_get_redireciona_sem_solicitar(self) -> None:
+        response = self.client.get(
+            reverse("contrato_solicitar_carimbo_tempo", args=[self.contrato.pk])
+        )
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_baixar_sem_carimbo_redireciona_com_mensagem(self) -> None:
+        response = self.client.get(
+            reverse("contrato_baixar_carimbo_tempo", args=[self.contrato.pk]),
+            follow=True,
+        )
+        self.assertContains(response, "ainda não possui carimbo de tempo")
+
+    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @patch("rfc3161ng.get_timestamp")
+    @patch("rfc3161ng.RemoteTimestamper")
+    def test_baixar_com_carimbo_retorna_arquivo(
+        self, MockTimestamper: MagicMock, mock_get_timestamp: MagicMock
+    ) -> None:
+        from datetime import datetime as dt
+
+        MockTimestamper.return_value.timestamp.return_value = b"token-tsr-fake"
+        mock_get_timestamp.return_value = dt(2026, 7, 6, 12, 0, 0)
+        solicitar_carimbo(self.contrato)
+
+        response = self.client.get(
+            reverse("contrato_baixar_carimbo_tempo", args=[self.contrato.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"token-tsr-fake")
+        self.assertEqual(response["Content-Type"], "application/timestamp-reply")

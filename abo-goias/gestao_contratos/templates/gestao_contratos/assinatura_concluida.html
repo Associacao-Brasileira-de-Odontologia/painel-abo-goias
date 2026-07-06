@@ -14,10 +14,19 @@
     <div class="card centro card-narrow">
         <div class="icone-sucesso" aria-hidden="true">✅</div>
         <h1 class="titulo-sucesso">Assinatura registrada com sucesso!</h1>
-        <p>
-            Obrigado, {{ paciente.nome }}. O termo de consentimento
-            ({{ contrato.get_tipo_display }}) foi assinado e salvo.
-        </p>
+        {% if sessao.assinado_por_responsavel %}
+            <p>
+                Obrigado. A assinatura do responsável legal
+                ({{ paciente.nome_responsavel }}) para o termo de
+                consentimento ({{ contrato.get_tipo_display }}) de
+                {{ paciente.nome }} foi registrada e salva com sucesso.
+            </p>
+        {% else %}
+            <p>
+                Obrigado, {{ paciente.nome }}. O termo de consentimento
+                ({{ contrato.get_tipo_display }}) foi assinado e salvo.
+            </p>
+        {% endif %}
         <p class="mt-sm">
             Você já pode fechar esta página. A recepção dará continuidade
             ao atendimento.

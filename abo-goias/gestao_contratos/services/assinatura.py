@@ -21,6 +21,8 @@ from django.core import signing
 from django.core.files.base import ContentFile
 from django.utils import timezone
 
+from .checklist import eh_menor_de_idade
+
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
     from gestao_contratos.models import ContratoGerado, SessaoAssinatura
@@ -237,24 +239,64 @@ def registrar_abertura(sessao: "SessaoAssinatura") -> None:
     registrar_evento(sessao.contrato, "contrato_aberto", sessao=sessao)
 
 
-def confirmar_identidade(
-    sessao: "SessaoAssinatura", data_informada: date | None
-) -> bool:
-    """Confirma a data de nascimento informada pelo paciente antes de assinar.
+def _somente_digitos(valor: str) -> str:
+    return "".join(c for c in valor if c.isdigit())
 
-    Retorna True se a data confere com o cadastro do paciente no Dental
-    Office (``Paciente.data_nascimento``, obrigatório para gerar qualquer
-    contrato — ver services/checklist.py). Em caso de erro, incrementa o
-    contador de tentativas da sessão e, ao atingir o limite, cancela a
-    sessão e levanta SessaoInvalida("identidade_bloqueada") — impede
-    adivinhação por força bruta (a data de nascimento tem baixa entropia).
+
+def confirmar_identidade(sessao: "SessaoAssinatura", valor_bruto: str) -> bool:
+    """Confirma a identidade de quem vai assinar antes de liberar o canvas.
+
+    Paciente maior de idade: confirma a própria data de nascimento
+    (``valor_bruto`` no formato ISO "AAAA-MM-DD", como enviado pelo
+    ``<input type="date">``) contra ``Paciente.data_nascimento`` (campo
+    obrigatório para gerar qualquer contrato — ver services/checklist.py).
+
+    Paciente menor de idade: quem assina é o responsável legal — confirma
+    o CPF do responsável cadastrado (``Paciente.cpf_responsavel``, também
+    obrigatório para menores), comparando somente os dígitos para tolerar
+    pontuação.
+
+    Em qualquer um dos dois casos, retorna True se conferir. Em caso de
+    erro, incrementa o contador de tentativas da sessão e, ao atingir o
+    limite, cancela a sessão e levanta SessaoInvalida("identidade_bloqueada")
+    — impede adivinhação por força bruta.
     """
 
-    nascimento = sessao.contrato.paciente.data_nascimento
-    if nascimento is not None and data_informada == nascimento:
+    paciente = sessao.contrato.paciente
+    menor = bool(eh_menor_de_idade(paciente.data_nascimento))
+
+    if menor:
+        papel = "responsavel_legal"
+        esperado = _somente_digitos(paciente.cpf_responsavel)
+        confere = bool(esperado) and _somente_digitos(valor_bruto) == esperado
+    else:
+        papel = "paciente"
+        try:
+            informado = date.fromisoformat(valor_bruto)
+        except (TypeError, ValueError):
+            informado = None
+        confere = (
+            informado is not None
+            and paciente.data_nascimento is not None
+            and informado == paciente.data_nascimento
+        )
+
+    if confere:
         sessao.identidade_confirmada_em = timezone.now()
-        sessao.save(update_fields=["identidade_confirmada_em", "atualizado_em"])
-        registrar_evento(sessao.contrato, "identidade_confirmada", sessao=sessao)
+        sessao.identidade_confirmada_como = papel
+        sessao.save(
+            update_fields=[
+                "identidade_confirmada_em",
+                "identidade_confirmada_como",
+                "atualizado_em",
+            ]
+        )
+        registrar_evento(
+            sessao.contrato,
+            "identidade_confirmada",
+            sessao=sessao,
+            confirmado_como=papel,
+        )
         return True
 
     sessao.tentativas_identidade += 1
@@ -268,6 +310,7 @@ def confirmar_identidade(
             "identidade_bloqueada",
             sessao=sessao,
             tentativas=sessao.tentativas_identidade,
+            esperado_de=papel,
         )
         contrato = sessao.contrato
         if contrato.status == "aguardando_assinatura":
@@ -276,6 +319,29 @@ def confirmar_identidade(
         raise SessaoInvalida("identidade_bloqueada")
 
     return False
+
+
+def _texto_carimbo(sessao: "SessaoAssinatura", ip: str | None, agora) -> str:
+    """Monta o texto impresso no rodapé do PDF assinado.
+
+    Quando o paciente é menor de idade, deixa explícito que quem assinou
+    foi o responsável legal em nome dele — relevante para a validade do
+    termo de consentimento (a assinatura do próprio menor não teria
+    efeito jurídico para esse fim).
+    """
+
+    quando = f"{agora.astimezone().strftime('%d/%m/%Y %H:%M')}"
+    quem_ip = f" — IP {ip}" if ip else ""
+
+    if sessao.identidade_confirmada_como == "responsavel_legal":
+        paciente = sessao.contrato.paciente
+        responsavel = paciente.nome_responsavel or "responsável legal"
+        return (
+            f"Assinado eletronicamente por {responsavel}, responsável legal, "
+            f"em nome do paciente {paciente.nome}, em {quando}{quem_ip} — ABO Goiás"
+        )
+
+    return f"Assinado eletronicamente pelo paciente em {quando}{quem_ip} — ABO Goiás"
 
 
 def processar_assinatura(
@@ -313,15 +379,17 @@ def processar_assinatura(
 
     sessao.refresh_from_db()
     contrato = sessao.contrato
-    registrar_evento(sessao.contrato, "assinatura_concluida", sessao=sessao, ip=ip)
+    registrar_evento(
+        sessao.contrato,
+        "assinatura_concluida",
+        sessao=sessao,
+        ip=ip,
+        assinado_como=sessao.identidade_confirmada_como,
+    )
 
     try:
         pdf_original = _obter_pdf_original(contrato)
-        carimbo = (
-            f"Assinado eletronicamente pelo paciente em "
-            f"{agora.astimezone().strftime('%d/%m/%Y %H:%M')}"
-            f"{f' — IP {ip}' if ip else ''} — ABO Goiás"
-        )
+        carimbo = _texto_carimbo(sessao, ip, agora)
         pdf_assinado = aplicar_assinatura_no_pdf(pdf_original, png_bytes, carimbo)
     except Exception:
         # Reverte o claim para permitir nova tentativa do paciente.
@@ -413,6 +481,30 @@ def processar_assinatura(
                 contrato,
                 "whatsapp_erro",
                 erro=f"Falha ao agendar envio automático: {exc}",
+            )
+
+    # Dispara a solicitação do carimbo de tempo (RFC 3161) em segundo
+    # plano, independente dos demais canais — reforça a validade jurídica
+    # da assinatura com uma evidência de data/hora de terceiros, mas nunca
+    # bloqueia nem afeta a confirmação já dada ao paciente. Só é agendada
+    # quando uma TSA está configurada (ver services/carimbo_tempo.py).
+    from .carimbo_tempo import carimbo_tempo_configurado
+
+    if carimbo_tempo_configurado():
+        try:
+            from gestao_contratos.tasks import solicitar_carimbo_tempo_task
+
+            solicitar_carimbo_tempo_task.delay(contrato.pk)
+        except Exception as exc:
+            logger.exception(
+                "processar_assinatura: falha ao agendar carimbo de tempo "
+                "(contrato=%s)",
+                contrato.pk,
+            )
+            registrar_evento(
+                contrato,
+                "carimbo_tempo_erro",
+                erro=f"Falha ao agendar solicitação automática: {exc}",
             )
 
     return contrato

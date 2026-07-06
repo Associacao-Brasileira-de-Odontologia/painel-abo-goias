@@ -19,6 +19,7 @@ from gestao_lab.models import Paciente
 
 from .forms import PacienteConfirmacaoForm
 from .models import TIPOS_CONTRATO, ContratoGerado
+from .services.carimbo_tempo import solicitar_carimbo
 from .services.checklist import gerar_checklist, pendencias_obrigatorias
 from .services.documentos import gerar_e_salvar_contrato
 from .services.envio import (
@@ -536,3 +537,49 @@ def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpRespons
         )
 
     return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+
+@login_required
+def solicitar_carimbo_tempo_view(
+    request: HttpRequest, contrato_pk: int
+) -> HttpResponse:
+    """Solicita (ou tenta novamente) o carimbo de tempo do contrato assinado.
+
+    Chamada de forma síncrona — ao contrário do disparo automático pós-
+    assinatura (assíncrono via Celery), aqui é a própria recepção que
+    aciona e espera o resultado, então uma chamada direta é aceitável.
+    """
+
+    if request.method != "POST":
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+
+    ok, erro = solicitar_carimbo(contrato)
+
+    if ok:
+        messages.success(request, "Carimbo de tempo obtido com sucesso.")
+    else:
+        messages.error(request, f"Falha ao obter o carimbo de tempo: {erro}")
+
+    return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+
+@login_required
+def baixar_carimbo_tempo_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
+    """Retorna o token de carimbo de tempo (.tsr) do contrato como download."""
+
+    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+
+    if not contrato.carimbo_tempo:
+        messages.error(request, "Este contrato ainda não possui carimbo de tempo.")
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+    contrato.carimbo_tempo.open("rb")
+    conteudo = contrato.carimbo_tempo.read()
+    contrato.carimbo_tempo.close()
+
+    nome_arquivo = f"carimbo_tempo_contrato_{contrato.pk}.tsr"
+    response = HttpResponse(conteudo, content_type="application/timestamp-reply")
+    response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
+    return response

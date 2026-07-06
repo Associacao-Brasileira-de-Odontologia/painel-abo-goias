@@ -192,7 +192,8 @@ canvas {
     color: var(--gc-ink-onlight);
 }
 
-.campo-data input[type="date"] {
+.campo-data input[type="date"],
+.campo-data input[type="text"] {
     padding: 12px 14px;
     border-radius: 10px;
     border: 1px solid var(--gc-paper-line);
@@ -202,7 +203,8 @@ canvas {
     color: var(--gc-paper-ink);
 }
 
-.campo-data input[type="date"]:focus-visible {
+.campo-data input[type="date"]:focus-visible,
+.campo-data input[type="text"]:focus-visible {
     outline: 3px solid var(--gc-ink-onlight);
     outline-offset: 2px;
 }

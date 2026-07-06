@@ -24,6 +24,40 @@ assinatura; ao mudar de status, o polling para automaticamente.
                 Baixar contrato assinado (.pdf)
             </a>
         </div>
+
+        {% if carimbo_tempo_configurado %}
+            <div class="gc-mt-md">
+                {% if contrato.status_carimbo_tempo == "concluido" %}
+                    <span class="badge badge-devolvido gc-badge-sm">
+                        Carimbo de tempo obtido — {{ contrato.carimbo_tempo_em|date:"d/m/Y H:i" }}
+                    </span>
+                    <a class="button secondary compact-button gc-mt-sm gc-full-width"
+                       href="{% url 'contrato_baixar_carimbo_tempo' contrato.pk %}">
+                        Baixar carimbo de tempo (.tsr)
+                    </a>
+                {% else %}
+                    <span class="badge {% if contrato.status_carimbo_tempo == 'erro' %}badge-atrasado{% endif %} gc-badge-sm">
+                        {% if contrato.status_carimbo_tempo == "erro" %}
+                            Carimbo de tempo — falha ao obter
+                        {% else %}
+                            Carimbo de tempo — não solicitado
+                        {% endif %}
+                    </span>
+                    <form method="post"
+                          action="{% url 'contrato_solicitar_carimbo_tempo' contrato.pk %}"
+                          class="gc-mt-sm">
+                        {% csrf_token %}
+                        <button class="button secondary compact-button gc-full-width" type="submit">
+                            {% if contrato.status_carimbo_tempo == "erro" %}
+                                Tentar novamente
+                            {% else %}
+                                Solicitar carimbo de tempo
+                            {% endif %}
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        {% endif %}
     {% elif sessao_assinatura %}
         <p class="panel-copy">
             Peça ao paciente para escanear o QR Code abaixo com a câmera
@@ -82,6 +116,9 @@ assinatura; ao mudar de status, o polling para automaticamente.
                         <span class="checklist-mensagem">
                             {{ evento.criado_em|date:"d/m/Y H:i:s" }}
                             {% if evento.payload.erro %} — {{ evento.payload.erro }}{% endif %}
+                            {% if evento.payload.confirmado_como == "responsavel_legal" or evento.payload.assinado_como == "responsavel_legal" %}
+                                — responsável legal
+                            {% endif %}
                         </span>
                     </div>
                 </li>

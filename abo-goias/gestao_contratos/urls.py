@@ -62,6 +62,16 @@ urlpatterns = [
         name="contrato_enviar_dental",
     ),
     path(
+        "contrato/<int:contrato_pk>/carimbo-tempo/solicitar/",
+        views.solicitar_carimbo_tempo_view,
+        name="contrato_solicitar_carimbo_tempo",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/carimbo-tempo/baixar/",
+        views.baixar_carimbo_tempo_view,
+        name="contrato_baixar_carimbo_tempo",
+    ),
+    path(
         "contrato/<int:contrato_pk>/pos-geracao/",
         views.pos_geracao_view,
         name="contrato_pos_geracao",

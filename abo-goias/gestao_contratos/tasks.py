@@ -75,6 +75,39 @@ def enviar_whatsapp_task(self, contrato_pk: int) -> None:
         raise RuntimeError(erro)
 
 
+@shared_task(
+    bind=True,
+    autoretry_for=(RuntimeError,),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+    max_retries=5,
+)
+def solicitar_carimbo_tempo_task(self, contrato_pk: int) -> None:
+    """Solicita o carimbo de tempo (RFC 3161) sobre o hash do PDF assinado.
+
+    Disparada logo após a conclusão da assinatura (services/assinatura.py),
+    apenas quando uma TSA está configurada — sem CARIMBO_TEMPO_TSA_URL, esta
+    tarefa nunca é agendada e o contrato segue sem carimbo de tempo, sem
+    nenhuma mudança de comportamento.
+    """
+
+    from .models import ContratoGerado
+    from .services.carimbo_tempo import solicitar_carimbo
+
+    try:
+        contrato = ContratoGerado.objects.select_related("paciente").get(pk=contrato_pk)
+    except ContratoGerado.DoesNotExist:
+        logger.error(
+            "solicitar_carimbo_tempo_task: contrato %s não encontrado", contrato_pk
+        )
+        return
+
+    ok, erro = solicitar_carimbo(contrato)
+    if not ok:
+        raise RuntimeError(erro)
+
+
 @shared_task
 def expirar_sessoes_vencidas_task() -> int:
     """Limpeza periódica (Celery Beat) das sessões de assinatura vencidas.
