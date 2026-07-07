@@ -342,14 +342,18 @@ Como essas tarefas rodam em paralelo e o carimbo de tempo depende de uma chamada
 **Produção (Railway)**: além do serviço web, são necessários:
 
 1. O plugin **Redis** do Railway adicionado ao projeto (injeta `REDIS_URL` automaticamente).
-2. Um serviço **worker**, apontando para este mesmo repositório, com *Start Command*:
+2. Um serviço **worker**, apontando para este mesmo repositório, com *Custom Start Command* (definido nas Settings do serviço, **não** herdado do `railway.toml` — o padrão do repositório é o comando do gunicorn, então é preciso sobrescrever explicitamente):
    ```
-   celery -A abo_goias worker --loglevel=info --concurrency=2
+   bash -c "cd abo-goias && celery -A abo_goias worker --loglevel=info --concurrency=2"
    ```
-3. Um serviço **beat** (agendador), com *Start Command*:
+3. Um serviço **beat** (agendador), com o mesmo tipo de *Custom Start Command*:
    ```
-   celery -A abo_goias beat --loglevel=info
+   bash -c "cd abo-goias && celery -A abo_goias beat --loglevel=info"
    ```
+
+O `cd abo-goias &&` é necessário porque o pacote `abo_goias` (e o `manage.py`) fica dentro dessa subpasta — sem isso, o Celery falha com `Error: Unable to load celery application. The module abo_goias was not found.`
+
+**Atenção ao Healthcheck Path**: nas Settings desses dois serviços (worker e beat), confira se o campo de Healthcheck Path não herdou `/healthz/` do `railway.toml` — nenhum dos dois serve HTTP, então um healthcheck ativo faria o Railway reiniciar o container em loop, achando que está com problema.
 
 Ambos precisam das mesmas variáveis de ambiente do serviço web (banco de dados, Dental Office, Redis) — use "Connect" no Railway para compartilhar variáveis entre serviços do mesmo projeto.
 
