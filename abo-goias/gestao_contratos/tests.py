@@ -20,7 +20,12 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from gestao_contratos.models import ContratoGerado, EventoContrato, SessaoAssinatura
+from gestao_contratos.models import (
+    ContratoGerado,
+    EventoContrato,
+    SessaoAssinatura,
+    TerminalAssinatura,
+)
 from gestao_contratos.services.assinatura import (
     LIMITE_TENTATIVAS_IDENTIDADE,
     AssinaturaInvalida,
@@ -33,6 +38,7 @@ from gestao_contratos.services.assinatura import (
     processar_assinatura,
     resolver_token,
     sessao_ativa,
+    sessao_ativa_para_terminal,
 )
 from gestao_contratos.services.carimbo_tempo import (
     carimbo_tempo_configurado,
@@ -3492,3 +3498,325 @@ class AssinarLinkaPoliticaPrivacidadeTests(AssinaturaBaseTests):
         )
 
         self.assertContains(response, reverse("contratos_politica_privacidade"))
+
+
+# ---------------------------------------------------------------------------
+# Terminal de assinatura dedicado (ex.: tablet da recepção)
+# ---------------------------------------------------------------------------
+
+
+class TerminalAssinaturaModelTests(TestCase):
+    def test_token_gerado_automaticamente(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        self.assertTrue(terminal.token)
+        self.assertGreaterEqual(len(terminal.token), 24)
+
+    def test_tokens_sao_unicos_entre_terminais(self) -> None:
+        primeiro = TerminalAssinatura.objects.create(nome="Tablet 1")
+        segundo = TerminalAssinatura.objects.create(nome="Tablet 2")
+
+        self.assertNotEqual(primeiro.token, segundo.token)
+
+    def test_str_retorna_nome(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        self.assertEqual(str(terminal), "Tablet Recepção")
+
+    def test_token_preservado_ao_salvar_novamente(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        token_original = terminal.token
+
+        terminal.nome = "Tablet Recepção 2"
+        terminal.save()
+
+        self.assertEqual(terminal.token, token_original)
+
+
+class SessaoAtivaParaTerminalTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        self.terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+    def test_sem_sessao_retorna_none(self) -> None:
+        self.assertIsNone(sessao_ativa_para_terminal(self.terminal))
+
+    def test_sessao_do_terminal_e_retornada(self) -> None:
+        sessao = criar_sessao(
+            self.contrato, criado_por=self.usuario, terminal=self.terminal
+        )
+
+        self.assertEqual(sessao_ativa_para_terminal(self.terminal), sessao)
+
+    def test_sessao_sem_terminal_nao_e_retornada(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+
+        self.assertIsNone(sessao_ativa_para_terminal(self.terminal))
+
+    def test_sessao_de_outro_terminal_nao_e_retornada(self) -> None:
+        outro_terminal = TerminalAssinatura.objects.create(nome="Outro tablet")
+        criar_sessao(self.contrato, criado_por=self.usuario, terminal=outro_terminal)
+
+        self.assertIsNone(sessao_ativa_para_terminal(self.terminal))
+
+    def test_sessao_vencida_expira_e_nao_e_retornada(self) -> None:
+        sessao = criar_sessao(
+            self.contrato, criado_por=self.usuario, terminal=self.terminal
+        )
+        sessao.expira_em = timezone.now() - timezone.timedelta(minutes=1)
+        sessao.save(update_fields=["expira_em"])
+
+        self.assertIsNone(sessao_ativa_para_terminal(self.terminal))
+        sessao.refresh_from_db()
+        self.assertEqual(sessao.status, "expirada")
+
+
+class CriarSessaoComTerminalTests(AssinaturaBaseTests):
+    def test_terminal_e_associado_a_sessao(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario, terminal=terminal)
+
+        self.assertEqual(sessao.terminal, terminal)
+
+    def test_sem_terminal_fica_none(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+
+        self.assertIsNone(sessao.terminal)
+
+
+class TerminalAssinaturaViewTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        self.terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        self.client.logout()
+
+    def test_token_invalido_retorna_404(self) -> None:
+        response = self.client.get(
+            reverse("terminal_assinatura", args=["token-invalido"])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_terminal_inativo_retorna_404(self) -> None:
+        self.terminal.ativo = False
+        self.terminal.save(update_fields=["ativo"])
+
+        response = self.client.get(
+            reverse("terminal_assinatura", args=[self.terminal.token])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_sem_sessao_exibe_tela_de_espera(self) -> None:
+        response = self.client.get(
+            reverse("terminal_assinatura", args=[self.terminal.token])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/terminal_aguardando.html")
+        self.assertContains(response, "Aguardando o próximo atendimento")
+
+    def test_com_sessao_ativa_redireciona_para_assinatura(self) -> None:
+        sessao = criar_sessao(
+            self.contrato, criado_por=self.usuario, terminal=self.terminal
+        )
+
+        response = self.client.get(
+            reverse("terminal_assinatura", args=[self.terminal.token])
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("assinatura_publica", args=[gerar_token(sessao)]),
+            fetch_redirect_response=False,
+        )
+
+
+class TerminalStatusFragmentViewTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        self.terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        self.client.logout()
+
+    def test_sem_sessao_retorna_fragmento_de_espera(self) -> None:
+        response = self.client.get(
+            reverse("terminal_status_fragment", args=[self.terminal.token])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(
+            response, "gestao_contratos/_terminal_aguardando_fragment.html"
+        )
+        self.assertNotIn("HX-Redirect", response.headers)
+
+    def test_com_sessao_envia_hx_redirect(self) -> None:
+        sessao = criar_sessao(
+            self.contrato, criado_por=self.usuario, terminal=self.terminal
+        )
+
+        response = self.client.get(
+            reverse("terminal_status_fragment", args=[self.terminal.token])
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(
+            response["HX-Redirect"],
+            reverse("assinatura_publica", args=[gerar_token(sessao)]),
+        )
+
+    def test_token_invalido_retorna_404(self) -> None:
+        response = self.client.get(
+            reverse("terminal_status_fragment", args=["token-invalido"])
+        )
+        self.assertEqual(response.status_code, 404)
+
+
+class IniciarAssinaturaComTerminalTests(AssinaturaBaseTests):
+    def setUp(self) -> None:
+        super().setUp()
+        self.terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+    def test_envia_sessao_para_terminal_escolhido(self) -> None:
+        response = self.client.post(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk]),
+            data={
+                "identidade_presencial_confirmada": "on",
+                "terminal_pk": self.terminal.pk,
+            },
+            follow=True,
+        )
+
+        self.assertContains(response, "Tablet Recepção")
+        sessao = sessao_ativa(self.contrato)
+        self.assertEqual(sessao.terminal, self.terminal)
+
+    def test_sem_terminal_pk_gera_sessao_sem_terminal(self) -> None:
+        self.client.post(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk]),
+            data={"identidade_presencial_confirmada": "on"},
+        )
+
+        sessao = sessao_ativa(self.contrato)
+        self.assertIsNone(sessao.terminal)
+
+    def test_terminal_pk_invalido_retorna_404(self) -> None:
+        response = self.client.post(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk]),
+            data={
+                "identidade_presencial_confirmada": "on",
+                "terminal_pk": 999_999,
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIsNone(sessao_ativa(self.contrato))
+
+    def test_terminal_inativo_retorna_404(self) -> None:
+        self.terminal.ativo = False
+        self.terminal.save(update_fields=["ativo"])
+
+        response = self.client.post(
+            reverse("contrato_iniciar_assinatura", args=[self.contrato.pk]),
+            data={
+                "identidade_presencial_confirmada": "on",
+                "terminal_pk": self.terminal.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class StatusFragmentTerminalTests(AssinaturaBaseTests):
+    def test_seletor_de_terminal_aparece_quando_ha_terminais_ativos(self) -> None:
+        TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertContains(response, "Onde o paciente vai assinar?")
+        self.assertContains(response, "Tablet Recepção")
+        self.assertContains(response, "Iniciar assinatura")
+
+    def test_seletor_nao_aparece_sem_terminais(self) -> None:
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertNotContains(response, "Onde o paciente vai assinar?")
+        self.assertContains(response, "Gerar QR Code de assinatura")
+
+    def test_terminal_inativo_nao_aparece_no_seletor(self) -> None:
+        TerminalAssinatura.objects.create(nome="Tablet Inativo", ativo=False)
+
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertNotContains(response, "Onde o paciente vai assinar?")
+
+    def test_sessao_em_terminal_nao_mostra_qr_code(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        criar_sessao(self.contrato, criado_por=self.usuario, terminal=terminal)
+
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertContains(response, "Assinatura enviada para o terminal")
+        self.assertNotContains(response, "escanear o QR Code")
+
+
+class AssinaturaConcluidaTerminalTests(AssinaturaBaseTests):
+    def test_meta_refresh_e_mensagem_quando_sessao_tem_terminal(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario, terminal=terminal)
+        _confirmar_identidade_sessao(sessao)
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("assinatura_publica", args=[gerar_token(sessao)]),
+            data={"assinatura": _assinatura_data_url()},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/assinatura_concluida.html")
+        self.assertContains(
+            response,
+            f'url={reverse("terminal_assinatura", args=[terminal.token])}',
+        )
+        self.assertContains(response, "Pode devolver o tablet")
+
+    def test_sem_terminal_nao_tem_meta_refresh(self) -> None:
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        _confirmar_identidade_sessao(sessao)
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("assinatura_publica", args=[gerar_token(sessao)]),
+            data={"assinatura": _assinatura_data_url()},
+        )
+
+        self.assertNotContains(response, 'http-equiv="refresh"')
+        self.assertContains(response, "Você já pode fechar esta página")
+
+
+class TerminalAssinaturaAdminTests(TestCase):
+    def setUp(self) -> None:
+        self.superuser = User.objects.create_superuser(
+            username="admin-terminal", password="senha-segura"
+        )
+        self.client.force_login(self.superuser)
+
+    def test_changelist_carrega_com_link_do_terminal(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        response = self.client.get("/admin/gestao_contratos/terminalassinatura/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tablet Recepção")
+        self.assertContains(
+            response, reverse("terminal_assinatura", args=[terminal.token])
+        )
+
+    def test_tela_de_adicao_carrega(self) -> None:
+        response = self.client.get("/admin/gestao_contratos/terminalassinatura/add/")
+        self.assertEqual(response.status_code, 200)
