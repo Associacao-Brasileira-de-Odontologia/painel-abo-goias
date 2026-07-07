@@ -157,6 +157,35 @@ class DentalClient:
         return self._get_autenticado(f"users?{params}")
 
     # ------------------------------------------------------------------
+    # Documentos
+    # ------------------------------------------------------------------
+
+    def enviar_documento_paciente(
+        self,
+        id_dental: int | str,
+        arquivo_bytes: bytes,
+        nome: str,
+        descricao: str = "",
+        tag_list: str = "contrato",
+    ) -> dict[str, Any]:
+        """Envia um documento para a ficha do paciente no Dental Office.
+
+        Usa multipart/form-data com os bytes do arquivo diretamente.
+        O endpoint POST /customers/{id}/docs retorna HTTP 201 em caso de sucesso.
+        """
+
+        url = self.config.base_url.rstrip("/") + f"/customers/{id_dental}/docs"
+        campos = {"customer_doc[name]": nome}
+        if descricao:
+            campos["customer_doc[description]"] = descricao
+        if tag_list:
+            campos["customer_doc[tag_list]"] = tag_list
+        arquivos = {
+            "customer_doc[file]": (nome, "application/octet-stream", arquivo_bytes)
+        }
+        return self._post_multipart_autenticado(url, campos, arquivos)
+
+    # ------------------------------------------------------------------
     # Autenticacao
     # ------------------------------------------------------------------
 
@@ -202,6 +231,83 @@ class DentalClient:
                 token = self._renovar_token()
                 return self._get_json(path, token=token)
             raise
+
+    def _post_autenticado(self, url: str, payload: dict[str, Any]) -> Any:
+        """Executa POST JSON autenticado com URL absoluta; renova token em 401/403."""
+
+        token = self._autenticar()
+        try:
+            return self._post_json(url, payload, token=token)
+        except DentalAPIError as exc:
+            mensagem = str(exc)
+            if "Erro HTTP 401" in mensagem or "Erro HTTP 403" in mensagem:
+                cache.delete(self._cache_key)
+                token = self._renovar_token()
+                return self._post_json(url, payload, token=token)
+            raise
+
+    def _post_multipart_autenticado(
+        self,
+        url: str,
+        campos: dict[str, str],
+        arquivos: dict[str, tuple[str, str, bytes]],
+    ) -> Any:
+        """Executa POST multipart/form-data autenticado, renovando token em 401/403.
+
+        ``campos`` é um dicionário nome→valor de campos de texto.
+        ``arquivos`` é nome→(filename, content_type, bytes).
+        """
+
+        token = self._autenticar()
+        try:
+            return self._post_multipart(url, campos, arquivos, token=token)
+        except DentalAPIError as exc:
+            mensagem = str(exc)
+            if "Erro HTTP 401" in mensagem or "Erro HTTP 403" in mensagem:
+                cache.delete(self._cache_key)
+                token = self._renovar_token()
+                return self._post_multipart(url, campos, arquivos, token=token)
+            raise
+
+    def _post_multipart(
+        self,
+        url: str,
+        campos: dict[str, str],
+        arquivos: dict[str, tuple[str, str, bytes]],
+        token: str | None = None,
+    ) -> Any:
+        """Envia POST multipart/form-data e converte a resposta para objeto Python."""
+
+        import uuid as _uuid
+
+        boundary = ("----FormBoundary" + _uuid.uuid4().hex).encode("ascii")
+
+        body = b""
+        for nome, valor in campos.items():
+            body += b"--" + boundary + b"\r\n"
+            body += f'Content-Disposition: form-data; name="{nome}"\r\n\r\n'.encode(
+                "utf-8"
+            )
+            body += valor.encode("utf-8") + b"\r\n"
+        for nome, (filename, content_type, dados) in arquivos.items():
+            body += b"--" + boundary + b"\r\n"
+            body += (
+                f'Content-Disposition: form-data; name="{nome}";'
+                f' filename="{filename}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode("utf-8")
+            body += dados + b"\r\n"
+        body += b"--" + boundary + b"--\r\n"
+
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            "Content-Type": f"multipart/form-data; boundary={boundary.decode('ascii')}",
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        request = Request(url, data=body, headers=headers, method="POST")
+        return self._executar_request(request)
 
     def _get_json(self, path: str, token: str) -> Any:
         """Envia GET com Bearer token e converte a resposta para objeto Python."""
@@ -272,11 +378,15 @@ class DentalClient:
                 f"Falha de conexao ao consultar Dental Office: {exc.reason}"
             ) from exc
 
+        if not body.strip():
+            return {}
+
         try:
             return json.loads(body)
         except json.JSONDecodeError as exc:
+            trecho = body[:200].replace("\n", " ")
             raise DentalAPIError(
-                "A API do Dental Office retornou uma resposta que nao e JSON valido."
+                f"A API do Dental Office retornou resposta nao-JSON: {trecho!r}"
             ) from exc
 
 
@@ -391,6 +501,15 @@ def normalizar_paciente_detalhado(data: dict[str, Any]) -> dict[str, Any]:
     mae_cpf = (data.get("mother_cpf") or "").strip()
     pai_cpf = (data.get("father_cpf") or "").strip()
     campos["cpf_responsavel"] = _formatar_cpf(mae_cpf or pai_cpf)
+
+    # E-mail (primeiro contato que tenha o campo preenchido)
+    email = ""
+    for contato in data.get("contacts_attributes") or []:
+        candidato = (contato.get("email") or "").strip()
+        if candidato:
+            email = candidato
+            break
+    campos["email"] = email
 
     return campos
 

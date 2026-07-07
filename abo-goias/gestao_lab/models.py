@@ -108,6 +108,7 @@ class Paciente(ModeloBase):
 
     nome = models.CharField(max_length=200)
     celular = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True, default="")
     id_dental = models.CharField(max_length=50, unique=True)
     processo_aberto = models.BooleanField(default=False)
     data_previsao_retorno = models.DateField(null=True, blank=True)
@@ -132,10 +133,30 @@ class Paciente(ModeloBase):
     nome_responsavel = models.CharField(max_length=200, blank=True)
     cpf_responsavel = models.CharField(max_length=20, blank=True)
 
+    # Campo local — o Dental Office não expõe convênio; nunca é sobrescrito
+    # pela sincronização, apenas editado manualmente na tela de confirmação.
+    convenio = models.CharField(max_length=120, blank=True)
+
+    # Confirmação explícita dos dados antes da geração de contratos.
+    # Limpa ao sincronizar com o Dental Office (dados mudaram → reconfirmar).
+    dados_confirmados_em = models.DateTimeField(null=True, blank=True)
+    dados_confirmados_por = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pacientes_confirmados",
+    )
+
     @property
     def dados_contrato_completos(self) -> bool:
         """True se os dados mínimos para gerar um contrato estão preenchidos."""
         return bool(self.cpf or self.rg) and bool(self.endereco_cidade)
+
+    @property
+    def dados_confirmados(self) -> bool:
+        """True se um colaborador já confirmou os dados do paciente."""
+        return self.dados_confirmados_em is not None
 
     class Meta:
         ordering = ["nome"]

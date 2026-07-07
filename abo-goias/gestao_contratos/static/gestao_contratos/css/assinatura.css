@@ -1,0 +1,329 @@
+/*
+ * Páginas públicas de assinatura — "papel" da família visual "Termo & Selo".
+ *
+ * Usadas por assinar.html, assinatura_invalida.html e assinatura_concluida.html
+ * — páginas standalone (não estendem gestao_cme/base.html), acessadas pelo
+ * PACIENTE via QR Code, no próprio celular, muitas vezes ao ar livre. Por
+ * isso o fundo permanece claro (legibilidade), mas com a mesma tipografia,
+ * acento dourado-tinta e linguagem de movimento do restante da app.
+ */
+
+:root {
+    --gc-paper: #faf6ee;
+    --gc-paper-card: #fffdf8;
+    --gc-paper-line: rgba(60, 40, 20, 0.14);
+    --gc-paper-ink: #2b2013;
+    --gc-paper-muted: #6b6153;
+    --gc-ink-onlight: #7a4e1c;
+    --gc-ink-onlight-dark: #5c3a13;
+    --gc-erro: #a32020;
+    --gc-erro-bg: #fdeaea;
+    --gc-sucesso: #4f7a3d;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 20px 16px;
+    display: flex;
+    justify-content: center;
+    color: var(--gc-paper-ink);
+    font-family: "DM Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.5;
+    background-color: var(--gc-paper);
+    background-image:
+        radial-gradient(circle at 8% 4%, rgba(224, 168, 85, 0.1), transparent 40%),
+        radial-gradient(rgba(60, 40, 20, 0.035) 1px, transparent 1px);
+    background-size: auto, 3px 3px;
+}
+
+h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 700;
+    font-optical-sizing: auto;
+    margin: 0 0 4px;
+    color: var(--gc-paper-ink);
+}
+
+p {
+    margin: 0;
+}
+
+.gc-wrap {
+    width: 100%;
+    max-width: 560px;
+}
+
+.gc-wrap-larga {
+    max-width: 720px;
+}
+
+.politica h2 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gc-paper-ink);
+    margin: 22px 0 8px;
+}
+
+.politica p,
+.politica ul {
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.politica ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.politica li {
+    margin-bottom: 8px;
+}
+
+.politica li:last-child {
+    margin-bottom: 0;
+}
+
+.card {
+    width: 100%;
+    background: var(--gc-paper-card);
+    border: 1px solid var(--gc-paper-line);
+    border-radius: 14px;
+    box-shadow: 0 2px 18px rgba(43, 32, 19, 0.07);
+    padding: 24px;
+    margin-bottom: 22px;
+    animation: gc-card-in 0.45s ease both;
+}
+
+.card:nth-of-type(2) {
+    animation-delay: 0.08s;
+}
+
+.eyebrow {
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gc-ink-onlight);
+    margin-bottom: 10px;
+}
+
+.info {
+    background: rgba(122, 78, 28, 0.06);
+    border: 1px solid var(--gc-paper-line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 16px 0;
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 0.86rem;
+}
+
+.info p {
+    margin: 3px 0;
+}
+
+.info span {
+    color: var(--gc-paper-muted);
+}
+
+.btn {
+    display: inline-flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 0;
+    font-family: "DM Sans", sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--gc-ink-onlight), var(--gc-ink-onlight-dark));
+    color: #fff8ec;
+    box-shadow: 0 14px 30px rgba(122, 78, 28, 0.28);
+}
+
+.btn-primary:disabled {
+    background: #cbb9a0;
+    color: #fff;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.btn-outline {
+    background: #fff;
+    color: var(--gc-paper-ink);
+    border: 1px solid var(--gc-paper-line);
+}
+
+.btn-outline:hover {
+    border-color: var(--gc-ink-onlight);
+}
+
+.canvas-wrap {
+    border: 2px dashed rgba(122, 78, 28, 0.35);
+    border-radius: 12px;
+    margin: 14px 0 10px;
+    position: relative;
+    background: #fffefb;
+    touch-action: none;
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 200px;
+    border-radius: 10px;
+}
+
+.canvas-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a99a83;
+    font-family: "Fraunces", Georgia, serif;
+    font-style: italic;
+    font-size: 1rem;
+    pointer-events: none;
+}
+
+.campo-data {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 16px 0 14px;
+    text-align: left;
+}
+
+.campo-data label {
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--gc-ink-onlight);
+}
+
+.campo-data input[type="date"],
+.campo-data input[type="text"] {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--gc-paper-line);
+    background: #fff;
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 1rem;
+    color: var(--gc-paper-ink);
+}
+
+.campo-data input[type="date"]:focus-visible,
+.campo-data input[type="text"]:focus-visible {
+    outline: 3px solid var(--gc-ink-onlight);
+    outline-offset: 2px;
+}
+
+.erro {
+    background: var(--gc-erro-bg);
+    color: var(--gc-erro);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+}
+
+.rodape {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--gc-paper-muted);
+    margin-top: 16px;
+    line-height: 1.6;
+}
+
+.icone {
+    font-size: 2.6rem;
+    margin-bottom: 6px;
+}
+
+.icone-sucesso {
+    font-size: 2.8rem;
+    margin-bottom: 6px;
+    animation: gc-icone-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+.titulo-sucesso {
+    color: var(--gc-sucesso);
+}
+
+.centro {
+    text-align: center;
+}
+
+.tela-cheia {
+    min-height: 90vh;
+    align-items: center;
+}
+
+.card-narrow {
+    max-width: 480px;
+}
+
+.mt-sm {
+    margin-top: 10px;
+}
+
+/* ══ Foco visível ═══════════════════════════════════════════════ */
+
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible {
+    outline: 3px solid var(--gc-ink-onlight);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+/* ══ Movimento ══════════════════════════════════════════════════ */
+
+@keyframes gc-card-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gc-icone-pop {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes gc-terminal-pulse {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.08); }
+}
+
+.gc-terminal-pulsando {
+    animation: gc-terminal-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.001ms !important;
+        animation-delay: 0s !important;
+        transition-duration: 0.001ms !important;
+    }
+}

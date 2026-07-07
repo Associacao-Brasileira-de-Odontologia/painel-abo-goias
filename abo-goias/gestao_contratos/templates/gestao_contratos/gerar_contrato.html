@@ -1,8 +1,17 @@
 {% extends "gestao_cme/base.html" %}
+{% load static %}
 
 {% block title %}Gerar Contrato — {{ paciente.nome }}{% endblock %}
 {% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
 {% block header_title %}Gerar Contrato{% endblock %}
+{% block body_class %}gestao-contratos{% endblock %}
+
+{% block extra_css %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/contratos.css' %}">
+{% endblock %}
 
 {% block content %}
 <main class="page-shell">
@@ -25,6 +34,15 @@
                     </span>
                     <span>Gerar contrato</span>
                 </a>
+                <a class="side-link" href="{% url 'contrato_confirmar_dados' paciente.pk %}">
+                    <span class="side-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"/>
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                        </svg>
+                    </span>
+                    <span>Editar dados do paciente</span>
+                </a>
                 <a class="side-link side-link-return" href="{% url 'contratos' %}">
                     <span class="side-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -41,9 +59,33 @@
                     <p class="section-label">Contratos anteriores</p>
                     <ul class="sync-history-list">
                         {% for contrato in historico %}
-                            <li class="sync-history-item sync-ok">
-                                <span class="sync-tipo">{{ contrato.get_tipo_display }}</span>
-                                <span class="sync-date">{{ contrato.criado_em|date:"d/m/Y" }}</span>
+                            <li class="sync-history-item sync-ok gc-historico-item">
+                                <div class="gc-historico-cabecalho">
+                                    <span class="sync-tipo">{{ contrato.get_tipo_display }}</span>
+                                    <span class="sync-date">{{ contrato.criado_em|date:"d/m/Y" }}</span>
+                                </div>
+                                {% if contrato.status_envio_dental == "enviado" %}
+                                    <span class="badge badge-devolvido gc-badge-sm">
+                                        Enviado ao Dental — {{ contrato.enviado_dental_em|date:"d/m H:i" }}
+                                    </span>
+                                {% else %}
+                                    <form method="post"
+                                          action="{% url 'contrato_enviar_dental' contrato.pk %}"
+                                          class="gc-full-width">
+                                        {% csrf_token %}
+                                        <button class="button secondary compact-button gc-full-width gc-btn-sm"
+                                                type="submit"
+                                                {% if contrato.status_envio_dental == "erro" %}
+                                                title="Tentativa anterior falhou — clique para reenviar"
+                                                {% endif %}>
+                                            {% if contrato.status_envio_dental == "erro" %}
+                                                Reenviar ao Dental Office
+                                            {% else %}
+                                                Enviar ao Dental Office
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                {% endif %}
                             </li>
                         {% endfor %}
                     </ul>
@@ -59,21 +101,18 @@
         {# ── Painel principal ──────────────────────────────────────── #}
         <section class="panel results-panel">
 
-            {# Cabeçalho com nome e badge de status #}
+            {# Cabeçalho com badge de status #}
             <div class="results-topbar">
-                <div>
-                    <h2 style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                        {{ paciente.nome }}
-                        {% if gerado_bloqueado %}
-                            <span class="badge badge-atrasado">Dados incompletos</span>
-                        {% else %}
-                            <span class="badge badge-devolvido">Pronto para gerar</span>
-                        {% endif %}
-                    </h2>
+                <div class="gc-row-tight">
+                    {% if gerado_bloqueado %}
+                        <span class="badge badge-atrasado">Dados incompletos</span>
+                    {% else %}
+                        <span class="badge badge-devolvido">Pronto para gerar</span>
+                    {% endif %}
                 </div>
                 <a class="icon-action"
-                   href="{% url 'contrato_gerar' paciente.pk %}?sincronizar=1"
-                   title="Atualizar dados do Dental Office"
+                   href="{% url 'contrato_confirmar_dados' paciente.pk %}?sincronizar=1"
+                   title="Atualizar dados do Dental Office (exige reconfirmação)"
                    aria-label="Atualizar dados do Dental Office">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M21.5 2v6h-6"/>
@@ -86,7 +125,7 @@
 
             {# ── Seção 1: Dados do paciente retornados do Dental Office ── #}
             <div class="kpi-section">
-                <p class="section-label">Dados retornados do Dental Office</p>
+                <p class="section-label">Dados do paciente</p>
 
                 <div class="selection-summary">
                     {% if paciente.cpf %}
@@ -100,9 +139,9 @@
                             <strong>{{ paciente.rg }}</strong>
                         </div>
                     {% else %}
-                        <div class="info-chip" style="border-color: rgba(255,100,100,0.3);">
+                        <div class="info-chip gc-danger-chip">
                             <span>Documento</span>
-                            <strong style="color: #ff9e9e;">Não encontrado</strong>
+                            <strong class="gc-danger-text">Não encontrado</strong>
                         </div>
                     {% endif %}
 
@@ -112,9 +151,9 @@
                             <strong>{{ paciente.data_nascimento|date:"d/m/Y" }}</strong>
                         </div>
                     {% else %}
-                        <div class="info-chip" style="border-color: rgba(255,100,100,0.3);">
+                        <div class="info-chip gc-danger-chip">
                             <span>Nascimento</span>
-                            <strong style="color: #ff9e9e;">Não informado</strong>
+                            <strong class="gc-danger-text">Não informado</strong>
                         </div>
                     {% endif %}
 
@@ -125,15 +164,36 @@
                         </div>
                     {% endif %}
 
+                    {% if paciente.email %}
+                        <div class="info-chip">
+                            <span>E-mail</span>
+                            <strong>{{ paciente.email }}</strong>
+                        </div>
+                    {% endif %}
+
+                    {% if paciente.convenio %}
+                        <div class="info-chip">
+                            <span>Convênio</span>
+                            <strong>{{ paciente.convenio }}</strong>
+                        </div>
+                    {% endif %}
+
                     <div class="info-chip">
                         <span>Registro Dental</span>
                         <strong>#{{ paciente.id_dental }}</strong>
                     </div>
+
+                    {% if paciente.dados_confirmados %}
+                        <div class="info-chip">
+                            <span>Dados confirmados</span>
+                            <strong>{{ paciente.dados_confirmados_em|date:"d/m/Y H:i" }}</strong>
+                        </div>
+                    {% endif %}
                 </div>
 
                 {% if paciente.endereco_logradouro or paciente.endereco_cidade %}
                     <div class="contrato-info-box">
-                        <p class="section-label" style="margin-bottom: 6px;">Endereço</p>
+                        <p class="section-label gc-mt-sm">Endereço</p>
                         <p class="contrato-info-text">
                             {% if paciente.endereco_logradouro %}
                                 {{ paciente.endereco_logradouro }}{% if paciente.endereco_numero %}, {{ paciente.endereco_numero }}{% endif %}{% if paciente.endereco_complemento %} — {{ paciente.endereco_complemento }}{% endif %}
@@ -146,16 +206,16 @@
                     </div>
                 {% else %}
                     <div class="contrato-info-box contrato-info-box--blocked">
-                        <p class="section-label" style="margin-bottom: 4px;">Endereço</p>
-                        <p class="contrato-info-text" style="color: #ff9e9e;">
+                        <p class="section-label gc-mt-sm">Endereço</p>
+                        <p class="contrato-info-text gc-danger-text">
                             Endereço não encontrado no Dental Office. Preencha a ficha do paciente e volte a esta tela.
                         </p>
                     </div>
                 {% endif %}
 
                 {% if paciente.nome_responsavel %}
-                    <div class="contrato-info-box" style="margin-top: 10px;">
-                        <p class="section-label" style="margin-bottom: 6px;">Responsável legal</p>
+                    <div class="contrato-info-box gc-mt-md">
+                        <p class="section-label gc-mt-sm">Responsável legal</p>
                         <p class="contrato-info-text">
                             {{ paciente.nome_responsavel }}
                             {% if paciente.cpf_responsavel %}
@@ -171,61 +231,56 @@
                 <p class="section-label">Verificação dos campos obrigatórios</p>
 
                 {% if gerado_bloqueado %}
-                    <div class="checklist-alert checklist-alert-blocked" style="margin-bottom: 12px;">
+                    <div class="checklist-alert checklist-alert-blocked gc-mt-md">
                         <strong>{{ pendencias|length }} campo(s) obrigatório(s) ausente(s)</strong>
                         <p>
-                            Acesse a ficha do paciente no Dental Office, corrija os campos indicados
-                            abaixo e reabra esta página — a sincronização ocorre automaticamente.
+                            Corrija os campos abaixo na ficha do Dental Office e recarregue — a
+                            sincronização ocorre automaticamente.
                         </p>
                     </div>
+                    <ul class="checklist-list">
+                        {% for item in checklist %}
+                            {% if item.status != "ok" %}
+                                <li class="checklist-item checklist-{{ item.status }}">
+                                    <span class="checklist-icon" aria-hidden="true">
+                                        {% if item.status == "pendente" %}
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ff9e9e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M18 6 6 18"/>
+                                                <path d="m6 6 12 12"/>
+                                            </svg>
+                                        {% else %}
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#92a1ba" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M12 16v-4"/>
+                                                <path d="M12 8h.01"/>
+                                            </svg>
+                                        {% endif %}
+                                    </span>
+                                    <div class="checklist-body">
+                                        <span class="checklist-label">{{ item.rotulo }}</span>
+                                        <span class="checklist-mensagem">{{ item.mensagem }}</span>
+                                    </div>
+                                    {% if not item.obrigatorio %}
+                                        <span class="checklist-badge-opcional">Opcional</span>
+                                    {% endif %}
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
                 {% else %}
-                    <div class="checklist-alert checklist-alert-ok" style="margin-bottom: 12px;">
+                    <div class="checklist-alert checklist-alert-ok">
                         <strong>Todos os dados obrigatórios estão preenchidos</strong>
                         <p>O contrato pode ser gerado.</p>
                     </div>
                 {% endif %}
-
-                <ul class="checklist-list">
-                    {% for item in checklist %}
-                        <li class="checklist-item checklist-{{ item.status }}">
-                            <span class="checklist-icon" aria-hidden="true">
-                                {% if item.status == "ok" %}
-                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5fe39a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M20 6 9 17l-5-5"/>
-                                    </svg>
-                                {% elif item.status == "pendente" %}
-                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ff9e9e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M18 6 6 18"/>
-                                        <path d="m6 6 12 12"/>
-                                    </svg>
-                                {% else %}
-                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#92a1ba" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <path d="M12 16v-4"/>
-                                        <path d="M12 8h.01"/>
-                                    </svg>
-                                {% endif %}
-                            </span>
-                            <div class="checklist-body">
-                                <span class="checklist-label">{{ item.rotulo }}</span>
-                                {% if item.status != "ok" %}
-                                    <span class="checklist-mensagem">{{ item.mensagem }}</span>
-                                {% endif %}
-                            </div>
-                            {% if not item.obrigatorio %}
-                                <span class="checklist-badge-opcional">Opcional</span>
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
             </div>
 
             {# ── Seção 3: Formulário de geração ──────────────────────── #}
             <div class="kpi-section">
-                <p class="section-label">Dados do profissional e do procedimento</p>
+                <p class="section-label">Modelo e profissional</p>
 
                 {% if gerado_bloqueado %}
-                    <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 16px;">
+                    <p class="gc-text-muted-sm" style="margin-bottom: 16px;">
                         Complete os dados do paciente no Dental Office para habilitar a geração.
                     </p>
                 {% endif %}
@@ -235,10 +290,10 @@
                     {% csrf_token %}
 
                     <div class="field field-required">
-                        <label for="id_tipo">Tipo de termo de consentimento</label>
+                        <label for="id_tipo">Modelo de documento</label>
                         <select id="id_tipo" name="tipo" required
                                 {% if gerado_bloqueado %}disabled{% endif %}>
-                            <option value="">— Selecione o procedimento —</option>
+                            <option value="">— Selecione o modelo —</option>
                             {% for codigo, nome in tipos_contrato %}
                                 <option value="{{ codigo }}">{{ nome }}</option>
                             {% endfor %}
@@ -268,19 +323,19 @@
                     </div>
 
                     <div class="field">
-                        <label for="id_obs">
-                            Observações clínicas
+                        <label for="id_email_paciente">
+                            E-mail para envio
                             <span class="field-optional">(opcional)</span>
                         </label>
-                        <textarea id="id_obs" name="observacoes_clinicas" rows="3"
-                                  placeholder="Informações adicionais relevantes para o procedimento..."
-                                  {% if gerado_bloqueado %}disabled{% endif %}></textarea>
+                        <input id="id_email_paciente" type="email" name="email_paciente"
+                               value="{{ paciente.email }}"
+                               placeholder="email@exemplo.com"
+                               {% if gerado_bloqueado %}disabled{% endif %}>
                     </div>
 
                     <div class="form-actions">
                         {% if gerado_bloqueado %}
-                            <button class="button primary" type="button" disabled
-                                    style="opacity: 0.45; cursor: not-allowed;">
+                            <button class="button primary gc-btn-disabled-look" type="button" disabled>
                                 Dados incompletos — geração bloqueada
                             </button>
                         {% else %}

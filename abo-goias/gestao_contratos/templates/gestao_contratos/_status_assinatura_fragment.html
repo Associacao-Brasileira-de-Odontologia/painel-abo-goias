@@ -1,0 +1,172 @@
+{% comment %}
+Fragmento de status da assinatura — servido tanto no carregamento inicial
+da pós-geração quanto pelo polling HTMX (contrato_status_assinatura_fragment).
+O elemento raiz só carrega hx-trigger enquanto o contrato aguarda
+assinatura; ao mudar de status, o polling para automaticamente.
+{% endcomment %}
+<div class="kpi-section" id="status-assinatura-section"
+     aria-live="polite" aria-atomic="true"
+     {% if poll_status_assinatura %}
+     hx-get="{% url 'contrato_status_assinatura_fragment' contrato.pk %}"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     {% endif %}>
+    <p class="section-label">Assinatura do paciente</p>
+
+    {% if contrato.status == "assinado" %}
+        <div class="checklist-alert checklist-alert-ok">
+            <strong>Contrato assinado pelo paciente</strong>
+            <p>A versão assinada está disponível para download e envio.</p>
+        </div>
+        <div class="form-actions gc-mt-md">
+            <a class="button gc-selar"
+               href="{% url 'contrato_baixar_assinado' contrato.pk %}">
+                Baixar contrato assinado (.pdf)
+            </a>
+        </div>
+
+        {% if carimbo_tempo_configurado %}
+            <div class="gc-mt-md">
+                {% if contrato.status_carimbo_tempo == "concluido" %}
+                    <span class="badge badge-devolvido gc-badge-sm">
+                        Carimbo de tempo obtido — {{ contrato.carimbo_tempo_em|date:"d/m/Y H:i" }}
+                    </span>
+                    <a class="button secondary compact-button gc-mt-sm gc-full-width"
+                       href="{% url 'contrato_baixar_carimbo_tempo' contrato.pk %}">
+                        Baixar carimbo de tempo (.tsr)
+                    </a>
+                {% else %}
+                    <span class="badge {% if contrato.status_carimbo_tempo == 'erro' %}badge-atrasado{% endif %} gc-badge-sm">
+                        {% if contrato.status_carimbo_tempo == "erro" %}
+                            Carimbo de tempo — falha ao obter
+                        {% else %}
+                            Carimbo de tempo — não solicitado
+                        {% endif %}
+                    </span>
+                    <form method="post"
+                          action="{% url 'contrato_solicitar_carimbo_tempo' contrato.pk %}"
+                          class="gc-mt-sm">
+                        {% csrf_token %}
+                        <button class="button secondary compact-button gc-full-width" type="submit">
+                            {% if contrato.status_carimbo_tempo == "erro" %}
+                                Tentar novamente
+                            {% else %}
+                                Solicitar carimbo de tempo
+                            {% endif %}
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% elif sessao_assinatura %}
+        {% if sessao_assinatura.terminal %}
+            <p class="panel-copy">
+                Assinatura enviada para o terminal
+                <strong>{{ sessao_assinatura.terminal.nome }}</strong> —
+                entregue o tablet ao paciente. A sessão expira em
+                <strong>{{ sessao_assinatura.expira_em|date:"H:i" }}</strong>.
+                Esta seção se atualiza automaticamente assim que ele assinar.
+            </p>
+            <form method="post"
+                  action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
+                  class="gc-mt-md">
+                {% csrf_token %}
+                <button class="button secondary compact-button" type="submit">
+                    Cancelar sessão de assinatura
+                </button>
+            </form>
+        {% else %}
+            <p class="panel-copy">
+                Peça ao paciente para escanear o QR Code abaixo com a câmera
+                do celular. A sessão expira em
+                <strong>{{ sessao_assinatura.expira_em|date:"H:i" }}</strong>.
+                Esta seção se atualiza automaticamente assim que ele assinar.
+            </p>
+            <div class="gc-row gc-mt-md">
+                <img src="{% url 'contrato_qr_assinatura' contrato.pk %}"
+                     alt="QR Code para assinatura"
+                     width="180" height="180"
+                     class="gc-qr-frame gc-qr-pulsando">
+                <div class="gc-col">
+                    <p class="section-label gc-mt-sm">
+                        Ou envie o link diretamente
+                    </p>
+                    <input type="text" readonly
+                           value="{{ link_assinatura }}"
+                           onclick="this.select();"
+                           class="gc-full-width gc-mono" style="font-size: 0.78rem;">
+                    <form method="post"
+                          action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
+                          class="gc-mt-md">
+                        {% csrf_token %}
+                        <button class="button secondary compact-button" type="submit">
+                            Cancelar sessão de assinatura
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <p class="panel-copy">
+            Gere um QR Code para o paciente assinar o contrato no
+            próprio celular ou tablet — sem login e sem baixar nada.
+        </p>
+        <form method="post"
+              action="{% url 'contrato_iniciar_assinatura' contrato.pk %}">
+            {% csrf_token %}
+            {% if terminais_disponiveis %}
+                <div class="field gc-mt-sm">
+                    <label for="id_terminal_pk">Onde o paciente vai assinar?</label>
+                    <select id="id_terminal_pk" name="terminal_pk">
+                        <option value="">QR Code (celular do paciente)</option>
+                        {% for terminal in terminais_disponiveis %}
+                            <option value="{{ terminal.pk }}">{{ terminal.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
+            <div class="field field-checkbox gc-mt-sm">
+                <label for="id_identidade_presencial_confirmada">
+                    <input type="checkbox" id="id_identidade_presencial_confirmada"
+                           name="identidade_presencial_confirmada" required>
+                    Confirmo que verifiquei presencialmente a identidade de
+                    {{ contrato.paciente.nome }} antes de iniciar a assinatura.
+                </label>
+            </div>
+            <div class="form-actions gc-mt-sm">
+                <button class="button gc-selar" type="submit">
+                    {% if terminais_disponiveis %}
+                        Iniciar assinatura
+                    {% else %}
+                        Gerar QR Code de assinatura
+                    {% endif %}
+                </button>
+            </div>
+        </form>
+    {% endif %}
+
+    {% if eventos_assinatura %}
+        <p class="section-label gc-mt-lg">Linha do tempo</p>
+        <ul class="checklist-list gc-mt-sm">
+            {% for evento in eventos_assinatura %}
+                <li class="checklist-item checklist-ok gc-timeline-item">
+                    <div class="checklist-body">
+                        <span class="checklist-label" style="font-size: 0.85rem;">
+                            {{ evento.get_tipo_display }}
+                        </span>
+                        <span class="checklist-mensagem">
+                            {{ evento.criado_em|date:"d/m/Y H:i:s" }}
+                            {% if evento.payload.erro %} — {{ evento.payload.erro }}{% endif %}
+                            {% if evento.payload.confirmado_como == "responsavel_legal" or evento.payload.assinado_como == "responsavel_legal" %}
+                                — responsável legal
+                            {% endif %}
+                            {% if evento.payload.confirmada_por %}
+                                — por {{ evento.payload.confirmada_por }}
+                            {% endif %}
+                        </span>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>

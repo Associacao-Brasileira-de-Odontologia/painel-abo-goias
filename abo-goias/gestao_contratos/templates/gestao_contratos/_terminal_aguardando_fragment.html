@@ -1,0 +1,19 @@
+{% comment %}
+Fragmento de espera do terminal — servido tanto no carregamento inicial
+(terminal_assinatura_view) quanto pelo polling HTMX (terminal_status_fragment).
+Quando uma sessão é encontrada, a view responde com o cabeçalho HX-Redirect
+em vez deste fragmento, e o navegador do tablet navega automaticamente
+para a assinatura — sem precisar de nenhum toque do paciente.
+{% endcomment %}
+<div id="terminal-aguardando"
+     hx-get="{% url 'terminal_status_fragment' terminal.token %}"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML">
+    <div class="icone gc-terminal-pulsando" aria-hidden="true">🖊️</div>
+    <h1>Aguardando o próximo atendimento</h1>
+    <p>
+        Este tablet está pronto para o paciente assinar. Assim que a
+        recepção enviar um contrato para <strong>{{ terminal.nome }}</strong>,
+        esta tela vai mudar automaticamente — não é preciso tocar em nada.
+    </p>
+</div>

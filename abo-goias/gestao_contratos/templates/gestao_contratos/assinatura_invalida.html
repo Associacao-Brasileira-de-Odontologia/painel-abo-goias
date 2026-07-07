@@ -1,0 +1,40 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Link indisponível — ABO Goiás</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/assinatura.css' %}">
+</head>
+<body class="tela-cheia">
+    <div class="card centro card-narrow">
+        <div class="icone">⚠️</div>
+        {% if motivo == "expirada" %}
+            <h1>Este link de assinatura expirou</h1>
+            <p>Por segurança, o link tem validade limitada.
+               Peça à recepção para gerar um novo QR Code.</p>
+        {% elif motivo == "ja_assinada" %}
+            <h1>Contrato já assinado</h1>
+            <p>Este documento já recebeu uma assinatura.
+               Se precisar de uma cópia, fale com a recepção.</p>
+        {% elif motivo == "cancelada" %}
+            <h1>Sessão de assinatura cancelada</h1>
+            <p>Esta sessão foi cancelada pela recepção.
+               Solicite um novo QR Code se ainda precisar assinar.</p>
+        {% elif motivo == "identidade_bloqueada" %}
+            <h1>Verificação de identidade bloqueada</h1>
+            <p>O número de tentativas para confirmar a data de nascimento
+               foi excedido. Por segurança, este link foi bloqueado — peça
+               à recepção para gerar um novo QR Code.</p>
+        {% else %}
+            <h1>Link de assinatura inválido</h1>
+            <p>O endereço acessado não corresponde a nenhuma sessão de
+               assinatura. Confira o QR Code e tente novamente.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

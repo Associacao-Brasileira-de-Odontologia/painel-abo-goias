@@ -1,0 +1,100 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Política de Privacidade — Assinatura Eletrônica — ABO Goiás</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/assinatura.css' %}">
+</head>
+<body>
+<div class="gc-wrap gc-wrap-larga">
+    <div class="card politica">
+        <p class="eyebrow">ABO Goiás — Assinatura eletrônica</p>
+        <h1>Política de Privacidade</h1>
+        <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+            Esta página explica, de forma simples, quais dados são
+            tratados quando você assina eletronicamente um termo de
+            consentimento pelo sistema da ABO Goiás — Associação
+            Brasileira de Odontologia, Seção Goiás.
+        </p>
+
+        <h2>Quem trata os seus dados</h2>
+        <p>
+            A ABO Goiás é a controladora dos dados pessoais tratados
+            neste fluxo de assinatura. As informações abaixo se aplicam
+            especificamente ao momento de leitura e assinatura do termo
+            de consentimento — não à integralidade dos sistemas da
+            associação.
+        </p>
+
+        <h2>Quais dados são coletados</h2>
+        <ul>
+            <li>Nome, data de nascimento, CPF/RG e endereço do paciente (ou do responsável legal, quando o paciente é menor de idade), já cadastrados previamente no Dental Office.</li>
+            <li>A imagem da sua assinatura, desenhada no próprio dispositivo.</li>
+            <li>Data, hora, endereço IP e informações do navegador/dispositivo usado para assinar.</li>
+            <li>O hash (impressão digital criptográfica) do documento assinado.</li>
+        </ul>
+
+        <h2>Para que esses dados são usados</h2>
+        <p>
+            Exclusivamente para viabilizar a assinatura eletrônica do
+            termo de consentimento, comprovar quem assinou e que o
+            documento não foi alterado depois de assinado, e cumprir a
+            obrigação legal de manter o registro do consentimento
+            informado em procedimentos de saúde. A base legal é o
+            cumprimento de obrigação legal/regulatória e a tutela da
+            saúde (art. 7º e art. 11 da Lei 13.709/2018 — LGPD); os dados
+            técnicos de auditoria (IP, dispositivo) têm base no legítimo
+            interesse de comprovar a autenticidade da assinatura.
+        </p>
+
+        <h2>Com quem os dados são compartilhados</h2>
+        <ul>
+            <li><strong>Dental Office</strong> — sistema de prontuário/gestão da clínica, para onde o documento assinado é enviado.</li>
+            <li><strong>Meta (WhatsApp Business Cloud API)</strong> — usada apenas para enviar a você uma cópia em PDF do documento assinado, quando há celular cadastrado.</li>
+            <li><strong>Autoridade de carimbo do tempo</strong> — recebe apenas o hash do documento (não o conteúdo do documento nem seus dados pessoais) para emitir uma prova independente de data/hora.</li>
+        </ul>
+
+        <h2>Por quanto tempo os dados ficam guardados</h2>
+        <p>
+            Pelo prazo necessário ao cumprimento da finalidade acima e da
+            obrigação legal aplicável, observado o prazo de prescrição da
+            responsabilidade civil previsto no Código Civil — ou seja,
+            os dados de auditoria da assinatura são mantidos enquanto o
+            documento assinado puder ser exigido como prova.
+        </p>
+
+        <h2>Como os dados são protegidos</h2>
+        <p>
+            O link de assinatura é de uso único, expira automaticamente e
+            é protegido contra adulteração. A identidade de quem assina é
+            confirmada antes da liberação da assinatura, e o documento
+            assinado é protegido por hash criptográfico (SHA-256) que
+            permite detectar qualquer alteração posterior.
+        </p>
+
+        <h2>Seus direitos</h2>
+        <p>
+            Nos termos da LGPD, você pode solicitar a qualquer momento a
+            confirmação de que tratamos seus dados, acesso a eles, a
+            correção de dados incompletos ou desatualizados, informações
+            sobre o compartilhamento com terceiros, e a eliminação dos
+            dados quando o tratamento não for mais necessário.
+        </p>
+
+        <h2>Contato</h2>
+        <p>
+            Para exercer esses direitos ou tirar dúvidas sobre esta
+            política, entre em contato com o encarregado de dados da
+            ABO Goiás em [e-mail ou telefone do encarregado de dados —
+            a preencher].
+        </p>
+
+        <p class="rodape">Última atualização: julho de 2026.</p>
+    </div>
+</div>
+</body>
+</html>

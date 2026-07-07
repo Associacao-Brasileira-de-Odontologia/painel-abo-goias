@@ -32,7 +32,7 @@ def gerar_checklist(paciente: "Paciente") -> list[ItemChecklist]:
     O responsável legal só é obrigatório se o paciente for menor de 18 anos.
     """
 
-    menor = _eh_menor_de_idade(paciente.data_nascimento)
+    menor = eh_menor_de_idade(paciente.data_nascimento)
     documento = _formatar_documento(paciente)
     endereco = _formatar_endereco_resumido(paciente)
 
@@ -137,7 +137,7 @@ def _formatar_data(d: date | None) -> str:
     return d.strftime("%d/%m/%Y") if d else ""
 
 
-def _eh_menor_de_idade(data_nascimento: date | None) -> bool | None:
+def eh_menor_de_idade(data_nascimento: date | None) -> bool | None:
     """Retorna True se menor de 18 anos, False se maior, None se data desconhecida."""
 
     if data_nascimento is None:

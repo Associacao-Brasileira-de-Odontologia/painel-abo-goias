@@ -1,5 +1,6 @@
 ﻿import importlib.util
 import os
+import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
@@ -114,6 +115,18 @@ def _database_config() -> dict[str, dict]:
                 "PORT": _env("PGPORT", "5432"),
             }
         }
+
+    if not _env_bool("DJANGO_DEBUG", True):
+        raise ImproperlyConfigured(
+            "Nenhum banco de dados persistente configurado (DATABASE_URL, "
+            "DB_ENGINE ou PGDATABASE) com DJANGO_DEBUG=false. Em produção "
+            "isso cairia silenciosamente num SQLite local, que é apagado a "
+            "cada reinício do container (filesystem efêmero no Railway) — "
+            "resultando em erros como 'no such table: django_session' assim "
+            "que o container reinicia. Configure DATABASE_URL apontando "
+            "para um banco persistente (ex.: o plugin PostgreSQL do "
+            "Railway, conectado a este serviço)."
+        )
 
     return {
         "default": {
@@ -250,6 +263,9 @@ STATIC_URL = "static/"
 STATIC_ROOT = _env("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles"))
 STATICFILES_DIRS = []
 
+MEDIA_ROOT = Path(_env("DJANGO_MEDIA_ROOT", str(BASE_DIR)))
+MEDIA_URL = "/media/"
+
 if importlib.util.find_spec("whitenoise"):
     STORAGES = {
         "default": {
@@ -264,16 +280,35 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"
 
-EMAIL_BACKEND = _env(
-    "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+EMAIL_HOST = _env("EMAIL_HOST") or _env("DJANGO_EMAIL_HOST")
+EMAIL_PORT = _env_int("EMAIL_PORT", 0) or _env_int("DJANGO_EMAIL_PORT", 587)
+EMAIL_HOST_USER = _env("EMAIL_HOST_USER") or _env("DJANGO_EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = _env("EMAIL_HOST_PASSWORD") or _env("DJANGO_EMAIL_HOST_PASSWORD")
+EMAIL_USE_TLS = (
+    _env_bool("EMAIL_USE_TLS", True)
+    if _env("EMAIL_USE_TLS")
+    else _env_bool("DJANGO_EMAIL_USE_TLS", True)
 )
-DEFAULT_FROM_EMAIL = _env("DJANGO_DEFAULT_FROM_EMAIL", "noreply@abogoias.local")
-EMAIL_HOST = _env("DJANGO_EMAIL_HOST")
-EMAIL_PORT = _env_int("DJANGO_EMAIL_PORT", 587)
-EMAIL_HOST_USER = _env("DJANGO_EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = _env("DJANGO_EMAIL_HOST_PASSWORD")
-EMAIL_USE_TLS = _env_bool("DJANGO_EMAIL_USE_TLS", True)
-EMAIL_USE_SSL = _env_bool("DJANGO_EMAIL_USE_SSL", False)
+EMAIL_USE_SSL = (
+    _env_bool("EMAIL_USE_SSL", False)
+    if _env("EMAIL_USE_SSL")
+    else _env_bool("DJANGO_EMAIL_USE_SSL", False)
+)
+DEFAULT_FROM_EMAIL = (
+    _env("DEFAULT_FROM_EMAIL")
+    or _env("DJANGO_DEFAULT_FROM_EMAIL")
+    or "noreply@abogoias.local"
+)
+
+# Usa SMTP automaticamente quando EMAIL_HOST estiver definido; console em DEBUG
+if _env("DJANGO_EMAIL_BACKEND"):
+    EMAIL_BACKEND = _env("DJANGO_EMAIL_BACKEND")
+elif EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+elif DEBUG:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 CSRF_TRUSTED_ORIGINS = _env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
@@ -354,4 +389,45 @@ EDUQ_USE_PROXY = os.environ.get("EDUQ_USE_PROXY", "").strip().lower() in {
     "yes",
     "sim",
     "on",
+}
+
+# ──────────────────────────────────────────────────────────────────────────
+# Celery — processamento assíncrono (envio ao Dental Office, limpeza de
+# sessões de assinatura vencidas). Broker e result backend usam Redis;
+# REDIS_URL é preenchida automaticamente pelo plugin Redis do Railway.
+# ──────────────────────────────────────────────────────────────────────────
+TESTING = "test" in sys.argv or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+CELERY_BROKER_URL = _env("CELERY_BROKER_URL") or _env(
+    "REDIS_URL", "redis://localhost:6379/0"
+)
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+# Só confirma a tarefa ao worker depois de concluída — uma queda do processo
+# no meio da execução devolve a tarefa para a fila em vez de perdê-la.
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 200
+
+# Em testes, executa as tarefas de forma síncrona e imediata, sem exigir um
+# broker Redis rodando — mantém a suíte determinística e independente de infra.
+# CELERY_TASK_EAGER_PROPAGATES fica no padrão (False) de propósito: .delay()
+# é fire-and-forget tanto em produção quanto em teste — uma falha dentro da
+# tarefa nunca deve estourar no código que a disparou.
+#
+# Fora dos testes, o mesmo modo pode ser ligado via CELERY_TASK_ALWAYS_EAGER=true
+# no .env — útil para rodar o servidor de desenvolvimento (runserver) sem
+# precisar de um Redis local. Em produção (Railway) essa variável deve ficar
+# ausente, para que as tarefas realmente rodem no worker dedicado.
+if TESTING or _env_bool("CELERY_TASK_ALWAYS_EAGER", False):
+    CELERY_TASK_ALWAYS_EAGER = True
+
+CELERY_BEAT_SCHEDULE = {
+    "expirar-sessoes-assinatura-vencidas": {
+        "task": "gestao_contratos.tasks.expirar_sessoes_vencidas_task",
+        "schedule": 300.0,  # a cada 5 minutos
+    },
 }

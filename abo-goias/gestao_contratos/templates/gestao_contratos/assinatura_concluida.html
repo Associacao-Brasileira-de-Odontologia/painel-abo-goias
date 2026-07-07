@@ -1,0 +1,46 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Assinatura concluída — ABO Goiás</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/assinatura.css' %}">
+    {% if sessao.terminal %}
+        <meta http-equiv="refresh" content="8;url={% url 'terminal_assinatura' sessao.terminal.token %}">
+    {% endif %}
+</head>
+<body class="tela-cheia">
+    <div class="card centro card-narrow">
+        <div class="icone-sucesso" aria-hidden="true">✅</div>
+        <h1 class="titulo-sucesso">Assinatura registrada com sucesso!</h1>
+        {% if sessao.assinado_por_responsavel %}
+            <p>
+                Obrigado. A assinatura do responsável legal
+                ({{ paciente.nome_responsavel }}) para o termo de
+                consentimento ({{ contrato.get_tipo_display }}) de
+                {{ paciente.nome }} foi registrada e salva com sucesso.
+            </p>
+        {% else %}
+            <p>
+                Obrigado, {{ paciente.nome }}. O termo de consentimento
+                ({{ contrato.get_tipo_display }}) foi assinado e salvo.
+            </p>
+        {% endif %}
+        {% if sessao.terminal %}
+            <p class="mt-sm">
+                Pode devolver o tablet à recepção — esta tela volta a
+                ficar pronta para o próximo atendimento em alguns segundos.
+            </p>
+        {% else %}
+            <p class="mt-sm">
+                Você já pode fechar esta página. A recepção dará continuidade
+                ao atendimento.
+            </p>
+        {% endif %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,313 @@
+/*
+ * Gestão de Contratos — camada visual própria da app.
+ *
+ * Tudo aqui é escopado em `body.gestao-contratos` (declarado via
+ * {% block body_class %} nos templates que estendem gestao_cme/base.html).
+ * Isso garante que NADA aqui vaza para as demais apps do sistema, que
+ * continuam usando exclusivamente gestao_cme/static/gestao_cme/css/home.css.
+ *
+ * Conceito: "Termo & Selo" — documento legal + precisão clínica. O
+ * dourado-tinta (--gc-ink) é reservado para o momento da assinatura;
+ * o resto da interface continua usando os tokens semânticos do sistema
+ * (azul = navegação/ação, verde/vermelho = sucesso/erro).
+ */
+
+body.gestao-contratos {
+    /* ── Tokens próprios da app ──────────────────────────────────── */
+    --gc-ink: #e0a855;
+    --gc-ink-dark: #a8701f;
+    --gc-ink-soft: rgba(224, 168, 85, 0.16);
+    --gc-ink-line: rgba(224, 168, 85, 0.4);
+    --accent: var(--blue); /* corrige --accent nunca declarada em home.css */
+
+    /* fontes desta camada — DM Sans do home.css permanece para corpo de texto */
+    --gc-serif: "Fraunces", "Syne", Georgia, serif;
+    --gc-mono: "IBM Plex Mono", "Courier New", monospace;
+}
+
+/* ══ Fontes — carregadas só quando esta classe está presente ═══════ */
+/* (o <link> do Google Fonts fica no template, via extra_css; aqui só
+   as regras de uso, para o arquivo continuar autocontido em intenção) */
+
+body.gestao-contratos h1,
+body.gestao-contratos h2,
+body.gestao-contratos h3 {
+    font-family: var(--gc-serif);
+    font-optical-sizing: auto;
+}
+
+body.gestao-contratos h3 {
+    font-weight: 700;
+    font-size: 1.2rem;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin: 0 0 12px;
+}
+
+body.gestao-contratos .eyebrow,
+body.gestao-contratos .section-label {
+    font-family: var(--gc-mono);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+}
+
+/* Dados estruturados (documentos/CPF/datas/valores) em mono — reforça
+   a leitura "documento oficial". Aplicar via class="gc-mono". */
+.gc-mono,
+body.gestao-contratos .info-chip strong,
+body.gestao-contratos .checklist-valor,
+body.gestao-contratos .checklist-mensagem,
+body.gestao-contratos .cell-muted,
+body.gestao-contratos .sync-date,
+body.gestao-contratos td {
+    font-family: var(--gc-mono);
+}
+
+/* ══ Atmosfera — grade de pontos sutil sobre os painéis ════════════ */
+
+body.gestao-contratos .panel {
+    position: relative;
+    isolation: isolate;
+}
+
+body.gestao-contratos .panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(224, 168, 85, 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.55;
+}
+
+body.gestao-contratos .panel > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* ══ Foco visível — cobre a lacuna do sistema base (só inputs tinham) ═ */
+
+body.gestao-contratos a:focus-visible,
+body.gestao-contratos button:focus-visible,
+body.gestao-contratos .button:focus-visible,
+body.gestao-contratos .side-link:focus-visible,
+body.gestao-contratos .icon-action:focus-visible,
+body.gestao-contratos input:focus-visible,
+body.gestao-contratos select:focus-visible,
+body.gestao-contratos textarea:focus-visible {
+    outline: 3px solid var(--gc-ink);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+/* ══ Acento de assinatura — só nos pontos-chave do ritual ══════════ */
+
+body.gestao-contratos .button.gc-selar {
+    background: linear-gradient(135deg, var(--gc-ink), var(--gc-ink-dark));
+    box-shadow: 0 18px 42px rgba(224, 168, 85, 0.28);
+    color: #1c1204;
+}
+
+body.gestao-contratos .button.gc-selar:hover {
+    box-shadow: 0 22px 50px rgba(224, 168, 85, 0.4);
+}
+
+body.gestao-contratos .badge.gc-selo {
+    background: var(--gc-ink-soft);
+    color: var(--gc-ink);
+    border: 1px solid var(--gc-ink-line);
+}
+
+/* ══ Utilitários — substituem os style= inline dos templates ══════ */
+
+.gc-row {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.gc-row-tight {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.gc-col {
+    flex: 1;
+    min-width: 240px;
+}
+
+.gc-mt-sm { margin-top: 6px; }
+.gc-mt-md { margin-top: 12px; }
+.gc-mt-lg { margin-top: 18px; }
+
+.gc-flex-2 { flex: 2; }
+.gc-flex-1 { flex: 1; }
+
+.gc-text-muted-sm {
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.gc-danger-chip {
+    border-color: rgba(255, 100, 100, 0.3) !important;
+}
+
+.gc-danger-text {
+    color: #ff9e9e !important;
+}
+
+.gc-full-width {
+    width: 100%;
+}
+
+.gc-hidden {
+    display: none;
+}
+
+.gc-badge-sm {
+    font-size: 11px;
+}
+
+/* Variantes de .contrato-form-row (home.css) para linhas com proporções
+   diferentes — a versão anterior usava style="flex:" em filhos de um
+   grid, o que não tem efeito nenhum (flex não atua em item de grid). */
+.gc-row-logradouro {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.gc-row-endereco-3 {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    .gc-row-logradouro,
+    .gc-row-endereco-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.gc-btn-disabled-look {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.gc-btn-sm {
+    font-size: 0.75rem;
+}
+
+.gc-historico-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding-bottom: 10px;
+}
+
+.gc-historico-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.gc-timeline-item {
+    padding: 8px 10px;
+}
+
+.gc-qr-frame {
+    border-radius: 14px;
+    background: #fff;
+    padding: 10px;
+    box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 34px rgba(224, 168, 85, 0.22);
+}
+
+/* ══ Movimento ══════════════════════════════════════════════════── */
+
+@keyframes gc-rise-in {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gc-check-draw {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes gc-qr-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 24px rgba(224, 168, 85, 0.18); }
+    50% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 46px rgba(224, 168, 85, 0.4); }
+}
+
+/* Entrada escalonada — só no carregamento inicial da página, nunca no
+   fragmento de polling (evita reanimar a cada 3s). */
+body.gestao-contratos .config-panel,
+body.gestao-contratos .results-panel > .results-topbar,
+body.gestao-contratos .results-panel > .kpi-section,
+body.gestao-contratos .results-panel > .messages,
+body.gestao-contratos .results-panel > .results-search,
+body.gestao-contratos .results-panel > .selection-summary,
+body.gestao-contratos .results-panel > .table-wrap {
+    animation: gc-rise-in 0.5s ease both;
+}
+
+body.gestao-contratos .config-panel { animation-delay: 0s; }
+body.gestao-contratos .results-panel > *:nth-child(1) { animation-delay: 0.04s; }
+body.gestao-contratos .results-panel > *:nth-child(2) { animation-delay: 0.09s; }
+body.gestao-contratos .results-panel > *:nth-child(3) { animation-delay: 0.14s; }
+body.gestao-contratos .results-panel > *:nth-child(4) { animation-delay: 0.19s; }
+body.gestao-contratos .results-panel > *:nth-child(5) { animation-delay: 0.24s; }
+body.gestao-contratos .results-panel > *:nth-child(6) { animation-delay: 0.29s; }
+body.gestao-contratos .results-panel > *:nth-child(n+7) { animation-delay: 0.32s; }
+
+/* O fragmento de status é trocado via HTMX a cada 3s — nunca animar sua
+   entrada como "novidade", exceto o glow contínuo do QR (abaixo). */
+body.gestao-contratos #status-assinatura-section {
+    animation: none;
+}
+
+/* "Check" que se desenha — usado sempre que um item de checklist com
+   status ok for renderizado individualmente (hoje a tela de geração só
+   lista os pendentes; deixado pronto para outras telas do checklist). */
+body.gestao-contratos .checklist-item.checklist-ok .checklist-icon svg {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: gc-check-draw 0.4s ease forwards;
+}
+
+/* Entrada escalonada dos itens da checklist realmente exibidos hoje
+   (pendências/opcionais quando a geração está bloqueada). */
+body.gestao-contratos .checklist-list .checklist-item {
+    animation: gc-rise-in 0.35s ease both;
+}
+
+body.gestao-contratos .checklist-list .checklist-item:nth-child(1) { animation-delay: 0.05s; }
+body.gestao-contratos .checklist-list .checklist-item:nth-child(2) { animation-delay: 0.1s; }
+body.gestao-contratos .checklist-list .checklist-item:nth-child(3) { animation-delay: 0.15s; }
+body.gestao-contratos .checklist-list .checklist-item:nth-child(4) { animation-delay: 0.2s; }
+body.gestao-contratos .checklist-list .checklist-item:nth-child(5) { animation-delay: 0.25s; }
+body.gestao-contratos .checklist-list .checklist-item:nth-child(n+6) { animation-delay: 0.3s; }
+
+.gc-qr-pulsando {
+    animation: gc-qr-pulse 2.6s ease-in-out infinite;
+}
+
+/* ══ Acessibilidade de movimento ════════════════════════════════── */
+
+@media (prefers-reduced-motion: reduce) {
+    body.gestao-contratos * {
+        animation-duration: 0.001ms !important;
+        animation-delay: 0s !important;
+        transition-duration: 0.001ms !important;
+    }
+    body.gestao-contratos .checklist-item.checklist-ok .checklist-icon svg {
+        stroke-dashoffset: 0;
+    }
+}

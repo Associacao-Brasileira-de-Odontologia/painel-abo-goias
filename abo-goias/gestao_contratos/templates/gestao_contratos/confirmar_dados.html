@@ -1,0 +1,206 @@
+{% extends "gestao_cme/base.html" %}
+{% load static %}
+
+{% block title %}Confirmar Dados — {{ paciente.nome }}{% endblock %}
+{% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
+{% block header_title %}Confirmar Dados{% endblock %}
+{% block body_class %}gestao-contratos{% endblock %}
+
+{% block extra_css %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/contratos.css' %}">
+{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+    <div class="layout-grid">
+
+        {# ── Barra lateral ──────────────────────────────────────────── #}
+        <aside class="panel config-panel">
+            <p class="section-label">Paciente</p>
+            <h2>{{ paciente.nome }}</h2>
+
+            <nav class="side-nav" aria-label="Navegação de contratos">
+                <a class="side-link active" href="#">
+                    <span class="side-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 6 9 17l-5-5"/>
+                        </svg>
+                    </span>
+                    <span>Confirmar dados</span>
+                </a>
+                <a class="side-link side-link-return" href="{% url 'contratos' %}">
+                    <span class="side-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 12H5"/>
+                            <path d="m12 19-7-7 7-7"/>
+                        </svg>
+                    </span>
+                    <span>Voltar à lista</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-section gc-mt-lg">
+                <p class="section-label">Sincronização</p>
+                {% if paciente.ultima_sincronizacao %}
+                    <p class="panel-copy gc-text-muted-sm">
+                        Dados do Dental Office obtidos em
+                        {{ paciente.ultima_sincronizacao|date:"d/m/Y H:i" }}.
+                    </p>
+                {% else %}
+                    <p class="panel-copy gc-text-muted-sm">
+                        Paciente ainda não sincronizado com o Dental Office.
+                    </p>
+                {% endif %}
+                <a class="button secondary compact-button gc-full-width gc-mt-md"
+                   href="{% url 'contrato_confirmar_dados' paciente.pk %}?sincronizar=1">
+                    Atualizar do Dental Office
+                </a>
+            </div>
+        </aside>
+
+        {# ── Painel principal ──────────────────────────────────────── #}
+        <section class="panel results-panel">
+
+            <div class="results-topbar">
+                <div class="gc-row-tight">
+                    {% if paciente.dados_confirmados %}
+                        <span class="badge badge-devolvido">
+                            Confirmados em {{ paciente.dados_confirmados_em|date:"d/m/Y H:i" }}
+                        </span>
+                    {% else %}
+                        <span class="badge badge-atrasado">Aguardando confirmação</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="kpi-section">
+                <p class="section-label">Revise e confirme os dados do paciente</p>
+                <p class="panel-copy gc-mt-md" style="margin-bottom: 16px;">
+                    Os campos abaixo preencherão o contrato. Corrija o que for
+                    necessário e clique em <strong>Confirmar dados</strong> para
+                    liberar a geração. O convênio é um dado local — não vem do
+                    Dental Office.
+                </p>
+
+                <form class="form-stack-wide" method="post">
+                    {% csrf_token %}
+
+                    <div class="field field-required">
+                        <label for="{{ form.nome.id_for_label }}">Nome completo</label>
+                        {{ form.nome }}
+                        {{ form.nome.errors }}
+                    </div>
+
+                    <div class="contrato-form-row">
+                        <div class="field">
+                            <label for="{{ form.cpf.id_for_label }}">CPF</label>
+                            {{ form.cpf }}
+                            {{ form.cpf.errors }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.rg.id_for_label }}">RG</label>
+                            {{ form.rg }}
+                            {{ form.rg.errors }}
+                        </div>
+                    </div>
+
+                    <div class="contrato-form-row">
+                        <div class="field">
+                            <label for="{{ form.data_nascimento.id_for_label }}">Data de nascimento</label>
+                            {{ form.data_nascimento }}
+                            {{ form.data_nascimento.errors }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.celular.id_for_label }}">Celular</label>
+                            {{ form.celular }}
+                            {{ form.celular.errors }}
+                        </div>
+                    </div>
+
+                    <div class="contrato-form-row">
+                        <div class="field">
+                            <label for="{{ form.email.id_for_label }}">E-mail</label>
+                            {{ form.email }}
+                            {{ form.email.errors }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.convenio.id_for_label }}">
+                                Convênio
+                                <span class="field-optional">(dado local)</span>
+                            </label>
+                            {{ form.convenio }}
+                            {{ form.convenio.errors }}
+                        </div>
+                    </div>
+
+                    <p class="section-label gc-mt-sm">Endereço</p>
+
+                    <div class="gc-row-logradouro">
+                        <div class="field">
+                            <label for="{{ form.endereco_logradouro.id_for_label }}">Logradouro</label>
+                            {{ form.endereco_logradouro }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.endereco_numero.id_for_label }}">Número</label>
+                            {{ form.endereco_numero }}
+                        </div>
+                    </div>
+
+                    <div class="contrato-form-row">
+                        <div class="field">
+                            <label for="{{ form.endereco_complemento.id_for_label }}">Complemento</label>
+                            {{ form.endereco_complemento }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.endereco_bairro.id_for_label }}">Bairro</label>
+                            {{ form.endereco_bairro }}
+                        </div>
+                    </div>
+
+                    <div class="gc-row-endereco-3">
+                        <div class="field">
+                            <label for="{{ form.endereco_cidade.id_for_label }}">Cidade</label>
+                            {{ form.endereco_cidade }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.endereco_estado.id_for_label }}">UF</label>
+                            {{ form.endereco_estado }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.endereco_cep.id_for_label }}">CEP</label>
+                            {{ form.endereco_cep }}
+                        </div>
+                    </div>
+
+                    <p class="section-label gc-mt-sm">
+                        Responsável legal
+                        <span class="field-optional">(obrigatório para menores de 18 anos)</span>
+                    </p>
+
+                    <div class="contrato-form-row">
+                        <div class="field">
+                            <label for="{{ form.nome_responsavel.id_for_label }}">Nome</label>
+                            {{ form.nome_responsavel }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ form.cpf_responsavel.id_for_label }}">CPF</label>
+                            {{ form.cpf_responsavel }}
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="button primary" type="submit">
+                            Confirmar dados e continuar
+                        </button>
+                        <a class="button secondary" href="{% url 'contratos' %}">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+
+        </section>
+    </div>
+</main>
+{% endblock %}

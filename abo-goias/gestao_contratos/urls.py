@@ -1,9 +1,67 @@
 from django.urls import path
 
-from . import views
+from . import views, views_assinatura, views_terminal
 
 urlpatterns = [
+    # ── Assinatura remota — público (paciente, via QR Code) ────────────
+    path(
+        "assinar/<str:token>/",
+        views_assinatura.assinar_view,
+        name="assinatura_publica",
+    ),
+    path(
+        "assinar/<str:token>/pdf/",
+        views_assinatura.assinar_pdf_view,
+        name="assinatura_publica_pdf",
+    ),
+    path(
+        "politica-privacidade/",
+        views_assinatura.politica_privacidade_view,
+        name="contratos_politica_privacidade",
+    ),
+    # ── Terminal de assinatura dedicado (ex.: tablet da recepção) ───────
+    path(
+        "terminal/<str:token>/",
+        views_terminal.terminal_assinatura_view,
+        name="terminal_assinatura",
+    ),
+    path(
+        "terminal/<str:token>/status/",
+        views_terminal.terminal_status_fragment_view,
+        name="terminal_status_fragment",
+    ),
+    # ── Assinatura remota — staff ───────────────────────────────────────
+    path(
+        "contrato/<int:contrato_pk>/status-assinatura/",
+        views_assinatura.status_assinatura_fragment_view,
+        name="contrato_status_assinatura_fragment",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/iniciar-assinatura/",
+        views_assinatura.iniciar_assinatura_view,
+        name="contrato_iniciar_assinatura",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/cancelar-assinatura/",
+        views_assinatura.cancelar_assinatura_view,
+        name="contrato_cancelar_assinatura",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/qr-assinatura/",
+        views_assinatura.qr_assinatura_view,
+        name="contrato_qr_assinatura",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/baixar-assinado/",
+        views_assinatura.baixar_contrato_assinado_view,
+        name="contrato_baixar_assinado",
+    ),
     path("", views.contratos, name="contratos"),
+    path(
+        "paciente/<int:paciente_pk>/confirmar-dados/",
+        views.confirmar_dados_view,
+        name="contrato_confirmar_dados",
+    ),
     path(
         "paciente/<int:paciente_pk>/gerar/",
         views.gerar_contrato_view,
@@ -13,5 +71,45 @@ urlpatterns = [
         "importar/<str:id_dental>/",
         views.importar_e_gerar,
         name="contrato_importar",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/enviar-dental/",
+        views.enviar_ao_dental_view,
+        name="contrato_enviar_dental",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/carimbo-tempo/solicitar/",
+        views.solicitar_carimbo_tempo_view,
+        name="contrato_solicitar_carimbo_tempo",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/carimbo-tempo/baixar/",
+        views.baixar_carimbo_tempo_view,
+        name="contrato_baixar_carimbo_tempo",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/pos-geracao/",
+        views.pos_geracao_view,
+        name="contrato_pos_geracao",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/baixar/",
+        views.baixar_contrato_view,
+        name="contrato_baixar",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/baixar-pdf/",
+        views.baixar_contrato_pdf_view,
+        name="contrato_baixar_pdf",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/enviar-email/",
+        views.enviar_email_view,
+        name="contrato_enviar_email",
+    ),
+    path(
+        "contrato/<int:contrato_pk>/whatsapp-status/",
+        views.whatsapp_status_view,
+        name="contrato_whatsapp_status",
     ),
 ]
