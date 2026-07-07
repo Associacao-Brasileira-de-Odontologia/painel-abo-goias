@@ -116,6 +116,18 @@ def _database_config() -> dict[str, dict]:
             }
         }
 
+    if not _env_bool("DJANGO_DEBUG", True):
+        raise ImproperlyConfigured(
+            "Nenhum banco de dados persistente configurado (DATABASE_URL, "
+            "DB_ENGINE ou PGDATABASE) com DJANGO_DEBUG=false. Em produção "
+            "isso cairia silenciosamente num SQLite local, que é apagado a "
+            "cada reinício do container (filesystem efêmero no Railway) — "
+            "resultando em erros como 'no such table: django_session' assim "
+            "que o container reinicia. Configure DATABASE_URL apontando "
+            "para um banco persistente (ex.: o plugin PostgreSQL do "
+            "Railway, conectado a este serviço)."
+        )
+
     return {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
