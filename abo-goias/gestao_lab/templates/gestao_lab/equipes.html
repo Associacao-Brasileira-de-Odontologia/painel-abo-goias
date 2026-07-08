@@ -31,28 +31,27 @@
                 </div>
             </div>
 
-            <form class="results-search" method="get">
-                <label class="search-label" for="results-q-equipes">Buscar na listagem</label>
-                <div class="results-search-row">
-                    <div class="search-control">
-                        <input id="results-q-equipes" type="search" name="q" value="{{ busca }}" placeholder="Buscar por nome ou coordenador...">
-                    </div>
-                    <button class="button primary" type="submit">Buscar</button>
-                    <a class="button secondary" href="{% url 'lab_equipes' %}">Limpar</a>
+            <form class="filter-bar" method="get">
+                <div class="search-control">
+                    <input id="results-q-equipes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome ou coordenador..." aria-label="Buscar na listagem">
                 </div>
+                <button class="button primary" type="submit">Buscar</button>
             </form>
 
-            <div class="selection-summary">
-                {% if busca %}
-                    <div class="info-chip">
+            {% if busca %}
+                <div class="selection-summary">
+                    <a class="info-chip info-chip--removable"
+                       href="{% url 'lab_equipes' %}"
+                       title="Remover busca">
                         <span>Busca</span>
                         <strong>{{ busca }}</strong>
-                    </div>
-                {% endif %}
-                <div class="info-chip">
-                    <span>Resultado</span>
-                    <strong>{{ page_obj.paginator.count }} equipe(s)</strong>
+                        <span class="chip-x" aria-hidden="true">×</span>
+                    </a>
                 </div>
+            {% endif %}
+
+            <div class="results-meta">
+                <span><strong>{{ page_obj.paginator.count }}</strong> equipe{{ page_obj.paginator.count|pluralize }}</span>
             </div>
 
             <div class="table-wrap data-table-wrap">

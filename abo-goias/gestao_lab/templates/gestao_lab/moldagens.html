@@ -13,23 +13,6 @@
 
             {% include "gestao_lab/partials/menu_lab.html" with active_page="moldagens" %}
 
-            <form class="form-stack" method="get">
-                {% if busca %}
-                    <input type="hidden" name="q" value="{{ busca }}">
-                {% endif %}
-                <div class="field">
-                    <label for="filtro">Filtrar por</label>
-                    <select id="filtro" name="filtro">
-                        <option value="">Todos</option>
-                        {% for valor, rotulo in filtro_opcoes %}
-                            <option value="{{ valor }}" {% if filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <button class="button primary update-first" type="submit">Aplicar filtro</button>
-                <a class="button secondary" href="{% url 'lab_moldagens' %}">Limpar filtros</a>
-            </form>
-
             <div class="metric-grid">
                 <div class="metric-card">
                     <span class="metric-label">Total</span>
@@ -60,37 +43,48 @@
                 </div>
             </div>
 
-            <form class="results-search" method="get">
-                {% if filtro %}
-                    <input type="hidden" name="filtro" value="{{ filtro }}">
-                {% endif %}
-                <label class="search-label" for="results-q-mol">Buscar na listagem</label>
-                <div class="results-search-row">
-                    <div class="search-control">
-                        <input id="results-q-mol" type="search" name="q" value="{{ busca }}" placeholder="Buscar por paciente ou aluno...">
-                    </div>
-                    <button class="button primary" type="submit">Buscar</button>
-                    <a class="button secondary" href="{% url 'lab_moldagens' %}">Limpar</a>
+            <form class="filter-bar" method="get">
+                <div class="search-control">
+                    <input id="results-q-mol" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por paciente ou aluno..." aria-label="Buscar na listagem">
                 </div>
+                <select name="filtro" aria-label="Filtrar moldagens" onchange="this.form.submit()">
+                    <option value="">Situação — todas</option>
+                    {% for valor, rotulo in filtro_opcoes %}
+                        <option value="{{ valor }}" {% if filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
+                    {% endfor %}
+                </select>
+                <button class="button primary" type="submit">Buscar</button>
             </form>
 
-            <div class="selection-summary">
-                {% if busca %}
-                    <div class="info-chip">
-                        <span>Busca</span>
-                        <strong>{{ busca }}</strong>
-                    </div>
-                {% endif %}
-                {% if filtro %}
-                    <div class="info-chip">
-                        <span>Filtro</span>
-                        <strong>{{ filtro }}</strong>
-                    </div>
-                {% endif %}
-                <div class="info-chip">
-                    <span>Resultado</span>
-                    <strong>{{ page_obj.paginator.count }} moldagem(ns)</strong>
+            {% if busca or filtro %}
+                <div class="selection-summary">
+                    {% if busca %}
+                        <a class="info-chip info-chip--removable"
+                           href="?{% if filtro %}filtro={{ filtro }}{% endif %}"
+                           title="Remover busca">
+                            <span>Busca</span>
+                            <strong>{{ busca }}</strong>
+                            <span class="chip-x" aria-hidden="true">×</span>
+                        </a>
+                    {% endif %}
+                    {% if filtro %}
+                        <a class="info-chip info-chip--removable"
+                           href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                           title="Remover filtro de situação">
+                            <span>Situação</span>
+                            <strong>{{ filtro_label }}</strong>
+                            <span class="chip-x" aria-hidden="true">×</span>
+                        </a>
+                    {% endif %}
+                    <a class="chips-clear" href="{% url 'lab_moldagens' %}">Limpar tudo</a>
                 </div>
+            {% endif %}
+
+            <div class="results-meta">
+                <span><strong>{{ page_obj.paginator.count }}</strong> moldagem{{ page_obj.paginator.count|pluralize:"ns" }}</span>
+                {% if metricas.pendentes %}
+                    <a class="meta-warn" href="?filtro=nao_convertida" title="Filtrar não convertidas"><strong>{{ metricas.pendentes }}</strong> não convertida{{ metricas.pendentes|pluralize }}</a>
+                {% endif %}
             </div>
 
             <div class="table-wrap data-table-wrap">

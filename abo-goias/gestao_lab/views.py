@@ -357,6 +357,8 @@ FILTRO_MOLDAGEM_OPCOES = [
     ("nao_convertida", "Não convertida"),
 ]
 
+FILTRO_MOLDAGEM_LABELS = dict(FILTRO_MOLDAGEM_OPCOES)
+
 
 @login_required
 def moldagens(request: HttpRequest) -> HttpResponse:
@@ -408,6 +410,7 @@ def moldagens(request: HttpRequest) -> HttpResponse:
             "query_string": query_string,
             "busca": busca,
             "filtro": filtro,
+            "filtro_label": FILTRO_MOLDAGEM_LABELS.get(filtro, "Todas"),
             "filtro_opcoes": FILTRO_MOLDAGEM_OPCOES,
             "metricas": metricas,
         },
