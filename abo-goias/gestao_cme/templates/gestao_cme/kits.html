@@ -1,6 +1,7 @@
 ﻿{% extends "gestao_cme/base.html" %}
 
 {% block title %}Gestão de CME | Kits{% endblock %}
+{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Kits{% endblock %}
 
@@ -43,7 +44,7 @@
                     <label class="search-label" for="results-q-kits">Buscar na listagem</label>
                     <div class="results-search-row">
                         <div class="search-control">
-                            <input id="results-q-kits" type="search" name="q" value="{{ busca }}" placeholder="Buscar por kit, código ou material...">
+                            <input id="results-q-kits" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por kit, código ou material...">
                         </div>
                         <button class="button primary" type="submit">Buscar</button>
                         <a class="button secondary" href="{% url 'kits' %}">Limpar</a>

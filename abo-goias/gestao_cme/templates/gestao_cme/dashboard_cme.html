@@ -1,6 +1,7 @@
 {% extends "gestao_cme/base.html" %}
 
 {% block title %}Gestão de CME | Visão Geral{% endblock %}
+{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Visão Geral{% endblock %}
 
@@ -35,10 +36,6 @@
                     {% endif %}
                 </form>
 
-                <div class="panel-quick-actions">
-                    <a class="button primary" href="{% url 'registrar_saida' %}">Registrar saída</a>
-                    <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
-                </div>
             </aside>
 
             <section class="panel results-panel">

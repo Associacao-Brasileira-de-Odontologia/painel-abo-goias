@@ -2166,3 +2166,156 @@ h3 {
     display: block;
     fill: none;
 }
+
+/* ── Confirmação persistente de entrada (códigos gerados) ───── */
+
+.entrada-confirmada {
+    margin-bottom: 24px;
+    padding: 20px 22px;
+    border: 1px solid rgba(57, 217, 138, 0.32);
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(57, 217, 138, 0.12), rgba(57, 217, 138, 0.04));
+}
+
+.entrada-confirmada-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+}
+
+.entrada-confirmada-head strong {
+    font-family: "Syne", "Segoe UI", Arial, sans-serif;
+    font-size: 1.2rem;
+    color: var(--success);
+}
+
+.entrada-confirmada-head span {
+    color: var(--muted-strong);
+    font-size: 0.92rem;
+}
+
+.entrada-confirmada-hint {
+    margin: 12px 0 10px;
+    color: var(--muted-strong);
+    font-size: 0.9rem;
+}
+
+.codigo-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.codigo-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 4px 16px;
+    border: 1px solid rgba(57, 217, 138, 0.4);
+    border-radius: 10px;
+    background: rgba(8, 13, 25, 0.6);
+    color: #b3f0d5;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.entrada-confirmada-meta {
+    margin: 12px 0 0;
+    color: var(--muted-strong);
+    font-size: 0.9rem;
+}
+
+.entrada-confirmada-meta strong {
+    color: var(--text);
+}
+
+.entrada-confirmada-alerta {
+    color: #ffb8b8;
+    font-weight: 600;
+}
+
+.entrada-confirmada-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+/* ── Header compacto para telas operacionais ────────────────── */
+
+.header--compact .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    min-height: 72px;
+    padding: 14px 0;
+}
+
+.header--compact .brand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.header--compact .brand > div {
+    padding-left: 0;
+}
+
+.header--compact .brand-logo {
+    width: 136px;
+    height: 46px;
+}
+
+.header--compact .eyebrow {
+    margin-bottom: 2px;
+    font-size: 0.68rem;
+}
+
+.header--compact h1 {
+    font-size: 1.35rem;
+    line-height: 1.1;
+}
+
+.header--compact ~ .page-shell {
+    margin-top: 8px;
+}
+
+.header--compact .user-menu {
+    align-items: center;
+    flex-direction: row;
+}
+
+@media (max-width: 620px) {
+    .header--compact .header-inner {
+        flex-wrap: wrap;
+    }
+
+    .header--compact .brand {
+        flex-direction: row;
+        align-items: center;
+    }
+}
+
+/* ── Ações rápidas de balcão na navegação lateral ───────────── */
+
+.side-quick-actions {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+}
+
+.side-quick-actions .section-label {
+    margin-bottom: 2px;
+}
+
+.side-quick-actions .button {
+    min-height: 42px;
+    border-radius: 10px;
+    font-size: 14px;
+}

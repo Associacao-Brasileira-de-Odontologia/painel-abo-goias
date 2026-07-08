@@ -1,6 +1,7 @@
 ﻿{% extends "gestao_cme/base.html" %}
 
 {% block title %}Gestão de CME | {{ titulo }}{% endblock %}
+{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}{{ section_label }}{% endblock %}
 {% block header_title %}{{ titulo }}{% endblock %}
 
@@ -86,7 +87,7 @@
                     <label class="search-label" for="results-q">Buscar na listagem</label>
                     <div class="results-search-row">
                         <div class="search-control">
-                            <input id="results-q" type="search" name="q" value="{{ busca }}" placeholder="Buscar por aluno, turma, matrícula ou contato...">
+                            <input id="results-q" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, matrícula ou contato...">
                         </div>
                         <button class="button primary" type="submit">Buscar</button>
                         <a class="button secondary" href="{{ request.path }}">Limpar</a>

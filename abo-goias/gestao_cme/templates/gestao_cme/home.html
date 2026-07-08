@@ -1,6 +1,7 @@
 ﻿{% extends "gestao_cme/base.html" %}
 
 {% block title %}Gestão de CME | Movimentações{% endblock %}
+{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Movimentações{% endblock %}
 
@@ -81,7 +82,7 @@
                     <label class="search-label" for="results-q-movimentacoes">Buscar na listagem</label>
                     <div class="results-search-row">
                         <div class="search-control">
-                            <input id="results-q-movimentacoes" type="search" name="q" value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem...">
+                            <input id="results-q-movimentacoes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem...">
                         </div>
                         <button class="button primary" type="submit">Buscar</button>
                         <a class="button secondary" href="{% url 'cme_home' %}">Limpar</a>

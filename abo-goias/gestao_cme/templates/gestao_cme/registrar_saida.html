@@ -1,6 +1,7 @@
 {% extends "gestao_cme/base.html" %}
 
 {% block title %}Gestão de CME | Registrar saída{% endblock %}
+{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Registrar saída{% endblock %}
 
@@ -38,7 +39,7 @@
                     <form class="form-stack form-stack-wide" method="get">
                         <div class="field field-required">
                             <label for="id_aluno_sel">Aluno</label>
-                            <select id="id_aluno_sel" name="aluno_id" required>
+                            <select id="id_aluno_sel" name="aluno_id" required {% if not aluno %}autofocus{% endif %}>
                                 <option value="">Selecione um aluno...</option>
                                 {% for a in alunos_com_pendencias %}
                                     <option value="{{ a.pk }}" {% if aluno_id == a.pk|stringformat:"s" %}selected{% endif %}>

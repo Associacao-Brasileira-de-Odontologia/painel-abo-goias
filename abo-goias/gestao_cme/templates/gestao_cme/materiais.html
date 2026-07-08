@@ -1,6 +1,7 @@
 ﻿{% extends "gestao_cme/base.html" %}
 
 {% block title %}Gestão de CME | Materiais{% endblock %}
+{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Materiais{% endblock %}
 
@@ -66,7 +67,7 @@
                     <label class="search-label" for="results-q-materiais">Buscar na listagem</label>
                     <div class="results-search-row">
                         <div class="search-control">
-                            <input id="results-q-materiais" type="search" name="q" value="{{ busca }}" placeholder="Buscar por material, identificação, código ou kit...">
+                            <input id="results-q-materiais" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por material, identificação, código ou kit...">
                         </div>
                         <button class="button primary" type="submit">Buscar</button>
                         <a class="button secondary" href="{% url 'materiais' %}">Limpar</a>

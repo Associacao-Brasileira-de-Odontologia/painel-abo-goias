@@ -1,6 +1,7 @@
 ﻿{% extends "gestao_cme/base.html" %}
 
 {% block title %}Gestão de CME | Abrigos{% endblock %}
+{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Controle físico{% endblock %}
 {% block header_title %}Abrigos{% endblock %}
 
@@ -66,7 +67,7 @@
                     <label class="search-label" for="results-q-armarios">Buscar na listagem</label>
                     <div class="results-search-row">
                         <div class="search-control">
-                            <input id="results-q-armarios" type="search" name="q" value="{{ busca }}" placeholder="Buscar por identificador do abrigo...">
+                            <input id="results-q-armarios" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por identificador do abrigo...">
                         </div>
                         <button class="button primary" type="submit">Buscar</button>
                         <a class="button secondary" href="{% url 'abrigos' %}">Limpar</a>

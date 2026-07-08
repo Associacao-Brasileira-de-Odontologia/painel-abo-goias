@@ -90,6 +90,12 @@
             </span>
             <span>Empréstimos</span>
         </a>
+
+        <div class="side-quick-actions">
+            <p class="section-label">Ações rápidas</p>
+            <a class="button primary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
+            <a class="button secondary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
+        </div>
     {% endif %}
 
     <a class="side-link side-link-return" href="{% url 'home' %}">

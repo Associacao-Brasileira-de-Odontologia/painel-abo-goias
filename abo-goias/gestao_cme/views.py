@@ -720,16 +720,12 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
     Avisa quando o aluno nao tem abrigo cadastrado, mas nao bloqueia o registro.
     """
     form = EntradaForm(request.POST or None)
-    aluno_sem_abrigo = False
 
     if request.method == "POST" and form.is_valid():
         aluno: Aluno = form.cleaned_data["aluno"]
         quantidade: int = form.cleaned_data["quantidade"]
         data_hora = form.cleaned_data["data_hora"]
         observacoes = form.cleaned_data.get("observacoes", "")
-
-        if not aluno.abrigo:
-            aluno_sem_abrigo = True
 
         # Continua a sequencia numerica global dos pacotes existentes
         codigos_existentes = Movimentacao.objects.values_list(
@@ -740,8 +736,10 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
             if str(codigo).isdigit():
                 max_seq = max(max_seq, int(codigo))
 
+        codigos_gerados = [str(max_seq + i) for i in range(1, quantidade + 1)]
+
         with transaction.atomic():
-            for i in range(1, quantidade + 1):
+            for codigo in codigos_gerados:
                 Movimentacao.objects.create(
                     data_hora=data_hora,
                     tipo=Movimentacao.Tipo.ENTRADA,
@@ -750,7 +748,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
                     aluno_nome=aluno.nome,
                     aluno_codigo_externo=aluno.matricula,
                     turma_nome=aluno.turma.nome if aluno.turma else "",
-                    pacote_codigo=str(max_seq + i),
+                    pacote_codigo=codigo,
                     retirado=False,
                     arquivo_origem="painel",
                     row_hash=_gerar_row_hash(),
@@ -758,19 +756,17 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
                     observacoes=observacoes,
                 )
 
-        msg = f"{quantidade} pacote(s) de entrada registrado(s) para {aluno.nome}."
-        if aluno_sem_abrigo:
-            messages.warning(
-                request,
-                f"{msg} Atenção: {aluno.nome} não tem abrigo cadastrado — "
-                "defina o abrigo na ficha do aluno.",
-            )
-        else:
-            messages.success(
-                request,
-                f"{msg} Abrigo: {aluno.abrigo.identificador}.",
-            )
-        return redirect("cme_home")
+        # A confirmação com os códigos gerados precisa sobreviver ao
+        # redirect (post/redirect/get) e ficar visível até o operador
+        # etiquetar os pacotes — por isso sessão, e não messages.
+        request.session["cme_entrada_confirmada"] = {
+            "codigos": codigos_gerados,
+            "aluno_nome": aluno.nome,
+            "abrigo": aluno.abrigo.identificador if aluno.abrigo else "",
+            "quantidade": quantidade,
+            "data_hora": timezone.localtime(data_hora).strftime("%d/%m/%Y %H:%M"),
+        }
+        return redirect("registrar_entrada")
 
     alunos = (
         Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
@@ -786,6 +782,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
             "form": form,
             "alunos": alunos,
             "active_page": "nova_entrada",
+            "confirmacao": request.session.pop("cme_entrada_confirmada", None),
         },
     )
 
