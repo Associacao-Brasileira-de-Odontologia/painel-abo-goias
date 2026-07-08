@@ -234,3 +234,150 @@ Evite estéticas genéricas geradas por IA:
 
 Interprete de forma criativa e faça escolhas inesperadas que pareçam genuinamente projetadas para o contexto. Alterne entre temas claros e escuros, fontes diferentes e estéticas variadas. Você ainda tende a convergir para escolhas comuns (como Space Grotesk, por exemplo) entre as gerações. Evite isso: é fundamental pensar fora da caixa!
 </frontend_aesthetics>
+
+Abaixo estão prompts prontos para você usar com um agente de código/design. Estruturei seguindo a ideia do artigo da Anthropic: dar contexto estético reutilizável, evitar visual genérico, orientar por eixos implementáveis como hierarquia, layout, copy, movimento e consistência, sem especificar detalhes excessivamente baixos como hex codes rígidos. Fonte: [Improving frontend design through Skills](https://claude.com/blog/improving-frontend-design-through-skills).
+
+**Prompt Mestre**
+
+```text
+Você é um especialista em frontend para sistemas operacionais internos feitos em Python/Django. 
+Refatore os templates da aplicação de geração de contratos odontológicos com foco em clareza operacional, redução de redundância, hierarquia visual e velocidade de uso.
+
+Contexto do produto:
+- O usuário provavelmente é recepcionista, administrativo ou operador de clínica.
+- A interface deve parecer confiável, limpa e profissional, não uma landing page.
+- Priorize formulários bem alinhados, ações primárias evidentes, feedback visual claro e textos objetivos.
+- Evite estética genérica de IA: não use layouts previsíveis demais, excesso de cards, gradientes roxos, fontes genéricas como Inter/Roboto/Arial quando houver liberdade visual.
+- Use uma identidade visual sóbria para saúde/serviço: contraste bom, espaçamento consistente, botões com hierarquia clara, campos de formulário densos porém confortáveis.
+- Preserve a lógica Django existente, nomes de campos, rotas, CSRF, validações, mensagens e includes. Altere backend apenas se for estritamente necessário para suportar o novo fluxo.
+- Não crie uma nova aplicação. Trabalhe sobre os templates existentes.
+
+Objetivo:
+Reorganizar as telas do fluxo de contratos para que cada etapa tenha uma ação principal clara, menos texto redundante e melhor alinhamento dos campos e botões.
+```
+
+**Prompt 1 — Tela De Busca De Contratos**
+
+```text
+Refatore a tela de contratos onde o usuário realiza a busca.
+
+Mudanças obrigatórias:
+- Remover a existência visual de dois botões de busca.
+- A interface deve apresentar somente uma ação principal: “Buscar”.
+- A busca deve comunicar que o sistema consulta primeiro os cadastros locais e, em seguida, o Dental Office automaticamente.
+- Remover ou esconder o botão “Buscar no Dental Office” da experiência principal.
+- Reposicionar o botão “Limpar busca” para ficar na mesma linha do campo de busca e do botão “Buscar”, nunca abaixo do botão principal.
+- O alinhamento deve funcionar bem em desktop e mobile: em telas largas, campo + Buscar + Limpar na mesma linha; em telas pequenas, os controles podem empilhar, mas mantendo ordem lógica.
+
+Direção de design:
+- Faça a área de busca parecer uma ferramenta de trabalho rápida, não um bloco explicativo.
+- Use uma hierarquia clara: campo de busca dominante, botão “Buscar” como ação primária, “Limpar busca” como ação secundária discreta.
+- Se houver texto auxiliar, use algo curto, por exemplo: “A busca consulta o cadastro local e o Dental Office automaticamente.”
+- Preserve a lógica de busca existente, ajustando apenas o fluxo visual e, se necessário, a chamada para que uma única submissão execute a busca combinada.
+```
+
+**Prompt 2 — Tela De Confirmação Dos Dados Do Paciente**
+
+```text
+Refatore a tela de confirmação dos dados do paciente com foco em copy mais objetiva.
+
+Mudança obrigatória:
+Substituir o texto:
+“Os campos abaixo preencherão o contrato. Corrija o que for necessário e clique em Confirmar dados para liberar a geração. O convênio é um dado local — não vem do Dental Office.”
+
+Por:
+“Os campos abaixo preencherão o contrato. Corrija o que for necessário e clique em Confirmar dados para liberar a geração.”
+
+Direção de design:
+- Mantenha a tela com aparência de revisão de dados antes de gerar contrato.
+- Destaque a ação “Confirmar dados” como etapa de avanço.
+- Evite textos explicativos redundantes.
+- Preserve todos os campos, validações e mensagens já existentes.
+```
+
+**Prompt 3 — Tela Para Gerar Contrato**
+
+```text
+Refatore a tela de geração do contrato.
+
+Mudanças obrigatórias:
+- Remover temporariamente os campos “Nome do profissional” e “CRO” da interface.
+- Ao lado do campo “E-mail para envio”, adicionar o campo “WhatsApp”.
+- O campo “WhatsApp” deve permitir ao usuário revisar ou confirmar o número que será usado para envio.
+- Em desktop, “E-mail para envio” e “WhatsApp” devem ficar lado a lado.
+- Em mobile, os campos devem empilhar com espaçamento confortável.
+- Existe um botão que atualmente sugere “enviar novamente as informações ao Dental Office”, mas na prática volta para a página de confirmação/edição dos dados do paciente.
+- Renomear e redesenhar esse botão para deixar claro que ele leva à edição dos dados do paciente.
+- Sugestões de texto para o botão: “Editar dados do paciente”, “Voltar para editar dados” ou “Revisar dados do paciente”.
+- Escolha o texto mais claro para o contexto da tela.
+
+Direção de design:
+- A tela deve parecer uma etapa final de preparação antes da geração.
+- A ação principal deve continuar sendo gerar contrato.
+- A ação de edição deve ser secundária, visualmente menos forte que a geração.
+- Não deixe o usuário pensar que está sincronizando/enviando dados ao Dental Office se o botão apenas volta para edição.
+- Preserve nomes de campos esperados pelo backend ou adapte cuidadosamente o template sem quebrar o POST.
+```
+
+**Prompt 4 — Tela De Contrato Gerado**
+
+```text
+Refatore a tela de contrato gerado. Esta é a tela que precisa da maior melhoria de usabilidade.
+
+Seção de assinatura:
+- Substituir o texto atual:
+“Gere um QR Code para o paciente assinar o contrato no próprio celular ou tablet — sem login e sem baixar nada.”
+
+Por uma versão mais informativa e natural, por exemplo:
+“Gere um QR Code para o paciente assinar o contrato no próprio celular ou no tablet da recepção.”
+- O select de método de assinatura deve iniciar com uma opção placeholder clara:
+“Selecione o método de assinatura”
+- Essa opção placeholder deve estar selecionada por padrão e não deve iniciar assinatura.
+- O botão “Iniciar assinatura” deve ficar ao lado do select de método de assinatura em telas largas.
+- Em telas pequenas, select e botão podem empilhar, mantendo o select antes do botão.
+- A ação só deve ficar visualmente habilitada quando houver método selecionado, se a lógica atual permitir.
+
+Seção de envio/compartilhamento:
+- Remover textos explicativos redundantes.
+- Remover o botão “Compartilhar arquivo”.
+- Renomear o botão “Abrir WhatsApp” para “Compartilhar via WhatsApp”.
+- Os botões de envio/compartilhamento devem ficar ao lado dos respectivos campos de preenchimento.
+- Para WhatsApp: campo de número + botão “Compartilhar via WhatsApp” na mesma linha em desktop.
+- Para e-mail: campo de e-mail + botão de envio por e-mail na mesma linha em desktop.
+- Em mobile, cada campo e seu botão podem empilhar, mas devem continuar agrupados visualmente.
+
+Remoções:
+- Remover a seção/campos/botões de baixar documento.
+- Remover a seção/campos/botões de enviar documento ao Dental Office.
+
+Direção de design:
+- Organize a tela por tarefas reais: assinatura, envio por WhatsApp, envio por e-mail.
+- Evite cards em excesso. Use seções limpas, títulos curtos e alinhamento consistente.
+- Faça os botões parecerem ações diretas e específicas.
+- Reduza ruído visual: se uma ação não está disponível ou não deve ser usada agora, remova da interface.
+- Preserve o acesso ao contrato gerado se ele for necessário para visualização, mas não ofereça download se a exigência atual é remover essa ação.
+```
+
+**Prompt 5 — Revisão Final / QA Visual**
+
+```text
+Depois de aplicar as mudanças, revise os templates alterados com os seguintes critérios:
+
+- Não deve existir mais a duplicidade de busca com “Busca” e “Buscar no Dental Office”.
+- O botão “Limpar busca” deve estar alinhado com o campo de busca e o botão “Buscar”.
+- A frase da confirmação dos dados do paciente deve estar exatamente sem a menção ao convênio/Dental Office.
+- A tela de gerar contrato não deve exibir “Nome do profissional” nem “CRO”.
+- A tela de gerar contrato deve exibir “E-mail para envio” e “WhatsApp” lado a lado em desktop.
+- O botão que volta para confirmação/edição deve ter texto coerente, como “Editar dados do paciente”.
+- A tela de contrato gerado deve ter placeholder “Selecione o método de assinatura”.
+- O botão de iniciar assinatura deve ficar ao lado do select em desktop.
+- Não deve existir botão “Compartilhar arquivo”.
+- “Abrir WhatsApp” deve virar “Compartilhar via WhatsApp”.
+- Botões de compartilhamento devem ficar próximos aos campos correspondentes.
+- Não deve existir seção para baixar documento.
+- Não deve existir seção para enviar documento ao Dental Office.
+- Verifique responsividade em mobile e desktop.
+- Verifique se nenhum formulário Django perdeu CSRF, name, value, action ou method necessário.
+```
+
+Eu também ajustaria a frase sugerida de assinatura para “no tablet da recepção”, porque “reflita no tablet” soa como erro de digitação e pode confundir o usuário final.

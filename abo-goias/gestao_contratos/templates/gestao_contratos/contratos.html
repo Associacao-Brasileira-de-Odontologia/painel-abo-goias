@@ -64,7 +64,7 @@
             </div>
 
             {# Barra de busca #}
-            <form class="results-search" method="get" autocomplete="off">
+            <form class="results-search" method="get" autocomplete="off" id="form-busca-contratos">
                 <label class="search-label" for="results-q-contratos">Buscar paciente</label>
                 <div class="results-search-row">
                     <div class="search-control">
@@ -72,24 +72,19 @@
                                value="{{ busca }}"
                                placeholder="Digite o nome do paciente...">
                     </div>
-                    <button class="button primary" type="submit">Buscar</button>
-                    <button class="button secondary" type="submit" name="dental" value="1"
-                            title="Consulta também os pacientes cadastrados no Dental Office">
-                        Buscar no Dental Office
-                    </button>
+                    <button class="button primary" type="submit" id="btn-buscar-contratos">Buscar</button>
                     {% if busca %}
-                        <a class="button secondary" href="{% url 'contratos' %}">Limpar</a>
+                        <a class="button gc-btn-ghost" href="{% url 'contratos' %}">Limpar busca</a>
                     {% endif %}
                 </div>
+                <p class="gc-text-muted-sm gc-search-hint">
+                    A busca consulta o cadastro local e o Dental Office automaticamente.
+                </p>
             </form>
 
             {# Chips de resumo da busca #}
             {% if busca %}
                 <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Buscando por</span>
-                        <strong>"{{ busca }}"</strong>
-                    </div>
                     <div class="info-chip">
                         <span>No sistema</span>
                         <strong>{{ total }} resultado(s)</strong>
@@ -277,4 +272,27 @@
         </section>
     </div>
 </main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        var form = document.getElementById("form-busca-contratos");
+        var botao = document.getElementById("btn-buscar-contratos");
+        if (!form || !botao) return;
+        var rotulo = botao.textContent;
+        form.addEventListener("submit", function () {
+            botao.disabled = true;
+            botao.textContent = "Buscando…";
+        });
+        // Voltar via histórico (bfcache) restaura o DOM congelado —
+        // sem isto o botão ficaria preso em "Buscando…".
+        window.addEventListener("pageshow", function (evento) {
+            if (evento.persisted) {
+                botao.disabled = false;
+                botao.textContent = rotulo;
+            }
+        });
+    })();
+</script>
 {% endblock %}

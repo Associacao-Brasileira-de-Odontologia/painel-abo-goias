@@ -299,7 +299,10 @@ class ContratosViewTests(TestCase):
         self.assertContains(response, "Carlos Ativo")
         self.assertNotContains(response, "Ana Inativa")
 
-    def test_busca_filtra_pacientes_por_nome(self) -> None:
+    @override_settings(DENTAL_CLINIC_ID="clinic-001")
+    @patch("gestao_contratos.views.DentalClient")
+    def test_busca_filtra_pacientes_por_nome(self, MockDental: MagicMock) -> None:
+        MockDental.return_value.listar_pacientes.return_value = {"results": []}
         _paciente(nome="Fernanda Lima", id_dental="A3")
         _paciente(nome="Roberto Souza", id_dental="A4")
         response = self.client.get(reverse("contratos"), {"q": "Fernanda"})
@@ -352,16 +355,9 @@ class ContratosViewTests(TestCase):
             MockDental.assert_not_called()
         self.assertEqual(response.status_code, 200)
 
-    def test_resultado_local_encontrado_nao_consulta_api(self) -> None:
-        _paciente(nome="Marcos Local", id_dental="A6")
-        with patch("gestao_contratos.views.DentalClient") as MockDental:
-            response = self.client.get(reverse("contratos"), {"q": "Marcos"})
-            MockDental.assert_not_called()
-        self.assertContains(response, "Marcos Local")
-
     @override_settings(DENTAL_CLINIC_ID="clinic-001")
     @patch("gestao_contratos.views.DentalClient")
-    def test_busca_explicita_consulta_api_mesmo_com_resultado_local(
+    def test_busca_com_resultado_local_tambem_consulta_api(
         self, MockDental: MagicMock
     ) -> None:
         _paciente(nome="Helena Local", id_dental="A7")
@@ -377,11 +373,21 @@ class ContratosViewTests(TestCase):
             ]
         }
 
-        response = self.client.get(reverse("contratos"), {"q": "Helena", "dental": "1"})
+        response = self.client.get(reverse("contratos"), {"q": "Helena"})
 
         mock_client.listar_pacientes.assert_called_once()
         self.assertContains(response, "Helena Local")
         self.assertContains(response, "Helena Dental")
+
+    @override_settings(DENTAL_CLINIC_ID="clinic-001")
+    def test_paginacao_nao_repete_consulta_api(self) -> None:
+        _paciente(nome="Marcos Local", id_dental="A6")
+        with patch("gestao_contratos.views.DentalClient") as MockDental:
+            response = self.client.get(
+                reverse("contratos"), {"q": "Marcos", "page": "2"}
+            )
+            MockDental.assert_not_called()
+        self.assertContains(response, "Marcos Local")
 
 
 # ---------------------------------------------------------------------------

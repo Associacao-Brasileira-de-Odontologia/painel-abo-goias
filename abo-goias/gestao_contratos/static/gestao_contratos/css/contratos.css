@@ -205,6 +205,25 @@ body.gestao-contratos .badge.gc-selo {
     font-size: 0.75rem;
 }
 
+/* Ação secundária discreta ao lado de uma primária — ex.: "Limpar busca". */
+body.gestao-contratos .gc-btn-ghost {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font-weight: 700;
+    box-shadow: none;
+}
+
+body.gestao-contratos .gc-btn-ghost:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Nota curta sob a linha de busca — <p> participa do grid do form. */
+body.gestao-contratos .gc-search-hint {
+    margin: 0;
+}
+
 .gc-historico-item {
     flex-direction: column;
     align-items: flex-start;

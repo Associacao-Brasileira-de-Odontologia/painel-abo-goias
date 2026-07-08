@@ -34,7 +34,7 @@ _PACIENTES_POR_PAGINA = 25
 
 @login_required
 def contratos(request: HttpRequest) -> HttpResponse:
-    """Lista pacientes locais e, quando a busca retorna zero, consulta a API."""
+    """Lista pacientes locais e, havendo busca, consulta também a API."""
 
     busca = request.GET.get("q", "").strip()
     pacientes_qs = Paciente.objects.filter(ativo=True).order_by("nome")
@@ -45,11 +45,11 @@ def contratos(request: HttpRequest) -> HttpResponse:
     pacientes_api: list[dict] = []
     erro_api: str = ""
     dental_pesquisado: bool = False
-    busca_dental_explicita = request.GET.get("dental") == "1"
+    primeira_pagina = request.GET.get("page") in (None, "", "1")
 
-    # Busca no Dental Office quando solicitado explicitamente ou como
-    # fallback quando o banco local retornou zero resultados.
-    if busca and (busca_dental_explicita or not pacientes_qs.exists()):
+    # Toda busca consulta também o Dental Office, mas só na primeira
+    # página — paginar os resultados locais não deve repetir a chamada.
+    if busca and primeira_pagina:
         clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
         if clinic_id:
             try:
