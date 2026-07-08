@@ -76,7 +76,7 @@
                 <div class="kpi-section">
                     <p class="section-label">Movimentações</p>
                     <div class="kpi-grid">
-                        <div class="metric-card metric-neutral">
+                        <div class="metric-card">
                             <span class="metric-label">Total</span>
                             <strong>{{ metricas_mov.total }}</strong>
                             <span class="metric-secondary">registros</span>
@@ -86,7 +86,7 @@
                             <strong>{{ metricas_mov.entradas }}</strong>
                             <span class="metric-secondary">para esterilização</span>
                         </div>
-                        <div class="metric-card metric-blue">
+                        <div class="metric-card">
                             <span class="metric-label">Retiradas</span>
                             <strong>{{ metricas_mov.saidas }}</strong>
                             <span class="metric-secondary">materiais retirados</span>
@@ -113,7 +113,7 @@
                                     <div>
                                         <strong>{{ pacote.aluno_nome }}</strong>
                                         <span class="cell-muted">
-                                            Pacote {{ pacote.pacote_codigo }}
+                                            Pacote <span class="mono">{{ pacote.pacote_codigo }}</span>
                                             {% if pacote.aluno and pacote.aluno.abrigo %} · Abrigo {{ pacote.aluno.abrigo.identificador }}{% endif %}
                                         </span>
                                     </div>
@@ -130,7 +130,7 @@
                             {% endfor %}
                         </div>
                         {% if pacotes_aguardando %}
-                            <div style="margin-top: 14px;">
+                            <div class="section-footer-action">
                                 <a class="button secondary compact-button" href="{% url 'registrar_saida' %}">Registrar retirada</a>
                             </div>
                         {% endif %}
@@ -160,7 +160,7 @@
                                 </article>
                             {% endfor %}
                         </div>
-                        <div style="margin-top: 14px;">
+                        <div class="section-footer-action">
                             <a class="button secondary compact-button" href="{% url 'cme_home' %}">Ver todas as movimentações</a>
                         </div>
                     </div>
