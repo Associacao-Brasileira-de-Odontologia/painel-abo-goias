@@ -189,9 +189,20 @@ body.gestao-contratos .badge.gc-selo {
     align-items: start;
 }
 
+/* Campo + botão de ação na mesma linha (assinatura, WhatsApp, e-mail).
+   O botão alinha à base do campo; em telas estreitas empilham na ordem
+   campo → botão, mantendo o par agrupado. */
+.gc-row-campo-acao {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 16px;
+    align-items: end;
+}
+
 @media (max-width: 640px) {
     .gc-row-logradouro,
-    .gc-row-endereco-3 {
+    .gc-row-endereco-3,
+    .gc-row-campo-acao {
         grid-template-columns: 1fr;
     }
 }

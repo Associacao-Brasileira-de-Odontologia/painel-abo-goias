@@ -345,11 +345,20 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
     prof_cro = request.POST.get("profissional_cro", "").strip()
     local = request.POST.get("local_assinatura", "Goiânia - GO").strip()
     email_form = request.POST.get("email_paciente", "").strip()
+    whatsapp_form = request.POST.get("whatsapp_paciente", "").strip()
 
-    # Salva o e-mail preenchido no formulário de volta ao paciente
+    # Salva e-mail e WhatsApp preenchidos no formulário de volta ao paciente.
+    # O WhatsApp alimenta paciente.celular, que é o número usado pelo link
+    # de envio na tela de pós-geração.
+    campos_alterados = []
     if email_form and email_form != paciente.email:
         paciente.email = email_form
-        paciente.save(update_fields=["email", "atualizado_em"])
+        campos_alterados.append("email")
+    if whatsapp_form and whatsapp_form != paciente.celular:
+        paciente.celular = whatsapp_form
+        campos_alterados.append("celular")
+    if campos_alterados:
+        paciente.save(update_fields=[*campos_alterados, "atualizado_em"])
 
     tipos_validos = {t[0] for t in TIPOS_CONTRATO}
     if tipo not in tipos_validos:

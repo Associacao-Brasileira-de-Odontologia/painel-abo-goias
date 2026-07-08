@@ -109,22 +109,11 @@ assinatura; ao mudar de status, o polling para automaticamente.
     {% else %}
         <p class="panel-copy">
             Gere um QR Code para o paciente assinar o contrato no
-            próprio celular ou tablet — sem login e sem baixar nada.
+            próprio celular ou no tablet da recepção.
         </p>
         <form method="post"
               action="{% url 'contrato_iniciar_assinatura' contrato.pk %}">
             {% csrf_token %}
-            {% if terminais_disponiveis %}
-                <div class="field gc-mt-sm">
-                    <label for="id_terminal_pk">Onde o paciente vai assinar?</label>
-                    <select id="id_terminal_pk" name="terminal_pk">
-                        <option value="">QR Code (celular do paciente)</option>
-                        {% for terminal in terminais_disponiveis %}
-                            <option value="{{ terminal.pk }}">{{ terminal.nome }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            {% endif %}
             <div class="field field-checkbox gc-mt-sm">
                 <label for="id_identidade_presencial_confirmada">
                     <input type="checkbox" id="id_identidade_presencial_confirmada"
@@ -133,15 +122,37 @@ assinatura; ao mudar de status, o polling para automaticamente.
                     {{ contrato.paciente.nome }} antes de iniciar a assinatura.
                 </label>
             </div>
-            <div class="form-actions gc-mt-sm">
-                <button class="button gc-selar" type="submit">
-                    {% if terminais_disponiveis %}
+            {% if terminais_disponiveis %}
+                <div class="gc-row-campo-acao gc-mt-sm">
+                    <div class="field">
+                        <label for="id_terminal_pk">Onde o paciente vai assinar?</label>
+                        <select id="id_terminal_pk" name="terminal_pk" required
+                                onchange="var b = document.getElementById('btn-iniciar-assinatura'); if (b) b.disabled = !this.value;">
+                            <option value="" selected disabled>Selecione o método de assinatura</option>
+                            <option value="qr">QR Code (celular do paciente)</option>
+                            {% for terminal in terminais_disponiveis %}
+                                <option value="{{ terminal.pk }}">{{ terminal.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button class="button gc-selar" type="submit" id="btn-iniciar-assinatura">
                         Iniciar assinatura
-                    {% else %}
+                    </button>
+                </div>
+                <script>
+                    (function () {
+                        var sel = document.getElementById('id_terminal_pk');
+                        var btn = document.getElementById('btn-iniciar-assinatura');
+                        if (sel && btn) btn.disabled = !sel.value;
+                    })();
+                </script>
+            {% else %}
+                <div class="form-actions gc-mt-sm">
+                    <button class="button gc-selar" type="submit">
                         Gerar QR Code de assinatura
-                    {% endif %}
-                </button>
-            </div>
+                    </button>
+                </div>
+            {% endif %}
         </form>
     {% endif %}
 
