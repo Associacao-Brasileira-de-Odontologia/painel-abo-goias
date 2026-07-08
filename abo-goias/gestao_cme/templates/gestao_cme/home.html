@@ -12,53 +12,6 @@
                 <p class="panel-copy">Acompanhe as saídas, entradas e pendências registradas no sistema.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="emprestimos" %}
-
-                <form class="form-stack" method="get">
-                    {% if busca %}
-                        <input type="hidden" name="q" value="{{ busca }}">
-                    {% endif %}
-                    <div class="field">
-                        <label for="status">Status</label>
-                        <select id="status" name="status">
-                            <option value="">Todos</option>
-                            {% for valor, rotulo in status_opcoes %}
-                                <option value="{{ valor }}" {% if status_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="field">
-                        <label for="movimentacao">Movimentação</label>
-                        <select id="movimentacao" name="movimentacao">
-                            <option value="">Todas</option>
-                            {% for valor, rotulo in movimentacao_opcoes %}
-                                <option value="{{ valor }}" {% if movimentacao_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
-                    <a class="button secondary" href="{% url 'cme_home' %}">Limpar filtros</a>
-                </form>
-
-                <div class="metric-grid">
-                    <div class="metric-card">
-                        <span class="metric-label">Saídas</span>
-                        <strong>{{ metricas.saidas|default:0 }}</strong>
-                    </div>
-                    <div class="metric-card danger-metric">
-                        <span class="metric-label">Pendentes</span>
-                        <strong>{{ metricas.pendentes|default:0 }}</strong>
-                    </div>
-                    <div class="metric-card">
-                        <span class="metric-label">Entradas</span>
-                        <strong>{{ metricas.entradas|default:0 }}</strong>
-                    </div>
-                    <div class="metric-card">
-                        <span class="metric-label">Total</span>
-                        <strong>{{ metricas.total|default:0 }}</strong>
-                    </div>
-                </div>
             </aside>
 
             <section class="panel results-panel">
@@ -66,52 +19,65 @@
                     <div>
                         <h2>Histórico de movimentações</h2>
                     </div>
-                    <div class="topbar-actions">
-                        <a class="button primary" href="{% url 'registrar_saida' %}">Nova saída</a>
-                        <a class="button secondary" href="{% url 'registrar_entrada' %}">Nova entrada</a>
-                    </div>
                 </div>
 
-                <form class="results-search" method="get">
-                    {% if status_atual %}
-                        <input type="hidden" name="status" value="{{ status_atual }}">
-                    {% endif %}
-                    {% if movimentacao_atual %}
-                        <input type="hidden" name="movimentacao" value="{{ movimentacao_atual }}">
-                    {% endif %}
-                    <label class="search-label" for="results-q-movimentacoes">Buscar na listagem</label>
-                    <div class="results-search-row">
-                        <div class="search-control">
-                            <input id="results-q-movimentacoes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem...">
-                        </div>
-                        <button class="button primary" type="submit">Buscar</button>
-                        <a class="button secondary" href="{% url 'cme_home' %}">Limpar</a>
+                <form class="filter-bar" method="get">
+                    <div class="search-control">
+                        <input id="results-q-movimentacoes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem..." aria-label="Buscar na listagem">
                     </div>
+                    <select name="status" aria-label="Filtrar por status" onchange="this.form.submit()">
+                        <option value="">Status — todos</option>
+                        {% for valor, rotulo in status_opcoes %}
+                            <option value="{{ valor }}" {% if status_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="movimentacao" aria-label="Filtrar por movimentação" onchange="this.form.submit()">
+                        <option value="">Movimentação — todas</option>
+                        {% for valor, rotulo in movimentacao_opcoes %}
+                            <option value="{{ valor }}" {% if movimentacao_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="button primary" type="submit">Buscar</button>
                 </form>
 
-                <div class="selection-summary">
-                    {% if busca %}
-                        <div class="info-chip">
-                            <span>Busca</span>
-                            <strong>{{ busca }}</strong>
-                        </div>
-                    {% endif %}
-                    {% if status_atual %}
-                        <div class="info-chip">
-                            <span>Status</span>
-                            <strong>{{ status_label }}</strong>
-                        </div>
-                    {% endif %}
-                    {% if movimentacao_atual %}
-                        <div class="info-chip">
-                            <span>Movimentação</span>
-                            <strong>{{ movimentacao_label }}</strong>
-                        </div>
-                    {% endif %}
-                    <div class="info-chip">
-                        <span>Resultado</span>
-                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                {% if busca or status_atual or movimentacao_atual %}
+                    <div class="selection-summary">
+                        {% if busca %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if status_atual %}status={{ status_atual }}&{% endif %}{% if movimentacao_atual %}movimentacao={{ movimentacao_atual }}{% endif %}"
+                               title="Remover busca">
+                                <span>Busca</span>
+                                <strong>{{ busca }}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        {% if status_atual %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if movimentacao_atual %}movimentacao={{ movimentacao_atual }}{% endif %}"
+                               title="Remover filtro de status">
+                                <span>Status</span>
+                                <strong>{{ status_label }}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        {% if movimentacao_atual %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_atual %}status={{ status_atual }}{% endif %}"
+                               title="Remover filtro de movimentação">
+                                <span>Movimentação</span>
+                                <strong>{{ movimentacao_label }}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        <a class="chips-clear" href="{% url 'cme_home' %}">Limpar tudo</a>
                     </div>
+                {% endif %}
+
+                <div class="results-meta">
+                    <span><strong>{{ page_obj.paginator.count }}</strong> registro{{ page_obj.paginator.count|pluralize }}</span>
+                    {% if metricas.pendentes %}
+                        <a class="meta-warn" href="?status=pendente" title="Filtrar pacotes não retirados"><strong>{{ metricas.pendentes }}</strong> aguardando retirada</a>
+                    {% endif %}
                 </div>
 
                 <div class="table-wrap data-table-wrap">

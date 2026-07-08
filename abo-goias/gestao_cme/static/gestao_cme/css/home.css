@@ -74,7 +74,7 @@ select {
     margin: 0 0 7px;
     color: #79b7ff;
     font-size: 0.76rem;
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: 0;
     text-transform: uppercase;
 }
@@ -169,7 +169,7 @@ h2 {
     border-radius: 14px;
     padding: 12px 16px;
     color: var(--muted-strong);
-    font-weight: 800;
+    font-weight: 600;
     pointer-events: auto;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
     animation: message-appear 0.22s ease, message-dismiss 5s 0.5s ease forwards;
@@ -207,7 +207,7 @@ label,
 .search-label {
     color: var(--muted-strong);
     font-size: 0.9rem;
-    font-weight: 800;
+    font-weight: 500;
 }
 
 select,
@@ -269,7 +269,7 @@ select option {
     border-radius: 16px;
     padding: 0 18px;
     color: #ffffff;
-    font-weight: 800;
+    font-weight: 700;
     text-decoration: none;
     cursor: pointer;
     transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease;
@@ -339,7 +339,7 @@ select option {
 .metric-label {
     color: var(--muted-strong);
     font-size: 0.82rem;
-    font-weight: 800;
+    font-weight: 500;
 }
 
 .metric-card strong {
@@ -380,7 +380,7 @@ select option {
 .info-chip span {
     color: var(--muted);
     font-size: 0.78rem;
-    font-weight: 800;
+    font-weight: 500;
     white-space: nowrap;
 }
 
@@ -388,6 +388,7 @@ select option {
     display: block;
     color: var(--text);
     font-size: 0.9rem;
+    font-weight: 600;
     overflow-wrap: anywhere;
 }
 
@@ -518,7 +519,7 @@ tbody tr:last-child td {
     background: var(--success-bg);
     color: var(--success);
     font-size: 0.78rem;
-    font-weight: 900;
+    font-weight: 600;
 }
 
 .empty-row td {
@@ -662,7 +663,7 @@ td strong {
     align-items: center;
     gap: 12px;
     color: var(--muted-strong);
-    font-weight: 800;
+    font-weight: 500;
 }
 
 .user-menu form {
@@ -714,7 +715,7 @@ td strong {
 .auth-link {
     color: #9fcdff;
     font-size: 0.92rem;
-    font-weight: 800;
+    font-weight: 600;
     text-align: center;
     text-decoration: none;
 }
@@ -735,7 +736,7 @@ td strong {
     padding: 12px 14px;
     background: rgba(255, 94, 94, 0.12);
     color: #ffb8b8;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .portal-body {
@@ -907,7 +908,7 @@ td strong {
 .portal-brand-card span {
     color: var(--muted);
     font-size: 0.82rem;
-    font-weight: 800;
+    font-weight: 500;
 }
 
 .portal-stat strong {
@@ -953,7 +954,7 @@ td strong {
 .portal-status-item span {
     color: var(--muted);
     font-size: 0.78rem;
-    font-weight: 800;
+    font-weight: 500;
     text-transform: uppercase;
 }
 
@@ -1048,7 +1049,7 @@ td strong {
     flex: 0 0 auto;
     color: var(--muted);
     font-size: 0.76rem;
-    font-weight: 800;
+    font-weight: 500;
     white-space: nowrap;
 }
 
@@ -1104,7 +1105,7 @@ td strong {
 .system-card > span {
     color: #9fcdff;
     font-size: 0.8rem;
-    font-weight: 900;
+    font-weight: 600;
     text-transform: uppercase;
 }
 
@@ -1138,7 +1139,7 @@ td strong {
     color: #d9ecff;
     font-size: 0.88rem;
     font-style: normal;
-    font-weight: 900;
+    font-weight: 600;
     white-space: nowrap;
 }
 
@@ -1178,7 +1179,7 @@ td strong {
     background: rgba(255, 255, 255, 0.04);
     color: var(--muted-strong);
     font-size: 0.9rem;
-    font-weight: 900;
+    font-weight: 500;
     text-decoration: none;
 }
 
@@ -1313,7 +1314,7 @@ th {
 }
 
 td strong {
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .cell-muted {
@@ -1326,7 +1327,7 @@ td strong {
     min-height: 24px;
     padding: 2px 10px;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1.4;
 }
 
@@ -1341,7 +1342,7 @@ td strong {
 
 .pagination-summary span:first-child {
     color: var(--muted-strong);
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .pagination {
@@ -1847,12 +1848,12 @@ textarea:focus {
 .sync-date {
     color: var(--muted);
     font-size: 0.76rem;
-    font-weight: 800;
+    font-weight: 500;
 }
 
 .sync-tipo {
     color: var(--muted-strong);
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .sync-counts {
@@ -2318,4 +2319,106 @@ h3 {
     min-height: 42px;
     border-radius: 10px;
     font-size: 14px;
+}
+
+/* ── Barra de filtros única das listagens ───────────────────── */
+
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.filter-bar .search-control {
+    flex: 1 1 240px;
+}
+
+.filter-bar input[type="search"],
+.filter-bar select,
+.filter-bar .button {
+    min-height: 46px;
+}
+
+.filter-bar select {
+    width: auto;
+    min-width: 150px;
+    max-width: 260px;
+    flex: 0 1 auto;
+}
+
+/* ── Chips removíveis de filtro ativo ───────────────────────── */
+
+.info-chip--removable {
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.info-chip--removable:hover {
+    border-color: rgba(255, 94, 94, 0.4);
+    background: rgba(255, 94, 94, 0.08);
+}
+
+.chip-x {
+    color: var(--muted);
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.info-chip--removable:hover .chip-x {
+    color: #ff9e9e;
+}
+
+.chips-clear {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 4px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.chips-clear:hover {
+    color: var(--muted-strong);
+    text-decoration: underline;
+}
+
+/* ── Linha de resumo dos resultados ─────────────────────────── */
+
+.results-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.results-meta strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.results-meta a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.results-meta a:hover {
+    text-decoration: underline;
+}
+
+.results-meta .meta-warn,
+.results-meta .meta-warn strong {
+    color: #ff9e9e;
+}
+
+@media (max-width: 620px) {
+    .filter-bar select {
+        width: 100%;
+        max-width: none;
+    }
 }

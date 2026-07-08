@@ -12,35 +12,6 @@
                 <p class="panel-copy">{{ subtitulo }}</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page=active_page %}
-
-                <form class="form-stack" method="get">
-                    {% if busca %}
-                        <input type="hidden" name="q" value="{{ busca }}">
-                    {% endif %}
-                    {% if filter_select %}
-                        <div class="field">
-                            <label for="{{ filter_select.name }}">{{ filter_select.label }}</label>
-                            <select id="{{ filter_select.name }}" name="{{ filter_select.name }}">
-                                <option value="">Todas</option>
-                                {% for option in filter_select.options %}
-                                    <option value="{{ option.value }}" {% if filter_select.value == option.value %}selected{% endif %}>{{ option.label }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    {% endif %}
-
-                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
-                    <a class="button secondary" href="{{ request.path }}">Limpar filtros</a>
-                </form>
-
-                <div class="metric-grid">
-                    {% for metrica in metricas %}
-                        <div class="metric-card">
-                            <span class="metric-label">{{ metrica.label }}</span>
-                            <strong>{{ metrica.value }}</strong>
-                        </div>
-                    {% endfor %}
-                </div>
             </aside>
 
             <section class="panel results-panel">
@@ -80,44 +51,51 @@
                     </div>
                 {% endif %}
 
-                <form class="results-search" method="get">
-                    {% if filter_select.value %}
-                        <input type="hidden" name="{{ filter_select.name }}" value="{{ filter_select.value }}">
-                    {% endif %}
-                    <label class="search-label" for="results-q">Buscar na listagem</label>
-                    <div class="results-search-row">
-                        <div class="search-control">
-                            <input id="results-q" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, matrícula ou contato...">
-                        </div>
-                        <button class="button primary" type="submit">Buscar</button>
-                        <a class="button secondary" href="{{ request.path }}">Limpar</a>
+                <form class="filter-bar" method="get">
+                    <div class="search-control">
+                        <input id="results-q" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, matrícula ou contato..." aria-label="Buscar na listagem">
                     </div>
+                    {% if filter_select %}
+                        <select name="{{ filter_select.name }}" aria-label="Filtrar por {{ filter_select.label|lower }}" onchange="this.form.submit()">
+                            <option value="">{{ filter_select.label }} — todas</option>
+                            {% for option in filter_select.options %}
+                                <option value="{{ option.value }}" {% if filter_select.value == option.value %}selected{% endif %}>{{ option.label }}</option>
+                            {% endfor %}
+                        </select>
+                    {% endif %}
+                    <button class="button primary" type="submit">Buscar</button>
                 </form>
 
-                <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Busca</span>
-                        <strong>{{ busca|default:"Todos os registros" }}</strong>
+                {% if busca or filter_select.value %}
+                    <div class="selection-summary">
+                        {% if busca %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if filter_select.value %}{{ filter_select.name }}={{ filter_select.value|urlencode }}{% endif %}"
+                               title="Remover busca">
+                                <span>Busca</span>
+                                <strong>{{ busca }}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        {% if filter_select.value %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                               title="Remover filtro de {{ filter_select.label|lower }}">
+                                <span>{{ filter_select.label }}</span>
+                                <strong>{% for option in filter_select.options %}{% if filter_select.value == option.value %}{{ option.label }}{% endif %}{% endfor %}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        <a class="chips-clear" href="{{ request.path }}">Limpar tudo</a>
                     </div>
-                    {% if ultima_sincronizacao %}
-                        <div class="info-chip">
-                            <span>Última sincronização</span>
-                            <strong>{{ ultima_sincronizacao|date:"d/m/Y H:i" }}</strong>
-                        </div>
-                    {% else %}
-                        <div class="info-chip">
-                            <span>Última sincronização</span>
-                            <strong>Não realizada</strong>
-                        </div>
-                    {% endif %}
-                    <div class="info-chip">
-                        <span>Resultado</span>
-                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
-                    </div>
-                    <div class="info-chip">
-                        <span>Página</span>
-                        <strong>{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</strong>
-                    </div>
+                {% endif %}
+
+                <div class="results-meta">
+                    <span><strong>{{ page_obj.paginator.count }}</strong> registro{{ page_obj.paginator.count|pluralize }}</span>
+                    {% for metrica in metricas %}
+                        <span><strong>{{ metrica.value }}</strong> {{ metrica.label|lower }}</span>
+                    {% endfor %}
+                    <span>Última sincronização: <strong>{% if ultima_sincronizacao %}{{ ultima_sincronizacao|date:"d/m/Y H:i" }}{% else %}não realizada{% endif %}</strong></span>
                 </div>
 
                 <div class="table-wrap data-table-wrap">

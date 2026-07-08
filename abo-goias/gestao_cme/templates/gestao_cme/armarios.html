@@ -12,42 +12,6 @@
                 <p class="panel-copy">Visualize os identificadores dos abrigos e sua ocupação atual.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="armarios" %}
-
-                <form class="form-stack" method="get">
-                    {% if busca %}
-                        <input type="hidden" name="q" value="{{ busca }}">
-                    {% endif %}
-                    <div class="field">
-                        <label for="ocupacao">Ocupação</label>
-                        <select id="ocupacao" name="ocupacao">
-                            <option value="">Todos</option>
-                            <option value="ocupado" {% if ocupacao_atual == "ocupado" %}selected{% endif %}>Ocupados</option>
-                            <option value="livre" {% if ocupacao_atual == "livre" %}selected{% endif %}>Livres</option>
-                        </select>
-                    </div>
-
-                    <button class="button primary update-first" type="submit">Aplicar filtros</button>
-                    <a class="button secondary" href="{% url 'abrigos' %}">Limpar filtros</a>
-                </form>
-
-                <div class="metric-grid">
-                    <div class="metric-card">
-                        <span class="metric-label">Abrigos</span>
-                        <strong>{{ metricas.total }}</strong>
-                    </div>
-                    <div class="metric-card danger-metric">
-                        <span class="metric-label">Ocupados</span>
-                        <strong>{{ metricas.ocupados }}</strong>
-                    </div>
-                    <div class="metric-card">
-                        <span class="metric-label">Livres</span>
-                        <strong>{{ metricas.livres }}</strong>
-                    </div>
-                    <div class="metric-card">
-                        <span class="metric-label">Filtrados</span>
-                        <strong>{{ metricas.filtrados }}</strong>
-                    </div>
-                </div>
             </aside>
 
             <section class="panel results-panel">
@@ -60,37 +24,46 @@
                     </div>
                 </div>
 
-                <form class="results-search" method="get">
-                    {% if ocupacao_atual %}
-                        <input type="hidden" name="ocupacao" value="{{ ocupacao_atual }}">
-                    {% endif %}
-                    <label class="search-label" for="results-q-armarios">Buscar na listagem</label>
-                    <div class="results-search-row">
-                        <div class="search-control">
-                            <input id="results-q-armarios" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por identificador do abrigo...">
-                        </div>
-                        <button class="button primary" type="submit">Buscar</button>
-                        <a class="button secondary" href="{% url 'abrigos' %}">Limpar</a>
+                <form class="filter-bar" method="get">
+                    <div class="search-control">
+                        <input id="results-q-armarios" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por identificador do abrigo..." aria-label="Buscar na listagem">
                     </div>
+                    <select name="ocupacao" aria-label="Filtrar por ocupação" onchange="this.form.submit()">
+                        <option value="">Ocupação — todos</option>
+                        <option value="ocupado" {% if ocupacao_atual == "ocupado" %}selected{% endif %}>Ocupados</option>
+                        <option value="livre" {% if ocupacao_atual == "livre" %}selected{% endif %}>Livres</option>
+                    </select>
+                    <button class="button primary" type="submit">Buscar</button>
                 </form>
 
-                <div class="selection-summary">
-                    {% if busca %}
-                        <div class="info-chip">
-                            <span>Busca</span>
-                            <strong>{{ busca }}</strong>
-                        </div>
-                    {% endif %}
-                    {% if ocupacao_atual %}
-                        <div class="info-chip">
-                            <span>Ocupação</span>
-                            <strong>{{ ocupacao_label }}</strong>
-                        </div>
-                    {% endif %}
-                    <div class="info-chip">
-                        <span>Resultado</span>
-                        <strong>{{ page_obj.paginator.count }} registro(s)</strong>
+                {% if busca or ocupacao_atual %}
+                    <div class="selection-summary">
+                        {% if busca %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if ocupacao_atual %}ocupacao={{ ocupacao_atual }}{% endif %}"
+                               title="Remover busca">
+                                <span>Busca</span>
+                                <strong>{{ busca }}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        {% if ocupacao_atual %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                               title="Remover filtro de ocupação">
+                                <span>Ocupação</span>
+                                <strong>{{ ocupacao_label }}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        <a class="chips-clear" href="{% url 'abrigos' %}">Limpar tudo</a>
                     </div>
+                {% endif %}
+
+                <div class="results-meta">
+                    <span><strong>{{ page_obj.paginator.count }}</strong> resultado{{ page_obj.paginator.count|pluralize }}</span>
+                    <a href="?ocupacao=ocupado" title="Filtrar ocupados"><strong>{{ metricas.ocupados }}</strong> ocupado{{ metricas.ocupados|pluralize }}</a>
+                    <a href="?ocupacao=livre" title="Filtrar livres"><strong>{{ metricas.livres }}</strong> livre{{ metricas.livres|pluralize }}</a>
                 </div>
 
                 <div class="table-wrap data-table-wrap">

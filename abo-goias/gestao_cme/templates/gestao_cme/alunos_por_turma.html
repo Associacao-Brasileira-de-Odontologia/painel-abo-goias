@@ -14,52 +14,6 @@
                 <p class="panel-copy">Consulte os alunos vinculados a cada turma, veja seus abrigos e o histórico de movimentações.</p>
 
                 {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="alunos" %}
-
-                <form class="form-stack" method="get">
-                    {% if busca %}
-                        <input type="hidden" name="q" value="{{ busca }}">
-                    {% endif %}
-                    <div class="field">
-                        <label for="sel-status">Status</label>
-                        <select id="sel-status" name="status">
-                            <option value="ativo" {% if status_aluno == "ativo" %}selected{% endif %}>Somente ativos</option>
-                            <option value="inativo" {% if status_aluno == "inativo" %}selected{% endif %}>Somente inativos</option>
-                            <option value="todos" {% if status_aluno == "todos" %}selected{% endif %}>Todos</option>
-                        </select>
-                    </div>
-                    <div class="field">
-                        <label for="sel-turma">Turma</label>
-                        <select id="sel-turma" name="turma">
-                            <option value="">Todas as turmas</option>
-                            {% for turma in turmas %}
-                                <option value="{{ turma.pk }}" {% if turma_id == turma.pk|stringformat:"s" %}selected{% endif %}>
-                                    {{ turma.codigo }} — {{ turma.nome }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button class="button primary" type="submit">Aplicar</button>
-                    <a class="button secondary" href="{% url 'alunos_por_turma' %}">Limpar</a>
-                </form>
-
-                <div class="metric-grid">
-                    <div class="metric-card">
-                        <span class="metric-label">Alunos</span>
-                        <strong>{{ total_alunos }}</strong>
-                    </div>
-                    <div class="metric-card">
-                        <span class="metric-label">Turmas</span>
-                        <strong>{{ total_turmas }}</strong>
-                    </div>
-                    <div class="metric-card">
-                        <span class="metric-label">Ativos</span>
-                        <strong>{{ total_ativos }}</strong>
-                    </div>
-                    <div class="metric-card {% if sem_abrigo %}danger-metric{% endif %}">
-                        <span class="metric-label">Sem abrigo</span>
-                        <strong>{{ sem_abrigo }}</strong>
-                    </div>
-                </div>
             </aside>
 
             {# ── Painel principal ──────────────────────────────────────── #}
@@ -93,58 +47,71 @@
                     </div>
                 {% endif %}
 
-                {# Barra de busca #}
-                <form class="results-search" method="get" autocomplete="off">
-                    {% if turma_id %}
-                        <input type="hidden" name="turma" value="{{ turma_id }}">
-                    {% endif %}
-                    {% if status_aluno and status_aluno != "ativo" %}
-                        <input type="hidden" name="status" value="{{ status_aluno }}">
-                    {% endif %}
-                    <label class="search-label" for="results-q-alunos">Buscar aluno</label>
-                    <div class="results-search-row">
-                        <div class="search-control">
-                            <input id="results-q-alunos" type="search" name="q" autofocus
-                                   value="{{ busca }}"
-                                   placeholder="Nome, matrícula, e-mail ou turma...">
-                        </div>
-                        <button class="button primary" type="submit">Buscar</button>
-                        <a class="button secondary" href="{% url 'alunos_por_turma' %}">Limpar</a>
+                {# Barra de filtros única #}
+                <form class="filter-bar" method="get" autocomplete="off">
+                    <div class="search-control">
+                        <input id="results-q-alunos" type="search" name="q" autofocus
+                               value="{{ busca }}"
+                               placeholder="Nome, matrícula, e-mail ou turma..."
+                               aria-label="Buscar aluno">
                     </div>
+                    <select name="status" aria-label="Filtrar por status" onchange="this.form.submit()">
+                        <option value="ativo" {% if status_aluno == "ativo" %}selected{% endif %}>Somente ativos</option>
+                        <option value="inativo" {% if status_aluno == "inativo" %}selected{% endif %}>Somente inativos</option>
+                        <option value="todos" {% if status_aluno == "todos" %}selected{% endif %}>Todos</option>
+                    </select>
+                    <select name="turma" aria-label="Filtrar por turma" onchange="this.form.submit()">
+                        <option value="">Turma — todas</option>
+                        {% for turma in turmas %}
+                            <option value="{{ turma.pk }}" {% if turma_id == turma.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ turma.codigo }} — {{ turma.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <button class="button primary" type="submit">Buscar</button>
                 </form>
 
-                {# Chips de resumo #}
-                <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Exibindo</span>
-                        <strong>
-                            {% if status_aluno == "ativo" %}Ativos
-                            {% elif status_aluno == "inativo" %}Inativos
-                            {% else %}Todos
-                            {% endif %}
-                        </strong>
+                {# Chips removíveis de filtro ativo #}
+                {% if busca or turma_id or status_aluno != "ativo" %}
+                    <div class="selection-summary">
+                        {% if busca %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if status_aluno != 'ativo' %}status={{ status_aluno }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                               title="Remover busca">
+                                <span>Busca</span>
+                                <strong>{{ busca }}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        {% if status_aluno != "ativo" %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                               title="Voltar a exibir somente ativos">
+                                <span>Exibindo</span>
+                                <strong>{% if status_aluno == "inativo" %}Inativos{% else %}Todos{% endif %}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        {% if turma_id %}
+                            <a class="info-chip info-chip--removable"
+                               href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_aluno != 'ativo' %}status={{ status_aluno }}{% endif %}"
+                               title="Remover filtro de turma">
+                                <span>Turma</span>
+                                <strong>{% for turma in turmas %}{% if turma_id == turma.pk|stringformat:"s" %}{{ turma.codigo }}{% endif %}{% endfor %}</strong>
+                                <span class="chip-x" aria-hidden="true">×</span>
+                            </a>
+                        {% endif %}
+                        <a class="chips-clear" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
                     </div>
-                    {% if busca %}
-                        <div class="info-chip">
-                            <span>Busca</span>
-                            <strong>{{ busca }}</strong>
-                        </div>
+                {% endif %}
+
+                <div class="results-meta">
+                    <span><strong>{{ page_obj.paginator.count }}</strong> aluno{{ page_obj.paginator.count|pluralize }}</span>
+                    <span><strong>{{ total_turmas }}</strong> turma{{ total_turmas|pluralize }}</span>
+                    {% if sem_abrigo %}
+                        <span class="meta-warn"><strong>{{ sem_abrigo }}</strong> sem abrigo</span>
                     {% endif %}
-                    {% if ultima_sincronizacao %}
-                        <div class="info-chip">
-                            <span>Última sincronização</span>
-                            <strong>{{ ultima_sincronizacao|date:"d/m/Y H:i" }}</strong>
-                        </div>
-                    {% else %}
-                        <div class="info-chip">
-                            <span>Última sincronização</span>
-                            <strong>Não realizada</strong>
-                        </div>
-                    {% endif %}
-                    <div class="info-chip">
-                        <span>Resultado</span>
-                        <strong>{{ page_obj.paginator.count }} aluno(s)</strong>
-                    </div>
+                    <span>Última sincronização: <strong>{% if ultima_sincronizacao %}{{ ultima_sincronizacao|date:"d/m/Y H:i" }}{% else %}não realizada{% endif %}</strong></span>
                 </div>
 
                 {# Tabela de alunos #}
