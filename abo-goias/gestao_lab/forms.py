@@ -48,10 +48,21 @@ class PedidoMaterialForm(forms.ModelForm):
             "nome"
         )
         self.fields["equipe"].empty_label = "— Selecione a equipe —"
+        self.fields["equipe"].label_from_instance = (
+            lambda equipe: f"{equipe.nome} — {equipe.coordenador}"
+        )
         self.fields["previsao_entrega"].widget = forms.DateInput(
             attrs={"type": "date"}, format="%Y-%m-%d"
         )
         self.fields["previsao_entrega"].input_formats = ["%Y-%m-%d"]
+        self.fields["descricao_servico"].widget = forms.Textarea(
+            attrs={
+                "rows": 4,
+                "placeholder": (
+                    "Descreva o procedimento, especificações e observações relevantes..."
+                ),
+            }
+        )
 
 
 class PedidoEnvioForm(forms.Form):

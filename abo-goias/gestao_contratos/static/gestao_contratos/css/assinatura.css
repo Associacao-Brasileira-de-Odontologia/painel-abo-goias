@@ -4,21 +4,22 @@
  * Usadas por assinar.html, assinatura_invalida.html e assinatura_concluida.html
  * — páginas standalone (não estendem gestao_cme/base.html), acessadas pelo
  * PACIENTE via QR Code, no próprio celular, muitas vezes ao ar livre. Por
- * isso o fundo permanece claro (legibilidade), mas com a mesma tipografia,
- * acento dourado-tinta e linguagem de movimento do restante da app.
+ * isso o fundo permanece claro (legibilidade): papel frio com tinta-azul
+ * royal da paleta ABO Goiás, como caneta e carimbo de documento oficial,
+ * mantendo a tipografia e a linguagem de movimento do restante da app.
  */
 
 :root {
-    --gc-paper: #faf6ee;
-    --gc-paper-card: #fffdf8;
-    --gc-paper-line: rgba(60, 40, 20, 0.14);
-    --gc-paper-ink: #2b2013;
-    --gc-paper-muted: #6b6153;
-    --gc-ink-onlight: #7a4e1c;
-    --gc-ink-onlight-dark: #5c3a13;
+    --gc-paper: #f2f7fd;
+    --gc-paper-card: #fbfdff;
+    --gc-paper-line: rgba(3, 34, 83, 0.14);
+    --gc-paper-ink: #032253;
+    --gc-paper-muted: #5a6b85;
+    --gc-ink-onlight: #0348bb;
+    --gc-ink-onlight-dark: #032253;
     --gc-erro: #a32020;
     --gc-erro-bg: #fdeaea;
-    --gc-sucesso: #4f7a3d;
+    --gc-sucesso: #0b8f7d;
 }
 
 * {
@@ -36,8 +37,8 @@ body {
     line-height: 1.5;
     background-color: var(--gc-paper);
     background-image:
-        radial-gradient(circle at 8% 4%, rgba(224, 168, 85, 0.1), transparent 40%),
-        radial-gradient(rgba(60, 40, 20, 0.035) 1px, transparent 1px);
+        radial-gradient(circle at 8% 4%, rgba(39, 186, 255, 0.1), transparent 40%),
+        radial-gradient(rgba(3, 34, 83, 0.035) 1px, transparent 1px);
     background-size: auto, 3px 3px;
 }
 
@@ -94,7 +95,7 @@ p {
     background: var(--gc-paper-card);
     border: 1px solid var(--gc-paper-line);
     border-radius: 14px;
-    box-shadow: 0 2px 18px rgba(43, 32, 19, 0.07);
+    box-shadow: 0 2px 18px rgba(3, 34, 83, 0.07);
     padding: 24px;
     margin-bottom: 22px;
     animation: gc-card-in 0.45s ease both;
@@ -115,7 +116,7 @@ p {
 }
 
 .info {
-    background: rgba(122, 78, 28, 0.06);
+    background: rgba(3, 72, 187, 0.06);
     border: 1px solid var(--gc-paper-line);
     border-radius: 10px;
     padding: 14px 16px;
@@ -156,12 +157,12 @@ p {
 
 .btn-primary {
     background: linear-gradient(135deg, var(--gc-ink-onlight), var(--gc-ink-onlight-dark));
-    color: #fff8ec;
-    box-shadow: 0 14px 30px rgba(122, 78, 28, 0.28);
+    color: #ffffff;
+    box-shadow: 0 14px 30px rgba(3, 72, 187, 0.28);
 }
 
 .btn-primary:disabled {
-    background: #cbb9a0;
+    background: #a9bdd8;
     color: #fff;
     cursor: not-allowed;
     box-shadow: none;
@@ -179,11 +180,11 @@ p {
 }
 
 .canvas-wrap {
-    border: 2px dashed rgba(122, 78, 28, 0.35);
+    border: 2px dashed rgba(3, 72, 187, 0.35);
     border-radius: 12px;
     margin: 14px 0 10px;
     position: relative;
-    background: #fffefb;
+    background: #ffffff;
     touch-action: none;
 }
 
@@ -200,7 +201,7 @@ canvas {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #a99a83;
+    color: #93a7c4;
     font-family: "Fraunces", Georgia, serif;
     font-style: italic;
     font-size: 1rem;

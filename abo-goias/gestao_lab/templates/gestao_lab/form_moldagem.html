@@ -44,15 +44,7 @@
 
                 <div class="field field-required">
                     <label for="id_paciente">Paciente</label>
-                    <select id="id_paciente" name="paciente" required>
-                        <option value="">— Selecione o paciente —</option>
-                        {% for paciente in form.fields.paciente.queryset %}
-                            <option value="{{ paciente.pk }}"
-                                {% if form.paciente.value == paciente.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ paciente.nome }}
-                            </option>
-                        {% endfor %}
-                    </select>
+                    {{ form.paciente }}
                     {% if form.paciente.errors %}
                         <span class="field-error">{{ form.paciente.errors|join:", " }}</span>
                     {% endif %}
@@ -60,21 +52,13 @@
 
                 <div class="field field-required">
                     <label for="id_aluno">Aluno</label>
-                    <select id="id_aluno" name="aluno" required>
-                        <option value="">— Selecione o aluno —</option>
-                        {% for aluno in form.fields.aluno.queryset %}
-                            <option value="{{ aluno.pk }}"
-                                {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ aluno.nome }}
-                            </option>
-                        {% endfor %}
-                    </select>
+                    {{ form.aluno }}
                     {% if form.aluno.errors %}
                         <span class="field-error">{{ form.aluno.errors|join:", " }}</span>
                     {% endif %}
                 </div>
 
-                <div class="field">
+                <div class="field field-checkbox">
                     <label>
                         <input type="checkbox" name="faturado"
                             {% if form.faturado.value %}checked{% endif %}>
@@ -82,7 +66,7 @@
                     </label>
                 </div>
 
-                <div class="field">
+                <div class="field field-checkbox">
                     <label>
                         <input type="checkbox" name="entregue"
                             {% if form.entregue.value %}checked{% endif %}>

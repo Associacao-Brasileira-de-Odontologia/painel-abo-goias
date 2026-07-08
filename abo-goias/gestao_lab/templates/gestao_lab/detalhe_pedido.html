@@ -73,7 +73,7 @@
                 </div>
             </div>
 
-            <!-- Linha do tempo -->
+            <!-- Linha do tempo com ação embutida na etapa pendente -->
             <div class="kpi-section">
                 <p class="section-label">Etapas do pedido</p>
                 <div class="proximas-list">
@@ -87,102 +87,82 @@
                         </div>
                     </div>
 
-                    <div class="proxima-item {% if not pedido.data_envio %}etapa-pendente{% endif %}">
-                        <div>
-                            <strong>Envio ao laboratório</strong>
-                            <span class="cell-muted">Material físico enviado ao lab</span>
-                        </div>
-                        <div class="proxima-date">
-                            {% if pedido.data_envio %}
+                    {% if pedido.data_envio %}
+                        <div class="proxima-item">
+                            <div>
+                                <strong>Envio ao laboratório</strong>
+                                <span class="cell-muted">Material físico enviado ao lab</span>
+                            </div>
+                            <div class="proxima-date">
                                 <strong class="mono">{{ pedido.data_envio|date:"d/m/Y" }}</strong>
-                            {% else %}
-                                <span class="cell-muted">Pendente</span>
-                            {% endif %}
+                            </div>
                         </div>
-                    </div>
+                    {% else %}
+                        <div class="proxima-item etapa-ativa">
+                            <div>
+                                <strong>Envio ao laboratório</strong>
+                                <span class="cell-muted">Material físico enviado ao lab</span>
+                            </div>
+                            <form method="post" action="{% url 'lab_marcar_envio' pedido.pk %}" class="etapa-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <input type="date" name="data_envio" value="{{ hoje|date:'Y-m-d' }}" required aria-label="Data de envio">
+                                <button class="button primary compact-button" type="submit">Registrar envio</button>
+                            </form>
+                        </div>
+                    {% endif %}
 
-                    <div class="proxima-item {% if not pedido.entregue %}etapa-pendente{% endif %}">
-                        <div>
-                            <strong>Devolução do laboratório</strong>
-                            <span class="cell-muted">Material finalizado devolvido</span>
-                        </div>
-                        <div class="proxima-date">
-                            {% if pedido.data_entrega %}
+                    {% if pedido.entregue %}
+                        <div class="proxima-item">
+                            <div>
+                                <strong>Devolução do laboratório</strong>
+                                <span class="cell-muted">Material finalizado devolvido</span>
+                            </div>
+                            <div class="proxima-date">
                                 <strong class="mono">{{ pedido.data_entrega|date:"d/m/Y" }}</strong>
-                            {% else %}
-                                <span class="cell-muted">Pendente</span>
-                            {% endif %}
+                            </div>
                         </div>
-                    </div>
+                    {% elif pedido.data_envio %}
+                        <div class="proxima-item etapa-ativa">
+                            <div>
+                                <strong>Devolução do laboratório</strong>
+                                <span class="cell-muted">Material finalizado devolvido</span>
+                            </div>
+                            <form method="post" action="{% url 'lab_marcar_entrega' pedido.pk %}" class="etapa-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <input type="date" name="data_entrega" value="{{ hoje|date:'Y-m-d' }}" required aria-label="Data de entrega">
+                                <button class="button primary compact-button" type="submit">Registrar entrega</button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <div class="proxima-item etapa-pendente">
+                            <div>
+                                <strong>Devolução do laboratório</strong>
+                                <span class="cell-muted">Material finalizado devolvido</span>
+                            </div>
+                            <div class="proxima-date">
+                                <span class="cell-muted">Pendente</span>
+                            </div>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
-
-            <!-- Ação: Registrar envio -->
-            {% if not pedido.data_envio %}
-                <div class="kpi-section">
-                    <h3>Registrar envio ao laboratório</h3>
-                    {% if form_envio.errors %}
-                        <div class="form-errors">
-                            <ul>{% for e in form_envio.data_envio.errors %}<li>{{ e }}</li>{% endfor %}</ul>
-                        </div>
-                    {% endif %}
-                    <form method="post" action="{% url 'lab_marcar_envio' pedido.pk %}" class="form-stack">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <div class="field field-required">
-                            <label for="envio_data">Data de envio</label>
-                            <input id="envio_data" type="date" name="data_envio" value="{{ hoje|date:'Y-m-d' }}" required>
-                        </div>
-                        <div class="form-actions">
-                            <button class="button primary" type="submit">Registrar envio</button>
-                        </div>
-                    </form>
-                </div>
-            {% elif not pedido.entregue %}
-                <div class="kpi-section">
-                    <h3>Registrar entrega do laboratório</h3>
-                    {% if form_entrega.errors %}
-                        <div class="form-errors">
-                            <ul>{% for e in form_entrega.data_entrega.errors %}<li>{{ e }}</li>{% endfor %}</ul>
-                        </div>
-                    {% endif %}
-                    <form method="post" action="{% url 'lab_marcar_entrega' pedido.pk %}" class="form-stack">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <div class="field field-required">
-                            <label for="entrega_data">Data de entrega</label>
-                            <input id="entrega_data" type="date" name="data_entrega" value="{{ hoje|date:'Y-m-d' }}" required>
-                        </div>
-                        <div class="form-actions">
-                            <button class="button primary" type="submit">Registrar entrega</button>
-                        </div>
-                    </form>
-                </div>
-            {% endif %}
 
             <!-- Faturamento -->
             {% if pedido.entregue %}
                 <div class="kpi-section">
                     <h3>Faturamento</h3>
-                    {% if form_faturamento.errors %}
-                        <div class="form-errors">
-                            <ul>
-                                {% for field in form_faturamento %}
-                                    {% for e in field.errors %}<li>{{ field.label }}: {{ e }}</li>{% endfor %}
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% endif %}
                     <form method="post" action="{% url 'lab_atualizar_faturamento' pedido.pk %}" class="form-stack">
                         {% csrf_token %}
                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <div class="field">
+                        <div class="field field-checkbox">
                             <label>
                                 <input type="checkbox" name="faturado_paciente" {% if pedido.faturado_paciente %}checked{% endif %}>
                                 Faturado Paciente
                             </label>
                         </div>
-                        <div class="field">
+                        <div class="field field-checkbox">
                             <label>
                                 <input type="checkbox" name="faturado_lab" {% if pedido.faturado_lab %}checked{% endif %}>
                                 Faturado Lab

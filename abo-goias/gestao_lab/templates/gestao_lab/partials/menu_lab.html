@@ -1,4 +1,6 @@
 <nav class="side-nav" aria-label="Navegação do laboratório">
+    <p class="side-nav-label">Operação</p>
+
     <a class="side-link {% if active_page == 'dashboard' %}active{% endif %}" href="{% url 'lab_dashboard' %}">
         <span class="side-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
@@ -35,6 +37,16 @@
         <span>Novo pedido</span>
     </a>
 
+    <a class="side-link {% if active_page == 'moldagens' %}active{% endif %}" href="{% url 'lab_moldagens' %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+                <ellipse cx="12" cy="12" rx="10" ry="5"></ellipse>
+                <path d="M2 12c0 5.523 4.477 10 10 10s10-4.477 10-10"></path>
+            </svg>
+        </span>
+        <span>Moldagens</span>
+    </a>
+
     <a class="side-link {% if active_page == 'faturamento' %}active{% endif %}" href="{% url 'lab_pedidos_faturamento' %}">
         <span class="side-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
@@ -46,15 +58,7 @@
         <span>Faturamento</span>
     </a>
 
-    <a class="side-link {% if active_page == 'moldagens' %}active{% endif %}" href="{% url 'lab_moldagens' %}">
-        <span class="side-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-                <ellipse cx="12" cy="12" rx="10" ry="5"></ellipse>
-                <path d="M2 12c0 5.523 4.477 10 10 10s10-4.477 10-10"></path>
-            </svg>
-        </span>
-        <span>Moldagens</span>
-    </a>
+    <p class="side-nav-label">Cadastros</p>
 
     <a class="side-link {% if active_page == 'laboratorios' %}active{% endif %}" href="{% url 'lab_laboratorios' %}">
         <span class="side-icon" aria-hidden="true">
@@ -76,6 +80,8 @@
         </span>
         <span>Equipes</span>
     </a>
+
+    <p class="side-nav-label">Dental Office</p>
 
     <a class="side-link {% if active_page == 'pacientes' %}active{% endif %}" href="{% url 'lab_pacientes' %}">
         <span class="side-icon" aria-hidden="true">

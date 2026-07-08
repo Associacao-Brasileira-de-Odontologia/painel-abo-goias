@@ -24,20 +24,7 @@
                 </div>
             </div>
 
-            <div class="sidebar-section">
-                <p class="section-label">Sincronização</p>
-                {% if ultima_sync %}
-                    <p class="panel-copy">Última atualização: <strong>{{ ultima_sync|date:"d/m/Y H:i" }}</strong></p>
-                {% else %}
-                    <p class="panel-copy">Nenhuma sincronização realizada ainda.</p>
-                {% endif %}
-                <form method="post" action="{% url 'lab_sincronizar' %}">
-                    {% csrf_token %}
-                    <button class="button secondary" type="submit">Sincronizar com Dental Office</button>
-                </form>
-            </div>
-
-            {% include "gestao_lab/partials/historico_sync.html" %}
+            {% include "gestao_lab/partials/sync_dental.html" %}
         </aside>
 
         <section class="panel results-panel">
@@ -126,6 +113,7 @@
                                         <strong class="mono{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">
                                             {{ paciente.data_previsao_retorno|date:"d/m/Y" }}
                                         </strong>
+                                        <span class="cell-muted{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">{{ paciente.data_previsao_retorno|dias_relativos }}</span>
                                     {% else %}
                                         —
                                     {% endif %}

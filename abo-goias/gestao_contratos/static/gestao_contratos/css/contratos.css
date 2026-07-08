@@ -6,18 +6,20 @@
  * Isso garante que NADA aqui vaza para as demais apps do sistema, que
  * continuam usando exclusivamente gestao_cme/static/gestao_cme/css/home.css.
  *
- * Conceito: "Termo & Selo" — documento legal + precisão clínica. O
- * dourado-tinta (--gc-ink) é reservado para o momento da assinatura;
- * o resto da interface continua usando os tokens semânticos do sistema
- * (azul = navegação/ação, verde/vermelho = sucesso/erro).
+ * Conceito: "Termo & Selo" — documento legal + precisão clínica. A
+ * tinta-azul de caneta/carimbo oficial (--gc-ink, do céu #27BAFF ao
+ * royal #0348BB da paleta ABO Goiás) é reservada ao momento da
+ * assinatura; o resto da interface continua usando os tokens
+ * semânticos do sistema (azul = navegação/ação, turquesa/vermelho =
+ * sucesso/erro).
  */
 
 body.gestao-contratos {
     /* ── Tokens próprios da app ──────────────────────────────────── */
-    --gc-ink: #e0a855;
-    --gc-ink-dark: #a8701f;
-    --gc-ink-soft: rgba(224, 168, 85, 0.16);
-    --gc-ink-line: rgba(224, 168, 85, 0.4);
+    --gc-ink: #27baff;
+    --gc-ink-dark: #0348bb;
+    --gc-ink-soft: rgba(39, 186, 255, 0.16);
+    --gc-ink-line: rgba(39, 186, 255, 0.4);
     --accent: var(--blue); /* corrige --accent nunca declarada em home.css */
 
     /* fontes desta camada — DM Sans do home.css permanece para corpo de texto */
@@ -74,7 +76,7 @@ body.gestao-contratos .panel::before {
     content: "";
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(rgba(224, 168, 85, 0.07) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(39, 186, 255, 0.07) 1px, transparent 1px);
     background-size: 22px 22px;
     border-radius: inherit;
     pointer-events: none;
@@ -106,12 +108,12 @@ body.gestao-contratos textarea:focus-visible {
 
 body.gestao-contratos .button.gc-selar {
     background: linear-gradient(135deg, var(--gc-ink), var(--gc-ink-dark));
-    box-shadow: 0 18px 42px rgba(224, 168, 85, 0.28);
-    color: #1c1204;
+    box-shadow: 0 18px 42px rgba(39, 186, 255, 0.28);
+    color: #ffffff;
 }
 
 body.gestao-contratos .button.gc-selar:hover {
-    box-shadow: 0 22px 50px rgba(224, 168, 85, 0.4);
+    box-shadow: 0 22px 50px rgba(39, 186, 255, 0.4);
 }
 
 body.gestao-contratos .badge.gc-selo {
@@ -256,7 +258,7 @@ body.gestao-contratos .gc-search-hint {
     border-radius: 14px;
     background: #fff;
     padding: 10px;
-    box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 34px rgba(224, 168, 85, 0.22);
+    box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 34px rgba(39, 186, 255, 0.22);
 }
 
 /* ══ Movimento ══════════════════════════════════════════════════── */
@@ -272,8 +274,8 @@ body.gestao-contratos .gc-search-hint {
 }
 
 @keyframes gc-qr-pulse {
-    0%, 100% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 24px rgba(224, 168, 85, 0.18); }
-    50% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 46px rgba(224, 168, 85, 0.4); }
+    0%, 100% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 24px rgba(39, 186, 255, 0.18); }
+    50% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 46px rgba(39, 186, 255, 0.4); }
 }
 
 /* Entrada escalonada — só no carregamento inicial da página, nunca no

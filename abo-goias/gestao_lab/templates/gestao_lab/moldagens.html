@@ -117,10 +117,10 @@
                                     <form method="post" action="{% url 'lab_alternar_faturado_moldagem' moldagem.pk %}" class="inline-form">
                                         {% csrf_token %}
                                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                        <button
-                                            class="button compact-button {% if moldagem.faturado %}primary{% else %}secondary{% endif %}"
-                                            type="submit">
-                                            {% if moldagem.faturado %}Sim{% else %}Não{% endif %}
+                                        <button class="toggle-check {% if moldagem.faturado %}toggle-check--on{% endif %}"
+                                                type="submit"
+                                                title="{% if moldagem.faturado %}Marcar como não faturada{% else %}Marcar como faturada{% endif %}">
+                                            {% if moldagem.faturado %}&#10003;{% else %}&#9744;{% endif %}
                                         </button>
                                     </form>
                                 </td>
@@ -130,10 +130,10 @@
                                     <form method="post" action="{% url 'lab_alternar_entregue_moldagem' moldagem.pk %}" class="inline-form">
                                         {% csrf_token %}
                                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                        <button
-                                            class="button compact-button {% if moldagem.entregue %}primary{% else %}secondary{% endif %}"
-                                            type="submit">
-                                            {% if moldagem.entregue %}Sim{% else %}Não{% endif %}
+                                        <button class="toggle-check {% if moldagem.entregue %}toggle-check--on{% endif %}"
+                                                type="submit"
+                                                title="{% if moldagem.entregue %}Marcar como não entregue{% else %}Marcar como entregue ao lab{% endif %}">
+                                            {% if moldagem.entregue %}&#10003;{% else %}&#9744;{% endif %}
                                         </button>
                                     </form>
                                 </td>

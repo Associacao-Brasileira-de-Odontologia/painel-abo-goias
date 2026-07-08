@@ -29,26 +29,26 @@
             <div class="kpi-section">
                 <p class="section-label">Pedidos em andamento</p>
                 <div class="kpi-grid">
-                    <div class="metric-card metric-success">
+                    <a class="metric-card metric-success" href="{% url 'lab_pedidos' %}?status=EM_DIA" title="Ver pedidos em dia">
                         <span class="metric-label">Em dia</span>
                         <strong>{{ metricas.em_dia }}</strong>
                         <span class="metric-secondary">dentro do prazo</span>
-                    </div>
-                    <div class="metric-card metric-blue">
+                    </a>
+                    <a class="metric-card metric-warn" href="{% url 'lab_pedidos' %}?status=A_CONFIRMAR" title="Ver pedidos a confirmar">
                         <span class="metric-label">A confirmar</span>
                         <strong>{{ metricas.a_confirmar }}</strong>
                         <span class="metric-secondary">aguardando devolução</span>
-                    </div>
-                    <div class="metric-card danger-metric">
+                    </a>
+                    <a class="metric-card danger-metric" href="{% url 'lab_pedidos' %}?status=ATRASADO" title="Ver pedidos atrasados">
                         <span class="metric-label">Atrasados</span>
                         <strong>{{ metricas.atrasado }}</strong>
                         <span class="metric-secondary">fora do prazo</span>
-                    </div>
-                    <div class="metric-card metric-neutral">
+                    </a>
+                    <a class="metric-card metric-neutral" href="{% url 'lab_pedidos_faturamento' %}" title="Ver pedidos aguardando faturamento">
                         <span class="metric-label">Faturamento</span>
                         <strong>{{ metricas.pendentes_faturamento }}</strong>
                         <span class="metric-secondary">pendentes</span>
-                    </div>
+                    </a>
                 </div>
             </div>
 
@@ -66,8 +66,8 @@
                                 </div>
                                 <div class="proxima-date">
                                     <strong class="mono">{{ pedido.previsao_entrega|date:"d/m/Y" }}</strong>
-                                    <span class="cell-muted">
-                                        {% if pedido.previsao_entrega < hoje %}Vencido{% else %}Previsto{% endif %}
+                                    <span class="cell-muted{% if pedido.previsao_entrega < hoje %} date-overdue{% endif %}">
+                                        {% if pedido.previsao_entrega < hoje %}vencido {{ pedido.previsao_entrega|dias_relativos }}{% else %}{{ pedido.previsao_entrega|dias_relativos }}{% endif %}
                                     </span>
                                 </div>
                             </div>
