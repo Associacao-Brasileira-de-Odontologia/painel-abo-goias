@@ -58,7 +58,7 @@
                     </div>
                     <div class="info-chip">
                         <span>Previsão de entrega</span>
-                        <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}style="color:#ff9e9e"{% endif %}>
+                        <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}class="date-overdue"{% endif %}>
                             {{ pedido.previsao_entrega|date:"d/m/Y" }}
                         </strong>
                     </div>
@@ -67,7 +67,7 @@
                         <strong>{{ pedido.criado_em|date:"d/m/Y H:i" }}</strong>
                     </div>
                 </div>
-                <div style="margin-top: 12px; padding: 14px; background: rgba(8, 13, 25, 0.55); border: 1px solid var(--line); border-radius: 10px;">
+                <div class="info-box">
                     <p class="section-label">Descrição do serviço</p>
                     <p>{{ pedido.descricao_servico }}</p>
                 </div>
@@ -83,7 +83,7 @@
                             <span class="cell-muted">Solicitação registrada no sistema</span>
                         </div>
                         <div class="proxima-date">
-                            <strong>{{ pedido.criado_em|date:"d/m/Y" }}</strong>
+                            <strong class="mono">{{ pedido.criado_em|date:"d/m/Y" }}</strong>
                         </div>
                     </div>
 
@@ -94,7 +94,7 @@
                         </div>
                         <div class="proxima-date">
                             {% if pedido.data_envio %}
-                                <strong>{{ pedido.data_envio|date:"d/m/Y" }}</strong>
+                                <strong class="mono">{{ pedido.data_envio|date:"d/m/Y" }}</strong>
                             {% else %}
                                 <span class="cell-muted">Pendente</span>
                             {% endif %}
@@ -108,7 +108,7 @@
                         </div>
                         <div class="proxima-date">
                             {% if pedido.data_entrega %}
-                                <strong>{{ pedido.data_entrega|date:"d/m/Y" }}</strong>
+                                <strong class="mono">{{ pedido.data_entrega|date:"d/m/Y" }}</strong>
                             {% else %}
                                 <span class="cell-muted">Pendente</span>
                             {% endif %}
@@ -120,7 +120,7 @@
             <!-- Ação: Registrar envio -->
             {% if not pedido.data_envio %}
                 <div class="kpi-section">
-                    <h3 style="margin-bottom: 12px;">Registrar envio ao laboratório</h3>
+                    <h3>Registrar envio ao laboratório</h3>
                     {% if form_envio.errors %}
                         <div class="form-errors">
                             <ul>{% for e in form_envio.data_envio.errors %}<li>{{ e }}</li>{% endfor %}</ul>
@@ -140,7 +140,7 @@
                 </div>
             {% elif not pedido.entregue %}
                 <div class="kpi-section">
-                    <h3 style="margin-bottom: 12px;">Registrar entrega do laboratório</h3>
+                    <h3>Registrar entrega do laboratório</h3>
                     {% if form_entrega.errors %}
                         <div class="form-errors">
                             <ul>{% for e in form_entrega.data_entrega.errors %}<li>{{ e }}</li>{% endfor %}</ul>
@@ -163,7 +163,7 @@
             <!-- Faturamento -->
             {% if pedido.entregue %}
                 <div class="kpi-section">
-                    <h3 style="margin-bottom: 12px;">Faturamento</h3>
+                    <h3>Faturamento</h3>
                     {% if form_faturamento.errors %}
                         <div class="form-errors">
                             <ul>

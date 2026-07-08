@@ -88,13 +88,13 @@
                                 </td>
                                 <td>
                                     {% for equipe in lab.equipes.all %}
-                                        <span class="badge badge-devolvido">{{ equipe.nome }}</span>
+                                        <span class="badge badge-neutro">{{ equipe.nome }}</span>
                                     {% empty %}
                                         —
                                     {% endfor %}
                                 </td>
                                 <td>
-                                    <span class="cell-muted">{{ lab.cnpj|default:"—" }}</span>
+                                    <span class="cell-muted mono">{{ lab.cnpj|default:"—" }}</span>
                                 </td>
                                 <td class="actions-cell">
                                     {% if lab.whatsapp %}

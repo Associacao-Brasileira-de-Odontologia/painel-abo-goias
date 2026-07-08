@@ -105,7 +105,7 @@
                     <tbody>
                         {% for pedido in pedidos %}
                             <tr>
-                                <td><strong>#{{ pedido.pk }}</strong></td>
+                                <td class="mono"><strong>#{{ pedido.pk }}</strong></td>
                                 <td>
                                     <strong>{{ pedido.paciente.nome }}</strong>
                                     <span class="cell-muted">{{ pedido.equipe.nome }}</span>
@@ -118,11 +118,11 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <strong {% if pedido.previsao_entrega < hoje and not pedido.entregue %}style="color:#ff9e9e"{% endif %}>
+                                    <strong class="mono{% if pedido.previsao_entrega < hoje and not pedido.entregue %} date-overdue{% endif %}">
                                         {{ pedido.previsao_entrega|date:"d/m/Y" }}
                                     </strong>
                                     {% if pedido.data_envio %}
-                                        <span class="cell-muted">Env: {{ pedido.data_envio|date:"d/m/Y" }}</span>
+                                        <span class="cell-muted mono">Env: {{ pedido.data_envio|date:"d/m/Y" }}</span>
                                     {% endif %}
                                 </td>
                                 <td>

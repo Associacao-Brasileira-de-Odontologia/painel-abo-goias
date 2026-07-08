@@ -32,9 +32,9 @@ def whatsapp_url_msg(numero: str, mensagem: str) -> str:
 def status_badge_class(status: str) -> str:
     """Retorna a classe CSS do badge conforme o status do pedido."""
     mapa = {
-        "EM_DIA": "badge-devolvido",
-        "A_CONFIRMAR": "badge-emprestado",
+        "EM_DIA": "badge-em-dia",
+        "A_CONFIRMAR": "badge-a-confirmar",
         "ATRASADO": "badge-atrasado",
-        "CONCLUIDO": "badge-concluido",
+        "CONCLUIDO": "badge-neutro",
     }
     return mapa.get(status, "")

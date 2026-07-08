@@ -63,7 +63,7 @@
                     <tbody>
                         {% for pedido in pedidos %}
                             <tr>
-                                <td><strong>#{{ pedido.pk }}</strong></td>
+                                <td class="mono"><strong>#{{ pedido.pk }}</strong></td>
                                 <td>
                                     <strong>{{ pedido.paciente.nome }}</strong>
                                     <span class="cell-muted">{{ pedido.aluno.nome }}</span>
@@ -74,7 +74,7 @@
                                         <span class="cell-muted">{{ pedido.laboratorio.whatsapp }}</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ pedido.data_entrega|date:"d/m/Y"|default:"—" }}</td>
+                                <td class="mono">{{ pedido.data_entrega|date:"d/m/Y"|default:"—" }}</td>
 
                                 <td>
                                     <form method="post" action="{% url 'lab_alternar_faturado_paciente' pedido.pk %}" class="inline-form">
@@ -98,8 +98,8 @@
                                         </button>
                                     </form>
                                 </td>
-                                <td>{{ pedido.numero_nota_fiscal|default:"—" }}</td>
-                                <td>{{ pedido.data_vencimento|date:"d/m/Y"|default:"—" }}</td>
+                                <td class="mono">{{ pedido.numero_nota_fiscal|default:"—" }}</td>
+                                <td class="mono">{{ pedido.data_vencimento|date:"d/m/Y"|default:"—" }}</td>
 
                                 <td class="actions-cell">
                                     {% if pedido.laboratorio.whatsapp %}

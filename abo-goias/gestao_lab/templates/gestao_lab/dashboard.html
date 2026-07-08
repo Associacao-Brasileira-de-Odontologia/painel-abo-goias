@@ -65,7 +65,7 @@
                                     <span class="cell-muted">{{ pedido.laboratorio.nome }}</span>
                                 </div>
                                 <div class="proxima-date">
-                                    <strong>{{ pedido.previsao_entrega|date:"d/m/Y" }}</strong>
+                                    <strong class="mono">{{ pedido.previsao_entrega|date:"d/m/Y" }}</strong>
                                     <span class="cell-muted">
                                         {% if pedido.previsao_entrega < hoje %}Vencido{% else %}Previsto{% endif %}
                                     </span>
@@ -79,7 +79,7 @@
                         {% endfor %}
                     </div>
                     {% if proximas_entregas %}
-                        <div style="margin-top: 14px;">
+                        <div class="section-footer-action">
                             <a class="button secondary compact-button" href="{% url 'lab_pedidos' %}">Ver todos os pedidos</a>
                         </div>
                     {% endif %}

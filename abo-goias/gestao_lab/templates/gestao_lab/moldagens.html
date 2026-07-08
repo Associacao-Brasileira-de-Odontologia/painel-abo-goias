@@ -110,12 +110,12 @@
                     <tbody>
                         {% for moldagem in moldagens %}
                             <tr>
-                                <td><strong>#{{ moldagem.pk }}</strong></td>
+                                <td class="mono"><strong>#{{ moldagem.pk }}</strong></td>
                                 <td><strong>{{ moldagem.paciente.nome }}</strong></td>
                                 <td>{{ moldagem.aluno.nome }}</td>
                                 <td>
-                                    <strong>{{ moldagem.criado_em|date:"d/m/Y" }}</strong>
-                                    <span class="cell-muted">{{ moldagem.criado_em|date:"H:i" }}</span>
+                                    <strong class="mono">{{ moldagem.criado_em|date:"d/m/Y" }}</strong>
+                                    <span class="cell-muted mono">{{ moldagem.criado_em|date:"H:i" }}</span>
                                 </td>
 
                                 <!-- Faturado -->
@@ -165,7 +165,7 @@
                                             </button>
                                         </form>
                                     {% else %}
-                                        <span class="badge badge-devolvido">Convertida</span>
+                                        <span class="badge badge-neutro">Convertida</span>
                                     {% endif %}
                                 </td>
                             </tr>

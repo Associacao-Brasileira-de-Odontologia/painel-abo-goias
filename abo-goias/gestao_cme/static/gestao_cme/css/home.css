@@ -2396,3 +2396,58 @@ h3 {
         animation-delay: 180ms;
     }
 }
+
+/* ── Badges semânticos da gestão de laboratório ─────────────── */
+/* Saliência proporcional à urgência: atrasado > a confirmar > em dia > concluído */
+
+.badge-em-dia {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.badge-a-confirmar {
+    background: rgba(247, 165, 31, 0.16);
+    color: #ffd89a;
+}
+
+.badge-neutro {
+    background: rgba(146, 161, 186, 0.14);
+    color: var(--muted-strong);
+}
+
+.badge-info {
+    background: var(--blue-soft);
+    color: #9fcdff;
+}
+
+/* ── Data vencida em células e chips ────────────────────────── */
+
+.date-overdue {
+    color: #ff9e9e;
+}
+
+/* ── Caixa de texto informativa em painéis de detalhe ───────── */
+
+.info-box {
+    margin-top: 12px;
+    padding: 14px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(8, 13, 25, 0.55);
+}
+
+.info-box > p:last-child {
+    margin-bottom: 0;
+}
+
+/* ── Título de subseção dentro de kpi-section ───────────────── */
+
+.kpi-section > h3 {
+    margin-bottom: 12px;
+}
+
+/* ── Formulários empilhados na sidebar (busca Dental Office) ── */
+
+.sidebar-section .form-stack + .form-stack {
+    margin-top: 16px;
+}

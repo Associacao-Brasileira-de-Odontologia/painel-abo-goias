@@ -122,14 +122,14 @@
                                 </td>
                                 <td>
                                     {% if paciente.processo_aberto %}
-                                        <span class="badge badge-emprestado">Aberto</span>
+                                        <span class="badge badge-info">Aberto</span>
                                     {% else %}
-                                        <span class="badge badge-devolvido">Concluído</span>
+                                        <span class="badge badge-neutro">Concluído</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if paciente.data_previsao_retorno %}
-                                        <strong {% if paciente.data_previsao_retorno < hoje %}style="color:#ff9e9e"{% endif %}>
+                                        <strong class="mono{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">
                                             {{ paciente.data_previsao_retorno|date:"d/m/Y" }}
                                         </strong>
                                     {% else %}
