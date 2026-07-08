@@ -381,3 +381,42 @@ Depois de aplicar as mudanças, revise os templates alterados com os seguintes c
 ```
 
 Eu também ajustaria a frase sugerida de assinatura para “no tablet da recepção”, porque “reflita no tablet” soa como erro de digitação e pode confundir o usuário final.
+
+Você é um especialista em frontend para sistemas operacionais internos feitos em Python/Django. 
+Pense minuciosamente sobre a aplicação de gestão de laboratórios (gestao_lab) e elabore melhorias visuais que devem ser aplicadas na aplicação com foco em clareza operacional, redução de redundância, hierarquia visual e velocidade de uso.
+
+<context>
+A aplicação para gestao de materiais em laboratórios tem como finalidade realizar a gestão de todos os materiais que forem emprestados para laboratórios parceiros. É necessário realizar o controle dos materiais entregues tanto os que estão em dia, os atrasados e os a confirmar. Também é necessário que o sistema aponte visualmente os materiais que estão em atraso e a confirmar. Também é necessário realizar o controle sobre o que foi faturado, os laboratórios parceiros, as equipes responsáveis, os pacientes que são sincronizados do Dental Office (não confundir com a aplicação de gestão de contratos) e  os alunos que são responsavéis pelos procedimentos (retornados da API do EDUQ).
+</context>
+
+<frontend_aesthetics>
+Você tende a convergir para resultados genéricos, típicos de distribuições padrão. No design de frontend, isso
+cria o que os usuários chamam de estética de "tralha de IA" (*AI slop*). Evite isso: crie frontends
+criativos e distintos que surpreendam e encantem.
+
+Foque em:
+- Tipografia: Escolha fontes que sejam bonitas, únicas e interessantes. Evite fontes genéricas
+como Arial e Inter; opte por escolhas distintas que elevem a
+estética do frontend.
+- Cor e Tema: Comprometa-se com uma estética coesa. Use variáveis ​​CSS para garantir consistência.
+Cores dominantes com detalhes de destaque marcantes funcionam melhor do que paletas tímidas e distribuídas uniformemente.
+Busque inspiração em temas de IDEs e estéticas culturais.
+- Movimento: Use animações para efeitos e microinterações. Priorize soluções apenas em CSS
+para HTML. Use bibliotecas de movimento para React quando disponíveis. Foque em momentos de alto impacto:
+um carregamento de página bem orquestrado com revelações escalonadas (*animation-delay*)
+gera mais encantamento do que microinterações dispersas.
+- Planos de fundo: Crie atmosfera e profundidade em vez de recorrer a cores sólidas padrão.
+Sobreponha gradientes CSS, use padrões geométricos ou adicione efeitos contextuais
+que combinem com a estética geral.
+
+Evite estéticas genéricas geradas por IA:
+- Famílias de fontes usadas em excesso (Inter, Roboto, Arial, fontes do sistema)
+- Esquemas de cores clichês (particularmente gradientes roxos em fundos brancos)
+- Layouts e padrões de componentes previsíveis
+- Design padronizado e repetitivo, sem personalidade específica para o contexto
+
+Interprete de forma criativa e faça escolhas inesperadas que pareçam genuinamente projetadas para o
+contexto. Varie entre temas claros e escuros, fontes diferentes e estéticas distintas. Você
+ainda tende a convergir para escolhas comuns (Space Grotesk, por exemplo) entre
+as gerações. Evite isso: é fundamental pensar fora da caixa!
+</frontend_aesthetics>
