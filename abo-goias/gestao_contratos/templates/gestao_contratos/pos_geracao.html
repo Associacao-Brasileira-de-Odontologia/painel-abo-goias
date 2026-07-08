@@ -89,12 +89,33 @@
                     <span class="badge badge-atrasado">Não enviado</span>
                 {% endif %}
 
+                <p class="section-label gc-mt-md">Dental Office</p>
                 {% if contrato.status_envio_dental == "enviado" %}
-                    <p class="section-label gc-mt-md">Dental Office</p>
                     <span class="badge badge-devolvido">Enviado ao Dental</span>
                     <p class="panel-copy gc-mt-sm" style="font-size: 0.8rem;">
                         {{ contrato.enviado_dental_em|date:"d/m/Y H:i" }}
                     </p>
+                {% elif contrato.status == "assinado" %}
+                    <form method="post"
+                          action="{% url 'contrato_enviar_dental' contrato.pk %}"
+                          class="gc-mt-sm">
+                        {% csrf_token %}
+                        <button class="button secondary compact-button gc-full-width gc-btn-sm"
+                                type="submit"
+                                title="{% if contrato.status_envio_dental == 'erro' %}Tentativa anterior falhou — clique para reenviar{% else %}Envia o contrato assinado à ficha do paciente no Dental Office{% endif %}">
+                            {% if contrato.status_envio_dental == "erro" %}
+                                Reenviar ao Dental Office
+                            {% else %}
+                                Enviar ao Dental Office
+                            {% endif %}
+                        </button>
+                    </form>
+                {% else %}
+                    <button class="button secondary compact-button gc-full-width gc-btn-sm gc-btn-disabled-look gc-mt-sm"
+                            type="button" disabled
+                            title="Disponível após a assinatura do paciente">
+                        Enviar ao Dental Office
+                    </button>
                 {% endif %}
             </div>
         </aside>

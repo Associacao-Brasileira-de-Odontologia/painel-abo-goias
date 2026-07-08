@@ -2454,6 +2454,8 @@ class PosGeracaoActionViewsTests(AssinaturaBaseTests):
     @patch("gestao_contratos.views.enviar_contrato_ao_dental")
     def test_enviar_ao_dental_sucesso(self, mock_enviar: MagicMock) -> None:
         mock_enviar.return_value = (True, "")
+        self.contrato.status = "assinado"
+        self.contrato.save(update_fields=["status"])
 
         response = self.client.post(
             reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
@@ -2464,6 +2466,8 @@ class PosGeracaoActionViewsTests(AssinaturaBaseTests):
     @patch("gestao_contratos.views.enviar_contrato_ao_dental")
     def test_enviar_ao_dental_falha(self, mock_enviar: MagicMock) -> None:
         mock_enviar.return_value = (False, "erro simulado")
+        self.contrato.status = "assinado"
+        self.contrato.save(update_fields=["status"])
 
         response = self.client.post(
             reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
@@ -2471,6 +2475,38 @@ class PosGeracaoActionViewsTests(AssinaturaBaseTests):
 
         self.assertContains(response, "Falha ao enviar o contrato")
         self.assertContains(response, "erro simulado")
+
+    @patch("gestao_contratos.views.enviar_contrato_ao_dental")
+    def test_enviar_ao_dental_bloqueado_sem_assinatura(
+        self, mock_enviar: MagicMock
+    ) -> None:
+        """Regressão: contrato não assinado não pode ir ao Dental Office —
+        o serviço cairia no PDF sem assinatura e arquivaria um documento
+        sem valor na ficha do paciente."""
+        response = self.client.post(
+            reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
+        )
+
+        self.assertContains(response, "ainda não foi assinado")
+        mock_enviar.assert_not_called()
+
+    def test_pos_geracao_desabilita_envio_dental_sem_assinatura(self) -> None:
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertContains(response, "Disponível após a assinatura do paciente")
+
+    def test_pos_geracao_habilita_envio_dental_apos_assinatura(self) -> None:
+        self.contrato.status = "assinado"
+        self.contrato.save(update_fields=["status"])
+
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertNotContains(response, "Disponível após a assinatura do paciente")
+        self.assertContains(response, "Enviar ao Dental Office")
 
     def test_enviar_ao_dental_get_redireciona(self) -> None:
         response = self.client.get(

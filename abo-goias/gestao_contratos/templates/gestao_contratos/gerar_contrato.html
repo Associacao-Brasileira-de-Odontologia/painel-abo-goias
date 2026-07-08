@@ -68,7 +68,7 @@
                                     <span class="badge badge-devolvido gc-badge-sm">
                                         Enviado ao Dental — {{ contrato.enviado_dental_em|date:"d/m H:i" }}
                                     </span>
-                                {% else %}
+                                {% elif contrato.status == "assinado" %}
                                     <form method="post"
                                           action="{% url 'contrato_enviar_dental' contrato.pk %}"
                                           class="gc-full-width">
@@ -85,6 +85,12 @@
                                             {% endif %}
                                         </button>
                                     </form>
+                                {% else %}
+                                    <button class="button secondary compact-button gc-full-width gc-btn-sm gc-btn-disabled-look"
+                                            type="button" disabled
+                                            title="Disponível após a assinatura do paciente">
+                                        Enviar ao Dental Office
+                                    </button>
                                 {% endif %}
                             </li>
                         {% endfor %}

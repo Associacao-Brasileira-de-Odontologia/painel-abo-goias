@@ -531,6 +531,18 @@ def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpRespons
 
     contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
 
+    # Só o documento assinado pelo paciente vai para a ficha no Dental
+    # Office — sem assinatura, o serviço cairia no PDF sem assinatura
+    # (fallback de obter_melhor_pdf_bytes), arquivando um documento
+    # sem valor. A UI desabilita o botão; esta guarda cobre POST direto.
+    if contrato.status != "assinado":
+        messages.error(
+            request,
+            "O contrato ainda não foi assinado pelo paciente — só o "
+            "documento assinado pode ser enviado ao Dental Office.",
+        )
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
     ok, erro = enviar_contrato_ao_dental(contrato)
 
     if ok:
