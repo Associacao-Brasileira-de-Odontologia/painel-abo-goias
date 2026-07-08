@@ -339,10 +339,18 @@ def iniciar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpRespo
         )
         return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
 
+    # O select envia "qr" (celular do paciente) ou o pk de um terminal.
+    # Valor vazio é o placeholder "Selecione o método de assinatura" — não
+    # inicia sessão. Sem terminais cadastrados o formulário não tem select
+    # e a chave nem chega no POST (QR Code direto).
     terminal = None
-    terminal_pk = request.POST.get("terminal_pk", "").strip()
-    if terminal_pk:
-        terminal = get_object_or_404(TerminalAssinatura, pk=terminal_pk, ativo=True)
+    if "terminal_pk" in request.POST:
+        terminal_pk = request.POST["terminal_pk"].strip()
+        if not terminal_pk:
+            messages.error(request, "Selecione o método de assinatura.")
+            return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+        if terminal_pk != "qr":
+            terminal = get_object_or_404(TerminalAssinatura, pk=terminal_pk, ativo=True)
 
     criar_sessao(
         contrato,

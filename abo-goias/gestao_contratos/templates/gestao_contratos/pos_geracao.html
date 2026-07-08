@@ -115,40 +115,17 @@
 
             {# ── Envio por WhatsApp ───────────────────────────────── #}
             <div class="kpi-section">
-                <p class="section-label">Encaminhar pelo WhatsApp</p>
-
-                {# Texto padrão (sem suporte a Web Share) — JS oculta quando necessário #}
-                <p class="panel-copy" id="wa-copy-padrao">
-                    Confirme o número e clique em <strong>Abrir WhatsApp</strong>.
-                    O WhatsApp será aberto com mensagem pré-preenchida — anexe
-                    o arquivo baixado e envie ao paciente.
-                </p>
-                {# Texto alternativo (com suporte a Web Share) — JS exibe quando disponível #}
-                <p class="panel-copy gc-hidden" id="wa-copy-share">
-                    Clique em <strong>Compartilhar arquivo</strong> para enviar o
-                    documento diretamente pelo WhatsApp sem precisar baixá-lo antes.
-                    Disponível em dispositivos móveis e Chrome/Safari no computador.
-                </p>
-
-                <form class="form-stack-wide" id="wa-form" method="post"
+                <p class="section-label">Enviar pelo WhatsApp</p>
+                <form id="wa-form" method="post"
                       action="{% url 'contrato_whatsapp_status' contrato.pk %}">
                     {% csrf_token %}
-                    <div class="field">
-                        <label for="id_celular">Celular do paciente</label>
-                        <input id="id_celular" type="tel" name="celular"
-                               value="{{ paciente.celular }}"
-                               placeholder="(62) 9 0000-0000">
-                    </div>
-                    <div class="form-actions">
-                        {# Botão de compartilhamento direto — exibido por JS quando suportado #}
-                        <button id="btn-wa-share"
-                                type="button"
-                                class="button primary gc-hidden"
-                                data-url="{% if contrato.arquivo_pdf %}{% url 'contrato_baixar_pdf' contrato.pk %}{% else %}{% url 'contrato_baixar' contrato.pk %}{% endif %}"
-                                data-nome="{{ contrato.get_tipo_display }} - {{ paciente.nome }}.{% if contrato.arquivo_pdf %}pdf{% else %}docx{% endif %}">
-                            Compartilhar arquivo
-                        </button>
-                        {# Link WhatsApp com mensagem — sempre disponível como fallback #}
+                    <div class="gc-row-campo-acao">
+                        <div class="field">
+                            <label for="id_celular">Celular do paciente</label>
+                            <input id="id_celular" type="tel" name="celular"
+                                   value="{{ paciente.celular }}"
+                                   placeholder="(62) 9 0000-0000">
+                        </div>
                         {% if link_whatsapp %}
                             <a id="btn-wa-link"
                                class="button primary"
@@ -156,7 +133,7 @@
                                target="_blank"
                                rel="noopener noreferrer"
                                onclick="setTimeout(function(){ document.getElementById('wa-form').submit(); }, 400);">
-                                Abrir WhatsApp
+                                Compartilhar via WhatsApp
                             </a>
                         {% else %}
                             <button class="button secondary" type="button" disabled>
@@ -170,20 +147,17 @@
             {# ── Envio por e-mail ─────────────────────────────────── #}
             <div class="kpi-section">
                 <p class="section-label">Enviar por e-mail</p>
-                <p class="panel-copy">
-                    O documento será enviado como anexo ao endereço informado.
-                </p>
-                <form class="form-stack-wide" method="post"
+                <form method="post"
                       action="{% url 'contrato_enviar_email' contrato.pk %}">
                     {% csrf_token %}
-                    <div class="field">
-                        <label for="id_email_dest">E-mail do paciente</label>
-                        <input id="id_email_dest" type="email" name="email_destinatario"
-                               value="{{ paciente.email }}"
-                               placeholder="email@exemplo.com"
-                               required>
-                    </div>
-                    <div class="form-actions">
+                    <div class="gc-row-campo-acao">
+                        <div class="field">
+                            <label for="id_email_dest">E-mail do paciente</label>
+                            <input id="id_email_dest" type="email" name="email_destinatario"
+                                   value="{{ paciente.email }}"
+                                   placeholder="email@exemplo.com"
+                                   required>
+                        </div>
                         <button class="button primary" type="submit">
                             Enviar por e-mail
                         </button>
@@ -191,121 +165,9 @@
                 </form>
             </div>
 
-            {# ── Download ─────────────────────────────────────────── #}
-            <div class="kpi-section">
-                <p class="section-label">Baixar documento</p>
-                <p class="panel-copy">
-                    O contrato foi gerado e está disponível para download.
-                    Salve uma cópia antes de encaminhar ao paciente.
-                </p>
-                <div class="form-actions gc-mt-md" style="gap: 8px;">
-                    {% if contrato.arquivo_pdf %}
-                        <a class="button primary"
-                           href="{% url 'contrato_baixar_pdf' contrato.pk %}">
-                            Baixar contrato (.pdf)
-                        </a>
-                    {% endif %}
-                    <a class="button {% if contrato.arquivo_pdf %}secondary{% else %}primary{% endif %}"
-                       href="{% url 'contrato_baixar' contrato.pk %}">
-                        Baixar contrato (.docx)
-                    </a>
-                </div>
-            </div>
-
-            {# ── Envio ao Dental Office ───────────────────────────── #}
-            <div class="kpi-section">
-                <p class="section-label">Enviar para o Dental Office</p>
-                <p class="panel-copy">
-                    Adiciona o contrato à ficha do paciente no Dental Office.
-                </p>
-                {% if contrato.status_envio_dental == "enviado" %}
-                    <div class="checklist-alert checklist-alert-ok">
-                        <strong>Documento já enviado ao Dental Office</strong>
-                        <p>Enviado em {{ contrato.enviado_dental_em|date:"d/m/Y H:i" }}.</p>
-                    </div>
-                {% else %}
-                    <form method="post"
-                          action="{% url 'contrato_enviar_dental' contrato.pk %}">
-                        {% csrf_token %}
-                        <div class="form-actions">
-                            <button class="button secondary" type="submit">
-                                {% if contrato.status_envio_dental == "erro" %}
-                                    Reenviar ao Dental Office
-                                {% else %}
-                                    Enviar ao Dental Office
-                                {% endif %}
-                            </button>
-                        </div>
-                    </form>
-                {% endif %}
-            </div>
-
         </section>
     </div>
 </main>
-
-<script>
-(function () {
-    var btnShare = document.getElementById('btn-wa-share');
-    if (!btnShare) return;
-
-    var suporta = typeof navigator.share === 'function'
-               && typeof navigator.canShare === 'function';
-    if (!suporta) return;
-
-    // Revelar botão e trocar textos explicativos
-    btnShare.classList.remove('gc-hidden');
-    btnShare.style.display = 'inline-flex';
-    var padrao = document.getElementById('wa-copy-padrao');
-    var shareHint = document.getElementById('wa-copy-share');
-    if (padrao) padrao.style.display = 'none';
-    if (shareHint) {
-        shareHint.classList.remove('gc-hidden');
-        shareHint.style.display = 'block';
-    }
-
-    // Tornar o link "Abrir WhatsApp" secundário (continua como fallback)
-    var btnLink = document.getElementById('btn-wa-link');
-    if (btnLink) {
-        btnLink.classList.remove('primary');
-        btnLink.classList.add('secondary');
-    }
-
-    btnShare.addEventListener('click', async function () {
-        var url  = btnShare.dataset.url;
-        var nome = btnShare.dataset.nome;
-
-        btnShare.disabled = true;
-        btnShare.textContent = 'Preparando arquivo…';
-
-        try {
-            var resp = await fetch(url, {credentials: 'same-origin'});
-            if (!resp.ok) throw new Error('Falha ao obter o arquivo (' + resp.status + ').');
-
-            var blob = await resp.blob();
-            var file = new File([blob], nome, {type: blob.type});
-
-            if (!navigator.canShare({files: [file]})) {
-                throw new Error('Compartilhamento de arquivos não suportado neste dispositivo.');
-            }
-
-            await navigator.share({files: [file]});
-
-            // Registrar envio no servidor
-            document.getElementById('wa-form').submit();
-
-        } catch (err) {
-            if (err.name === 'AbortError') return; // usuário cancelou
-            alert('Não foi possível compartilhar o arquivo.\n'
-                + err.message
-                + '\n\nUtilize o botão "Abrir WhatsApp" para enviar manualmente.');
-        } finally {
-            btnShare.disabled = false;
-            btnShare.textContent = 'Compartilhar arquivo';
-        }
-    });
-})();
-</script>
 {% endblock %}
 
 {% block extra_js %}
