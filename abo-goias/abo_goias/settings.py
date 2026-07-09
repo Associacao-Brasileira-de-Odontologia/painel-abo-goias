@@ -383,6 +383,11 @@ DENTAL_BASE_URL = _env(
 DENTAL_VERIFY_TLS = _env_bool("DENTAL_VERIFY_TLS", True)
 DENTAL_TIMEOUT = _env_int("DENTAL_TIMEOUT", 30)
 DENTAL_USE_PROXY = _env_bool("DENTAL_USE_PROXY", False)
+# Retry com backoff exponencial para falhas transitorias (timeout,
+# indisponibilidade, limite de requisicoes) em chamadas de leitura (GET) —
+# nunca aplicado a POST, para nao arriscar duplicar envios de documento.
+DENTAL_MAX_RETRIES = _env_int("DENTAL_MAX_RETRIES", 3)
+DENTAL_RETRY_BACKOFF_SECONDS = _env_int("DENTAL_RETRY_BACKOFF_SECONDS", 1)
 DENTAL_CONFIGURADO = bool(DENTAL_CLIENT_ID and DENTAL_SECRET)
 
 EDUQ_DOMINIO = _env("EDUQ_DOMINIO")

@@ -377,7 +377,12 @@ Variáveis de ambiente:
 - `DENTAL_CLINIC_ID`: ID da clínica usado na busca de pacientes.
 - `DENTAL_AUTH_URL`, `DENTAL_BASE_URL`: endpoints da API (padrão aponta para o ambiente demo).
 - `DENTAL_VERIFY_TLS`, `DENTAL_TIMEOUT`, `DENTAL_USE_PROXY`: opções avançadas de conexão.
+- `DENTAL_MAX_RETRIES`, `DENTAL_RETRY_BACKOFF_SECONDS`: tentativas e backoff exponencial para falhas transitórias (timeout, indisponibilidade, limite de requisições) — só em chamadas de leitura (GET), nunca em POST, para não arriscar duplicar um envio de documento. Padrão: 3 tentativas, base de 1s.
 - `DENTAL_SYNC_TOKEN`: token do endpoint de sincronização agendada de `gestao_lab`.
+
+#### Paginação
+
+Os endpoints de listagem (`GET /customers`, `GET /users`) devolvem um número fixo de registros por página (a API não expõe nenhum parâmetro para configurar isso) e informam `total_pages` no corpo da resposta. `gestao_lab/integrations/dental.py::DentalClient` busca **uma página por chamada**; consolidar todas as páginas de uma busca é responsabilidade de `gestao_lab/services/dental_sync.py::listar_todas_paginas` — usada tanto pela sincronização completa quanto pela busca por nome (`buscar_e_importar_pacientes`/`buscar_e_importar_alunos`, e pela tela de listagem de contratos), então uma busca com mais resultados do que o limite por página nunca mais fica restrita à primeira página. A consolidação preserva a ordem devolvida pela API, remove duplicatas por `id` e para com segurança (sem loop indefinido) se `total_pages` for inconsistente.
 
 Para diagnosticar problemas de envio manualmente (autenticação, leitura do arquivo, chamada à API, análise da resposta):
 

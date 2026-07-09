@@ -17,6 +17,7 @@ from gestao_lab.integrations.dental import (
     normalizar_paciente_detalhado,
 )
 from gestao_lab.models import Paciente
+from gestao_lab.services.dental_sync import listar_todas_paginas
 
 from .forms import PacienteConfirmacaoForm
 from .models import TIPOS_CONTRATO, ContratoGerado
@@ -55,14 +56,19 @@ def contratos(request: HttpRequest) -> HttpResponse:
         if clinic_id:
             try:
                 client = DentalClient()
-                resposta = client.listar_pacientes(clinic_id=clinic_id, q=busca)
+                itens = listar_todas_paginas(
+                    lambda page: client.listar_pacientes(
+                        clinic_id=clinic_id, page=page, q=busca
+                    ),
+                    contexto="pacientes:busca_contratos",
+                )
                 dental_pesquisado = True
                 ids_locais = set(
                     Paciente.objects.filter(ativo=True).values_list(
                         "id_dental", flat=True
                     )
                 )
-                for item in resposta.get("results") or []:
+                for item in itens:
                     pac = normalizar_paciente(item)
                     if pac:
                         pacientes_api.append(

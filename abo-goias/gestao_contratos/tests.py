@@ -397,6 +397,51 @@ class ContratosViewTests(TestCase):
             MockDental.assert_not_called()
         self.assertContains(response, "Marcos Local")
 
+    @override_settings(DENTAL_CLINIC_ID="clinic-001")
+    @patch("gestao_contratos.views.DentalClient")
+    def test_busca_consolida_multiplas_paginas_da_api(
+        self, MockDental: MagicMock
+    ) -> None:
+        """Regressão do bug de paginação: uma busca com mais resultados do
+        que o limite por página da API não deve mais ficar restrita à
+        primeira página."""
+
+        mock_client = MockDental.return_value
+        mock_client.listar_pacientes.side_effect = [
+            {
+                "results": [
+                    {
+                        "id": i,
+                        "name": f"Paciente API {i}",
+                        "active": True,
+                        "contacts_attributes": [],
+                    }
+                    for i in range(1, 61)
+                ],
+                "total_pages": 2,
+            },
+            {
+                "results": [
+                    {
+                        "id": 61,
+                        "name": "Paciente API 61",
+                        "active": True,
+                        "contacts_attributes": [],
+                    }
+                ],
+                "total_pages": 2,
+            },
+        ]
+
+        response = self.client.get(reverse("contratos"), {"q": "Paciente"})
+
+        self.assertEqual(mock_client.listar_pacientes.call_count, 2)
+        pacientes_api = response.context["pacientes_api"]
+        self.assertEqual(len(pacientes_api), 61)
+        nomes = {p["nome"] for p in pacientes_api}
+        self.assertIn("Paciente API 1", nomes)
+        self.assertIn("Paciente API 61", nomes)
+
 
 # ---------------------------------------------------------------------------
 # Testes de Views — importar e gerar

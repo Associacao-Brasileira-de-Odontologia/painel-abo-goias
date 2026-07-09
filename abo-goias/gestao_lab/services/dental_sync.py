@@ -2,59 +2,175 @@
 
 from __future__ import annotations
 
+import logging
 import time
+from typing import Any, Callable
 
 from django.utils import timezone
 from gestao_lab.integrations.dental import (
+    DentalAPIError,
     DentalClient,
     normalizar_aluno_lab,
     normalizar_paciente,
 )
 from gestao_lab.models import AlunoLab, OrigemDados, Paciente
 
+logger = logging.getLogger(__name__)
+
 ResultadoSync = dict[str, int]
+
+# Salvaguarda contra total_pages inconsistente/instavel na API — a 500
+# registros por pagina (o maior ja observado), cobre ate 30 mil registros
+# antes de interromper e logar um aviso, bem acima do maior volume descrito
+# como cenario de uso (milhares de pacientes).
+_MAX_PAGINAS_SEGURANCA = 1000
+
+
+def listar_todas_paginas(
+    buscar_pagina: Callable[[int], dict[str, Any]],
+    *,
+    contexto: str,
+    max_paginas: int = _MAX_PAGINAS_SEGURANCA,
+) -> list[dict[str, Any]]:
+    """Consolida todos os itens de um endpoint paginado do Dental Office.
+
+    ``buscar_pagina(page)`` deve retornar a resposta bruta da API para a
+    página informada — um dict com ``results`` (lista de itens) e,
+    opcionalmente, ``total_pages``. Esta função chama ``buscar_pagina``
+    para as páginas de 1 até ``total_pages`` (relido a cada resposta),
+    consolidando os itens de todas as páginas numa única lista, **na
+    ordem devolvida pela API** e **sem duplicatas** (comparadas pelo
+    campo ``id`` de cada item) — a mesma lógica serve para qualquer
+    quantidade de páginas, de uma busca com poucos resultados a uma
+    sincronização completa com milhares de registros.
+
+    Uma resposta sem ``total_pages`` é tratada como página única — mesmo
+    comportamento já assumido pelo restante do projeto quando a API não
+    informa esse metadado. Uma página vazia interrompe a iteração como
+    salvaguarda contra ``total_pages`` inconsistente; ``max_paginas``
+    evita um loop indefinido caso a API sempre reporte mais páginas do
+    que realmente existem.
+
+    Uma falha de rede/API em qualquer página interrompe a consolidação e
+    propaga a exceção (``DentalAPIError`` ou subtipo) — os itens já
+    coletados até ali são descartados pelo chamador, que decide como
+    reagir (ex.: exibir mensagem de erro, ou marcar uma sincronização
+    como falha). Isso preserva o comportamento já esperado por quem
+    consome esta função: um erro nunca deve ser confundido com "não há
+    mais resultados".
+
+    ``contexto`` identifica a chamada nos logs estruturados (ex.:
+    ``"pacientes:busca"``, ``"alunos:sincronizacao_completa"``) — nunca
+    inclui o termo de busca (pode conter nome de paciente).
+    """
+
+    itens: list[dict[str, Any]] = []
+    ids_vistos: set[Any] = set()
+    duplicados_ignorados = 0
+    page = 1
+    total_pages = 1
+    inicio = time.monotonic()
+
+    while page <= total_pages:
+        if page > max_paginas:
+            logger.warning(
+                "dental.paginacao_limite_atingido contexto=%s max_paginas=%s "
+                "total_pages_reportado=%s registros_ate_agora=%s",
+                contexto,
+                max_paginas,
+                total_pages,
+                len(itens),
+            )
+            break
+
+        try:
+            resposta = buscar_pagina(page)
+        except DentalAPIError:
+            logger.error(
+                "dental.paginacao_interrompida contexto=%s pagina=%s "
+                "registros_ate_agora=%s",
+                contexto,
+                page,
+                len(itens),
+            )
+            raise
+
+        resultados = resposta.get("results") or []
+        total_pages = int(resposta.get("total_pages") or 1)
+
+        logger.info(
+            "dental.paginacao contexto=%s pagina=%s total_pages=%s "
+            "registros_pagina=%s",
+            contexto,
+            page,
+            total_pages,
+            len(resultados),
+        )
+
+        if not resultados:
+            break
+
+        for item in resultados:
+            id_item = item.get("id")
+            if id_item is not None:
+                if id_item in ids_vistos:
+                    duplicados_ignorados += 1
+                    continue
+                ids_vistos.add(id_item)
+            itens.append(item)
+
+        page += 1
+
+    logger.info(
+        "dental.paginacao_concluida contexto=%s total_pages=%s total_registros=%s "
+        "duplicados_ignorados=%s duracao_ms=%d",
+        contexto,
+        total_pages,
+        len(itens),
+        duplicados_ignorados,
+        int((time.monotonic() - inicio) * 1000),
+    )
+
+    return itens
 
 
 def sincronizar_pacientes(clinic_id: int) -> ResultadoSync:
     """Busca todos os pacientes do Dental Office e faz upsert no banco local.
 
-    Itera todas as paginas do endpoint /customers, cria ou atualiza cada
-    registro usando id_dental como chave. Retorna criados, atualizados e ignorados.
+    Percorre todas as páginas do endpoint /customers (ver
+    :func:`listar_todas_paginas`), cria ou atualiza cada registro usando
+    id_dental como chave. Retorna criados, atualizados e ignorados.
     """
     client = DentalClient()
     criados = atualizados = ignorados = 0
     agora = timezone.now()
 
-    page = 1
-    total_pages = 1
+    itens = listar_todas_paginas(
+        lambda page: client.listar_pacientes(clinic_id=clinic_id, page=page),
+        contexto="pacientes:sincronizacao_completa",
+    )
 
-    while page <= total_pages:
-        resposta = client.listar_pacientes(clinic_id=clinic_id, page=page)
-        total_pages = int(resposta.get("total_pages") or 1)
+    for item in itens:
+        paciente = normalizar_paciente(item)
+        if not paciente:
+            ignorados += 1
+            continue
 
-        for item in resposta.get("results") or []:
-            paciente = normalizar_paciente(item)
-            if not paciente:
-                ignorados += 1
-                continue
-
-            _, criado = Paciente.objects.update_or_create(
-                id_dental=str(paciente.id),
-                defaults={
-                    "nome": paciente.nome,
-                    "celular": paciente.celular,
-                    "processo_aberto": paciente.ativo,
-                    "ativo": paciente.ativo,
-                    "origem": OrigemDados.DENTAL,
-                    "ultima_sincronizacao": agora,
-                },
-            )
-            if criado:
-                criados += 1
-            else:
-                atualizados += 1
-
-        page += 1
+        _, criado = Paciente.objects.update_or_create(
+            id_dental=str(paciente.id),
+            defaults={
+                "nome": paciente.nome,
+                "celular": paciente.celular,
+                "processo_aberto": paciente.ativo,
+                "ativo": paciente.ativo,
+                "origem": OrigemDados.DENTAL,
+                "ultima_sincronizacao": agora,
+            },
+        )
+        if criado:
+            criados += 1
+        else:
+            atualizados += 1
 
     return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados}
 
@@ -62,58 +178,61 @@ def sincronizar_pacientes(clinic_id: int) -> ResultadoSync:
 def sincronizar_alunos(user_group: int) -> ResultadoSync:
     """Busca todos os alunos (usuarios do grupo especificado) e faz upsert local.
 
-    Itera todas as paginas do endpoint /users filtrando por user_group,
-    cria ou atualiza cada AlunoLab usando id_dental como chave.
+    Percorre todas as páginas do endpoint /users filtrando por user_group
+    (ver :func:`listar_todas_paginas`), cria ou atualiza cada AlunoLab
+    usando id_dental como chave.
     """
     client = DentalClient()
     criados = atualizados = ignorados = 0
     agora = timezone.now()
 
-    page = 1
-    total_pages = 1
+    itens = listar_todas_paginas(
+        lambda page: client.listar_usuarios(user_group=user_group, page=page),
+        contexto="alunos:sincronizacao_completa",
+    )
 
-    while page <= total_pages:
-        resposta = client.listar_usuarios(user_group=user_group, page=page)
-        total_pages = int(resposta.get("total_pages") or 1)
+    for item in itens:
+        aluno = normalizar_aluno_lab(item)
+        if not aluno:
+            ignorados += 1
+            continue
 
-        for item in resposta.get("results") or []:
-            aluno = normalizar_aluno_lab(item)
-            if not aluno:
-                ignorados += 1
-                continue
-
-            _, criado = AlunoLab.objects.update_or_create(
-                id_dental=str(aluno.id),
-                defaults={
-                    "nome": aluno.nome,
-                    "celular": aluno.celular,
-                    "ativo": aluno.ativo,
-                    "origem": OrigemDados.DENTAL,
-                    "ultima_sincronizacao": agora,
-                },
-            )
-            if criado:
-                criados += 1
-            else:
-                atualizados += 1
-
-        page += 1
+        _, criado = AlunoLab.objects.update_or_create(
+            id_dental=str(aluno.id),
+            defaults={
+                "nome": aluno.nome,
+                "celular": aluno.celular,
+                "ativo": aluno.ativo,
+                "origem": OrigemDados.DENTAL,
+                "ultima_sincronizacao": agora,
+            },
+        )
+        if criado:
+            criados += 1
+        else:
+            atualizados += 1
 
     return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados}
 
 
 def buscar_e_importar_pacientes(q: str, clinic_id: int) -> ResultadoSync:
-    """Busca pacientes no Dental Office pelo nome e faz upsert apenas dos resultados.
+    """Busca pacientes no Dental Office pelo nome e faz upsert de todos os resultados.
 
-    Usa apenas a primeira página da API com filtro por nome — adequado para
-    importação pontual durante o cadastro de pedidos.
+    Percorre **todas** as páginas retornadas pela API para o filtro de
+    busca (ver :func:`listar_todas_paginas`) — antes, apenas a primeira
+    página era usada, ocultando resultados quando a busca retornava mais
+    pacientes do que o limite por página da API.
     """
     client = DentalClient()
     criados = atualizados = ignorados = 0
     agora = timezone.now()
 
-    resposta = client.listar_pacientes(clinic_id=clinic_id, page=1, q=q)
-    for item in resposta.get("results") or []:
+    itens = listar_todas_paginas(
+        lambda page: client.listar_pacientes(clinic_id=clinic_id, page=page, q=q),
+        contexto="pacientes:busca",
+    )
+
+    for item in itens:
         paciente = normalizar_paciente(item)
         if not paciente:
             ignorados += 1
@@ -138,17 +257,22 @@ def buscar_e_importar_pacientes(q: str, clinic_id: int) -> ResultadoSync:
 
 
 def buscar_e_importar_alunos(q: str, user_group: int) -> ResultadoSync:
-    """Busca alunos no Dental Office pelo nome e faz upsert apenas dos resultados.
+    """Busca alunos no Dental Office pelo nome e faz upsert de todos os resultados.
 
-    Usa apenas a primeira página da API com filtro por nome — adequado para
-    importação pontual durante o cadastro de pedidos e moldagens.
+    Percorre **todas** as páginas retornadas pela API para o filtro de
+    busca (ver :func:`listar_todas_paginas`) — mesma correção aplicada a
+    :func:`buscar_e_importar_pacientes`.
     """
     client = DentalClient()
     criados = atualizados = ignorados = 0
     agora = timezone.now()
 
-    resposta = client.listar_usuarios(user_group=user_group, page=1, q=q)
-    for item in resposta.get("results") or []:
+    itens = listar_todas_paginas(
+        lambda page: client.listar_usuarios(user_group=user_group, page=page, q=q),
+        contexto="alunos:busca",
+    )
+
+    for item in itens:
         aluno = normalizar_aluno_lab(item)
         if not aluno:
             ignorados += 1
