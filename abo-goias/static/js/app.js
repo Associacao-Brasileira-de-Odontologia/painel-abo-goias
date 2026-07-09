@@ -62,3 +62,21 @@
         });
     });
 })();
+
+(function () {
+    // Feedback de carregamento em formulários que disparam sincronizações
+    // externas (Eduq, Dental Office) — a resposta é um redirect, então o
+    // estado de loading fica visível até a próxima página carregar.
+    document.addEventListener("submit", function (event) {
+        var form = event.target.closest(".sync-form");
+        if (!form) return;
+
+        var botao = form.querySelector('button[type="submit"]');
+        if (!botao || botao.disabled) return;
+
+        botao.dataset.originalLabel = botao.textContent;
+        botao.textContent = "Sincronizando…";
+        botao.disabled = true;
+        botao.classList.add("is-loading");
+    });
+})();

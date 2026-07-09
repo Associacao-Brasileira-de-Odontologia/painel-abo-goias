@@ -1,4 +1,4 @@
-{% extends "gestao_lab/base.html" %}
+﻿{% extends "gestao_lab/base.html" %}
 {% load lab_tags %}
 
 {% block title %}Gestão de Laboratório | Pedido #{{ pedido.pk }}{% endblock %}
@@ -6,7 +6,7 @@
 {% block header_title %}Pedido #{{ pedido.pk }}{% endblock %}
 
 {% block sidebar_copy %}Visualize o histórico e registre as etapas do pedido.{% endblock %}
-{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" with active_page="pedidos" %}{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% block sidebar_extra %}
     {% if pedido.laboratorio.whatsapp %}

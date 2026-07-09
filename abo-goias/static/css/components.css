@@ -256,6 +256,38 @@ select option {
     transform: none;
 }
 
+.button.is-loading {
+    position: relative;
+    padding-left: 40px;
+}
+
+.button.is-loading::before {
+    content: "";
+    position: absolute;
+    left: 16px;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: button-spin 0.7s linear infinite;
+}
+
+.secondary.is-loading::before {
+    border-color: rgba(29, 110, 238, 0.3);
+    border-top-color: var(--accent-strong);
+}
+
+@keyframes button-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .button.is-loading::before {
+        animation: none;
+    }
+}
+
 .primary,
 .download {
     background: linear-gradient(135deg, var(--blue), var(--blue-dark));

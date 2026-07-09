@@ -1,4 +1,4 @@
-{% extends "layouts/painel.html" %}
+﻿{% extends "layouts/painel.html" %}
 
 {% block title %}Gestão de CME | {{ titulo }}{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
@@ -11,7 +11,7 @@
         Cadastre um material manualmente. O código deve ser único em todo o catálogo.
     {% endif %}
 {% endblock %}
-{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" with active_page="materiais" %}{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_label %}<p class="section-label">Catálogo</p>{% endblock %}
 {% block panel_title %}{{ titulo }}{% endblock %}

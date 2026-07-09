@@ -1,18 +1,24 @@
+{% load nav_tags %}
 {% comment %}
 Item da navegação lateral.
 Parâmetros:
-  url_name     — nome da rota a resolver com a tag url
+  url_name     — nome da rota a resolver com a tag url (com namespace, se houver)
   url_arg      — argumento posicional opcional da rota (ex.: pk de um objeto)
   icon         — id do símbolo em partials/icons.html (sem o prefixo "i-")
   label        — texto do link
-  page         — slug desta página; recebe .active quando igual a active_page
-  active_page  — slug da página atual (passado pelo menu da app)
+  match        — nomes de rota adicionais (separados por espaço) que também
+                 devem marcar este item como ativo — usado quando uma tela
+                 "filha" (criar/editar) deve manter destacado o item de lista
+                 correspondente. O item ativo é resolvido automaticamente a
+                 partir de request.resolver_match — nenhuma página precisa
+                 mais informar qual item está ativo.
   extra_class  — classes adicionais (ex.: side-link-return)
   current      — quando verdadeiro, marca .active e renderiza href="#" em vez de
                  resolver a rota — usado no passo atual de um fluxo em etapas
                  (ex.: assistente de contrato), onde não há link real para "aqui"
 {% endcomment %}
-<a class="side-link{% if current or page and active_page == page %} active{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
+{% nav_ativo url_name match as nav_active %}
+<a class="side-link{% if current or nav_active %} active{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
    href="{% if current %}#{% elif url_arg %}{% url url_name url_arg %}{% else %}{% url url_name %}{% endif %}">
     <span class="side-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>

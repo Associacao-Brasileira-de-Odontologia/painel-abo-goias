@@ -1,4 +1,4 @@
-{% extends "layouts/painel.html" %}
+﻿{% extends "layouts/painel.html" %}
 
 {% block title %}Gestão de CME | {{ titulo }}{% endblock %}
 {% block header_eyebrow %}Controle físico{% endblock %}
@@ -11,7 +11,7 @@
         Cadastre um abrigo manualmente. O identificador deve ser único em todo o sistema.
     {% endif %}
 {% endblock %}
-{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" with active_page="armarios" %}{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}{{ titulo }}{% endblock %}
 {% block panel_actions %}

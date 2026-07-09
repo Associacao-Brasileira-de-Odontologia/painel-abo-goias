@@ -1,0 +1,38 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Meu perfil{% endblock %}
+{% block eyebrow %}Minha conta{% endblock %}
+{% block heading %}Meu perfil{% endblock %}
+{% block description %}Dados da sua conta de acesso ao painel.{% endblock %}
+
+{% block content %}
+    <dl class="profile-fields">
+        <div class="profile-field">
+            <dt>Nome</dt>
+            <dd>{{ usuario_logado.get_full_name|default:"—" }}</dd>
+        </div>
+        <div class="profile-field">
+            <dt>Usuário</dt>
+            <dd>{{ usuario_logado.username }}</dd>
+        </div>
+        <div class="profile-field">
+            <dt>E-mail</dt>
+            <dd>{{ usuario_logado.email|default:"—" }}</dd>
+        </div>
+        {% if usuario_logado.groups.all %}
+            <div class="profile-field">
+                <dt>Grupos</dt>
+                <dd>{% for grupo in usuario_logado.groups.all %}{{ grupo.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+            </div>
+        {% endif %}
+        <div class="profile-field">
+            <dt>Último acesso</dt>
+            <dd>{{ usuario_logado.last_login|date:"d/m/Y H:i"|default:"—" }}</dd>
+        </div>
+    </dl>
+
+    <div class="profile-actions">
+        <a class="button primary update-first" href="{% url 'password_change' %}">Trocar senha</a>
+        <a class="auth-link" href="{% url 'home' %}">Voltar ao portal</a>
+    </div>
+{% endblock %}

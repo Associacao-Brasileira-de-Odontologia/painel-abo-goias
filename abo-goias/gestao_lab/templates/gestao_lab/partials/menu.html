@@ -1,23 +1,24 @@
 {% comment %}
-Navegação lateral da Gestão de Laboratório.
-Uso: incluir com a variável active_page definida para o slug da página atual.
+Navegação lateral da Gestão de Laboratório. O item ativo é resolvido
+automaticamente a partir da rota atual (ver partials/side_link.html) — basta
+incluir este partial sem parâmetros.
 {% endcomment %}
 <nav class="side-nav" aria-label="Navegação do laboratório">
     <p class="side-nav-label">Operação</p>
-    {% include "partials/side_link.html" with url_name="lab_dashboard" icon="dashboard" label="Visão Geral" page="dashboard" %}
-    {% include "partials/side_link.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" page="pedidos" %}
-    {% include "partials/side_link.html" with url_name="lab_criar_pedido" icon="novo" label="Novo pedido" page="novo_pedido" %}
-    {% include "partials/side_link.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" page="moldagens" %}
-    {% include "partials/side_link.html" with url_name="lab_pedidos_faturamento" icon="emprestimo" label="Faturamento" page="faturamento" %}
+    {% include "partials/side_link.html" with url_name="lab_dashboard" icon="dashboard" label="Visão Geral" %}
+    {% include "partials/side_link.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" match="lab_detalhe_pedido" %}
+    {% include "partials/side_link.html" with url_name="lab_criar_pedido" icon="novo" label="Novo pedido" %}
+    {% include "partials/side_link.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" match="lab_criar_moldagem" %}
+    {% include "partials/side_link.html" with url_name="lab_pedidos_faturamento" icon="emprestimo" label="Faturamento" %}
 
     <p class="side-nav-label">Cadastros</p>
-    {% include "partials/side_link.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" page="laboratorios" %}
-    {% include "partials/side_link.html" with url_name="lab_equipes" icon="usuarios" label="Equipes" page="equipes" %}
+    {% include "partials/side_link.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" match="lab_criar_laboratorio lab_editar_laboratorio" %}
+    {% include "partials/side_link.html" with url_name="lab_equipes" icon="usuarios" label="Equipes" match="lab_criar_equipe lab_editar_equipe" %}
 
     <p class="side-nav-label">Dental Office</p>
-    {% include "partials/side_link.html" with url_name="lab_pacientes" icon="paciente" label="Pacientes" page="pacientes" %}
-    {% include "partials/side_link.html" with url_name="lab_alunos" icon="aluno" label="Alunos" page="alunos" %}
-    {% include "partials/side_link.html" with url_name="contratos" icon="contrato" label="Contratos" page="contratos" %}
+    {% include "partials/side_link.html" with url_name="lab_pacientes" icon="paciente" label="Pacientes" %}
+    {% include "partials/side_link.html" with url_name="lab_alunos" icon="aluno" label="Alunos" %}
+    {% include "partials/side_link.html" with url_name="contratos" icon="contrato" label="Contratos" %}
 
     {% include "partials/side_link.html" with url_name="home" icon="voltar" label="Voltar ao portal" extra_class="side-link-return" %}
 </nav>

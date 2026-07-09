@@ -1,4 +1,4 @@
-{% extends "gestao_lab/base.html" %}
+﻿{% extends "gestao_lab/base.html" %}
 
 {% block title %}Gestão de Laboratório | {% if editando %}Editar equipe{% else %}Nova equipe{% endif %}{% endblock %}
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
@@ -11,7 +11,7 @@
         Cadastre uma nova equipe de coordenação de laboratórios.
     {% endif %}
 {% endblock %}
-{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" with active_page="equipes" %}{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% block panel_label %}<p class="section-label">Equipes</p>{% endblock %}
 {% block panel_title %}{% if editando %}{{ equipe.nome }}{% else %}Nova equipe{% endif %}{% endblock %}

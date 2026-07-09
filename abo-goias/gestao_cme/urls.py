@@ -50,6 +50,7 @@ urlpatterns = [
         ),
         name="password_reset_complete",
     ),
+    path("perfil/", views.perfil, name="perfil"),
     path(
         "senha/trocar/",
         auth_views.PasswordChangeView.as_view(

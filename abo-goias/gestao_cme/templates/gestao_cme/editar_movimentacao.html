@@ -1,4 +1,4 @@
-{% extends "layouts/painel.html" %}
+﻿{% extends "layouts/painel.html" %}
 
 {% block title %}Gestão de CME | Editar registro{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
@@ -7,7 +7,7 @@
 {% block breadcrumb %}{% include "partials/breadcrumb.html" %}{% endblock %}
 
 {% block sidebar_copy %}Edite as informações do registro ou exclua caso necessário.{% endblock %}
-{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" with active_page="emprestimos" %}{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Editar registro — pacote {{ mov.pacote_codigo }}{% endblock %}
 {% block panel_actions %}
