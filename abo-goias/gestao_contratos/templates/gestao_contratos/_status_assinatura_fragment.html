@@ -57,6 +57,11 @@ assinatura; ao mudar de status, o polling para automaticamente.
                     </form>
                 {% endif %}
             </div>
+        {% elif request.user.is_staff %}
+            <p class="panel-copy gc-text-muted-sm gc-mt-sm">
+                Carimbo de tempo desativado — defina
+                <code>CARIMBO_TEMPO_TSA_URL</code> para ativar.
+            </p>
         {% endif %}
     {% elif sessao_assinatura %}
         {% if sessao_assinatura.terminal %}

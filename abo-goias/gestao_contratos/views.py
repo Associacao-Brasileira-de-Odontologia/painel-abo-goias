@@ -398,6 +398,7 @@ def pos_geracao_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
     contexto = {
         "paciente": paciente,
         "link_whatsapp": link_whatsapp,
+        "whatsapp_automatico_configurado": settings.WHATSAPP_META_CONFIGURADO,
     }
     contexto.update(contexto_status_assinatura(request, contrato))
 

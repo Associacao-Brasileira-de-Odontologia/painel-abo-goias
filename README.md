@@ -47,6 +47,8 @@ Pontos de atenção:
 - **Pendência operacional (WhatsApp)**: o envio automático via Meta Cloud API exige verificação de conta Business e um template de mensagem aprovado. Sem isso configurado, o envio automático fica desativado e o fluxo manual (link `wa.me`) continua funcionando normalmente.
 - **Pendência operacional (armazenamento)**: o filesystem do container no Railway é efêmero — sem um Volume persistente configurado, os PDFs/DOCX gerados são perdidos a cada deploy.
 - **Pendências de validade jurídica (Gestão de Contratos)**: ver [Pendências (validade jurídica)](#pendências-validade-jurídica) na seção dedicada — prazo de retenção da auditoria ainda não definido, contato do encarregado de dados pendente de preenchimento, TSA padrão não credenciada pela ICP-Brasil.
+- **Controle de acesso**: o comando `python abo-goias\manage.py criar_grupos_padrao` cria os grupos `recepcao`, `coordenacao` e `gestao` (idempotente), mas nenhuma view ainda os utiliza — hoje qualquer usuário autenticado tem acesso igual a todo o sistema (`@login_required` é o único portão). O decorator `gestao_cme.permissoes.requer_grupo` está pronto para uso futuro quando as regras de quem pode fazer o quê forem definidas.
+- Credenciais do WhatsApp (Meta Cloud API) e do carimbo de tempo (TSA) agora são lidas centralmente em `abo_goias/settings.py` (mesmo padrão já usado para Dental Office e e-mail), em vez de cada serviço ler `os.environ` diretamente. Os nomes das variáveis de ambiente não mudaram.
 
 ## Estrutura do projeto
 
@@ -426,6 +428,8 @@ O projeto carrega variaveis de ambiente a partir do sistema operacional e, quand
 Variaveis principais:
 
 - `DJANGO_DEBUG`: use `true` em desenvolvimento e `false` em producao.
+- `DJANGO_SESSION_COOKIE_AGE`: duracao da sessao em segundos. Padrao: 8h (`28800`).
+- `DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE`: expira a sessao ao fechar o navegador. Padrao: `true`.
 - `DJANGO_SECRET_KEY`: chave secreta do Django. Obrigatoria em producao.
 - `DJANGO_ALLOWED_HOSTS`: dominios/IPs permitidos, separados por virgula. Obrigatorio em producao.
 - `DJANGO_CSRF_TRUSTED_ORIGINS`: origens confiaveis para CSRF, separadas por virgula, incluindo protocolo. Exemplo: `https://cme.exemplo.com`.

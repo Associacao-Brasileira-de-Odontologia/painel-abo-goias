@@ -1139,12 +1139,9 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "token-teste",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-        },
+    @override_settings(
+        WHATSAPP_META_TOKEN="token-teste",
+        WHATSAPP_META_PHONE_NUMBER_ID="123456",
     )
     def test_assinatura_agenda_envio_whatsapp_quando_configurado_e_com_celular(
         self,
@@ -1168,12 +1165,9 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
 
         self.mock_enviar_whatsapp_delay.assert_not_called()
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "token-teste",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-        },
+    @override_settings(
+        WHATSAPP_META_TOKEN="token-teste",
+        WHATSAPP_META_PHONE_NUMBER_ID="123456",
     )
     def test_assinatura_nao_agenda_whatsapp_sem_celular(self) -> None:
         """Configurado, mas sem celular do paciente, não há para quem enviar."""
@@ -1183,12 +1177,9 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
 
         self.mock_enviar_whatsapp_delay.assert_not_called()
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "token-teste",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-        },
+    @override_settings(
+        WHATSAPP_META_TOKEN="token-teste",
+        WHATSAPP_META_PHONE_NUMBER_ID="123456",
     )
     def test_falha_ao_enfileirar_whatsapp_nao_quebra_a_assinatura(self) -> None:
         self.pac.celular = "62999998888"
@@ -2010,17 +2001,16 @@ class NormalizarCelularTests(TestCase):
 
 
 class CarregarConfigMetaTests(TestCase):
-    @patch.dict("os.environ", {}, clear=True)
+    @override_settings(WHATSAPP_META_TOKEN="", WHATSAPP_META_PHONE_NUMBER_ID="")
     def test_sem_variaveis_retorna_none(self) -> None:
         self.assertIsNone(carregar_config_meta())
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "tok",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123",
-        },
-        clear=True,
+    @override_settings(
+        WHATSAPP_META_TOKEN="tok",
+        WHATSAPP_META_PHONE_NUMBER_ID="123",
+        WHATSAPP_META_TEMPLATE_NAME="",
+        WHATSAPP_META_TEMPLATE_LANG="pt_BR",
+        WHATSAPP_META_API_VERSION="v21.0",
     )
     def test_com_variaveis_obrigatorias_usa_padroes_para_opcionais(self) -> None:
         config = carregar_config_meta()
@@ -2031,16 +2021,12 @@ class CarregarConfigMetaTests(TestCase):
         self.assertEqual(config.template_lang, "pt_BR")
         self.assertEqual(config.template_name, "")
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "tok",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123",
-            "WHATSAPP_META_TEMPLATE_NAME": "contrato_assinado",
-            "WHATSAPP_META_TEMPLATE_LANG": "pt_PT",
-            "WHATSAPP_META_API_VERSION": "v20.0",
-        },
-        clear=True,
+    @override_settings(
+        WHATSAPP_META_TOKEN="tok",
+        WHATSAPP_META_PHONE_NUMBER_ID="123",
+        WHATSAPP_META_TEMPLATE_NAME="contrato_assinado",
+        WHATSAPP_META_TEMPLATE_LANG="pt_PT",
+        WHATSAPP_META_API_VERSION="v20.0",
     )
     def test_respeita_variaveis_opcionais_quando_definidas(self) -> None:
         config = carregar_config_meta()
@@ -2048,7 +2034,7 @@ class CarregarConfigMetaTests(TestCase):
         self.assertEqual(config.template_lang, "pt_PT")
         self.assertEqual(config.api_version, "v20.0")
 
-    @patch.dict("os.environ", {"WHATSAPP_META_TOKEN": "tok"}, clear=True)
+    @override_settings(WHATSAPP_META_TOKEN="tok", WHATSAPP_META_PHONE_NUMBER_ID="")
     def test_apenas_token_sem_phone_number_id_retorna_none(self) -> None:
         self.assertIsNone(carregar_config_meta())
 
@@ -2075,19 +2061,18 @@ def _fake_http_error(status: int, corpo: str):
 
 class MetaWhatsAppClientTests(TestCase):
     def _config(self, **kwargs):
-        with patch.dict(
-            "os.environ",
-            {
-                "WHATSAPP_META_TOKEN": "tok",
-                "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-                **kwargs,
-            },
-            clear=True,
-        ):
+        valores = {
+            "WHATSAPP_META_TOKEN": "tok",
+            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
+            **kwargs,
+        }
+        with override_settings(**valores):
             return carregar_config_meta()
 
     def test_sem_config_levanta_erro_ao_instanciar(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
+        with override_settings(
+            WHATSAPP_META_TOKEN="", WHATSAPP_META_PHONE_NUMBER_ID=""
+        ):
             with self.assertRaises(MetaWhatsAppError):
                 MetaWhatsAppClient()
 
@@ -2957,13 +2942,8 @@ class ExtrairErroRespostaTests(TestCase):
 
 class MetaWhatsAppClientEdgeCasesTests(TestCase):
     def _config(self):
-        with patch.dict(
-            "os.environ",
-            {
-                "WHATSAPP_META_TOKEN": "tok",
-                "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-            },
-            clear=True,
+        with override_settings(
+            WHATSAPP_META_TOKEN="tok", WHATSAPP_META_PHONE_NUMBER_ID="123456"
         ):
             return carregar_config_meta()
 
@@ -3196,12 +3176,17 @@ _TSA_URL = "https://freetsa.org/tsr"
 
 
 class CarimboTempoConfigTests(TestCase):
-    @patch.dict("os.environ", {}, clear=True)
+    @override_settings(CARIMBO_TEMPO_TSA_URL="")
     def test_sem_tsa_url_fica_desativado(self) -> None:
         self.assertIsNone(carregar_config_carimbo_tempo())
         self.assertFalse(carimbo_tempo_configurado())
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     def test_com_tsa_url_fica_ativado(self) -> None:
         config = carregar_config_carimbo_tempo()
         self.assertIsNotNone(config)
@@ -3209,15 +3194,11 @@ class CarimboTempoConfigTests(TestCase):
         self.assertEqual(config.timeout, 30)
         self.assertTrue(carimbo_tempo_configurado())
 
-    @patch.dict(
-        "os.environ",
-        {
-            "CARIMBO_TEMPO_TSA_URL": _TSA_URL,
-            "CARIMBO_TEMPO_TSA_USERNAME": "user",
-            "CARIMBO_TEMPO_TSA_PASSWORD": "pass",
-            "CARIMBO_TEMPO_TIMEOUT": "45",
-        },
-        clear=True,
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="user",
+        CARIMBO_TEMPO_TSA_PASSWORD="pass",
+        CARIMBO_TEMPO_TIMEOUT=45,
     )
     def test_credenciais_e_timeout_customizados(self) -> None:
         config = carregar_config_carimbo_tempo()
@@ -3234,7 +3215,7 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
         self.contrato.refresh_from_db()
 
     def test_sem_tsa_configurada_retorna_erro_sem_solicitar(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
+        with override_settings(CARIMBO_TEMPO_TSA_URL=""):
             ok, erro = solicitar_carimbo(self.contrato)
 
         self.assertFalse(ok)
@@ -3245,7 +3226,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     def test_sem_hash_calculado_marca_erro(self) -> None:
         self.contrato.hash_sha256 = ""
         self.contrato.save(update_fields=["hash_sha256"])
@@ -3261,7 +3247,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_sucesso_salva_token_e_data_atestada(
@@ -3307,7 +3298,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
         self.assertEqual(leitor.attachments["carimbo_tempo.tsr"], [b"token-tsr-fake"])
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.RemoteTimestamper")
     def test_falha_na_tsa_marca_erro(self, MockTimestamper: MagicMock) -> None:
         MockTimestamper.return_value.timestamp.side_effect = RuntimeError(
@@ -3326,7 +3322,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_sucesso_sem_pdf_assinado_nao_quebra(
@@ -3403,7 +3404,12 @@ class SolicitarCarimboTempoTaskTests(TestCase):
 
 
 class ProcessarAssinaturaCarimboTempoTests(AssinaturaBaseTests):
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     def test_agenda_carimbo_quando_configurado(self) -> None:
         with patch(
             "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"
@@ -3413,7 +3419,7 @@ class ProcessarAssinaturaCarimboTempoTests(AssinaturaBaseTests):
 
         mock_delay.assert_called_once_with(self.contrato.pk)
 
-    @patch.dict("os.environ", {}, clear=True)
+    @override_settings(CARIMBO_TEMPO_TSA_URL="")
     def test_nao_agenda_carimbo_quando_nao_configurado(self) -> None:
         with patch(
             "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"
@@ -3474,7 +3480,12 @@ class CarimboTempoViewsTests(AssinaturaBaseTests):
         )
         self.assertContains(response, "ainda não possui carimbo de tempo")
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_baixar_com_carimbo_retorna_arquivo(
@@ -3494,7 +3505,12 @@ class CarimboTempoViewsTests(AssinaturaBaseTests):
         self.assertEqual(response.content, b"token-tsr-fake")
         self.assertEqual(response["Content-Type"], "application/timestamp-reply")
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_baixar_contrato_assinado_ja_leva_o_carimbo_embutido(

@@ -5,8 +5,11 @@ from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.http import HttpResponse
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -29,6 +32,7 @@ from gestao_cme.models import (
     OrigemDados,
     Turma,
 )
+from gestao_cme.permissoes import GRUPO_GESTAO, GRUPOS_PADRAO, requer_grupo
 from gestao_cme.services.eduq_sync import (
     sincronizar_alunos_eduq,
     sincronizar_eduq,
@@ -295,7 +299,7 @@ class RotasIniciaisTests(TestCase):
         )
         self.client.force_login(usuario)
 
-        response = self.client.get(reverse("armarios"), {"ocupacao": "ocupado"})
+        response = self.client.get(reverse("abrigos"), {"ocupacao": "ocupado"})
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_cme/armarios.html")
@@ -766,3 +770,80 @@ class MigracaoLegadoTests(TestCase):
             ],
         }
         return dados[path.name]
+
+
+class RequerGrupoTests(TestCase):
+    """Testa o decorator isoladamente — ele ainda não está aplicado a
+    nenhuma view real, então a checagem é feita numa view trivial criada
+    só para o teste."""
+
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+
+        @requer_grupo(GRUPO_GESTAO)
+        def view(request):
+            return HttpResponse("ok")
+
+        self.view = view
+
+    def test_usuario_anonimo_redireciona_para_login(self) -> None:
+        from django.contrib.auth.models import AnonymousUser
+
+        request = self.factory.get("/qualquer-rota/")
+        request.user = AnonymousUser()
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+
+    def test_usuario_sem_grupo_recebe_permission_denied(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="sem-grupo", password="senha-segura"
+        )
+        request = self.factory.get("/qualquer-rota/")
+        request.user = usuario
+
+        with self.assertRaises(PermissionDenied):
+            self.view(request)
+
+    def test_usuario_no_grupo_correto_acessa(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="da-gestao", password="senha-segura"
+        )
+        usuario.groups.add(Group.objects.create(name=GRUPO_GESTAO))
+        request = self.factory.get("/qualquer-rota/")
+        request.user = usuario
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"ok")
+
+    def test_superuser_acessa_sem_pertencer_a_nenhum_grupo(self) -> None:
+        usuario = get_user_model().objects.create_superuser(
+            username="admin", password="senha-segura", email="admin@example.com"
+        )
+        request = self.factory.get("/qualquer-rota/")
+        request.user = usuario
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 200)
+
+
+class CriarGruposPadraoTests(TestCase):
+    def test_cria_os_tres_grupos_padrao(self) -> None:
+        call_command("criar_grupos_padrao")
+
+        self.assertEqual(
+            Group.objects.filter(name__in=GRUPOS_PADRAO).count(), len(GRUPOS_PADRAO)
+        )
+
+    def test_comando_e_idempotente(self) -> None:
+        call_command("criar_grupos_padrao")
+        call_command("criar_grupos_padrao")
+
+        self.assertEqual(
+            Group.objects.filter(name__in=GRUPOS_PADRAO).count(), len(GRUPOS_PADRAO)
+        )

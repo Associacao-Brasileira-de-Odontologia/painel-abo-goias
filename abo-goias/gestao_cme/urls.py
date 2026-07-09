@@ -71,7 +71,6 @@ urlpatterns = [
         name="sincronizar_turmas_eduq",
     ),
     path("abrigos/", views.armarios, name="abrigos"),
-    path("armarios/", views.armarios, name="armarios"),
     path("abrigos/novo/", views.cadastrar_abrigo, name="cadastrar_abrigo"),
     path("abrigos/<int:pk>/editar/", views.editar_abrigo, name="editar_abrigo"),
     path("materiais/", views.materiais, name="materiais"),

@@ -280,6 +280,14 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"
 
+# Sessao expira apos 8h (turno de trabalho) e tambem ao fechar o navegador;
+# antes disso o cookie de sessao usava o padrao do Django (2 semanas), o que
+# nao fazia sentido para um sistema que manipula dados de pacientes.
+SESSION_COOKIE_AGE = _env_int("DJANGO_SESSION_COOKIE_AGE", 60 * 60 * 8)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = _env_bool(
+    "DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE", True
+)
+
 EMAIL_HOST = _env("EMAIL_HOST") or _env("DJANGO_EMAIL_HOST")
 EMAIL_PORT = _env_int("EMAIL_PORT", 0) or _env_int("DJANGO_EMAIL_PORT", 587)
 EMAIL_HOST_USER = _env("EMAIL_HOST_USER") or _env("DJANGO_EMAIL_HOST_USER")
@@ -334,6 +342,25 @@ SECURE_PROXY_SSL_HEADER = (
     if _env_bool("DJANGO_SECURE_PROXY_SSL_HEADER", False)
     else None
 )
+
+# WhatsApp (Meta Cloud API) e carimbo de tempo (TSA/RFC 3161) sao lidos
+# aqui, centralizados como o restante da configuracao do projeto, em vez
+# de cada servico ler os.environ diretamente. WHATSAPP_META_CONFIGURADO e
+# CARIMBO_TEMPO_CONFIGURADO permitem que views/templates verifiquem se a
+# integracao esta ativa sem duplicar a logica de "campos obrigatorios".
+WHATSAPP_META_TOKEN = _env("WHATSAPP_META_TOKEN")
+WHATSAPP_META_PHONE_NUMBER_ID = _env("WHATSAPP_META_PHONE_NUMBER_ID")
+WHATSAPP_META_API_VERSION = _env("WHATSAPP_META_API_VERSION", "v21.0")
+WHATSAPP_META_TEMPLATE_NAME = _env("WHATSAPP_META_TEMPLATE_NAME")
+WHATSAPP_META_TEMPLATE_LANG = _env("WHATSAPP_META_TEMPLATE_LANG", "pt_BR")
+WHATSAPP_META_TIMEOUT = _env_int("WHATSAPP_META_TIMEOUT", 30)
+WHATSAPP_META_CONFIGURADO = bool(WHATSAPP_META_TOKEN and WHATSAPP_META_PHONE_NUMBER_ID)
+
+CARIMBO_TEMPO_TSA_URL = _env("CARIMBO_TEMPO_TSA_URL")
+CARIMBO_TEMPO_TSA_USERNAME = _env("CARIMBO_TEMPO_TSA_USERNAME")
+CARIMBO_TEMPO_TSA_PASSWORD = _env("CARIMBO_TEMPO_TSA_PASSWORD")
+CARIMBO_TEMPO_TIMEOUT = _env_int("CARIMBO_TEMPO_TIMEOUT", 30)
+CARIMBO_TEMPO_CONFIGURADO = bool(CARIMBO_TEMPO_TSA_URL)
 
 DENTAL_SYNC_TOKEN = os.environ.get("DENTAL_SYNC_TOKEN", "")
 DENTAL_CLINIC_ID = int(os.environ.get("DENTAL_CLINIC_ID", "1"))

@@ -18,11 +18,11 @@ feita — o restante do fluxo de assinatura permanece inalterado.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import timezone as dt_timezone
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 
 if TYPE_CHECKING:
@@ -49,15 +49,15 @@ def carregar_config_carimbo_tempo() -> ConfigCarimboTempo | None:
     como um erro.
     """
 
-    url = os.environ.get("CARIMBO_TEMPO_TSA_URL", "").strip()
+    url = (settings.CARIMBO_TEMPO_TSA_URL or "").strip()
     if not url:
         return None
 
     return ConfigCarimboTempo(
         url=url,
-        username=os.environ.get("CARIMBO_TEMPO_TSA_USERNAME", "").strip(),
-        password=os.environ.get("CARIMBO_TEMPO_TSA_PASSWORD", "").strip(),
-        timeout=int(os.environ.get("CARIMBO_TEMPO_TIMEOUT", "30")),
+        username=(settings.CARIMBO_TEMPO_TSA_USERNAME or "").strip(),
+        password=(settings.CARIMBO_TEMPO_TSA_PASSWORD or "").strip(),
+        timeout=int(settings.CARIMBO_TEMPO_TIMEOUT or 30),
     )
 
 

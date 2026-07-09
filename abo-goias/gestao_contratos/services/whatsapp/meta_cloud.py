@@ -17,12 +17,13 @@ escrito para o número da clínica nas últimas 24h.
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from django.conf import settings
 
 _MENSAGEM_SESSAO = (
     "Olá! Seu contrato foi assinado com sucesso. Segue uma cópia em PDF. "
@@ -54,18 +55,18 @@ def carregar_config_meta() -> ConfigMetaWhatsapp | None:
     automático desativado", não como um erro.
     """
 
-    token = os.environ.get("WHATSAPP_META_TOKEN", "").strip()
-    phone_number_id = os.environ.get("WHATSAPP_META_PHONE_NUMBER_ID", "").strip()
+    token = (settings.WHATSAPP_META_TOKEN or "").strip()
+    phone_number_id = (settings.WHATSAPP_META_PHONE_NUMBER_ID or "").strip()
     if not token or not phone_number_id:
         return None
 
     return ConfigMetaWhatsapp(
         token=token,
         phone_number_id=phone_number_id,
-        api_version=os.environ.get("WHATSAPP_META_API_VERSION", "v21.0").strip(),
-        template_name=os.environ.get("WHATSAPP_META_TEMPLATE_NAME", "").strip(),
-        template_lang=os.environ.get("WHATSAPP_META_TEMPLATE_LANG", "pt_BR").strip(),
-        timeout=int(os.environ.get("WHATSAPP_META_TIMEOUT", "30")),
+        api_version=(settings.WHATSAPP_META_API_VERSION or "v21.0").strip(),
+        template_name=(settings.WHATSAPP_META_TEMPLATE_NAME or "").strip(),
+        template_lang=(settings.WHATSAPP_META_TEMPLATE_LANG or "pt_BR").strip(),
+        timeout=int(settings.WHATSAPP_META_TIMEOUT or 30),
     )
 
 
