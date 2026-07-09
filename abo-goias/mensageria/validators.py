@@ -1,10 +1,8 @@
-"""Validação de destinatários antes do envio.
+"""Normalização e validação de destinatários antes do envio.
 
-A normalização de números de celular brasileiros (adicionar DDI, remover
-formatação) é responsabilidade do domínio da aplicação — ver
-``gestao_contratos.services.envio.normalizar_celular``. Esta validação
-garante apenas que o valor já normalizado é aceitável para envio por
-qualquer provedor de WhatsApp.
+Compartilhado por qualquer app que precise enviar WhatsApp — hoje
+``gestao_contratos`` (link wa.me e envio automático do contrato) e
+``gestao_lab`` (cobrança de material em atraso).
 """
 
 from __future__ import annotations
@@ -14,6 +12,21 @@ import re
 from .exceptions import InvalidRecipientError
 
 _NUMERO_VALIDO = re.compile(r"^\d{10,15}$")
+
+
+def normalizar_celular(celular: str) -> str:
+    """Normaliza um celular para dígitos com DDI 55 (padrão E.164 sem '+').
+
+    Remove não-dígitos e adiciona o 55 se ausente. Retorna string vazia se
+    não houver nenhum dígito.
+    """
+
+    digitos = re.sub(r"\D", "", celular or "")
+    if not digitos:
+        return ""
+    if not digitos.startswith("55"):
+        digitos = "55" + digitos
+    return digitos
 
 
 def validar_destinatario(numero: str) -> str:

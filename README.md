@@ -49,17 +49,18 @@ Pontos de atenção:
 - **Pendências de validade jurídica (Gestão de Contratos)**: ver [Pendências (validade jurídica)](#pendências-validade-jurídica) na seção dedicada — prazo de retenção da auditoria ainda não definido, contato do encarregado de dados pendente de preenchimento, TSA padrão não credenciada pela ICP-Brasil.
 - **Controle de acesso**: o comando `python abo-goias\manage.py criar_grupos_padrao` cria os grupos `recepcao`, `coordenacao` e `gestao` (idempotente), mas nenhuma view ainda os utiliza — hoje qualquer usuário autenticado tem acesso igual a todo o sistema (`@login_required` é o único portão). O decorator `gestao_cme.permissoes.requer_grupo` está pronto para uso futuro quando as regras de quem pode fazer o quê forem definidas.
 - Credenciais do WhatsApp (Z-API) e do carimbo de tempo (TSA) são lidas centralmente em `abo_goias/settings.py` (mesmo padrão já usado para Dental Office e e-mail), em vez de cada serviço ler `os.environ` diretamente.
-- O envio de WhatsApp é feito por uma camada de mensageria desacoplada de provedor (`gestao_contratos/services/messaging/`) — `MessagingProvider` é a interface, `ZApiProvider` a implementação atual para a Z-API, e `MessagingService` é a fachada usada pelo resto da aplicação. Trocar de provedor no futuro (ex.: voltar à API oficial, ou usar outro serviço) significa implementar um novo `MessagingProvider`, sem tocar em views, models ou templates — ver [Envio automático por WhatsApp (Z-API)](#envio-automático-por-whatsapp-z-api).
+- O envio de WhatsApp é feito por uma camada de mensageria desacoplada de provedor (`mensageria/`, pacote compartilhado na raiz do projeto — não pertence a nenhuma app, para poder ser reusado por outras além de `gestao_contratos`) — `MessagingProvider` é a interface, `ZApiProvider` a implementação atual para a Z-API, e `MessagingService` é a fachada usada pelo resto da aplicação. Trocar de provedor no futuro (ex.: voltar à API oficial, ou usar outro serviço) significa implementar um novo `MessagingProvider`, sem tocar em views, models ou templates — ver [Envio automático por WhatsApp (Z-API)](#envio-automático-por-whatsapp-z-api).
 
 ## Estrutura do projeto
 
 ```text
 abo-goias/
 ├── abo_goias/          # Configurações Django do projeto principal + bootstrap do Celery
-├── gestao_cme/         # Aplicação Gestão de CME
-├── identificadores/    # Aplicação Identificador de Bancadas
-├── gestao_lab/          # Aplicação Gestão de Laboratório (sincronização Dental Office)
-├── gestao_contratos/    # Aplicação Gestão de Contratos (geração, assinatura, envio)
+├── contas/             # Aplicação de autenticação (login, senha, perfil)
+├── gestao_cme/         # Aplicação Gestão de CME (inclui identificadores de bancada como sub-rota)
+├── gestao_lab/         # Aplicação Gestão de Laboratório (sincronização Dental Office)
+├── gestao_contratos/   # Aplicação Gestão de Contratos (geração, assinatura, envio)
+├── mensageria/         # Pacote compartilhado de mensageria (WhatsApp/Z-API) — não é uma app Django
 ├── manage.py
 └── db.sqlite3          # Banco local de desenvolvimento
 ```
@@ -228,6 +229,16 @@ python abo-goias\manage.py sincronizar_dental
 ```
 
 Um endpoint autenticado por token (`/laboratorio/sincronizar-agendado/`) permite acionar a sincronização via cron externo (ex.: Railway Cron) — token configurado em `DENTAL_SYNC_TOKEN`.
+
+### Cobrança automática de pedidos atrasados (WhatsApp)
+
+`PedidoMaterial.status` é recalculado a cada `save()` a partir de `previsao_entrega`; quando o prazo vence sem entrega registrada, o pedido vira `ATRASADO`. A tarefa `gestao_lab.tasks.cobrar_pedidos_atrasados_task` (Celery Beat, uma vez por dia às 9h — ver `CELERY_BEAT_SCHEDULE` em `settings.py`) varre esses pedidos e envia **uma mensagem de texto por laboratório** (agregando todos os pedidos atrasados dele, em vez de uma mensagem por pedido) via `mensageria` (Z-API) — mesma camada de mensageria usada pelo envio automático de contratos, ver [Envio automático por WhatsApp (Z-API)](#envio-automático-por-whatsapp-z-api).
+
+- Usa `Laboratorio.whatsapp` como destinatário; laboratórios sem WhatsApp cadastrado são ignorados.
+- **Deduplicação**: cada `PedidoMaterial` notificado é marcado com `cobranca_whatsapp_enviada_em`. A próxima execução no mesmo dia ignora pedidos já cobrados hoje — evita notificar o mesmo laboratório repetidamente se a tarefa rodar mais de uma vez. Um pedido cobrado ontem (e ainda atrasado) volta a ser elegível hoje.
+- Se o envio para um laboratório falhar (ex.: instância da Z-API desconectada), os pedidos dele **não** são marcados como cobrados — continuam elegíveis na próxima execução, sem afetar a cobrança dos demais laboratórios.
+- Sem `ZAPI_*` configurado, a tarefa não faz nada (mesmo padrão do envio automático de contratos).
+- Lógica de negócio em `gestao_lab/services/cobranca.py`.
 
 ## Gestão de Contratos
 
@@ -398,27 +409,30 @@ Variáveis de ambiente:
 
 #### Arquitetura da camada de mensageria
 
-O envio não fala diretamente com a Z-API em nenhum ponto da aplicação — toda a comunicação passa por `gestao_contratos/services/messaging/`:
+O envio não fala diretamente com a Z-API em nenhum ponto da aplicação — toda a comunicação passa por `mensageria/`, um pacote **na raiz do projeto** (não dentro de nenhuma app) para poder ser reaproveitado por qualquer app que precise enviar WhatsApp — hoje `gestao_contratos`, futuramente também `gestao_lab` (cobrança de material em atraso), sem criar dependência de uma app para a outra:
 
 ```text
-MessagingProvider (interface, provider.py)
-        ▲
-        │
-    ZApiProvider (zapi.py) — implementação atual, HTTP da Z-API
-        │
-  MessagingService (base.py) — retry com backoff + tratamento de erro padronizado
-        │
-  services/whatsapp/__init__.py — regra de negócio (status do contrato, eventos)
-        │
-  tasks.py (enviar_whatsapp_task, Celery) — chamado por services/assinatura.py
+mensageria/                              ← pacote compartilhado, não é uma app Django
+    provider.py    — MessagingProvider (interface)
+            ▲
+            │
+    zapi.py        — ZApiProvider — implementação atual, HTTP da Z-API
+            │
+    base.py        — MessagingService — retry com backoff + tratamento de erro padronizado
+            │
+gestao_contratos/services/whatsapp/__init__.py  — regra de negócio (status do contrato, eventos)
+            │
+gestao_contratos/tasks.py (enviar_whatsapp_task, Celery) — chamado por services/assinatura.py
 ```
 
-- `exceptions.py`: hierarquia de erros do provedor (`MessagingConfigurationError`, `MessagingAuthenticationError`, `InstanceDisconnectedError`, `QRCodePendingError`, `InvalidRecipientError`, `MessageRejectedError`, `RateLimitExceededError`, `MessagingTimeoutError`, `ProviderUnavailableError`) — nenhum chamador vê exceções específicas da Z-API.
-- `responses.py`: `MessagingResult`/`DisponibilidadeResult` — formato de retorno padronizado (`sucesso`, `message_id`, `erro`), igual para qualquer provedor.
-- `validators.py` / `serializers.py`: validação do destinatário e montagem dos payloads HTTP da Z-API.
-- `utils.py`: retry com backoff exponencial (só para erros transitórios — configuração, autenticação, destinatário inválido e mensagem rejeitada nunca são retentados, para não duplicar envio) e logging estruturado (nunca grava token/instance id, só metadados da chamada).
+- `mensageria/exceptions.py`: hierarquia de erros do provedor (`MessagingConfigurationError`, `MessagingAuthenticationError`, `InstanceDisconnectedError`, `QRCodePendingError`, `InvalidRecipientError`, `MessageRejectedError`, `RateLimitExceededError`, `MessagingTimeoutError`, `ProviderUnavailableError`) — nenhum chamador vê exceções específicas da Z-API.
+- `mensageria/responses.py`: `MessagingResult`/`DisponibilidadeResult` — formato de retorno padronizado (`sucesso`, `message_id`, `erro`), igual para qualquer provedor.
+- `mensageria/validators.py` / `serializers.py`: validação do destinatário e montagem dos payloads HTTP da Z-API.
+- `mensageria/utils.py`: retry com backoff exponencial (só para erros transitórios — configuração, autenticação, destinatário inválido e mensagem rejeitada nunca são retentados, para não duplicar envio) e logging estruturado (nunca grava token/instance id, só metadados da chamada).
 
-**Adicionar um novo provedor no futuro** (ex.: voltar à API oficial da Meta, ou usar outro serviço): implemente `MessagingProvider` num novo módulo dentro de `services/messaging/` e troque a instância criada em `get_messaging_service()` — nenhuma view, model, template ou a lógica de negócio em `services/whatsapp/` precisa mudar.
+**Usar a partir de outra app** (ex.: `gestao_lab` para cobrança de material em atraso): `from mensageria import get_messaging_service, messaging_configurado` — igual ao que `gestao_contratos/services/whatsapp/__init__.py` já faz. Não é preciso adicionar `mensageria` a `INSTALLED_APPS`: é um pacote Python comum, sem models/templates/migrations.
+
+**Adicionar um novo provedor no futuro** (ex.: voltar à API oficial da Meta, ou usar outro serviço): implemente `MessagingProvider` num novo módulo dentro de `mensageria/` e troque a instância criada em `get_messaging_service()` (`mensageria/__init__.py`) — nenhuma view, model, template ou lógica de negócio de app precisa mudar.
 
 ### Armazenamento de arquivos
 

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
+from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -349,7 +350,8 @@ SECURE_PROXY_SSL_HEADER = (
 # .env) diretamente. Os flags *_CONFIGURADO permitem que views/templates
 # verifiquem se uma integracao esta ativa sem duplicar a logica de "campos
 # obrigatorios".
-# Z-API (envio automático de WhatsApp) — ver gestao_contratos/services/messaging.
+# Z-API (envio automático de WhatsApp) — ver mensageria/ (pacote compartilhado
+# entre apps, na raiz do projeto).
 ZAPI_INSTANCE_ID = _env("ZAPI_INSTANCE_ID")
 ZAPI_TOKEN = _env("ZAPI_TOKEN")
 ZAPI_CLIENT_TOKEN = _env("ZAPI_CLIENT_TOKEN")
@@ -439,5 +441,9 @@ CELERY_BEAT_SCHEDULE = {
     "expirar-sessoes-assinatura-vencidas": {
         "task": "gestao_contratos.tasks.expirar_sessoes_vencidas_task",
         "schedule": 300.0,  # a cada 5 minutos
+    },
+    "cobrar-pedidos-de-material-atrasados": {
+        "task": "gestao_lab.tasks.cobrar_pedidos_atrasados_task",
+        "schedule": crontab(hour=9, minute=0),  # uma vez por dia, as 9h
     },
 }

@@ -14,7 +14,10 @@ mensagens de WhatsApp, independente de qual provedor está por trás.
 
 Nenhuma view, model ou template deve importar um provedor concreto — toda
 comunicação passa por :class:`MessagingService`, obtido via
-``gestao_contratos.services.messaging.get_messaging_service()``.
+``mensageria.get_messaging_service()``. Este pacote vive na raiz do
+projeto (não dentro de nenhuma app) justamente para ser compartilhado por
+qualquer app que precise enviar mensagens — hoje ``gestao_contratos``,
+futuramente também ``gestao_lab`` (cobrança de material em atraso).
 """
 
 from __future__ import annotations

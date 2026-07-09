@@ -1,8 +1,9 @@
 """Envio automático do contrato assinado ao paciente via WhatsApp.
 
-Usa a camada de mensageria (``gestao_contratos.services.messaging``),
-atualmente configurada para a Z-API — ver
-``services/messaging/zapi.py``. Este módulo não conhece detalhes de
+Usa a camada de mensageria compartilhada (``mensageria``, na raiz do
+projeto — não pertence a nenhuma app específica, para poder ser reusada
+por outras apps além de gestão de contratos), atualmente configurada para
+a Z-API — ver ``mensageria/zapi.py``. Este módulo não conhece detalhes de
 protocolo do provedor: só monta os dados do envio (destinatário, PDF,
 legenda) e traduz o resultado em eventos/status do contrato.
 
@@ -19,9 +20,9 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.utils import timezone
+from mensageria import get_messaging_service, messaging_configurado
 
 from ..envio import normalizar_celular
-from ..messaging import get_messaging_service, messaging_configurado
 
 if TYPE_CHECKING:
     from gestao_contratos.models import ContratoGerado

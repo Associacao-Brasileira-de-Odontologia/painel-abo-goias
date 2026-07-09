@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from gestao_lab.forms import (
     EquipeForm,
     LaboratorioForm,
@@ -30,6 +31,9 @@ from gestao_lab.models import (
     PedidoMaterial,
     RegistroSync,
 )
+from gestao_lab.services.cobranca import cobrar_laboratorios_atrasados
+from gestao_lab.tasks import cobrar_pedidos_atrasados_task
+from mensageria import MessagingResult
 
 User = get_user_model()
 
@@ -760,3 +764,210 @@ class LaboratorioFormTests(TestCase):
     def test_mensagem_erro_nome_obrigatorio(self) -> None:
         form = LaboratorioForm(data={})
         self.assertIn("Informe o nome do laboratório", str(form.errors.get("nome", "")))
+
+
+# ---------------------------------------------------------------------------
+# Cobrança automática de pedidos atrasados (WhatsApp)
+# ---------------------------------------------------------------------------
+
+
+class CobrarLaboratoriosAtrasadosTests(TestCase):
+    def setUp(self) -> None:
+        self.pac = _paciente(id_dental="10")
+        self.aluno = _aluno(id_dental="20")
+        self.equipe = _equipe()
+
+    def test_sem_mensageria_configurada_nao_faz_nada(self) -> None:
+        with patch(
+            "gestao_lab.services.cobranca.messaging_configurado", return_value=False
+        ):
+            total = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(total, 0)
+
+    @patch("gestao_lab.services.cobranca.get_messaging_service")
+    @patch("gestao_lab.services.cobranca.messaging_configurado", return_value=True)
+    def test_agrega_pedidos_do_mesmo_laboratorio_numa_unica_mensagem(
+        self, mock_configurado: MagicMock, mock_get_service: MagicMock
+    ) -> None:
+        mock_get_service.return_value.enviar_texto.return_value = MessagingResult.ok(
+            "id-1"
+        )
+        lab = _laboratorio(equipe=self.equipe, whatsapp="62999998888")
+        pedido1 = _pedido(
+            self.pac,
+            self.aluno,
+            lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=3),
+        )
+        pedido2 = _pedido(
+            self.pac,
+            self.aluno,
+            lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=1),
+        )
+
+        total = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(total, 1)
+        mock_get_service.return_value.enviar_texto.assert_called_once()
+        destinatario, mensagem = mock_get_service.return_value.enviar_texto.call_args[0]
+        self.assertEqual(destinatario, "5562999998888")
+        self.assertIn(f"Pedido #{pedido1.pk}", mensagem)
+        self.assertIn(f"Pedido #{pedido2.pk}", mensagem)
+        pedido1.refresh_from_db()
+        pedido2.refresh_from_db()
+        self.assertIsNotNone(pedido1.cobranca_whatsapp_enviada_em)
+        self.assertIsNotNone(pedido2.cobranca_whatsapp_enviada_em)
+
+    @patch("gestao_lab.services.cobranca.get_messaging_service")
+    @patch("gestao_lab.services.cobranca.messaging_configurado", return_value=True)
+    def test_pedido_ja_cobrado_hoje_nao_e_cobrado_de_novo(
+        self, mock_configurado: MagicMock, mock_get_service: MagicMock
+    ) -> None:
+        mock_get_service.return_value.enviar_texto.return_value = MessagingResult.ok(
+            "id-1"
+        )
+        lab = _laboratorio(equipe=self.equipe, whatsapp="62999998888")
+        _pedido(
+            self.pac,
+            self.aluno,
+            lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=3),
+        )
+
+        primeira_execucao = cobrar_laboratorios_atrasados()
+        segunda_execucao = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(primeira_execucao, 1)
+        self.assertEqual(segunda_execucao, 0)
+        mock_get_service.return_value.enviar_texto.assert_called_once()
+
+    @patch("gestao_lab.services.cobranca.get_messaging_service")
+    @patch("gestao_lab.services.cobranca.messaging_configurado", return_value=True)
+    def test_pedido_cobrado_ontem_e_cobrado_novamente_hoje(
+        self, mock_configurado: MagicMock, mock_get_service: MagicMock
+    ) -> None:
+        mock_get_service.return_value.enviar_texto.return_value = MessagingResult.ok(
+            "id-1"
+        )
+        lab = _laboratorio(equipe=self.equipe, whatsapp="62999998888")
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=3),
+        )
+        PedidoMaterial.objects.filter(pk=pedido.pk).update(
+            cobranca_whatsapp_enviada_em=timezone.now() - timedelta(days=1)
+        )
+
+        total = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(total, 1)
+
+    @patch("gestao_lab.services.cobranca.get_messaging_service")
+    @patch("gestao_lab.services.cobranca.messaging_configurado", return_value=True)
+    def test_laboratorio_sem_whatsapp_e_ignorado(
+        self, mock_configurado: MagicMock, mock_get_service: MagicMock
+    ) -> None:
+        lab = _laboratorio(equipe=self.equipe, whatsapp="")
+        _pedido(
+            self.pac,
+            self.aluno,
+            lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=3),
+        )
+
+        total = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(total, 0)
+        mock_get_service.return_value.enviar_texto.assert_not_called()
+
+    @patch("gestao_lab.services.cobranca.get_messaging_service")
+    @patch("gestao_lab.services.cobranca.messaging_configurado", return_value=True)
+    def test_pedido_em_dia_nao_e_cobrado(
+        self, mock_configurado: MagicMock, mock_get_service: MagicMock
+    ) -> None:
+        lab = _laboratorio(equipe=self.equipe, whatsapp="62999998888")
+        _pedido(
+            self.pac,
+            self.aluno,
+            lab,
+            self.equipe,
+            previsao_entrega=date.today() + timedelta(days=5),
+        )
+
+        total = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(total, 0)
+        mock_get_service.return_value.enviar_texto.assert_not_called()
+
+    @patch("gestao_lab.services.cobranca.get_messaging_service")
+    @patch("gestao_lab.services.cobranca.messaging_configurado", return_value=True)
+    def test_falha_no_envio_nao_marca_pedido_como_cobrado(
+        self, mock_configurado: MagicMock, mock_get_service: MagicMock
+    ) -> None:
+        mock_get_service.return_value.enviar_texto.return_value = (
+            MessagingResult.falha("instância desconectada")
+        )
+        lab = _laboratorio(equipe=self.equipe, whatsapp="62999998888")
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=3),
+        )
+
+        total = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(total, 0)
+        pedido.refresh_from_db()
+        self.assertIsNone(pedido.cobranca_whatsapp_enviada_em)
+
+    @patch("gestao_lab.services.cobranca.get_messaging_service")
+    @patch("gestao_lab.services.cobranca.messaging_configurado", return_value=True)
+    def test_dois_laboratorios_geram_duas_mensagens_separadas(
+        self, mock_configurado: MagicMock, mock_get_service: MagicMock
+    ) -> None:
+        mock_get_service.return_value.enviar_texto.return_value = MessagingResult.ok(
+            "id-1"
+        )
+        lab1 = _laboratorio(equipe=self.equipe, nome="Lab 1", whatsapp="62999998888")
+        lab2 = _laboratorio(equipe=self.equipe, nome="Lab 2", whatsapp="62999997777")
+        _pedido(
+            self.pac,
+            self.aluno,
+            lab1,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=2),
+        )
+        _pedido(
+            self.pac,
+            self.aluno,
+            lab2,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=2),
+        )
+
+        total = cobrar_laboratorios_atrasados()
+
+        self.assertEqual(total, 2)
+        self.assertEqual(mock_get_service.return_value.enviar_texto.call_count, 2)
+
+
+class CobrarPedidosAtrasadosTaskTests(TestCase):
+    @patch("gestao_lab.services.cobranca.cobrar_laboratorios_atrasados")
+    def test_chama_o_service_e_retorna_o_total(self, mock_cobrar: MagicMock) -> None:
+        mock_cobrar.return_value = 2
+
+        resultado = cobrar_pedidos_atrasados_task.delay()
+
+        self.assertEqual(resultado.get(), 2)
+        mock_cobrar.assert_called_once()

@@ -1,4 +1,4 @@
-"""Testes da aplicação de gestão de contratos.
+﻿"""Testes da aplicação de gestão de contratos.
 
 Cobre views, serviço de checklist e integração com o Dental Office.
 Prioridade: views e integração Dental → checklist service → models.
@@ -56,19 +56,6 @@ from gestao_contratos.services.documentos import (
     gerar_pdf,
 )
 from gestao_contratos.services.envio import normalizar_celular
-from gestao_contratos.services.messaging import MessagingResult
-from gestao_contratos.services.messaging.exceptions import (
-    InstanceDisconnectedError,
-    InvalidRecipientError,
-    MessageRejectedError,
-    MessagingAuthenticationError,
-    MessagingError,
-    MessagingTimeoutError,
-    ProviderUnavailableError,
-    RateLimitExceededError,
-)
-from gestao_contratos.services.messaging.validators import validar_destinatario
-from gestao_contratos.services.messaging.zapi import ZApiProvider, carregar_config_zapi
 from gestao_contratos.services.whatsapp import enviar_whatsapp_contrato
 from gestao_contratos.tasks import (
     enviar_dental_task,
@@ -78,6 +65,19 @@ from gestao_contratos.tasks import (
 )
 from gestao_lab.integrations.dental import DentalAPIError
 from gestao_lab.models import Paciente
+from mensageria import MessagingResult
+from mensageria.exceptions import (
+    InstanceDisconnectedError,
+    InvalidRecipientError,
+    MessageRejectedError,
+    MessagingAuthenticationError,
+    MessagingError,
+    MessagingTimeoutError,
+    ProviderUnavailableError,
+    RateLimitExceededError,
+)
+from mensageria.validators import validar_destinatario
+from mensageria.zapi import ZApiProvider, carregar_config_zapi
 
 User = get_user_model()
 
@@ -2096,7 +2096,7 @@ class ZApiProviderTests(TestCase):
             with self.assertRaises(MessagingError):
                 ZApiProvider()
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_envia_texto_com_sucesso(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-1"})
 
@@ -2111,7 +2111,7 @@ class ZApiProviderTests(TestCase):
         self.assertEqual(payload["phone"], "5562999998888")
         self.assertEqual(payload["message"], "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_envia_documento_com_sucesso(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-2"})
 
@@ -2132,7 +2132,7 @@ class ZApiProviderTests(TestCase):
         self.assertEqual(payload["caption"], "Segue o contrato")
         self.assertTrue(payload["document"].startswith("data:application/pdf;base64,"))
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_envia_imagem_com_sucesso(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-3"})
 
@@ -2147,7 +2147,7 @@ class ZApiProviderTests(TestCase):
         payload = json.loads(chamada.data)
         self.assertTrue(payload["image"].startswith("data:image/png;base64,"))
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_enviar_arquivo_escolhe_imagem_por_content_type(
         self, mock_urlopen: MagicMock
     ) -> None:
@@ -2161,7 +2161,7 @@ class ZApiProviderTests(TestCase):
         chamada = mock_urlopen.call_args[0][0]
         self.assertTrue(chamada.full_url.endswith("/send-image"))
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_enviar_arquivo_escolhe_documento_por_content_type(
         self, mock_urlopen: MagicMock
     ) -> None:
@@ -2178,7 +2178,7 @@ class ZApiProviderTests(TestCase):
         chamada = mock_urlopen.call_args[0][0]
         self.assertTrue(chamada.full_url.endswith("/send-document/xlsx"))
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_destinatario_invalido_nao_chega_a_chamar_a_api(
         self, mock_urlopen: MagicMock
     ) -> None:
@@ -2187,7 +2187,7 @@ class ZApiProviderTests(TestCase):
             provider.enviar_texto("", "Olá!")
         mock_urlopen.assert_not_called()
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_resposta_com_error_vira_message_rejected(
         self, mock_urlopen: MagicMock
     ) -> None:
@@ -2199,7 +2199,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(MessageRejectedError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_resposta_sem_id_levanta_erro(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.return_value = _fake_http_response({"algo": "inesperado"})
 
@@ -2207,7 +2207,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(MessagingError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_http_401_vira_erro_de_autenticacao(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.side_effect = _fake_http_error(401, '{"error": "token invalido"}')
 
@@ -2215,7 +2215,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(MessagingAuthenticationError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_http_404_vira_instancia_desconectada(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.side_effect = _fake_http_error(404, '{"error": "not found"}')
 
@@ -2223,7 +2223,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(InstanceDisconnectedError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_http_429_vira_limite_excedido(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.side_effect = _fake_http_error(429, '{"error": "rate limit"}')
 
@@ -2231,7 +2231,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(RateLimitExceededError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_http_500_vira_provedor_indisponivel(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.side_effect = _fake_http_error(500, '{"error": "internal"}')
 
@@ -2239,7 +2239,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(ProviderUnavailableError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_falha_de_conexao_vira_provedor_indisponivel(
         self, mock_urlopen: MagicMock
     ) -> None:
@@ -2251,7 +2251,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(ProviderUnavailableError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_timeout_vira_messaging_timeout_error(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.side_effect = TimeoutError("tempo esgotado")
 
@@ -2259,7 +2259,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(MessagingTimeoutError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_corpo_vazio_retorna_dict_vazio_e_falta_de_id_levanta_erro(
         self, mock_urlopen: MagicMock
     ) -> None:
@@ -2272,7 +2272,7 @@ class ZApiProviderTests(TestCase):
         with self.assertRaises(MessagingError):
             provider.enviar_texto("5562999998888", "Olá!")
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_resposta_nao_json_levanta_erro(self, mock_urlopen: MagicMock) -> None:
         cm = MagicMock()
         cm.__enter__.return_value.read.return_value = b"<html>erro</html>"
@@ -2290,7 +2290,7 @@ class ZApiProviderDisponibilidadeTests(TestCase):
         with override_settings(**valores):
             return carregar_config_zapi()
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_instancia_conectada(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.return_value = _fake_http_response({"connected": True})
 
@@ -2298,7 +2298,7 @@ class ZApiProviderDisponibilidadeTests(TestCase):
 
         self.assertTrue(resultado.disponivel)
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_instancia_desconectada(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.return_value = _fake_http_response({"connected": False})
 
@@ -2307,7 +2307,7 @@ class ZApiProviderDisponibilidadeTests(TestCase):
         self.assertFalse(resultado.disponivel)
         self.assertIn("QR Code", resultado.detalhe)
 
-    @patch("gestao_contratos.services.messaging.zapi.urlopen")
+    @patch("mensageria.zapi.urlopen")
     def test_erro_de_rede_reporta_indisponivel_sem_levantar_excecao(
         self, mock_urlopen: MagicMock
     ) -> None:
@@ -2326,7 +2326,7 @@ class MessagingServiceRetryTests(TestCase):
     a comunicação em si já é coberta por ZApiProviderTests."""
 
     def setUp(self) -> None:
-        from gestao_contratos.services.messaging import MessagingService
+        from mensageria import MessagingService
 
         self.provider = MagicMock()
         self.service = MessagingService(

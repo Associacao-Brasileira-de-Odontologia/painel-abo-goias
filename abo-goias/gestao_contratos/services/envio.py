@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from django.core.mail import EmailMessage
 from django.utils import timezone
+from mensageria.validators import normalizar_celular
 
 from .documentos import obter_melhor_pdf_bytes
 
@@ -113,22 +113,6 @@ def enviar_contrato_email(contrato: "ContratoGerado", destinatario: str) -> bool
     contrato.enviado_em = timezone.now()
     contrato.save(update_fields=["status_envio", "enviado_em", "atualizado_em"])
     return True
-
-
-def normalizar_celular(celular: str) -> str:
-    """Normaliza um celular para dígitos com DDI 55 (padrão E.164 sem '+').
-
-    Remove não-dígitos e adiciona o 55 se ausente. Retorna string vazia se
-    não houver nenhum dígito. Compartilhado entre o link wa.me e o envio
-    automático via Z-API — ambos precisam do mesmo formato.
-    """
-
-    digitos = re.sub(r"\D", "", celular)
-    if not digitos:
-        return ""
-    if not digitos.startswith("55"):
-        digitos = "55" + digitos
-    return digitos
 
 
 def calcular_link_whatsapp(celular: str, tipo_display: str) -> str:
