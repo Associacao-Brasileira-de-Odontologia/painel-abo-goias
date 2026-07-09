@@ -76,7 +76,10 @@ assinatura; ao mudar de status, o polling para automaticamente.
                   action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
                   class="gc-mt-md">
                 {% csrf_token %}
-                <button class="button secondary compact-button" type="submit">
+                <button class="button secondary compact-button" type="submit"
+                        data-confirm="Cancelar esta sessão de assinatura? O tablet volta para a tela de espera e será preciso enviar uma nova sessão para o paciente assinar."
+                        data-confirm-title="Cancelar sessão de assinatura"
+                        data-confirm-label="Cancelar sessão">
                     Cancelar sessão de assinatura
                 </button>
             </form>
@@ -104,7 +107,10 @@ assinatura; ao mudar de status, o polling para automaticamente.
                           action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
                           class="gc-mt-md">
                         {% csrf_token %}
-                        <button class="button secondary compact-button" type="submit">
+                        <button class="button secondary compact-button" type="submit"
+                                data-confirm="Cancelar esta sessão de assinatura? O QR Code e o link deixarão de funcionar e será preciso gerar uma nova sessão para o paciente assinar."
+                                data-confirm-title="Cancelar sessão de assinatura"
+                                data-confirm-label="Cancelar sessão">
                             Cancelar sessão de assinatura
                         </button>
                     </form>

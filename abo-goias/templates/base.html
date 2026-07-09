@@ -15,6 +15,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% include "partials/icons.html" %}
+    {% include "partials/confirm_dialog.html" %}
 
     <header class="app-header {% block header_class %}{% endblock %}">
         <div class="header-inner">
@@ -42,7 +43,10 @@
     {% if messages %}
         <div class="messages-banner">
             {% for message in messages %}
-                <div class="message {{ message.tags }}">{{ message }}</div>
+                <div class="message {{ message.tags }}">
+                    <span>{{ message }}</span>
+                    <button type="button" class="message-dismiss" aria-label="Dispensar mensagem">&times;</button>
+                </div>
             {% endfor %}
         </div>
     {% endif %}
@@ -56,5 +60,6 @@
     {% endblock %}
 
     {% block extra_js %}{% endblock %}
+    <script defer src="{% static 'js/app.js' %}"></script>
 </body>
 </html>

@@ -9,20 +9,8 @@
     <h2>{{ paciente.nome }}</h2>
 
     <nav class="side-nav" aria-label="Navegação de contratos">
-        <a class="side-link active" href="#">
-            <span class="side-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 6 9 17l-5-5"/>
-                </svg>
-            </span>
-            <span>Confirmar dados</span>
-        </a>
-        <a class="side-link side-link-return" href="{% url 'contratos' %}">
-            <span class="side-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><use href="#i-voltar"></use></svg>
-            </span>
-            <span>Voltar à lista</span>
-        </a>
+        {% include "partials/side_link.html" with icon="check" label="Confirmar dados" current=True %}
+        {% include "partials/side_link.html" with url_name="contratos" icon="voltar" label="Voltar à lista" extra_class="side-link-return" %}
     </nav>
 
     <div class="sidebar-section gc-mt-lg">

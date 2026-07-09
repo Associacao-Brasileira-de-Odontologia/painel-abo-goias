@@ -1,0 +1,21 @@
+{% comment %}
+Modal de confirmação genérico e reutilizável — incluído uma única vez em
+base.html. Qualquer botão de ação com o atributo data-confirm abre este
+dialog antes de submeter o formulário (ver static/js/app.js).
+
+Atributos do botão que dispara a confirmação:
+  data-confirm         — texto da pergunta (obrigatório)
+  data-confirm-title   — título do modal (opcional, padrão "Confirmar ação")
+  data-confirm-label   — texto do botão de confirmar (opcional, padrão "Confirmar")
+  data-confirm-danger  — "true" para destacar o botão de confirmar como perigoso
+{% endcomment %}
+<dialog id="confirm-dialog" class="confirm-dialog">
+    <form method="dialog">
+        <h3 data-role="title">Confirmar ação</h3>
+        <p data-role="message"></p>
+        <div class="form-actions">
+            <button type="submit" class="button secondary" value="cancel">Cancelar</button>
+            <button type="button" class="button primary" data-role="accept">Confirmar</button>
+        </div>
+    </form>
+</dialog>

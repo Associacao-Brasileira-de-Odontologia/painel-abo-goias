@@ -103,11 +103,16 @@
                 Esta ação é permanente e não pode ser desfeita.
             {% endif %}
         </p>
-        <form method="post" action="{% url 'excluir_movimentacao' mov.pk %}"
-              onsubmit="return confirm('Excluir o registro do pacote {{ mov.pacote_codigo|escapejs }} de {{ mov.aluno_nome|escapejs }}?')">
+        <form method="post" action="{% url 'excluir_movimentacao' mov.pk %}">
             {% csrf_token %}
             <input type="hidden" name="next" value="{% url 'cme_home' %}">
-            <button class="button danger-button" type="submit">Excluir registro</button>
+            <button class="button danger-button" type="submit"
+                    data-confirm="Excluir o registro do pacote {{ mov.pacote_codigo }} de {{ mov.aluno_nome }}? Essa ação não pode ser desfeita."
+                    data-confirm-title="Excluir registro"
+                    data-confirm-label="Excluir registro"
+                    data-confirm-danger="true">
+                Excluir registro
+            </button>
         </form>
     </div>
 {% endblock %}

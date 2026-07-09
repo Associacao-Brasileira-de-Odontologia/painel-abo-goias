@@ -233,6 +233,10 @@ h3 {
 }
 
 .message {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
     border: 1px solid var(--line);
     border-radius: var(--radius-card);
     padding: 12px 16px;
@@ -241,6 +245,33 @@ h3 {
     pointer-events: auto;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
     animation: message-appear 0.22s ease, message-dismiss 5s 0.5s ease forwards;
+}
+
+.message:hover,
+.message:focus-within {
+    animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .message {
+        animation: none;
+    }
+}
+
+.message-dismiss {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 0 0 0 4px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.message-dismiss:hover {
+    opacity: 1;
 }
 
 .message.success {
