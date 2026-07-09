@@ -57,8 +57,8 @@ def enviar_whatsapp_task(self, contrato_pk: int) -> None:
     """Envia o PDF assinado ao paciente via WhatsApp, com retry automático.
 
     Disparada logo após a conclusão da assinatura (services/assinatura.py),
-    apenas quando a Meta Cloud API está configurada — sem credenciais, essa
-    tarefa nunca é agendada e o fluxo manual (link wa.me) segue intacto.
+    apenas quando a Z-API está configurada — sem credenciais, essa tarefa
+    nunca é agendada e o fluxo manual (link wa.me) segue intacto.
     """
 
     from .models import ContratoGerado

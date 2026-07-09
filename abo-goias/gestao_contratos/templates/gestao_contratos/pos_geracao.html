@@ -122,8 +122,8 @@
         {% if request.user.is_staff and not whatsapp_automatico_configurado %}
             <p class="panel-copy gc-text-muted-sm gc-mt-sm">
                 Envio automático por WhatsApp desativado — configure
-                <code>WHATSAPP_META_TOKEN</code> e
-                <code>WHATSAPP_META_PHONE_NUMBER_ID</code> para ativar.
+                <code>ZAPI_INSTANCE_ID</code> e
+                <code>ZAPI_TOKEN</code> para ativar.
             </p>
         {% endif %}
     </div>

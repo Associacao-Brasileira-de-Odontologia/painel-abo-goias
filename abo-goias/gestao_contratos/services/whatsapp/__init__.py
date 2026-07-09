@@ -1,8 +1,13 @@
 """Envio automático do contrato assinado ao paciente via WhatsApp.
 
-Usa a Meta WhatsApp Business Cloud API quando configurada (ver
-meta_cloud.py). Sem configuração, whatsapp_configurado() retorna False e
-o chamador (services/assinatura.py) simplesmente não agenda o envio
+Usa a camada de mensageria (``gestao_contratos.services.messaging``),
+atualmente configurada para a Z-API — ver
+``services/messaging/zapi.py``. Este módulo não conhece detalhes de
+protocolo do provedor: só monta os dados do envio (destinatário, PDF,
+legenda) e traduz o resultado em eventos/status do contrato.
+
+Sem credenciais configuradas, ``whatsapp_configurado()`` retorna False e o
+chamador (``services/assinatura.py``) simplesmente não agenda o envio
 automático — o fluxo manual (link wa.me na tela de pós-geração) continua
 sendo o único caminho, sem nenhuma mudança de comportamento até que as
 credenciais sejam configuradas.
@@ -16,7 +21,7 @@ from typing import TYPE_CHECKING
 from django.utils import timezone
 
 from ..envio import normalizar_celular
-from .meta_cloud import MetaWhatsAppClient, MetaWhatsAppError, carregar_config_meta
+from ..messaging import get_messaging_service, messaging_configurado
 
 if TYPE_CHECKING:
     from gestao_contratos.models import ContratoGerado
@@ -26,18 +31,22 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "whatsapp_configurado",
     "enviar_whatsapp_contrato",
-    "MetaWhatsAppError",
 ]
+
+_LEGENDA_CONTRATO = (
+    "Olá! Seu contrato foi assinado com sucesso. Segue uma cópia em PDF. "
+    "Obrigado — ABO Goiás."
+)
 
 
 def whatsapp_configurado() -> bool:
-    """True se há credenciais da Meta Cloud API configuradas no ambiente."""
+    """True se há credenciais do provedor de mensageria configuradas."""
 
-    return carregar_config_meta() is not None
+    return messaging_configurado()
 
 
 def enviar_whatsapp_contrato(contrato: "ContratoGerado") -> tuple[bool, str]:
-    """Envia o PDF do contrato ao paciente via WhatsApp (Meta Cloud API).
+    """Envia o PDF do contrato ao paciente via WhatsApp.
 
     Prefere o PDF assinado, igual aos demais canais de envio. Retorna
     (True, "") em sucesso ou (False, erro). Não é chamada quando
@@ -67,24 +76,23 @@ def enviar_whatsapp_contrato(contrato: "ContratoGerado") -> tuple[bool, str]:
 
     nome_arquivo = f"contrato_{contrato.tipo}_{paciente.id_dental}.pdf"
 
-    try:
-        client = MetaWhatsAppClient()
-        message_id = client.enviar_documento(
-            destinatario=destinatario,
-            arquivo_bytes=arquivo_bytes,
-            nome_arquivo=nome_arquivo,
-            nome_paciente=paciente.nome,
+    resultado = get_messaging_service().enviar_documento(
+        destinatario=destinatario,
+        arquivo_bytes=arquivo_bytes,
+        nome_arquivo=nome_arquivo,
+        legenda=_LEGENDA_CONTRATO,
+    )
+    if not resultado.sucesso:
+        logger.error(
+            "enviar_whatsapp_contrato: %s (contrato_pk=%s)", resultado.erro, contrato.pk
         )
-    except MetaWhatsAppError as exc:
-        erro = str(exc)
-        logger.error("enviar_whatsapp_contrato: %s (contrato_pk=%s)", erro, contrato.pk)
-        _marcar_erro(contrato, erro)
-        return False, erro
+        _marcar_erro(contrato, resultado.erro)
+        return False, resultado.erro
 
     contrato.status_envio = "enviado_whatsapp"
     contrato.enviado_em = timezone.now()
     contrato.save(update_fields=["status_envio", "enviado_em", "atualizado_em"])
-    registrar_evento(contrato, "whatsapp_concluido", message_id=message_id)
+    registrar_evento(contrato, "whatsapp_concluido", message_id=resultado.message_id)
     return True, ""
 
 

@@ -44,11 +44,12 @@ Pontos de atenção:
 - Existe uma migration que cria um usuário de teste (`coordenador.teste`). Antes de produção, recomenda-se remover essa criação automática ou substituir por um comando/fixture exclusivo de desenvolvimento.
 - A geração de identificadores ainda faz tentativa de atualização de localização pelo Eduq durante o request. Para produção, o ideal é separar sincronização e geração, ou mover a sincronização para uma rotina assíncrona.
 - **Pendência operacional (Gestão de Contratos)**: o envio assíncrono ao Dental Office e por WhatsApp depende de um worker Celery + Redis rodando em produção. Sem esses dois serviços configurados no Railway, o envio automático não funciona — mas a aplicação não trava por causa disso (ver [Processamento assíncrono](#processamento-assíncrono-celery--redis)).
-- **Pendência operacional (WhatsApp)**: o envio automático via Meta Cloud API exige verificação de conta Business e um template de mensagem aprovado. Sem isso configurado, o envio automático fica desativado e o fluxo manual (link `wa.me`) continua funcionando normalmente.
+- **Pendência operacional (WhatsApp)**: o envio automático via Z-API exige uma instância criada e conectada (QR Code lido) no painel da Z-API. Sem isso configurado, o envio automático fica desativado e o fluxo manual (link `wa.me`) continua funcionando normalmente.
 - **Pendência operacional (armazenamento)**: o filesystem do container no Railway é efêmero — sem um Volume persistente configurado, os PDFs/DOCX gerados são perdidos a cada deploy.
 - **Pendências de validade jurídica (Gestão de Contratos)**: ver [Pendências (validade jurídica)](#pendências-validade-jurídica) na seção dedicada — prazo de retenção da auditoria ainda não definido, contato do encarregado de dados pendente de preenchimento, TSA padrão não credenciada pela ICP-Brasil.
 - **Controle de acesso**: o comando `python abo-goias\manage.py criar_grupos_padrao` cria os grupos `recepcao`, `coordenacao` e `gestao` (idempotente), mas nenhuma view ainda os utiliza — hoje qualquer usuário autenticado tem acesso igual a todo o sistema (`@login_required` é o único portão). O decorator `gestao_cme.permissoes.requer_grupo` está pronto para uso futuro quando as regras de quem pode fazer o quê forem definidas.
-- Credenciais do WhatsApp (Meta Cloud API) e do carimbo de tempo (TSA) agora são lidas centralmente em `abo_goias/settings.py` (mesmo padrão já usado para Dental Office e e-mail), em vez de cada serviço ler `os.environ` diretamente. Os nomes das variáveis de ambiente não mudaram.
+- Credenciais do WhatsApp (Z-API) e do carimbo de tempo (TSA) são lidas centralmente em `abo_goias/settings.py` (mesmo padrão já usado para Dental Office e e-mail), em vez de cada serviço ler `os.environ` diretamente.
+- O envio de WhatsApp é feito por uma camada de mensageria desacoplada de provedor (`gestao_contratos/services/messaging/`) — `MessagingProvider` é a interface, `ZApiProvider` a implementação atual para a Z-API, e `MessagingService` é a fachada usada pelo resto da aplicação. Trocar de provedor no futuro (ex.: voltar à API oficial, ou usar outro serviço) significa implementar um novo `MessagingProvider`, sem tocar em views, models ou templates — ver [Envio automático por WhatsApp (Z-API)](#envio-automático-por-whatsapp-z-api).
 
 ## Estrutura do projeto
 
@@ -256,7 +257,7 @@ Colaborador confirma identidade presencial do paciente e escolhe o destino:
         PDF assinado salvo (nunca sobrescreve o original)
                              ↓ (em paralelo, assíncrono via Celery)
    Envio ao Dental Office     Envio por WhatsApp      Carimbo de tempo (RFC 3161)
-      (com retry)           (Meta Cloud API,         sobre o hash do PDF assinado —
+      (com retry)              (Z-API,                sobre o hash do PDF assinado —
                               se configurada)         embutido de volta no PDF
 ```
 
@@ -295,7 +296,7 @@ Do lado do paciente:
 5. O PDF resultante é salvo em `arquivo_pdf_assinado`, com um carimbo de auditoria no rodapé (data/hora, IP e, quando aplicável, o nome do responsável legal) — e o hash SHA-256 é recalculado.
 6. Em paralelo, assíncrono, um **carimbo de tempo de terceiro (RFC 3161)** é solicitado sobre esse hash e embutido de volta no PDF (ver [Carimbo de tempo](#carimbo-de-tempo-rfc-3161)).
 
-Uma [política de privacidade](/contratos/politica-privacidade/) (`/contratos/politica-privacidade/`) é linkada na própria tela de assinatura, detalhando quais dados são coletados, a finalidade, com quem são compartilhados (Dental Office, Meta WhatsApp, TSA) e os direitos do titular sob a LGPD.
+Uma [política de privacidade](/contratos/politica-privacidade/) (`/contratos/politica-privacidade/`) é linkada na própria tela de assinatura, detalhando quais dados são coletados, a finalidade, com quem são compartilhados (Dental Office, Z-API, TSA) e os direitos do titular sob a LGPD.
 
 A tela de pós-geração do staff atualiza sozinha (polling HTMX a cada 3s) enquanto aguarda a assinatura, parando automaticamente assim que o status muda — sem JavaScript adicional além do HTMX (vendorizado localmente, sem CDN).
 
@@ -333,7 +334,7 @@ Se a TSA falhar, o staff pode tentar novamente manualmente na tela de pós-gera�
 Após a assinatura, três tarefas são agendadas em segundo plano, de forma independente entre si — uma falha numa não afeta as outras, e nenhuma falha de agendamento (ex.: Redis indisponível) pode quebrar a confirmação de assinatura do paciente:
 
 - `enviar_dental_task`: reenvia ao Dental Office, com retry automático (backoff exponencial, até 5 tentativas).
-- `enviar_whatsapp_task`: envia o PDF por WhatsApp via Meta Cloud API — **só é agendada se a Meta estiver configurada** (ver variáveis abaixo) e o paciente tiver celular cadastrado.
+- `enviar_whatsapp_task`: envia o PDF por WhatsApp via Z-API — **só é agendada se a Z-API estiver configurada** (ver variáveis abaixo) e o paciente tiver celular cadastrado.
 - `solicitar_carimbo_tempo_task`: solicita o carimbo de tempo (RFC 3161) — **só é agendada se `CARIMBO_TEMPO_TSA_URL` estiver configurada**.
 - `expirar_sessoes_vencidas_task` (Celery Beat, a cada 5 min): limpeza em lote de sessões de assinatura abandonadas.
 
@@ -375,21 +376,49 @@ python abo-goias\manage.py testar_envio_dental --contrato 5
 python abo-goias\manage.py testar_envio_dental --apenas-auth
 ```
 
-### Envio automático por WhatsApp (Meta Cloud API)
+### Envio automático por WhatsApp (Z-API)
 
 Opcional e desativado por padrão — sem as variáveis abaixo configuradas, nada muda: o botão manual "Encaminhar pelo WhatsApp" (link `wa.me`, com opção de compartilhamento direto de arquivo via Web Share API em navegadores compatíveis) continua sendo o único caminho.
 
-Pré-requisitos (fora deste repositório, no Meta Business Suite):
+A [Z-API](https://www.z-api.io) opera como uma sessão comum de WhatsApp conectada via QR Code (diferente da API Oficial da Meta) — não exige verificação de conta Business nem template de mensagem pré-aprovado.
 
-1. Conta WhatsApp Business verificada, com número dedicado.
-2. Um access token (temporário para teste; permanente via *System User* para produção).
-3. Um **template de mensagem aprovado pela Meta**, com cabeçalho do tipo Documento e uma variável no corpo (nome do paciente) — obrigatório pela política do WhatsApp Business para conversas iniciadas pela clínica fora de uma janela de atendimento de 24h, que é o caso normal aqui.
+Pré-requisitos (fora deste repositório, no painel da Z-API):
+
+1. Uma instância criada em [app.z-api.io](https://app.z-api.io), com o QR Code lido por um número de WhatsApp dedicado (sessão "conectada").
+2. O **Instance ID** e o **Token** da instância (visíveis no painel).
+3. Opcionalmente, o **Client-Token** de segurança da conta (Segurança > Client-Token no painel) — recomendado em produção.
 
 Variáveis de ambiente:
 
-- `WHATSAPP_META_TOKEN`, `WHATSAPP_META_PHONE_NUMBER_ID`: credenciais obrigatórias — sem elas, o envio automático fica desativado.
-- `WHATSAPP_META_API_VERSION`: padrão `v21.0`.
-- `WHATSAPP_META_TEMPLATE_NAME`, `WHATSAPP_META_TEMPLATE_LANG`: nome e idioma do template aprovado. Sem template configurado, o envio tenta uma mensagem de sessão livre — só funciona se o paciente tiver escrito para o número da clínica nas últimas 24h, portanto normalmente insuficiente para o envio automático pós-assinatura.
+- `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`: credenciais obrigatórias — sem elas, o envio automático fica desativado.
+- `ZAPI_CLIENT_TOKEN`: opcional — cabeçalho `Client-Token` adicional de segurança da conta.
+- `ZAPI_BASE_URL`: padrão `https://api.z-api.io`.
+- `ZAPI_TIMEOUT`: timeout HTTP em segundos, padrão 30.
+- `ZAPI_MAX_RETRIES`, `ZAPI_RETRY_BACKOFF_SECONDS`: tentativas e backoff exponencial para falhas transitórias (timeout, indisponibilidade, limite de requisições) na camada de mensageria — padrão 3 tentativas, base de 2s.
+
+#### Arquitetura da camada de mensageria
+
+O envio não fala diretamente com a Z-API em nenhum ponto da aplicação — toda a comunicação passa por `gestao_contratos/services/messaging/`:
+
+```text
+MessagingProvider (interface, provider.py)
+        ▲
+        │
+    ZApiProvider (zapi.py) — implementação atual, HTTP da Z-API
+        │
+  MessagingService (base.py) — retry com backoff + tratamento de erro padronizado
+        │
+  services/whatsapp/__init__.py — regra de negócio (status do contrato, eventos)
+        │
+  tasks.py (enviar_whatsapp_task, Celery) — chamado por services/assinatura.py
+```
+
+- `exceptions.py`: hierarquia de erros do provedor (`MessagingConfigurationError`, `MessagingAuthenticationError`, `InstanceDisconnectedError`, `QRCodePendingError`, `InvalidRecipientError`, `MessageRejectedError`, `RateLimitExceededError`, `MessagingTimeoutError`, `ProviderUnavailableError`) — nenhum chamador vê exceções específicas da Z-API.
+- `responses.py`: `MessagingResult`/`DisponibilidadeResult` — formato de retorno padronizado (`sucesso`, `message_id`, `erro`), igual para qualquer provedor.
+- `validators.py` / `serializers.py`: validação do destinatário e montagem dos payloads HTTP da Z-API.
+- `utils.py`: retry com backoff exponencial (só para erros transitórios — configuração, autenticação, destinatário inválido e mensagem rejeitada nunca são retentados, para não duplicar envio) e logging estruturado (nunca grava token/instance id, só metadados da chamada).
+
+**Adicionar um novo provedor no futuro** (ex.: voltar à API oficial da Meta, ou usar outro serviço): implemente `MessagingProvider` num novo módulo dentro de `services/messaging/` e troque a instância criada em `get_messaging_service()` — nenhuma view, model, template ou a lógica de negócio em `services/whatsapp/` precisa mudar.
 
 ### Armazenamento de arquivos
 
@@ -507,5 +536,5 @@ Para PostgreSQL, o sistema usa `DATABASE_URL` quando ela existir. O Railway tamb
 - Rodar a suíte de testes completa após as refatorações de nomenclatura.
 - Configurar um Volume persistente no Railway e `DJANGO_MEDIA_ROOT` antes de gerar contratos com pacientes reais — sem isso, os documentos assinados são perdidos a cada deploy.
 - Adicionar os serviços `worker` e `beat` do Celery no Railway (mais o plugin Redis) para que o envio automático ao Dental Office e por WhatsApp de fato funcione em produção — sem eles, os contratos continuam sendo assinados normalmente, mas o envio automático fica só registrado como pendente/erro, exigindo reenvio manual pelo staff.
-- Verificar a conta WhatsApp Business e aprovar o template de mensagem no Meta Business Suite antes de configurar `WHATSAPP_META_*` — sem template aprovado, a Meta rejeita a maioria dos envios automáticos.
+- Criar e conectar (ler o QR Code) uma instância no painel da Z-API antes de configurar `ZAPI_*` — sem uma sessão conectada, os envios automáticos falham.
 - Preencher o contato do encarregado de dados na política de privacidade e decidir o prazo de retenção da auditoria antes de assinar contratos com pacientes reais — ver [Pendências (validade jurídica)](#pendências-validade-jurídica).

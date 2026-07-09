@@ -120,7 +120,7 @@ def normalizar_celular(celular: str) -> str:
 
     Remove não-dígitos e adiciona o 55 se ausente. Retorna string vazia se
     não houver nenhum dígito. Compartilhado entre o link wa.me e o envio
-    automático via Meta Cloud API — ambos precisam do mesmo formato.
+    automático via Z-API — ambos precisam do mesmo formato.
     """
 
     digitos = re.sub(r"\D", "", celular)
