@@ -36,7 +36,14 @@
     pointer-events: none;
 }
 
-.portal-header,
+.portal-header {
+    position: relative;
+    /* Precisa pintar acima do .portal-shell (mesmo z-index empataria pela
+       ordem do DOM, e o shell vem depois — escondendo o menu do usuário
+       aberto atrás do primeiro cartão do portal). */
+    z-index: 2;
+}
+
 .portal-shell {
     position: relative;
     z-index: 1;
