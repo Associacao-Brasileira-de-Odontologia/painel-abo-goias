@@ -29,7 +29,7 @@ assinaturas/
 abo-goias/gestao_lab/fixtures/*.csv
 
 ### Arquivos gerados — identificadores ###
-abo-goias/identificadores/arquivos_gerados/
+abo-goias/gestao_cme/identificadores/arquivos_gerados/
 
 ### IDE ###
 .vscode/

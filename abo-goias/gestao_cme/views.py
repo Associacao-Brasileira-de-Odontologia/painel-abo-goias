@@ -246,13 +246,6 @@ def portal(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-def perfil(request: HttpRequest) -> HttpResponse:
-    """Exibe os dados da conta do usuário autenticado."""
-
-    return render(request, "auth/perfil.html")
-
-
-@login_required
 def home(request: HttpRequest) -> HttpResponse:
     """Lista movimentacoes de materiais com busca, filtros e metricas.
 

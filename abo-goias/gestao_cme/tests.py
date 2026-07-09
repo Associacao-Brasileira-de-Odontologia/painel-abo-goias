@@ -849,64 +849,6 @@ class CriarGruposPadraoTests(TestCase):
         )
 
 
-@override_settings(ALLOWED_HOSTS=["testserver"])
-class PasswordChangeViewTests(TestCase):
-    def setUp(self) -> None:
-        self.usuario = get_user_model().objects.create_user(
-            username="troca-senha", password="senha-antiga-123"
-        )
-
-    def test_anonimo_redireciona_para_login(self) -> None:
-        response = self.client.get(reverse("password_change"))
-
-        self.assertRedirects(
-            response,
-            f'{reverse("login")}?next={reverse("password_change")}',
-            fetch_redirect_response=False,
-        )
-
-    def test_usuario_logado_ve_formulario(self) -> None:
-        self.client.force_login(self.usuario)
-
-        response = self.client.get(reverse("password_change"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "auth/password_change_form.html")
-
-    def test_troca_de_senha_com_sucesso_redireciona_para_concluido(self) -> None:
-        self.client.force_login(self.usuario)
-
-        response = self.client.post(
-            reverse("password_change"),
-            {
-                "old_password": "senha-antiga-123",
-                "new_password1": "senha-nova-456",
-                "new_password2": "senha-nova-456",
-            },
-        )
-
-        self.assertRedirects(
-            response, reverse("password_change_done"), fetch_redirect_response=False
-        )
-        self.usuario.refresh_from_db()
-        self.assertTrue(self.usuario.check_password("senha-nova-456"))
-
-    def test_senha_atual_incorreta_nao_altera_senha(self) -> None:
-        self.client.force_login(self.usuario)
-
-        self.client.post(
-            reverse("password_change"),
-            {
-                "old_password": "senha-errada",
-                "new_password1": "senha-nova-456",
-                "new_password2": "senha-nova-456",
-            },
-        )
-
-        self.usuario.refresh_from_db()
-        self.assertTrue(self.usuario.check_password("senha-antiga-123"))
-
-
 class MenuDoUsuarioTests(TestCase):
     def test_dropdown_exibe_trocar_senha_e_sair(self) -> None:
         usuario = get_user_model().objects.create_user(
@@ -989,3 +931,31 @@ class PaginasDeErroTests(TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertIn(b"Erro interno", response.content)
+
+
+class IdentificadoresSubRotaTests(TestCase):
+    """Identificadores deixou de ser um app Django isolado e passou a ser uma
+    sub-rota de gestao_cme (ver gestao_cme/identificadores/). Estes testes
+    cobrem o essencial da rota apos a fusao — os testes especificos de
+    geracao de PPTX continuam responsabilidade de gestao_cme/identificadores.
+    """
+
+    def test_anonimo_redireciona_para_login(self) -> None:
+        response = self.client.get(reverse("identificadores:index"))
+
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={reverse("identificadores:index")}',
+            fetch_redirect_response=False,
+        )
+
+    def test_usuario_logado_ve_tela_de_identificadores(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="identificadores-teste", password="senha-segura"
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("identificadores:index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "identificadores/index.html")

@@ -16,8 +16,10 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
 
-TEMPLATES_IDENTIFICADORES_DIR = settings.BASE_DIR / "identificadores" / "templates_pptx"
-ARQUIVOS_GERADOS_DIR = settings.BASE_DIR / "identificadores" / "arquivos_gerados"
+TEMPLATES_IDENTIFICADORES_DIR = (
+    settings.BASE_DIR / "gestao_cme" / "identificadores" / "templates_pptx"
+)
+ARQUIVOS_GERADOS_DIR = settings.BASE_DIR / "gestao_cme" / "identificadores" / "arquivos_gerados"
 IDENTIFICADORES_POR_SLIDE = 3
 CAPACIDADE_TEMPLATE = 48
 

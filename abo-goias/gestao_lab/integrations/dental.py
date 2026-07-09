@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import ssl
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -63,54 +61,32 @@ class AlunoLabDental:
     ativo: bool
 
 
-def _carregar_env() -> None:
-    """Carrega variaveis de ambiente de arquivos .env conhecidos do projeto."""
-
-    candidatos = [
-        settings.BASE_DIR / ".env",
-        settings.BASE_DIR.parent / ".env",
-    ]
-    for arquivo in candidatos:
-        if not Path(arquivo).exists():
-            continue
-        for linha in Path(arquivo).read_text(encoding="utf-8").splitlines():
-            linha = linha.strip()
-            if not linha or linha.startswith("#") or "=" not in linha:
-                continue
-            chave, valor = linha.split("=", 1)
-            os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
-        break
-
-
 def carregar_config_dental() -> ConfigDental:
-    """Monta a configuracao da API Dental Office a partir do ambiente e settings.
+    """Monta a configuracao da API Dental Office a partir de settings.
 
     Valida credenciais obrigatorias e converte opcoes de TLS, timeout e proxy.
     """
 
-    _carregar_env()
-    client_id = os.getenv("DENTAL_CLIENT_ID", "").strip()
-    secret = os.getenv("DENTAL_SECRET", "").strip()
-
-    ausentes = [
-        nome
-        for nome, valor in (("CLIENT_ID", client_id), ("SECRET", secret))
-        if not valor
-    ]
-    if ausentes:
+    if not settings.DENTAL_CONFIGURADO:
+        ausentes = [
+            nome
+            for nome, valor in (
+                ("CLIENT_ID", settings.DENTAL_CLIENT_ID),
+                ("SECRET", settings.DENTAL_SECRET),
+            )
+            if not valor
+        ]
         variaveis = ", ".join(f"DENTAL_{nome}" for nome in ausentes)
         raise DentalAPIError(f"Configure as variaveis de ambiente: {variaveis}")
 
     return ConfigDental(
-        client_id=client_id,
-        secret=secret,
-        auth_url=os.getenv("DENTAL_AUTH_URL", settings.DENTAL_AUTH_URL).strip(),
-        base_url=os.getenv("DENTAL_BASE_URL", settings.DENTAL_BASE_URL).strip(),
-        verify_tls=_ler_booleano("DENTAL_VERIFY_TLS", settings.DENTAL_VERIFY_TLS),
-        timeout=int(os.getenv("DENTAL_TIMEOUT", settings.DENTAL_TIMEOUT)),
-        use_proxy=_ler_booleano(
-            "DENTAL_USE_PROXY", getattr(settings, "DENTAL_USE_PROXY", False)
-        ),
+        client_id=settings.DENTAL_CLIENT_ID,
+        secret=settings.DENTAL_SECRET,
+        auth_url=settings.DENTAL_AUTH_URL,
+        base_url=settings.DENTAL_BASE_URL,
+        verify_tls=settings.DENTAL_VERIFY_TLS,
+        timeout=settings.DENTAL_TIMEOUT,
+        use_proxy=settings.DENTAL_USE_PROXY,
     )
 
 
@@ -521,10 +497,3 @@ def _formatar_cpf(cpf_raw: str) -> str:
     if len(digitos) == 11:
         return f"{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}"
     return cpf_raw
-
-
-def _ler_booleano(nome: str, padrao: bool = False) -> bool:
-    valor = os.getenv(nome)
-    if valor is None:
-        return padrao
-    return valor.strip().lower() in {"1", "true", "yes", "sim", "on"}

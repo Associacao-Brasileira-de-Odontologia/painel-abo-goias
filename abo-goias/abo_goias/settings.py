@@ -182,10 +182,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "contas.apps.ContasConfig",
     "gestao_cme.apps.GestaoCmeConfig",
     "gestao_lab.apps.GestaoLabConfig",
     "gestao_contratos.apps.GestaoContratosConfig",
-    "identificadores",
 ]
 
 MIDDLEWARE = [
@@ -213,7 +213,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "gestao_cme.context_processors.usuario_logado",
+                "contas.context_processors.usuario_logado",
             ],
         },
     },
@@ -343,11 +343,12 @@ SECURE_PROXY_SSL_HEADER = (
     else None
 )
 
-# WhatsApp (Meta Cloud API) e carimbo de tempo (TSA/RFC 3161) sao lidos
-# aqui, centralizados como o restante da configuracao do projeto, em vez
-# de cada servico ler os.environ diretamente. WHATSAPP_META_CONFIGURADO e
-# CARIMBO_TEMPO_CONFIGURADO permitem que views/templates verifiquem se a
-# integracao esta ativa sem duplicar a logica de "campos obrigatorios".
+# Credenciais e parametros de todas as integracoes externas (WhatsApp, carimbo
+# de tempo, Dental Office, Eduq) sao lidos aqui, centralizados num unico ponto
+# de configuracao, em vez de cada servico ler os.environ (e recarregar o
+# .env) diretamente. Os flags *_CONFIGURADO permitem que views/templates
+# verifiquem se uma integracao esta ativa sem duplicar a logica de "campos
+# obrigatorios".
 WHATSAPP_META_TOKEN = _env("WHATSAPP_META_TOKEN")
 WHATSAPP_META_PHONE_NUMBER_ID = _env("WHATSAPP_META_PHONE_NUMBER_ID")
 WHATSAPP_META_API_VERSION = _env("WHATSAPP_META_API_VERSION", "v21.0")
@@ -362,61 +363,41 @@ CARIMBO_TEMPO_TSA_PASSWORD = _env("CARIMBO_TEMPO_TSA_PASSWORD")
 CARIMBO_TEMPO_TIMEOUT = _env_int("CARIMBO_TEMPO_TIMEOUT", 30)
 CARIMBO_TEMPO_CONFIGURADO = bool(CARIMBO_TEMPO_TSA_URL)
 
-DENTAL_SYNC_TOKEN = os.environ.get("DENTAL_SYNC_TOKEN", "")
-DENTAL_CLINIC_ID = int(os.environ.get("DENTAL_CLINIC_ID", "1"))
-DENTAL_USER_GROUP_ALUNO = int(os.environ.get("DENTAL_USER_GROUP_ALUNO", "8"))
-
-DENTAL_AUTH_URL = os.environ.get(
+DENTAL_SYNC_TOKEN = _env("DENTAL_SYNC_TOKEN")
+DENTAL_CLINIC_ID = _env_int("DENTAL_CLINIC_ID", 1)
+DENTAL_USER_GROUP_ALUNO = _env_int("DENTAL_USER_GROUP_ALUNO", 8)
+DENTAL_CLIENT_ID = _env("DENTAL_CLIENT_ID")
+DENTAL_SECRET = _env("DENTAL_SECRET")
+DENTAL_AUTH_URL = _env(
     "DENTAL_AUTH_URL",
     "https://demo.api.app.dentaloffice.com.br/v1/auth/tokens",
 )
-DENTAL_BASE_URL = os.environ.get(
+DENTAL_BASE_URL = _env(
     "DENTAL_BASE_URL",
     "https://demo.api.app.dentaloffice.com.br/v1",
 )
-DENTAL_VERIFY_TLS = os.environ.get("DENTAL_VERIFY_TLS", "true").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
-DENTAL_TIMEOUT = int(os.environ.get("DENTAL_TIMEOUT", "30"))
-DENTAL_USE_PROXY = os.environ.get("DENTAL_USE_PROXY", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
+DENTAL_VERIFY_TLS = _env_bool("DENTAL_VERIFY_TLS", True)
+DENTAL_TIMEOUT = _env_int("DENTAL_TIMEOUT", 30)
+DENTAL_USE_PROXY = _env_bool("DENTAL_USE_PROXY", False)
+DENTAL_CONFIGURADO = bool(DENTAL_CLIENT_ID and DENTAL_SECRET)
 
-EDUQ_AUTH_URL = os.environ.get(
+EDUQ_DOMINIO = _env("EDUQ_DOMINIO")
+EDUQ_USUARIO = _env("EDUQ_USUARIO")
+EDUQ_SENHA = _env("EDUQ_SENHA")
+EDUQ_AUTH_URL = _env(
     "EDUQ_AUTH_URL",
     "https://apisistema.eduqtecnologia.com.br/autenticacao/logar",
 )
-EDUQ_DATA_URL = os.environ.get(
+EDUQ_DATA_URL = _env(
     "EDUQ_DATA_URL",
     "https://apisistema.eduqtecnologia.com.br/emissao-consulta-personalizada/obter-dados",
 )
-EDUQ_CONSULTA_TURMAS_ID = int(os.environ.get("EDUQ_CONSULTA_TURMAS_ID", "4"))
-EDUQ_CONSULTA_DETALHES_TURMA_ID = int(
-    os.environ.get("EDUQ_CONSULTA_DETALHES_TURMA_ID", "5")
-)
-EDUQ_VERIFY_TLS = os.environ.get("EDUQ_VERIFY_TLS", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
-EDUQ_TIMEOUT = int(os.environ.get("EDUQ_TIMEOUT", "30"))
-EDUQ_USE_PROXY = os.environ.get("EDUQ_USE_PROXY", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
+EDUQ_CONSULTA_TURMAS_ID = _env_int("EDUQ_CONSULTA_TURMAS_ID", 4)
+EDUQ_CONSULTA_DETALHES_TURMA_ID = _env_int("EDUQ_CONSULTA_DETALHES_TURMA_ID", 5)
+EDUQ_VERIFY_TLS = _env_bool("EDUQ_VERIFY_TLS", False)
+EDUQ_TIMEOUT = _env_int("EDUQ_TIMEOUT", 30)
+EDUQ_USE_PROXY = _env_bool("EDUQ_USE_PROXY", False)
+EDUQ_CONFIGURADO = bool(EDUQ_DOMINIO and EDUQ_USUARIO and EDUQ_SENHA)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Celery — processamento assíncrono (envio ao Dental Office, limpeza de
