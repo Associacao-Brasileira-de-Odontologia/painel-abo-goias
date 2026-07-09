@@ -1468,6 +1468,37 @@ tbody tr.row-a-confirmar > td:first-child {
     margin-bottom: 0;
 }
 
+/* ── Breadcrumb ─────────────────────────────────────────────────── */
+
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 16px;
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+
+.breadcrumb a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    color: var(--accent-text);
+    text-decoration: underline;
+}
+
+.breadcrumb-sep {
+    color: var(--line-strong);
+}
+
+.breadcrumb-current {
+    color: var(--muted-strong);
+    font-weight: 600;
+}
+
 /* ── Modal de confirmação ───────────────────────────────────────── */
 
 .confirm-dialog {

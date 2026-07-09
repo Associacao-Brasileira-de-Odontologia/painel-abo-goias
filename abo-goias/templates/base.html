@@ -29,13 +29,19 @@
                 {% endblock %}
             </div>
             {% if usuario_logado %}
-                <div class="user-menu">
-                    <span>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</span>
-                    <form method="post" action="{% url 'logout' %}">
-                        {% csrf_token %}
-                        <button class="button secondary compact-button" type="submit">Sair</button>
-                    </form>
-                </div>
+                <details class="user-menu-dropdown">
+                    <summary>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</summary>
+                    <div class="dropdown-panel">
+                        <a href="{% url 'password_change' %}">Trocar senha</a>
+                        {% if usuario_logado.is_staff %}
+                            <a href="/admin/">Administração</a>
+                        {% endif %}
+                        <form method="post" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <button type="submit">Sair</button>
+                        </form>
+                    </div>
+                </details>
             {% endif %}
         </div>
     </header>

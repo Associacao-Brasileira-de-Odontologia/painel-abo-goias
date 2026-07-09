@@ -847,3 +847,145 @@ class CriarGruposPadraoTests(TestCase):
         self.assertEqual(
             Group.objects.filter(name__in=GRUPOS_PADRAO).count(), len(GRUPOS_PADRAO)
         )
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class PasswordChangeViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="troca-senha", password="senha-antiga-123"
+        )
+
+    def test_anonimo_redireciona_para_login(self) -> None:
+        response = self.client.get(reverse("password_change"))
+
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={reverse("password_change")}',
+            fetch_redirect_response=False,
+        )
+
+    def test_usuario_logado_ve_formulario(self) -> None:
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(reverse("password_change"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "auth/password_change_form.html")
+
+    def test_troca_de_senha_com_sucesso_redireciona_para_concluido(self) -> None:
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": "senha-antiga-123",
+                "new_password1": "senha-nova-456",
+                "new_password2": "senha-nova-456",
+            },
+        )
+
+        self.assertRedirects(
+            response, reverse("password_change_done"), fetch_redirect_response=False
+        )
+        self.usuario.refresh_from_db()
+        self.assertTrue(self.usuario.check_password("senha-nova-456"))
+
+    def test_senha_atual_incorreta_nao_altera_senha(self) -> None:
+        self.client.force_login(self.usuario)
+
+        self.client.post(
+            reverse("password_change"),
+            {
+                "old_password": "senha-errada",
+                "new_password1": "senha-nova-456",
+                "new_password2": "senha-nova-456",
+            },
+        )
+
+        self.usuario.refresh_from_db()
+        self.assertTrue(self.usuario.check_password("senha-antiga-123"))
+
+
+class MenuDoUsuarioTests(TestCase):
+    def test_dropdown_exibe_trocar_senha_e_sair(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="comum", password="senha-segura"
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "user-menu-dropdown")
+        self.assertContains(response, "Trocar senha")
+        self.assertContains(response, "Sair")
+
+    def test_dropdown_esconde_administracao_para_usuario_comum(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="comum2", password="senha-segura"
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertNotContains(response, "Administração")
+
+    def test_dropdown_exibe_administracao_para_staff(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="staff", password="senha-segura", is_staff=True
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "Administração")
+
+
+class PaginasDeErroTests(TestCase):
+    """Os templates 404/403/500 estendem auth/base_auth.html porque as views
+    padrão do Django (django.views.defaults) renderizam sem context
+    processors — 500 nem recebe request. Por isso os testes chamam as views
+    diretamente com RequestFactory em vez de depender do Client."""
+
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+
+    def _request_autenticado(self, path: str):
+        from django.contrib.auth.models import AnonymousUser
+
+        request = self.factory.get(path)
+        # page_not_found/permission_denied passam `request` ao template (ao
+        # contrário de server_error) — o context processor usuario_logado
+        # precisa de request.user, normalmente populado pelo
+        # AuthenticationMiddleware. RequestFactory não roda middleware, então
+        # simulamos aqui um visitante anônimo.
+        request.user = AnonymousUser()
+        return request
+
+    def test_pagina_404_renderiza(self) -> None:
+        from django.http import Http404
+        from django.views.defaults import page_not_found
+
+        request = self._request_autenticado("/rota-que-nao-existe/")
+        response = page_not_found(request, Http404("não encontrado"))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn(b"P\xc3\xa1gina n\xc3\xa3o encontrada", response.content)
+
+    def test_pagina_403_renderiza(self) -> None:
+        from django.views.defaults import permission_denied
+
+        request = self._request_autenticado("/qualquer-rota/")
+        response = permission_denied(request, PermissionDenied())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(b"Sem permiss\xc3\xa3o", response.content)
+
+    def test_pagina_500_renderiza_sem_contexto(self) -> None:
+        from django.views.defaults import server_error
+
+        request = self.factory.get("/qualquer-rota/")
+        response = server_error(request)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn(b"Erro interno", response.content)

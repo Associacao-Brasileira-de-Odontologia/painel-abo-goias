@@ -985,6 +985,10 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
             "status_label": status_label,
             "status_classe": status_classe,
             "active_page": "emprestimos",
+            "breadcrumbs": [
+                {"label": "Movimentações", "url": reverse("cme_home")},
+                {"label": "Editar registro", "url": None},
+            ],
         },
     )
 

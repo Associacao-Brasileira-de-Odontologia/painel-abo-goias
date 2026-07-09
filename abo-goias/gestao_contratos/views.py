@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from gestao_lab.integrations.dental import (
     DentalAPIError,
@@ -276,6 +277,11 @@ def confirmar_dados_view(request: HttpRequest, paciente_pk: int) -> HttpResponse
         {
             "paciente": paciente,
             "form": form,
+            "breadcrumbs": [
+                {"label": "Contratos", "url": reverse("contratos")},
+                {"label": paciente.nome, "url": None},
+                {"label": "Confirmar dados", "url": None},
+            ],
         },
     )
 
@@ -318,6 +324,14 @@ def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
             "checklist": checklist,
             "pendencias": pendencias,
             "gerado_bloqueado": bool(pendencias),
+            "breadcrumbs": [
+                {"label": "Contratos", "url": reverse("contratos")},
+                {
+                    "label": paciente.nome,
+                    "url": reverse("contrato_confirmar_dados", args=[paciente.pk]),
+                },
+                {"label": "Gerar contrato", "url": None},
+            ],
         },
     )
 
@@ -399,6 +413,14 @@ def pos_geracao_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
         "paciente": paciente,
         "link_whatsapp": link_whatsapp,
         "whatsapp_automatico_configurado": settings.WHATSAPP_META_CONFIGURADO,
+        "breadcrumbs": [
+            {"label": "Contratos", "url": reverse("contratos")},
+            {
+                "label": paciente.nome,
+                "url": reverse("contrato_gerar", args=[paciente.pk]),
+            },
+            {"label": "Enviar contrato", "url": None},
+        ],
     }
     contexto.update(contexto_status_assinatura(request, contrato))
 

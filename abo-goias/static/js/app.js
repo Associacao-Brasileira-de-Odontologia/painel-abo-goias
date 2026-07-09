@@ -38,6 +38,14 @@
 })();
 
 (function () {
+    document.addEventListener("click", function (event) {
+        document.querySelectorAll(".user-menu-dropdown[open]").forEach(function (menu) {
+            if (!menu.contains(event.target)) menu.removeAttribute("open");
+        });
+    });
+})();
+
+(function () {
     function removerMensagem(mensagem) {
         if (mensagem) mensagem.remove();
     }

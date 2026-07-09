@@ -79,18 +79,12 @@
                     {% endif %}
                 </div>
 
-                {# Ações rápidas: contextuais por perfil #}
-                {% if usuario_logado.is_staff %}
+                {# Ações rápidas: administração agora fica no menu do usuário #}
+                {% if 'cme' in apps_disponiveis %}
                     <div class="portal-quick-links">
-                        <a class="button secondary" href="/admin/">Gerenciar usuários</a>
+                        <a class="button primary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
+                        <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
                     </div>
-                {% else %}
-                    {% if 'cme' in apps_disponiveis %}
-                        <div class="portal-quick-links">
-                            <a class="button primary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
-                            <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
-                        </div>
-                    {% endif %}
                 {% endif %}
             </div>
         </section>

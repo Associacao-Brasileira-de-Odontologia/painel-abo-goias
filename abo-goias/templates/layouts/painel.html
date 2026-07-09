@@ -5,6 +5,7 @@ Layout padrão das telas operacionais: cabeçalho compacto + grade de dois
 painéis (sidebar de contexto à esquerda, painel de resultados à direita).
 
 Blocos disponíveis para as páginas:
+  breadcrumb      — trilha de navegação (vazio por padrão; ver partials/breadcrumb.html)
   sidebar         — sidebar completa (sobrescrever apenas em telas atípicas)
   sidebar_copy    — texto introdutório da sidebar (uma frase de contexto)
   sidebar_nav     — navegação da aplicação (include do menu da app)
@@ -20,6 +21,7 @@ Blocos disponíveis para as páginas:
 
 {% block content %}
     <main class="page-shell">
+        {% block breadcrumb %}{% endblock %}
         <div class="layout-grid">
             <aside class="panel config-panel">
                 {% block sidebar %}

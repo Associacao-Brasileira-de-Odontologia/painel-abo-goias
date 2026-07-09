@@ -51,6 +51,21 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path(
+        "senha/trocar/",
+        auth_views.PasswordChangeView.as_view(
+            template_name="auth/password_change_form.html",
+            success_url="/senha/trocar/concluido/",
+        ),
+        name="password_change",
+    ),
+    path(
+        "senha/trocar/concluido/",
+        auth_views.PasswordChangeDoneView.as_view(
+            template_name="auth/password_change_done.html",
+        ),
+        name="password_change_done",
+    ),
+    path(
         "catalog/",
         RedirectView.as_view(pattern_name="home", permanent=False),
         name="catalog_redirect",

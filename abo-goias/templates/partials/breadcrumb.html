@@ -1,0 +1,20 @@
+{% comment %}
+Trilha de navegação (breadcrumb). Espera a variável de contexto `breadcrumbs`:
+lista de dicts {"label": str, "url": str|None}. O último item (página atual)
+é renderizado sem link mesmo que tenha "url" — a resolução de rota (com ou
+sem argumento) é feita na view via reverse(), não aqui.
+{% endcomment %}
+<nav class="breadcrumb" aria-label="Trilha de navegação">
+    {% for item in breadcrumbs %}
+        {% if forloop.last %}
+            <span class="breadcrumb-current">{{ item.label }}</span>
+        {% else %}
+            {% if item.url %}
+                <a href="{{ item.url }}">{{ item.label }}</a>
+            {% else %}
+                <span>{{ item.label }}</span>
+            {% endif %}
+            <span class="breadcrumb-sep" aria-hidden="true">/</span>
+        {% endif %}
+    {% endfor %}
+</nav>

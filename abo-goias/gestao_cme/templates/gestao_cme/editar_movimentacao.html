@@ -4,6 +4,8 @@
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Editar registro{% endblock %}
 
+{% block breadcrumb %}{% include "partials/breadcrumb.html" %}{% endblock %}
+
 {% block sidebar_copy %}Edite as informações do registro ou exclua caso necessário.{% endblock %}
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" with active_page="emprestimos" %}{% endblock %}
 
