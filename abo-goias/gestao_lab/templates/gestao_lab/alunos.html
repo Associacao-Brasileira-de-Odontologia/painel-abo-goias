@@ -5,112 +5,101 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Alunos{% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
-        <aside class="panel config-panel">
-            <p class="panel-copy">Alunos sincronizados do Dental Office. Utilize a sincronização para atualizar os dados.</p>
+{% block sidebar_copy %}Alunos sincronizados do Dental Office. Utilize a sincronização para atualizar os dados.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" with active_page="alunos" %}{% endblock %}
 
-            {% include "gestao_lab/partials/menu_lab.html" with active_page="alunos" %}
-
-            <div class="metric-grid">
-                <div class="metric-card">
-                    <span class="metric-label">Alunos ativos</span>
-                    <strong>{{ total }}</strong>
-                </div>
-            </div>
-
-            {% include "gestao_lab/partials/sync_dental.html" %}
-        </aside>
-
-        <section class="panel results-panel">
-            <div class="results-topbar">
-                <div>
-                    <h2>Alunos cadastrados</h2>
-                </div>
-            </div>
-
-            <form class="filter-bar" method="get">
-                <div class="search-control">
-                    <input id="results-q-alunos" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome ou celular..." aria-label="Buscar na listagem">
-                </div>
-                <button class="button primary" type="submit">Buscar</button>
-            </form>
-
-            {% if busca %}
-                <div class="selection-summary">
-                    <a class="info-chip info-chip--removable"
-                       href="{% url 'lab_alunos' %}"
-                       title="Remover busca">
-                        <span>Busca</span>
-                        <strong>{{ busca }}</strong>
-                        <span class="chip-x" aria-hidden="true">×</span>
-                    </a>
-                </div>
-            {% endif %}
-
-            <div class="results-meta">
-                <span><strong>{{ page_obj.paginator.count }}</strong> aluno{{ page_obj.paginator.count|pluralize }}</span>
-            </div>
-
-            <div class="table-wrap data-table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Aluno</th>
-                            <th>Celular</th>
-                            <th>ID Dental</th>
-                            <th>Última sincronização</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for aluno in alunos %}
-                            <tr>
-                                <td><strong>{{ aluno.nome }}</strong></td>
-                                <td>
-                                    {% if aluno.celular %}
-                                        <a href="{{ aluno.celular|whatsapp_url }}" target="_blank" rel="noopener">
-                                            {{ aluno.celular }}
-                                        </a>
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="cell-muted mono">{{ aluno.id_dental }}</span>
-                                </td>
-                                <td>
-                                    {% if aluno.ultima_sincronizacao %}
-                                        <span class="cell-muted">{{ aluno.ultima_sincronizacao|date:"d/m/Y H:i" }}</span>
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr class="empty-row">
-                                <td colspan="4">
-                                    <div class="empty-state">
-                                        <strong>Nenhum aluno encontrado.</strong>
-                                        <p>
-                                            {% if busca %}
-                                                Revise os termos de busca ou
-                                                <a href="{% url 'lab_alunos' %}">limpe o filtro</a>.
-                                            {% else %}
-                                                Nenhum aluno sincronizado ainda. Use o botão
-                                                <strong>Sincronizar com Dental Office</strong> no painel lateral.
-                                            {% endif %}
-                                        </p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            {% include "gestao_cme/partials/paginacao.html" %}
-        </section>
+{% block sidebar_extra %}
+    <div class="metric-grid">
+        <div class="metric-card">
+            <span class="metric-label">Alunos ativos</span>
+            <strong>{{ total }}</strong>
+        </div>
     </div>
-</main>
+
+    {% include "gestao_lab/partials/sync_dental.html" %}
+{% endblock %}
+
+{% block panel_title %}Alunos cadastrados{% endblock %}
+
+{% block panel %}
+    <form class="filter-bar" method="get">
+        <div class="search-control">
+            <input id="results-q-alunos" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome ou celular..." aria-label="Buscar na listagem">
+        </div>
+        <button class="button primary" type="submit">Buscar</button>
+    </form>
+
+    {% if busca %}
+        <div class="selection-summary">
+            <a class="info-chip info-chip--removable"
+               href="{% url 'lab_alunos' %}"
+               title="Remover busca">
+                <span>Busca</span>
+                <strong>{{ busca }}</strong>
+                <span class="chip-x" aria-hidden="true">×</span>
+            </a>
+        </div>
+    {% endif %}
+
+    <div class="results-meta">
+        <span><strong>{{ page_obj.paginator.count }}</strong> aluno{{ page_obj.paginator.count|pluralize }}</span>
+    </div>
+
+    <div class="table-wrap data-table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Aluno</th>
+                    <th>Celular</th>
+                    <th>ID Dental</th>
+                    <th>Última sincronização</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for aluno in alunos %}
+                    <tr>
+                        <td><strong>{{ aluno.nome }}</strong></td>
+                        <td>
+                            {% if aluno.celular %}
+                                <a href="{{ aluno.celular|whatsapp_url }}" target="_blank" rel="noopener">
+                                    {{ aluno.celular }}
+                                </a>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="cell-muted mono">{{ aluno.id_dental }}</span>
+                        </td>
+                        <td>
+                            {% if aluno.ultima_sincronizacao %}
+                                <span class="cell-muted">{{ aluno.ultima_sincronizacao|date:"d/m/Y H:i" }}</span>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr class="empty-row">
+                        <td colspan="4">
+                            <div class="empty-state">
+                                <strong>Nenhum aluno encontrado.</strong>
+                                <p>
+                                    {% if busca %}
+                                        Revise os termos de busca ou
+                                        <a href="{% url 'lab_alunos' %}">limpe o filtro</a>.
+                                    {% else %}
+                                        Nenhum aluno sincronizado ainda. Use o botão
+                                        <strong>Sincronizar com Dental Office</strong> no painel lateral.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "partials/paginacao.html" %}
 {% endblock %}

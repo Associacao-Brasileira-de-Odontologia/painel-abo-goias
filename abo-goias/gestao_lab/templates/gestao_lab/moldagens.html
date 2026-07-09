@@ -5,180 +5,171 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Moldagens{% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
-        <aside class="panel config-panel">
-            <p class="panel-copy">Controle de moldagens realizadas. Converta para pedido de material quando estiver pronto para enviar ao laboratório.</p>
+{% block sidebar_copy %}Controle de moldagens realizadas. Converta para pedido de material quando estiver pronto para enviar ao laboratório.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" with active_page="moldagens" %}{% endblock %}
 
-            {% include "gestao_lab/partials/menu_lab.html" with active_page="moldagens" %}
-
-            <div class="metric-grid">
-                <div class="metric-card">
-                    <span class="metric-label">Total</span>
-                    <strong>{{ metricas.total }}</strong>
-                </div>
-                <div class="metric-card metric-success">
-                    <span class="metric-label">Faturadas</span>
-                    <strong>{{ metricas.faturadas }}</strong>
-                </div>
-                <div class="metric-card metric-blue">
-                    <span class="metric-label">Convertidas</span>
-                    <strong>{{ metricas.convertidas }}</strong>
-                </div>
-                <div class="metric-card danger-metric">
-                    <span class="metric-label">Pendentes</span>
-                    <strong>{{ metricas.pendentes }}</strong>
-                </div>
-            </div>
-        </aside>
-
-        <section class="panel results-panel">
-            <div class="results-topbar">
-                <div>
-                    <h2>Moldagens registradas</h2>
-                </div>
-                <div class="topbar-actions">
-                    <a class="button primary" href="{% url 'lab_criar_moldagem' %}">Nova moldagem</a>
-                </div>
-            </div>
-
-            <form class="filter-bar" method="get">
-                <div class="search-control">
-                    <input id="results-q-mol" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por paciente ou aluno..." aria-label="Buscar na listagem">
-                </div>
-                <select name="filtro" aria-label="Filtrar moldagens" onchange="this.form.submit()">
-                    <option value="">Situação — todas</option>
-                    {% for valor, rotulo in filtro_opcoes %}
-                        <option value="{{ valor }}" {% if filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
-                    {% endfor %}
-                </select>
-                <button class="button primary" type="submit">Buscar</button>
-            </form>
-
-            {% if busca or filtro %}
-                <div class="selection-summary">
-                    {% if busca %}
-                        <a class="info-chip info-chip--removable"
-                           href="?{% if filtro %}filtro={{ filtro }}{% endif %}"
-                           title="Remover busca">
-                            <span>Busca</span>
-                            <strong>{{ busca }}</strong>
-                            <span class="chip-x" aria-hidden="true">×</span>
-                        </a>
-                    {% endif %}
-                    {% if filtro %}
-                        <a class="info-chip info-chip--removable"
-                           href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
-                           title="Remover filtro de situação">
-                            <span>Situação</span>
-                            <strong>{{ filtro_label }}</strong>
-                            <span class="chip-x" aria-hidden="true">×</span>
-                        </a>
-                    {% endif %}
-                    <a class="chips-clear" href="{% url 'lab_moldagens' %}">Limpar tudo</a>
-                </div>
-            {% endif %}
-
-            <div class="results-meta">
-                <span><strong>{{ page_obj.paginator.count }}</strong> moldagem{{ page_obj.paginator.count|pluralize:"ns" }}</span>
-                {% if metricas.pendentes %}
-                    <a class="meta-warn" href="?filtro=nao_convertida" title="Filtrar não convertidas"><strong>{{ metricas.pendentes }}</strong> não convertida{{ metricas.pendentes|pluralize }}</a>
-                {% endif %}
-            </div>
-
-            <div class="table-wrap data-table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Paciente</th>
-                            <th>Aluno</th>
-                            <th>Registrada em</th>
-                            <th>Faturado</th>
-                            <th>Entregue ao lab</th>
-                            <th>Pedido vinculado</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for moldagem in moldagens %}
-                            <tr>
-                                <td class="mono"><strong>#{{ moldagem.pk }}</strong></td>
-                                <td><strong>{{ moldagem.paciente.nome }}</strong></td>
-                                <td>{{ moldagem.aluno.nome }}</td>
-                                <td>
-                                    <strong class="mono">{{ moldagem.criado_em|date:"d/m/Y" }}</strong>
-                                    <span class="cell-muted mono">{{ moldagem.criado_em|date:"H:i" }}</span>
-                                </td>
-
-                                <!-- Faturado -->
-                                <td>
-                                    <form method="post" action="{% url 'lab_alternar_faturado_moldagem' moldagem.pk %}" class="inline-form">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                        <button class="toggle-check {% if moldagem.faturado %}toggle-check--on{% endif %}"
-                                                type="submit"
-                                                title="{% if moldagem.faturado %}Marcar como não faturada{% else %}Marcar como faturada{% endif %}">
-                                            {% if moldagem.faturado %}&#10003;{% else %}&#9744;{% endif %}
-                                        </button>
-                                    </form>
-                                </td>
-
-                                <!-- Entregue -->
-                                <td>
-                                    <form method="post" action="{% url 'lab_alternar_entregue_moldagem' moldagem.pk %}" class="inline-form">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                        <button class="toggle-check {% if moldagem.entregue %}toggle-check--on{% endif %}"
-                                                type="submit"
-                                                title="{% if moldagem.entregue %}Marcar como não entregue{% else %}Marcar como entregue ao lab{% endif %}">
-                                            {% if moldagem.entregue %}&#10003;{% else %}&#9744;{% endif %}
-                                        </button>
-                                    </form>
-                                </td>
-
-                                <!-- Pedido vinculado -->
-                                <td>
-                                    {% if moldagem.convertida %}
-                                        <a class="button compact-button secondary" href="{% url 'lab_detalhe_pedido' moldagem.pedido_material.pk %}">
-                                            Pedido #{{ moldagem.pedido_material.pk }}
-                                        </a>
-                                    {% else %}
-                                        <span class="cell-muted">—</span>
-                                    {% endif %}
-                                </td>
-
-                                <!-- Ações -->
-                                <td class="actions-cell">
-                                    {% if not moldagem.convertida %}
-                                        <form method="post" action="{% url 'lab_converter_moldagem' moldagem.pk %}" class="inline-form">
-                                            {% csrf_token %}
-                                            <button class="button compact-button primary" type="submit" title="Converter em pedido de material">
-                                                Encaminhar
-                                            </button>
-                                        </form>
-                                    {% else %}
-                                        <span class="badge badge-neutro">Convertida</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr class="empty-row">
-                                <td colspan="8">
-                                    <div class="empty-state">
-                                        <strong>Nenhuma moldagem encontrada.</strong>
-                                        <p>Revise os filtros ou <a href="{% url 'lab_criar_moldagem' %}">registre uma nova moldagem</a>.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            {% include "gestao_cme/partials/paginacao.html" %}
-        </section>
+{% block sidebar_extra %}
+    <div class="metric-grid">
+        <div class="metric-card">
+            <span class="metric-label">Total</span>
+            <strong>{{ metricas.total }}</strong>
+        </div>
+        <div class="metric-card metric-success">
+            <span class="metric-label">Faturadas</span>
+            <strong>{{ metricas.faturadas }}</strong>
+        </div>
+        <div class="metric-card metric-blue">
+            <span class="metric-label">Convertidas</span>
+            <strong>{{ metricas.convertidas }}</strong>
+        </div>
+        <div class="metric-card danger-metric">
+            <span class="metric-label">Pendentes</span>
+            <strong>{{ metricas.pendentes }}</strong>
+        </div>
     </div>
-</main>
+{% endblock %}
+
+{% block panel_title %}Moldagens registradas{% endblock %}
+{% block panel_actions %}
+    <div class="topbar-actions">
+        <a class="button primary" href="{% url 'lab_criar_moldagem' %}">Nova moldagem</a>
+    </div>
+{% endblock %}
+
+{% block panel %}
+    <form class="filter-bar" method="get">
+        <div class="search-control">
+            <input id="results-q-mol" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por paciente ou aluno..." aria-label="Buscar na listagem">
+        </div>
+        <select name="filtro" aria-label="Filtrar moldagens" onchange="this.form.submit()">
+            <option value="">Situação — todas</option>
+            {% for valor, rotulo in filtro_opcoes %}
+                <option value="{{ valor }}" {% if filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
+            {% endfor %}
+        </select>
+        <button class="button primary" type="submit">Buscar</button>
+    </form>
+
+    {% if busca or filtro %}
+        <div class="selection-summary">
+            {% if busca %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if filtro %}filtro={{ filtro }}{% endif %}"
+                   title="Remover busca">
+                    <span>Busca</span>
+                    <strong>{{ busca }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if filtro %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                   title="Remover filtro de situação">
+                    <span>Situação</span>
+                    <strong>{{ filtro_label }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            <a class="chips-clear" href="{% url 'lab_moldagens' %}">Limpar tudo</a>
+        </div>
+    {% endif %}
+
+    <div class="results-meta">
+        <span><strong>{{ page_obj.paginator.count }}</strong> moldagem{{ page_obj.paginator.count|pluralize:"ns" }}</span>
+        {% if metricas.pendentes %}
+            <a class="meta-warn" href="?filtro=nao_convertida" title="Filtrar não convertidas"><strong>{{ metricas.pendentes }}</strong> não convertida{{ metricas.pendentes|pluralize }}</a>
+        {% endif %}
+    </div>
+
+    <div class="table-wrap data-table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Paciente</th>
+                    <th>Aluno</th>
+                    <th>Registrada em</th>
+                    <th>Faturado</th>
+                    <th>Entregue ao lab</th>
+                    <th>Pedido vinculado</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for moldagem in moldagens %}
+                    <tr>
+                        <td class="mono"><strong>#{{ moldagem.pk }}</strong></td>
+                        <td><strong>{{ moldagem.paciente.nome }}</strong></td>
+                        <td>{{ moldagem.aluno.nome }}</td>
+                        <td>
+                            <strong class="mono">{{ moldagem.criado_em|date:"d/m/Y" }}</strong>
+                            <span class="cell-muted mono">{{ moldagem.criado_em|date:"H:i" }}</span>
+                        </td>
+
+                        {# Faturado #}
+                        <td>
+                            <form method="post" action="{% url 'lab_alternar_faturado_moldagem' moldagem.pk %}" class="inline-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="toggle-check {% if moldagem.faturado %}toggle-check--on{% endif %}"
+                                        type="submit"
+                                        title="{% if moldagem.faturado %}Marcar como não faturada{% else %}Marcar como faturada{% endif %}">
+                                    {% if moldagem.faturado %}&#10003;{% else %}&#9744;{% endif %}
+                                </button>
+                            </form>
+                        </td>
+
+                        {# Entregue #}
+                        <td>
+                            <form method="post" action="{% url 'lab_alternar_entregue_moldagem' moldagem.pk %}" class="inline-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="toggle-check {% if moldagem.entregue %}toggle-check--on{% endif %}"
+                                        type="submit"
+                                        title="{% if moldagem.entregue %}Marcar como não entregue{% else %}Marcar como entregue ao lab{% endif %}">
+                                    {% if moldagem.entregue %}&#10003;{% else %}&#9744;{% endif %}
+                                </button>
+                            </form>
+                        </td>
+
+                        {# Pedido vinculado #}
+                        <td>
+                            {% if moldagem.convertida %}
+                                <a class="button compact-button secondary" href="{% url 'lab_detalhe_pedido' moldagem.pedido_material.pk %}">
+                                    Pedido #{{ moldagem.pedido_material.pk }}
+                                </a>
+                            {% else %}
+                                <span class="cell-muted">—</span>
+                            {% endif %}
+                        </td>
+
+                        {# Ações #}
+                        <td class="actions-cell">
+                            {% if not moldagem.convertida %}
+                                <form method="post" action="{% url 'lab_converter_moldagem' moldagem.pk %}" class="inline-form">
+                                    {% csrf_token %}
+                                    <button class="button compact-button primary" type="submit" title="Converter em pedido de material">
+                                        Encaminhar
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="badge badge-neutro">Convertida</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr class="empty-row">
+                        <td colspan="8">
+                            <div class="empty-state">
+                                <strong>Nenhuma moldagem encontrada.</strong>
+                                <p>Revise os filtros ou <a href="{% url 'lab_criar_moldagem' %}">registre uma nova moldagem</a>.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "partials/paginacao.html" %}
 {% endblock %}

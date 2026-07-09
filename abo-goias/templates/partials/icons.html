@@ -1,0 +1,104 @@
+{% comment %}
+Sprite de ícones do design system — incluído uma única vez em base.html.
+Uso: <svg viewBox="0 0 24 24"><use href="#i-nome"></use></svg>
+Os símbolos não carregam fill/stroke próprios: herdam do elemento pai
+(ver .side-icon svg em components.css).
+{% endcomment %}
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none" aria-hidden="true">
+    <symbol id="i-dashboard" viewBox="0 0 24 24">
+        <rect width="7" height="7" x="3" y="3" rx="1"></rect>
+        <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+        <rect width="7" height="7" x="14" y="14" rx="1"></rect>
+        <rect width="7" height="7" x="3" y="14" rx="1"></rect>
+    </symbol>
+    <symbol id="i-lista" viewBox="0 0 24 24">
+        <path d="M8 7h12"></path>
+        <path d="M8 12h12"></path>
+        <path d="M8 17h12"></path>
+        <path d="M4 7h.01"></path>
+        <path d="M4 12h.01"></path>
+        <path d="M4 17h.01"></path>
+    </symbol>
+    <symbol id="i-usuarios" viewBox="0 0 24 24">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+    </symbol>
+    <symbol id="i-abrigo" viewBox="0 0 24 24">
+        <path d="M4 4h16v16H4z"></path>
+        <path d="M4 10h16"></path>
+        <path d="M12 10v10"></path>
+        <path d="M8 15h.01"></path>
+        <path d="M16 15h.01"></path>
+    </symbol>
+    <symbol id="i-material" viewBox="0 0 24 24">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        <path d="m3.3 7 8.7 5 8.7-5"></path>
+        <path d="M12 22V12"></path>
+    </symbol>
+    <symbol id="i-kit" viewBox="0 0 24 24">
+        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8"></path>
+        <path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8"></path>
+        <path d="m3.3 7 8.7 5 8.7-5"></path>
+        <path d="m7.5 4.3 8.7 5"></path>
+    </symbol>
+    <symbol id="i-emprestimo" viewBox="0 0 24 24">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path>
+        <rect width="6" height="4" x="9" y="3" rx="1"></rect>
+        <path d="m9 14 2 2 4-4"></path>
+    </symbol>
+    <symbol id="i-identificadores" viewBox="0 0 24 24">
+        <path d="M4 7h16"></path>
+        <path d="M4 17h16"></path>
+        <path d="M7 4v16"></path>
+        <path d="M17 4v16"></path>
+    </symbol>
+    <symbol id="i-novo" viewBox="0 0 24 24">
+        <path d="M12 5v14"></path>
+        <path d="M5 12h14"></path>
+    </symbol>
+    <symbol id="i-moldagem" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="12" rx="10" ry="5"></ellipse>
+        <path d="M2 12c0 5.523 4.477 10 10 10s10-4.477 10-10"></path>
+    </symbol>
+    <symbol id="i-laboratorio" viewBox="0 0 24 24">
+        <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5m4 0h4m6-11v11m0 0h-4m4 0h4m-4 0a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4m14 0H5"></path>
+    </symbol>
+    <symbol id="i-paciente" viewBox="0 0 24 24">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+    </symbol>
+    <symbol id="i-aluno" viewBox="0 0 24 24">
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+        <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+    </symbol>
+    <symbol id="i-contrato" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+    </symbol>
+    <symbol id="i-editar" viewBox="0 0 24 24">
+        <path d="M12 20h9"></path>
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+    </symbol>
+    <symbol id="i-voltar" viewBox="0 0 24 24">
+        <path d="M19 12H5"></path>
+        <path d="m12 19-7-7 7-7"></path>
+    </symbol>
+    <symbol id="i-seta" viewBox="0 0 24 24">
+        <path d="M5 12h14"></path>
+        <path d="m12 5 7 7-7 7"></path>
+    </symbol>
+    <symbol id="i-alerta" viewBox="0 0 24 24">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </symbol>
+    <symbol id="i-info" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M12 8v4"></path>
+        <path d="M12 16h.01"></path>
+    </symbol>
+</svg>

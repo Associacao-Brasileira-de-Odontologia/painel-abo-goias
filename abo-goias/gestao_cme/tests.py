@@ -59,7 +59,7 @@ class RotasIniciaisTests(TestCase):
         response = self.client.get(reverse("login"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "gestao_cme/auth/login.html")
+        self.assertTemplateUsed(response, "auth/login.html")
 
     def test_catalog_legado_redireciona_para_home(self) -> None:
         response = self.client.get("/catalog/")

@@ -1,3 +1,8 @@
+{% comment %}
+Paginação padrão das listagens.
+Espera no contexto: page_obj (Page do Django) e, opcionalmente,
+query_string (filtros ativos, sem o parâmetro page).
+{% endcomment %}
 {% if page_obj.paginator.count %}
     <div class="pagination-summary">
         <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>

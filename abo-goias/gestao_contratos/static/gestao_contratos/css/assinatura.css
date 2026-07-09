@@ -2,7 +2,7 @@
  * Páginas públicas de assinatura — "papel" da família visual "Termo & Selo".
  *
  * Usadas por assinar.html, assinatura_invalida.html e assinatura_concluida.html
- * — páginas standalone (não estendem gestao_cme/base.html), acessadas pelo
+ * — páginas standalone (não estendem o base.html do painel), acessadas pelo
  * PACIENTE via QR Code, no próprio celular, muitas vezes ao ar livre. Por
  * isso o fundo permanece claro (legibilidade): papel frio com tinta-azul
  * royal da paleta ABO Goiás, como caneta e carimbo de documento oficial,
@@ -288,6 +288,12 @@ canvas {
 
 .mt-sm {
     margin-top: 10px;
+}
+
+.texto-apoio {
+    font-size: 0.88rem;
+    color: var(--gc-paper-muted);
+    margin-top: 4px;
 }
 
 /* ══ Foco visível ═══════════════════════════════════════════════ */

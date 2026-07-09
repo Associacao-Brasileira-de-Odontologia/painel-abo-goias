@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% comment %}
+Layout padrão das telas operacionais: cabeçalho compacto + grade de dois
+painéis (sidebar de contexto à esquerda, painel de resultados à direita).
+
+Blocos disponíveis para as páginas:
+  sidebar         — sidebar completa (sobrescrever apenas em telas atípicas)
+  sidebar_copy    — texto introdutório da sidebar (uma frase de contexto)
+  sidebar_nav     — navegação da aplicação (include do menu da app)
+  sidebar_extra   — conteúdo adicional da sidebar (métricas, formulários)
+  panel_topbar    — barra superior completa (sobrescrever em telas atípicas)
+  panel_label     — rótulo pequeno acima do título (<p class="section-label">)
+  panel_title     — título (h2) do painel de resultados
+  panel_actions   — ações à direita do título (botões, formulários)
+  panel           — conteúdo principal do painel de resultados
+{% endcomment %}
+
+{% block header_class %}header--compact{% endblock %}
+
+{% block content %}
+    <main class="page-shell">
+        <div class="layout-grid">
+            <aside class="panel config-panel">
+                {% block sidebar %}
+                    <p class="panel-copy">{% block sidebar_copy %}{% endblock %}</p>
+                    {% block sidebar_nav %}{% endblock %}
+                    {% block sidebar_extra %}{% endblock %}
+                {% endblock %}
+            </aside>
+
+            <section class="panel results-panel">
+                {% block panel_topbar %}
+                    <div class="results-topbar">
+                        <div>
+                            {% block panel_label %}{% endblock %}
+                            <h2>{% block panel_title %}{% endblock %}</h2>
+                        </div>
+                        {% block panel_actions %}{% endblock %}
+                    </div>
+                {% endblock %}
+
+                {% block panel %}{% endblock %}
+            </section>
+        </div>
+    </main>
+{% endblock %}

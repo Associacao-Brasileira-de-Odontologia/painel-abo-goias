@@ -1,4 +1,4 @@
-{% extends "gestao_cme/base.html" %}
+{% extends "base.html" %}
 {% load static %}
 
 {% block title %}ABO Goiás | Portal{% endblock %}
@@ -6,6 +6,10 @@
 {% block header_class %}portal-header{% endblock %}
 {% block header_brand_text %}{% endblock %}
 {% block footer %}{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+{% endblock %}
 
 {% block content %}
     <main class="portal-shell">
@@ -33,15 +37,7 @@
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
                                      stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                      stroke-linejoin="round" aria-hidden="true">
-                                    {% if tarefa.urgente %}
-                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                                        <line x1="12" y1="9" x2="12" y2="13"/>
-                                        <line x1="12" y1="17" x2="12.01" y2="17"/>
-                                    {% else %}
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <path d="M12 8v4"/>
-                                        <path d="M12 16h.01"/>
-                                    {% endif %}
+                                    <use href="{% if tarefa.urgente %}#i-alerta{% else %}#i-info{% endif %}"></use>
                                 </svg>
                                 {{ tarefa.texto }}
                             </a>
@@ -58,7 +54,7 @@
                     {% if 'cme' in apps_disponiveis %}
                         <div class="portal-status-item">
                             <span>Pacotes aguardando retirada</span>
-                            <strong {% if resumo.pacotes_pendentes %}style="color:#f7a51f"{% endif %}>
+                            <strong {% if resumo.pacotes_pendentes %}class="status-warn"{% endif %}>
                                 {{ resumo.pacotes_pendentes }}
                             </strong>
                         </div>
@@ -142,9 +138,7 @@
                                 <span>{{ resumo.materiais }} materiais cadastrados</span>
                                 <em>
                                     Acessar
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                    </svg>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-seta"></use></svg>
                                 </em>
                             </div>
                         </a>
@@ -164,9 +158,7 @@
                                 </span>
                                 <em>
                                     Acessar
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                    </svg>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-seta"></use></svg>
                                 </em>
                             </div>
                         </a>
@@ -181,9 +173,7 @@
                                 <span>{{ resumo.turmas }} turma(s) disponível(is)</span>
                                 <em>
                                     Acessar
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                    </svg>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-seta"></use></svg>
                                 </em>
                             </div>
                         </a>
@@ -198,9 +188,7 @@
                                 <span>{{ resumo.contratos_gerados }} contrato(s) gerado(s)</span>
                                 <em>
                                     Acessar
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                                    </svg>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-seta"></use></svg>
                                 </em>
                             </div>
                         </a>

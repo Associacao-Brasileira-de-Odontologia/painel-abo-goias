@@ -1,0 +1,79 @@
+/*
+ * Autenticação — login e recuperação de senha.
+ *
+ * Carregado apenas por templates/auth/base_auth.html. Cartão centralizado
+ * sobre o fundo institucional definido em base.css.
+ */
+
+.auth-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.auth-card {
+    width: min(460px, 100%);
+    padding: 30px;
+    background: rgba(4, 20, 46, 0.92);
+    box-shadow: var(--shadow);
+}
+
+.auth-logo {
+    width: min(260px, 100%);
+    height: auto;
+    margin-bottom: 26px;
+}
+
+.auth-card h1 {
+    margin-bottom: 0;
+    font-size: clamp(1.8rem, 5vw, 2.55rem);
+}
+
+.auth-form {
+    display: grid;
+    gap: 16px;
+    margin-top: 24px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+}
+
+.auth-link {
+    color: var(--info-text);
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+}
+
+.auth-link:hover {
+    color: var(--accent-strong);
+}
+
+.auth-action {
+    width: 100%;
+    margin-top: 24px;
+}
+
+.update-first {
+    width: 100%;
+}
+
+.form-alert {
+    margin-top: 18px;
+    border: 1px solid var(--danger-border);
+    border-radius: var(--radius-card);
+    padding: 12px 14px;
+    background: var(--danger-bg);
+    color: var(--danger-text-strong);
+    font-weight: 600;
+}
+
+/* ── Movimento ──────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+    .auth-card {
+        animation: panel-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+}

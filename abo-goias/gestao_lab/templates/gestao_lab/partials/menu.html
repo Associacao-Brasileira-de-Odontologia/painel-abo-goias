@@ -1,0 +1,23 @@
+{% comment %}
+Navegação lateral da Gestão de Laboratório.
+Uso: incluir com a variável active_page definida para o slug da página atual.
+{% endcomment %}
+<nav class="side-nav" aria-label="Navegação do laboratório">
+    <p class="side-nav-label">Operação</p>
+    {% include "partials/side_link.html" with url_name="lab_dashboard" icon="dashboard" label="Visão Geral" page="dashboard" %}
+    {% include "partials/side_link.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" page="pedidos" %}
+    {% include "partials/side_link.html" with url_name="lab_criar_pedido" icon="novo" label="Novo pedido" page="novo_pedido" %}
+    {% include "partials/side_link.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" page="moldagens" %}
+    {% include "partials/side_link.html" with url_name="lab_pedidos_faturamento" icon="emprestimo" label="Faturamento" page="faturamento" %}
+
+    <p class="side-nav-label">Cadastros</p>
+    {% include "partials/side_link.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" page="laboratorios" %}
+    {% include "partials/side_link.html" with url_name="lab_equipes" icon="usuarios" label="Equipes" page="equipes" %}
+
+    <p class="side-nav-label">Dental Office</p>
+    {% include "partials/side_link.html" with url_name="lab_pacientes" icon="paciente" label="Pacientes" page="pacientes" %}
+    {% include "partials/side_link.html" with url_name="lab_alunos" icon="aluno" label="Alunos" page="alunos" %}
+    {% include "partials/side_link.html" with url_name="contratos" icon="contrato" label="Contratos" page="contratos" %}
+
+    {% include "partials/side_link.html" with url_name="home" icon="voltar" label="Voltar ao portal" extra_class="side-link-return" %}
+</nav>

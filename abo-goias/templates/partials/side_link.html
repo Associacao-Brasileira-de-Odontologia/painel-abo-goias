@@ -1,0 +1,16 @@
+{% comment %}
+Item da navegação lateral.
+Parâmetros:
+  url_name     — nome da rota (sem argumentos) a resolver com a tag url
+  icon         — id do símbolo em partials/icons.html (sem o prefixo "i-")
+  label        — texto do link
+  page         — slug desta página; recebe .active quando igual a active_page
+  active_page  — slug da página atual (passado pelo menu da app)
+  extra_class  — classes adicionais (ex.: side-link-return)
+{% endcomment %}
+<a class="side-link{% if page and active_page == page %} active{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}" href="{% url url_name %}">
+    <span class="side-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>
+    </span>
+    <span>{{ label }}</span>
+</a>

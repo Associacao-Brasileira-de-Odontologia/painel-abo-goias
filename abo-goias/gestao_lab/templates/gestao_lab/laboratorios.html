@@ -5,122 +5,113 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Laboratórios{% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
-        <aside class="panel config-panel">
-            <p class="panel-copy">Laboratórios externos parceiros e suas equipes de atendimento.</p>
+{% block sidebar_copy %}Laboratórios externos parceiros e suas equipes de atendimento.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" with active_page="laboratorios" %}{% endblock %}
 
-            {% include "gestao_lab/partials/menu_lab.html" with active_page="laboratorios" %}
-
-            <div class="metric-grid">
-                <div class="metric-card">
-                    <span class="metric-label">Total de laboratórios</span>
-                    <strong>{{ total }}</strong>
-                </div>
-            </div>
-        </aside>
-
-        <section class="panel results-panel">
-            <div class="results-topbar">
-                <div>
-                    <h2>Laboratórios parceiros</h2>
-                </div>
-                <div class="topbar-actions">
-                    <a class="button primary" href="{% url 'lab_criar_laboratorio' %}">Novo laboratório</a>
-                </div>
-            </div>
-
-            <form class="filter-bar" method="get">
-                <div class="search-control">
-                    <input id="results-q-labs" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome, CNPJ ou equipe..." aria-label="Buscar na listagem">
-                </div>
-                <button class="button primary" type="submit">Buscar</button>
-            </form>
-
-            {% if busca %}
-                <div class="selection-summary">
-                    <a class="info-chip info-chip--removable"
-                       href="{% url 'lab_laboratorios' %}"
-                       title="Remover busca">
-                        <span>Busca</span>
-                        <strong>{{ busca }}</strong>
-                        <span class="chip-x" aria-hidden="true">×</span>
-                    </a>
-                </div>
-            {% endif %}
-
-            <div class="results-meta">
-                <span><strong>{{ page_obj.paginator.count }}</strong> laboratório{{ page_obj.paginator.count|pluralize }}</span>
-            </div>
-
-            <div class="table-wrap data-table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Laboratório</th>
-                            <th>Contato</th>
-                            <th>Equipes</th>
-                            <th>CNPJ</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for lab in laboratorios %}
-                            <tr>
-                                <td>
-                                    <strong>{{ lab.nome }}</strong>
-                                    {% if lab.email and lab.email != "@" %}
-                                        <span class="cell-muted">{{ lab.email }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if lab.whatsapp %}
-                                        <a href="{{ lab.whatsapp|whatsapp_url }}" target="_blank" rel="noopener">
-                                            {{ lab.whatsapp }}
-                                        </a>
-                                    {% elif lab.telefone %}
-                                        {{ lab.telefone }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% for equipe in lab.equipes.all %}
-                                        <span class="badge badge-neutro">{{ equipe.nome }}</span>
-                                    {% empty %}
-                                        —
-                                    {% endfor %}
-                                </td>
-                                <td>
-                                    <span class="cell-muted mono">{{ lab.cnpj|default:"—" }}</span>
-                                </td>
-                                <td class="actions-cell">
-                                    {% if lab.whatsapp %}
-                                        <a class="button compact-button secondary"
-                                           href="{{ lab.whatsapp|whatsapp_url }}"
-                                           target="_blank" rel="noopener"
-                                           title="Abrir WhatsApp">WhatsApp</a>
-                                    {% endif %}
-                                    <a class="button compact-button secondary" href="{% url 'lab_editar_laboratorio' lab.pk %}">Editar</a>
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr class="empty-row">
-                                <td colspan="5">
-                                    <div class="empty-state">
-                                        <strong>Nenhum laboratório encontrado.</strong>
-                                        <p>Revise os filtros ou <a href="{% url 'lab_criar_laboratorio' %}">cadastre um novo laboratório</a>.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            {% include "gestao_cme/partials/paginacao.html" %}
-        </section>
+{% block sidebar_extra %}
+    <div class="metric-grid">
+        <div class="metric-card">
+            <span class="metric-label">Total de laboratórios</span>
+            <strong>{{ total }}</strong>
+        </div>
     </div>
-</main>
+{% endblock %}
+
+{% block panel_title %}Laboratórios parceiros{% endblock %}
+{% block panel_actions %}
+    <div class="topbar-actions">
+        <a class="button primary" href="{% url 'lab_criar_laboratorio' %}">Novo laboratório</a>
+    </div>
+{% endblock %}
+
+{% block panel %}
+    <form class="filter-bar" method="get">
+        <div class="search-control">
+            <input id="results-q-labs" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome, CNPJ ou equipe..." aria-label="Buscar na listagem">
+        </div>
+        <button class="button primary" type="submit">Buscar</button>
+    </form>
+
+    {% if busca %}
+        <div class="selection-summary">
+            <a class="info-chip info-chip--removable"
+               href="{% url 'lab_laboratorios' %}"
+               title="Remover busca">
+                <span>Busca</span>
+                <strong>{{ busca }}</strong>
+                <span class="chip-x" aria-hidden="true">×</span>
+            </a>
+        </div>
+    {% endif %}
+
+    <div class="results-meta">
+        <span><strong>{{ page_obj.paginator.count }}</strong> laboratório{{ page_obj.paginator.count|pluralize }}</span>
+    </div>
+
+    <div class="table-wrap data-table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Laboratório</th>
+                    <th>Contato</th>
+                    <th>Equipes</th>
+                    <th>CNPJ</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lab in laboratorios %}
+                    <tr>
+                        <td>
+                            <strong>{{ lab.nome }}</strong>
+                            {% if lab.email and lab.email != "@" %}
+                                <span class="cell-muted">{{ lab.email }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if lab.whatsapp %}
+                                <a href="{{ lab.whatsapp|whatsapp_url }}" target="_blank" rel="noopener">
+                                    {{ lab.whatsapp }}
+                                </a>
+                            {% elif lab.telefone %}
+                                {{ lab.telefone }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for equipe in lab.equipes.all %}
+                                <span class="badge badge-neutro">{{ equipe.nome }}</span>
+                            {% empty %}
+                                —
+                            {% endfor %}
+                        </td>
+                        <td>
+                            <span class="cell-muted mono">{{ lab.cnpj|default:"—" }}</span>
+                        </td>
+                        <td class="actions-cell">
+                            {% if lab.whatsapp %}
+                                <a class="button compact-button secondary"
+                                   href="{{ lab.whatsapp|whatsapp_url }}"
+                                   target="_blank" rel="noopener"
+                                   title="Abrir WhatsApp">WhatsApp</a>
+                            {% endif %}
+                            <a class="button compact-button secondary" href="{% url 'lab_editar_laboratorio' lab.pk %}">Editar</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr class="empty-row">
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <strong>Nenhum laboratório encontrado.</strong>
+                                <p>Revise os filtros ou <a href="{% url 'lab_criar_laboratorio' %}">cadastre um novo laboratório</a>.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "partials/paginacao.html" %}
 {% endblock %}

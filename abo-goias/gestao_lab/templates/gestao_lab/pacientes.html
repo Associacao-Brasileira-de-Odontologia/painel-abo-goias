@@ -5,158 +5,147 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Pacientes{% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
-        <aside class="panel config-panel">
-            <p class="panel-copy">Pacientes sincronizados do Dental Office com processos ativos na clínica.</p>
+{% block sidebar_copy %}Pacientes sincronizados do Dental Office com processos ativos na clínica.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" with active_page="pacientes" %}{% endblock %}
 
-            {% include "gestao_lab/partials/menu_lab.html" with active_page="pacientes" %}
-
-            <div class="metric-grid">
-                <div class="metric-card">
-                    <span class="metric-label">Total de pacientes</span>
-                    <strong>{{ total }}</strong>
-                </div>
-                <div class="metric-card metric-blue">
-                    <span class="metric-label">Processos abertos</span>
-                    <strong>{{ total_abertos }}</strong>
-                </div>
-            </div>
-
-            {% include "gestao_lab/partials/sync_dental.html" %}
-        </aside>
-
-        <section class="panel results-panel">
-            <div class="results-topbar">
-                <div>
-                    <h2>Pacientes cadastrados</h2>
-                </div>
-            </div>
-
-            <form class="filter-bar" method="get">
-                <div class="search-control">
-                    <input id="results-q-pacientes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome ou celular..." aria-label="Buscar na listagem">
-                </div>
-                <select name="processo" aria-label="Filtrar por processo" onchange="this.form.submit()">
-                    <option value="">Processo — todos</option>
-                    <option value="aberto" {% if processo_filtro == "aberto" %}selected{% endif %}>Com processo aberto</option>
-                </select>
-                <button class="button primary" type="submit">Buscar</button>
-            </form>
-
-            {% if busca or processo_filtro %}
-                <div class="selection-summary">
-                    {% if busca %}
-                        <a class="info-chip info-chip--removable"
-                           href="?{% if processo_filtro %}processo={{ processo_filtro }}{% endif %}"
-                           title="Remover busca">
-                            <span>Busca</span>
-                            <strong>{{ busca }}</strong>
-                            <span class="chip-x" aria-hidden="true">×</span>
-                        </a>
-                    {% endif %}
-                    {% if processo_filtro %}
-                        <a class="info-chip info-chip--removable"
-                           href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
-                           title="Remover filtro de processo">
-                            <span>Processo</span>
-                            <strong>Com processo aberto</strong>
-                            <span class="chip-x" aria-hidden="true">×</span>
-                        </a>
-                    {% endif %}
-                    <a class="chips-clear" href="{% url 'lab_pacientes' %}">Limpar tudo</a>
-                </div>
-            {% endif %}
-
-            <div class="results-meta">
-                <span><strong>{{ page_obj.paginator.count }}</strong> paciente{{ page_obj.paginator.count|pluralize }}</span>
-                {% if total_abertos %}
-                    <a href="?processo=aberto" title="Filtrar processos abertos"><strong>{{ total_abertos }}</strong> com processo aberto</a>
-                {% endif %}
-            </div>
-
-            <div class="table-wrap data-table-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Paciente</th>
-                            <th>Celular</th>
-                            <th>Processo</th>
-                            <th>Previsão de retorno</th>
-                            <th>Sincronização</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for paciente in pacientes %}
-                            <tr>
-                                <td><strong>{{ paciente.nome }}</strong></td>
-                                <td>
-                                    {% if paciente.celular %}
-                                        <a href="{{ paciente.celular|whatsapp_url }}" target="_blank" rel="noopener">
-                                            {{ paciente.celular }}
-                                        </a>
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if paciente.processo_aberto %}
-                                        <span class="badge badge-info">Aberto</span>
-                                    {% else %}
-                                        <span class="badge badge-neutro">Concluído</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if paciente.data_previsao_retorno %}
-                                        <strong class="mono{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">
-                                            {{ paciente.data_previsao_retorno|date:"d/m/Y" }}
-                                        </strong>
-                                        <span class="cell-muted{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">{{ paciente.data_previsao_retorno|dias_relativos }}</span>
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if paciente.ultima_sincronizacao %}
-                                        <span class="cell-muted">{{ paciente.ultima_sincronizacao|date:"d/m/Y" }}</span>
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                                <td class="actions-cell">
-                                    <a class="button compact-button secondary"
-                                       href="{% url 'contrato_gerar' paciente.pk %}"
-                                       title="Gerar termo de consentimento">
-                                        Contrato
-                                    </a>
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr class="empty-row">
-                                <td colspan="6">
-                                    <div class="empty-state">
-                                        <strong>Nenhum paciente encontrado.</strong>
-                                        <p>
-                                            {% if busca or processo_filtro %}
-                                                Revise os filtros ou
-                                                <a href="{% url 'lab_pacientes' %}">limpe a busca</a>.
-                                            {% else %}
-                                                Nenhum paciente sincronizado ainda. Use o botão
-                                                <strong>Sincronizar com Dental Office</strong> no painel lateral.
-                                            {% endif %}
-                                        </p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            {% include "gestao_cme/partials/paginacao.html" %}
-        </section>
+{% block sidebar_extra %}
+    <div class="metric-grid">
+        <div class="metric-card">
+            <span class="metric-label">Total de pacientes</span>
+            <strong>{{ total }}</strong>
+        </div>
+        <div class="metric-card metric-blue">
+            <span class="metric-label">Processos abertos</span>
+            <strong>{{ total_abertos }}</strong>
+        </div>
     </div>
-</main>
+
+    {% include "gestao_lab/partials/sync_dental.html" %}
+{% endblock %}
+
+{% block panel_title %}Pacientes cadastrados{% endblock %}
+
+{% block panel %}
+    <form class="filter-bar" method="get">
+        <div class="search-control">
+            <input id="results-q-pacientes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome ou celular..." aria-label="Buscar na listagem">
+        </div>
+        <select name="processo" aria-label="Filtrar por processo" onchange="this.form.submit()">
+            <option value="">Processo — todos</option>
+            <option value="aberto" {% if processo_filtro == "aberto" %}selected{% endif %}>Com processo aberto</option>
+        </select>
+        <button class="button primary" type="submit">Buscar</button>
+    </form>
+
+    {% if busca or processo_filtro %}
+        <div class="selection-summary">
+            {% if busca %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if processo_filtro %}processo={{ processo_filtro }}{% endif %}"
+                   title="Remover busca">
+                    <span>Busca</span>
+                    <strong>{{ busca }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if processo_filtro %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                   title="Remover filtro de processo">
+                    <span>Processo</span>
+                    <strong>Com processo aberto</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            <a class="chips-clear" href="{% url 'lab_pacientes' %}">Limpar tudo</a>
+        </div>
+    {% endif %}
+
+    <div class="results-meta">
+        <span><strong>{{ page_obj.paginator.count }}</strong> paciente{{ page_obj.paginator.count|pluralize }}</span>
+        {% if total_abertos %}
+            <a href="?processo=aberto" title="Filtrar processos abertos"><strong>{{ total_abertos }}</strong> com processo aberto</a>
+        {% endif %}
+    </div>
+
+    <div class="table-wrap data-table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Paciente</th>
+                    <th>Celular</th>
+                    <th>Processo</th>
+                    <th>Previsão de retorno</th>
+                    <th>Sincronização</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for paciente in pacientes %}
+                    <tr>
+                        <td><strong>{{ paciente.nome }}</strong></td>
+                        <td>
+                            {% if paciente.celular %}
+                                <a href="{{ paciente.celular|whatsapp_url }}" target="_blank" rel="noopener">
+                                    {{ paciente.celular }}
+                                </a>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if paciente.processo_aberto %}
+                                <span class="badge badge-info">Aberto</span>
+                            {% else %}
+                                <span class="badge badge-neutro">Concluído</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if paciente.data_previsao_retorno %}
+                                <strong class="mono{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">
+                                    {{ paciente.data_previsao_retorno|date:"d/m/Y" }}
+                                </strong>
+                                <span class="cell-muted{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">{{ paciente.data_previsao_retorno|dias_relativos }}</span>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if paciente.ultima_sincronizacao %}
+                                <span class="cell-muted">{{ paciente.ultima_sincronizacao|date:"d/m/Y" }}</span>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td class="actions-cell">
+                            <a class="button compact-button secondary"
+                               href="{% url 'contrato_gerar' paciente.pk %}"
+                               title="Gerar termo de consentimento">
+                                Contrato
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr class="empty-row">
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <strong>Nenhum paciente encontrado.</strong>
+                                <p>
+                                    {% if busca or processo_filtro %}
+                                        Revise os filtros ou
+                                        <a href="{% url 'lab_pacientes' %}">limpe a busca</a>.
+                                    {% else %}
+                                        Nenhum paciente sincronizado ainda. Use o botão
+                                        <strong>Sincronizar com Dental Office</strong> no painel lateral.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include "partials/paginacao.html" %}
 {% endblock %}

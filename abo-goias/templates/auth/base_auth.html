@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -8,12 +8,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'gestao_cme/css/home.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components.css' %}">
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
 </head>
 <body>
     <main class="auth-shell">
         <section class="auth-card panel">
-            <img class="auth-logo" src="{% static 'gestao_cme/img/logo.png' %}" alt="ABO Goiás">
+            <img class="auth-logo" src="{% static 'img/logo.png' %}" alt="ABO Goiás">
             <p class="section-label">{% block eyebrow %}{% endblock %}</p>
             <h1>{% block heading %}{% endblock %}</h1>
             <p class="panel-copy">{% block description %}{% endblock %}</p>

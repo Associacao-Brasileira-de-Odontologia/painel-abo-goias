@@ -1,6 +1,11 @@
-{% extends "gestao_cme/base.html" %}
+{% extends "layouts/painel.html" %}
+
+{% comment %}
+Base da Gestão de Laboratório: aplica o acento visual da app (app-lab)
+sobre o layout padrão de painel. As páginas definem os blocos do painel
+e incluem gestao_lab/partials/menu.html na sidebar.
+{% endcomment %}
 
 {% block body_class %}app-lab{% endblock %}
-{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}ABO Goiás{% endblock %}
 {% block header_title %}Gestão de Laboratório{% endblock %}

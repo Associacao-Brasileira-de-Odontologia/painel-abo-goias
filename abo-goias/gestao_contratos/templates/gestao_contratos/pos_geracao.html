@@ -1,196 +1,161 @@
-{% extends "gestao_cme/base.html" %}
+{% extends "gestao_contratos/base.html" %}
 {% load static %}
 
 {% block title %}Contrato Gerado — {{ paciente.nome }}{% endblock %}
 {% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
 {% block header_title %}Contrato Gerado{% endblock %}
-{% block body_class %}gestao-contratos{% endblock %}
 
-{% block extra_css %}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'gestao_contratos/css/contratos.css' %}">
+{% block sidebar %}
+    <p class="section-label">Paciente</p>
+    <h2>{{ paciente.nome }}</h2>
+
+    <nav class="side-nav" aria-label="Navegação de contratos">
+        <a class="side-link active" href="#">
+            <span class="side-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><use href="#i-contrato"></use></svg>
+            </span>
+            <span>Enviar contrato</span>
+        </a>
+        <a class="side-link" href="{% url 'contrato_gerar' paciente.pk %}">
+            <span class="side-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><use href="#i-novo"></use></svg>
+            </span>
+            <span>Gerar novo contrato</span>
+        </a>
+        <a class="side-link side-link-return" href="{% url 'contratos' %}">
+            <span class="side-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><use href="#i-voltar"></use></svg>
+            </span>
+            <span>Voltar à lista</span>
+        </a>
+    </nav>
+
+    <div class="sidebar-section gc-mt-lg">
+        <p class="section-label">Contrato gerado</p>
+        <div class="info-chip">
+            <span>Tipo</span>
+            <strong>{{ contrato.get_tipo_display }}</strong>
+        </div>
+        <div class="info-chip gc-mt-sm">
+            <span>Data</span>
+            <strong>{{ contrato.criado_em|date:"d/m/Y H:i" }}</strong>
+        </div>
+        {% if contrato.profissional_nome %}
+            <div class="info-chip gc-mt-sm">
+                <span>Profissional</span>
+                <strong>{{ contrato.profissional_nome }}</strong>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="sidebar-section gc-mt-md">
+        <p class="section-label">Status de envio</p>
+        {% if contrato.status_envio == "enviado_email" %}
+            <span class="badge badge-devolvido">E-mail enviado</span>
+            <p class="panel-copy gc-mt-sm gc-text-xs">
+                {{ contrato.enviado_em|date:"d/m/Y H:i" }}
+            </p>
+        {% elif contrato.status_envio == "enviado_whatsapp" %}
+            <span class="badge badge-devolvido">WhatsApp marcado</span>
+            <p class="panel-copy gc-mt-sm gc-text-xs">
+                {{ contrato.enviado_em|date:"d/m/Y H:i" }}
+            </p>
+        {% else %}
+            <span class="badge badge-atrasado">Não enviado</span>
+        {% endif %}
+
+        <p class="section-label gc-mt-md">Dental Office</p>
+        {% if contrato.status_envio_dental == "enviado" %}
+            <span class="badge badge-devolvido">Enviado ao Dental</span>
+            <p class="panel-copy gc-mt-sm gc-text-xs">
+                {{ contrato.enviado_dental_em|date:"d/m/Y H:i" }}
+            </p>
+        {% elif contrato.status == "assinado" %}
+            <form method="post"
+                  action="{% url 'contrato_enviar_dental' contrato.pk %}"
+                  class="gc-mt-sm">
+                {% csrf_token %}
+                <button class="button secondary compact-button gc-full-width gc-btn-sm"
+                        type="submit"
+                        title="{% if contrato.status_envio_dental == 'erro' %}Tentativa anterior falhou — clique para reenviar{% else %}Envia o contrato assinado à ficha do paciente no Dental Office{% endif %}">
+                    {% if contrato.status_envio_dental == "erro" %}
+                        Reenviar ao Dental Office
+                    {% else %}
+                        Enviar ao Dental Office
+                    {% endif %}
+                </button>
+            </form>
+        {% else %}
+            <button class="button secondary compact-button gc-full-width gc-btn-sm gc-btn-disabled-look gc-mt-sm"
+                    type="button" disabled
+                    title="Disponível após a assinatura do paciente">
+                Enviar ao Dental Office
+            </button>
+        {% endif %}
+    </div>
 {% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
+{% block panel_title %}Contrato gerado com sucesso{% endblock %}
 
-        {# ── Barra lateral ──────────────────────────────────────────── #}
-        <aside class="panel config-panel">
-            <p class="section-label">Paciente</p>
-            <h2>{{ paciente.nome }}</h2>
+{% block panel %}
+    {# As mensagens já aparecem via .messages-banner global (base.html) — não duplicar aqui. #}
 
-            <nav class="side-nav" aria-label="Navegação de contratos">
-                <a class="side-link active" href="#">
-                    <span class="side-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                        </svg>
-                    </span>
-                    <span>Enviar contrato</span>
-                </a>
-                <a class="side-link" href="{% url 'contrato_gerar' paciente.pk %}">
-                    <span class="side-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="16"/>
-                            <line x1="8" y1="12" x2="16" y2="12"/>
-                        </svg>
-                    </span>
-                    <span>Gerar novo contrato</span>
-                </a>
-                <a class="side-link side-link-return" href="{% url 'contratos' %}">
-                    <span class="side-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M19 12H5"/>
-                            <path d="m12 19-7-7 7-7"/>
-                        </svg>
-                    </span>
-                    <span>Voltar à lista</span>
-                </a>
-            </nav>
+    {# ── Assinatura do paciente (QR Code + polling HTMX) ──── #}
+    {% include "gestao_contratos/_status_assinatura_fragment.html" %}
 
-            <div class="sidebar-section gc-mt-lg">
-                <p class="section-label">Contrato gerado</p>
-                <div class="info-chip">
-                    <span>Tipo</span>
-                    <strong>{{ contrato.get_tipo_display }}</strong>
+    {# ── Envio por WhatsApp ───────────────────────────────── #}
+    <div class="kpi-section">
+        <p class="section-label">Enviar pelo WhatsApp</p>
+        <form id="wa-form" method="post"
+              action="{% url 'contrato_whatsapp_status' contrato.pk %}">
+            {% csrf_token %}
+            <div class="gc-row-campo-acao">
+                <div class="field">
+                    <label for="id_celular">Celular do paciente</label>
+                    <input id="id_celular" type="tel" name="celular"
+                           value="{{ paciente.celular }}"
+                           placeholder="(62) 9 0000-0000">
                 </div>
-                <div class="info-chip gc-mt-sm">
-                    <span>Data</span>
-                    <strong>{{ contrato.criado_em|date:"d/m/Y H:i" }}</strong>
-                </div>
-                {% if contrato.profissional_nome %}
-                    <div class="info-chip gc-mt-sm">
-                        <span>Profissional</span>
-                        <strong>{{ contrato.profissional_nome }}</strong>
-                    </div>
-                {% endif %}
-            </div>
-
-            <div class="sidebar-section gc-mt-md">
-                <p class="section-label">Status de envio</p>
-                {% if contrato.status_envio == "enviado_email" %}
-                    <span class="badge badge-devolvido">E-mail enviado</span>
-                    <p class="panel-copy gc-mt-sm" style="font-size: 0.8rem;">
-                        {{ contrato.enviado_em|date:"d/m/Y H:i" }}
-                    </p>
-                {% elif contrato.status_envio == "enviado_whatsapp" %}
-                    <span class="badge badge-devolvido">WhatsApp marcado</span>
-                    <p class="panel-copy gc-mt-sm" style="font-size: 0.8rem;">
-                        {{ contrato.enviado_em|date:"d/m/Y H:i" }}
-                    </p>
+                {% if link_whatsapp %}
+                    <a id="btn-wa-link"
+                       class="button primary"
+                       href="{{ link_whatsapp }}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       onclick="setTimeout(function(){ document.getElementById('wa-form').submit(); }, 400);">
+                        Compartilhar via WhatsApp
+                    </a>
                 {% else %}
-                    <span class="badge badge-atrasado">Não enviado</span>
-                {% endif %}
-
-                <p class="section-label gc-mt-md">Dental Office</p>
-                {% if contrato.status_envio_dental == "enviado" %}
-                    <span class="badge badge-devolvido">Enviado ao Dental</span>
-                    <p class="panel-copy gc-mt-sm" style="font-size: 0.8rem;">
-                        {{ contrato.enviado_dental_em|date:"d/m/Y H:i" }}
-                    </p>
-                {% elif contrato.status == "assinado" %}
-                    <form method="post"
-                          action="{% url 'contrato_enviar_dental' contrato.pk %}"
-                          class="gc-mt-sm">
-                        {% csrf_token %}
-                        <button class="button secondary compact-button gc-full-width gc-btn-sm"
-                                type="submit"
-                                title="{% if contrato.status_envio_dental == 'erro' %}Tentativa anterior falhou — clique para reenviar{% else %}Envia o contrato assinado à ficha do paciente no Dental Office{% endif %}">
-                            {% if contrato.status_envio_dental == "erro" %}
-                                Reenviar ao Dental Office
-                            {% else %}
-                                Enviar ao Dental Office
-                            {% endif %}
-                        </button>
-                    </form>
-                {% else %}
-                    <button class="button secondary compact-button gc-full-width gc-btn-sm gc-btn-disabled-look gc-mt-sm"
-                            type="button" disabled
-                            title="Disponível após a assinatura do paciente">
-                        Enviar ao Dental Office
+                    <button class="button secondary" type="button" disabled>
+                        Número não disponível
                     </button>
                 {% endif %}
             </div>
-        </aside>
-
-        {# ── Painel principal ──────────────────────────────────────── #}
-        <section class="panel results-panel">
-
-            <div class="results-topbar">
-                <div>
-                    <h2>Contrato gerado com sucesso</h2>
-                </div>
-            </div>
-
-            {# As mensagens já aparecem via .messages-banner global (base.html) — não duplicar aqui. #}
-
-            {# ── Assinatura do paciente (QR Code + polling HTMX) ──── #}
-            {% include "gestao_contratos/_status_assinatura_fragment.html" %}
-
-            {# ── Envio por WhatsApp ───────────────────────────────── #}
-            <div class="kpi-section">
-                <p class="section-label">Enviar pelo WhatsApp</p>
-                <form id="wa-form" method="post"
-                      action="{% url 'contrato_whatsapp_status' contrato.pk %}">
-                    {% csrf_token %}
-                    <div class="gc-row-campo-acao">
-                        <div class="field">
-                            <label for="id_celular">Celular do paciente</label>
-                            <input id="id_celular" type="tel" name="celular"
-                                   value="{{ paciente.celular }}"
-                                   placeholder="(62) 9 0000-0000">
-                        </div>
-                        {% if link_whatsapp %}
-                            <a id="btn-wa-link"
-                               class="button primary"
-                               href="{{ link_whatsapp }}"
-                               target="_blank"
-                               rel="noopener noreferrer"
-                               onclick="setTimeout(function(){ document.getElementById('wa-form').submit(); }, 400);">
-                                Compartilhar via WhatsApp
-                            </a>
-                        {% else %}
-                            <button class="button secondary" type="button" disabled>
-                                Número não disponível
-                            </button>
-                        {% endif %}
-                    </div>
-                </form>
-            </div>
-
-            {# ── Envio por e-mail ─────────────────────────────────── #}
-            <div class="kpi-section">
-                <p class="section-label">Enviar por e-mail</p>
-                <form method="post"
-                      action="{% url 'contrato_enviar_email' contrato.pk %}">
-                    {% csrf_token %}
-                    <div class="gc-row-campo-acao">
-                        <div class="field">
-                            <label for="id_email_dest">E-mail do paciente</label>
-                            <input id="id_email_dest" type="email" name="email_destinatario"
-                                   value="{{ paciente.email }}"
-                                   placeholder="email@exemplo.com"
-                                   required>
-                        </div>
-                        <button class="button primary" type="submit">
-                            Enviar por e-mail
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-        </section>
+        </form>
     </div>
-</main>
+
+    {# ── Envio por e-mail ─────────────────────────────────── #}
+    <div class="kpi-section">
+        <p class="section-label">Enviar por e-mail</p>
+        <form method="post"
+              action="{% url 'contrato_enviar_email' contrato.pk %}">
+            {% csrf_token %}
+            <div class="gc-row-campo-acao">
+                <div class="field">
+                    <label for="id_email_dest">E-mail do paciente</label>
+                    <input id="id_email_dest" type="email" name="email_destinatario"
+                           value="{{ paciente.email }}"
+                           placeholder="email@exemplo.com"
+                           required>
+                </div>
+                <button class="button primary" type="submit">
+                    Enviar por e-mail
+                </button>
+            </div>
+        </form>
+    </div>
 {% endblock %}
 
 {% block extra_js %}
-    <script src="{% static 'gestao_contratos/js/htmx.min.js' %}"></script>
+    <script src="{% static 'js/htmx.min.js' %}"></script>
 {% endblock %}

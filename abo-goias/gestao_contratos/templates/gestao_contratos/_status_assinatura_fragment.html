@@ -94,7 +94,7 @@ assinatura; ao mudar de status, o polling para automaticamente.
                     <input type="text" readonly
                            value="{{ link_assinatura }}"
                            onclick="this.select();"
-                           class="gc-full-width gc-mono" style="font-size: 0.78rem;">
+                           class="gc-full-width gc-mono gc-text-xs">
                     <form method="post"
                           action="{% url 'contrato_cancelar_assinatura' contrato.pk %}"
                           class="gc-mt-md">
@@ -162,7 +162,7 @@ assinatura; ao mudar de status, o polling para automaticamente.
             {% for evento in eventos_assinatura %}
                 <li class="checklist-item checklist-ok gc-timeline-item">
                     <div class="checklist-body">
-                        <span class="checklist-label" style="font-size: 0.85rem;">
+                        <span class="checklist-label gc-text-sm">
                             {{ evento.get_tipo_display }}
                         </span>
                         <span class="checklist-mensagem">

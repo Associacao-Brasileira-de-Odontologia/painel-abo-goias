@@ -1,242 +1,183 @@
-{% extends "gestao_cme/base.html" %}
+{% extends "layouts/painel.html" %}
 
 {% block title %}Gestão de CME | Alunos por turma{% endblock %}
-{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Cadastros acadêmicos{% endblock %}
 {% block header_title %}Alunos por turma{% endblock %}
 
-{% block content %}
-    <main class="page-shell">
-        <div class="layout-grid">
+{% block sidebar_copy %}Consulte os alunos vinculados a cada turma, veja seus abrigos e o histórico de movimentações.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" with active_page="alunos" %}{% endblock %}
 
-            {# ── Barra lateral ────────────────────────────────────────── #}
-            <aside class="panel config-panel">
-                <p class="panel-copy">Consulte os alunos vinculados a cada turma, veja seus abrigos e o histórico de movimentações.</p>
+{% block panel_title %}Alunos por turma{% endblock %}
+{% block panel_actions %}
+    <div class="topbar-actions">
+        <a class="button primary" href="{% url 'cadastrar_aluno' %}">Cadastrar aluno</a>
+        <a class="button secondary" href="{% url 'cadastrar_turma' %}">Cadastrar turma</a>
+        {% if sync_alunos_url %}
+            <form class="sync-form" method="post" action="{{ sync_alunos_url }}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="button secondary" type="submit">{{ sync_alunos_label }}</button>
+            </form>
+        {% endif %}
+        <form class="sync-form" method="post" action="{% url 'sincronizar_turmas_eduq' %}">
+            {% csrf_token %}
+            <button class="button secondary" type="submit">Sincronizar turmas</button>
+        </form>
+    </div>
+{% endblock %}
 
-                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="alunos" %}
-            </aside>
+{% block panel %}
+    {# Barra de filtros única #}
+    <form class="filter-bar" method="get" autocomplete="off">
+        <div class="search-control">
+            <input id="results-q-alunos" type="search" name="q" autofocus
+                   value="{{ busca }}"
+                   placeholder="Nome, matrícula, e-mail ou turma..."
+                   aria-label="Buscar aluno">
+        </div>
+        <select name="status" aria-label="Filtrar por status" onchange="this.form.submit()">
+            <option value="ativo" {% if status_aluno == "ativo" %}selected{% endif %}>Somente ativos</option>
+            <option value="inativo" {% if status_aluno == "inativo" %}selected{% endif %}>Somente inativos</option>
+            <option value="todos" {% if status_aluno == "todos" %}selected{% endif %}>Todos</option>
+        </select>
+        <select name="turma" aria-label="Filtrar por turma" onchange="this.form.submit()">
+            <option value="">Turma — todas</option>
+            {% for turma in turmas %}
+                <option value="{{ turma.pk }}" {% if turma_id == turma.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ turma.codigo }} — {{ turma.nome }}
+                </option>
+            {% endfor %}
+        </select>
+        <button class="button primary" type="submit">Buscar</button>
+    </form>
 
-            {# ── Painel principal ──────────────────────────────────────── #}
-            <section class="panel results-panel">
-                <div class="results-topbar">
-                    <div>
-                        <h2>Alunos por turma</h2>
-                    </div>
-                    <div class="topbar-actions">
-                        <a class="button primary" href="{% url 'cadastrar_aluno' %}">Cadastrar aluno</a>
-                        <a class="button secondary" href="{% url 'cadastrar_turma' %}">Cadastrar turma</a>
-                        {% if sync_alunos_url %}
-                            <form class="sync-form" method="post" action="{{ sync_alunos_url }}">
+    {# Chips removíveis de filtro ativo #}
+    {% if busca or turma_id or status_aluno != "ativo" %}
+        <div class="selection-summary">
+            {% if busca %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if status_aluno != 'ativo' %}status={{ status_aluno }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                   title="Remover busca">
+                    <span>Busca</span>
+                    <strong>{{ busca }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if status_aluno != "ativo" %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                   title="Voltar a exibir somente ativos">
+                    <span>Exibindo</span>
+                    <strong>{% if status_aluno == "inativo" %}Inativos{% else %}Todos{% endif %}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if turma_id %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_aluno != 'ativo' %}status={{ status_aluno }}{% endif %}"
+                   title="Remover filtro de turma">
+                    <span>Turma</span>
+                    <strong>{% for turma in turmas %}{% if turma_id == turma.pk|stringformat:"s" %}{{ turma.codigo }}{% endif %}{% endfor %}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            <a class="chips-clear" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
+        </div>
+    {% endif %}
+
+    <div class="results-meta">
+        <span><strong>{{ page_obj.paginator.count }}</strong> aluno{{ page_obj.paginator.count|pluralize }}</span>
+        <span><strong>{{ total_turmas }}</strong> turma{{ total_turmas|pluralize }}</span>
+        {% if sem_abrigo %}
+            <span class="meta-warn"><strong>{{ sem_abrigo }}</strong> sem abrigo</span>
+        {% endif %}
+        <span>Última sincronização: <strong>{% if ultima_sincronizacao %}{{ ultima_sincronizacao|date:"d/m/Y H:i" }}{% else %}não realizada{% endif %}</strong></span>
+    </div>
+
+    {# Tabela de alunos #}
+    <div class="table-wrap data-table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Turma</th>
+                    <th>Aluno</th>
+                    <th>Abrigo</th>
+                    <th>Movimentações</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for aluno in page_obj.object_list %}
+                    <tr>
+                        {# Turma #}
+                        <td>
+                            <strong>{{ aluno.turma.nome|default:"Sem turma" }}</strong>
+                            {% if aluno.turma %}
+                                <span class="cell-muted">{{ aluno.turma.codigo }}</span>
+                            {% endif %}
+                        </td>
+
+                        {# Aluno #}
+                        <td>
+                            <strong>{{ aluno.nome }}</strong>
+                            <span class="cell-muted">{{ aluno.matricula }}</span>
+                        </td>
+
+                        {# Abrigo — select inline com form por linha #}
+                        <td>
+                            <form class="inline-row-form" method="post" action="{% url 'atribuir_abrigo' aluno.pk %}">
                                 {% csrf_token %}
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <button class="button secondary" type="submit">{{ sync_alunos_label }}</button>
+                                <select class="select-compact" name="abrigo_id" aria-label="Abrigo do aluno">
+                                    <option value="">— Sem abrigo —</option>
+                                    {% for abrigo in abrigos %}
+                                        <option value="{{ abrigo.pk }}"
+                                            {% if aluno.abrigo_id == abrigo.pk %}selected{% endif %}>
+                                            {{ abrigo.identificador }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <button class="button compact-button secondary"
+                                        type="submit"
+                                        title="Salvar abrigo">
+                                    Salvar
+                                </button>
                             </form>
-                        {% endif %}
-                        <form class="sync-form" method="post" action="{% url 'sincronizar_turmas_eduq' %}">
-                            {% csrf_token %}
-                            <button class="button secondary" type="submit">Sincronizar turmas</button>
-                        </form>
-                    </div>
-                </div>
+                        </td>
 
-                {% if messages %}
-                    <div class="messages">
-                        {% for message in messages %}
-                            <div class="message {{ message.tags }}">{{ message }}</div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-
-                {# Barra de filtros única #}
-                <form class="filter-bar" method="get" autocomplete="off">
-                    <div class="search-control">
-                        <input id="results-q-alunos" type="search" name="q" autofocus
-                               value="{{ busca }}"
-                               placeholder="Nome, matrícula, e-mail ou turma..."
-                               aria-label="Buscar aluno">
-                    </div>
-                    <select name="status" aria-label="Filtrar por status" onchange="this.form.submit()">
-                        <option value="ativo" {% if status_aluno == "ativo" %}selected{% endif %}>Somente ativos</option>
-                        <option value="inativo" {% if status_aluno == "inativo" %}selected{% endif %}>Somente inativos</option>
-                        <option value="todos" {% if status_aluno == "todos" %}selected{% endif %}>Todos</option>
-                    </select>
-                    <select name="turma" aria-label="Filtrar por turma" onchange="this.form.submit()">
-                        <option value="">Turma — todas</option>
-                        {% for turma in turmas %}
-                            <option value="{{ turma.pk }}" {% if turma_id == turma.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ turma.codigo }} — {{ turma.nome }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    <button class="button primary" type="submit">Buscar</button>
-                </form>
-
-                {# Chips removíveis de filtro ativo #}
-                {% if busca or turma_id or status_aluno != "ativo" %}
-                    <div class="selection-summary">
-                        {% if busca %}
-                            <a class="info-chip info-chip--removable"
-                               href="?{% if status_aluno != 'ativo' %}status={{ status_aluno }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
-                               title="Remover busca">
-                                <span>Busca</span>
-                                <strong>{{ busca }}</strong>
-                                <span class="chip-x" aria-hidden="true">×</span>
-                            </a>
-                        {% endif %}
-                        {% if status_aluno != "ativo" %}
-                            <a class="info-chip info-chip--removable"
-                               href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
-                               title="Voltar a exibir somente ativos">
-                                <span>Exibindo</span>
-                                <strong>{% if status_aluno == "inativo" %}Inativos{% else %}Todos{% endif %}</strong>
-                                <span class="chip-x" aria-hidden="true">×</span>
-                            </a>
-                        {% endif %}
-                        {% if turma_id %}
-                            <a class="info-chip info-chip--removable"
-                               href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_aluno != 'ativo' %}status={{ status_aluno }}{% endif %}"
-                               title="Remover filtro de turma">
-                                <span>Turma</span>
-                                <strong>{% for turma in turmas %}{% if turma_id == turma.pk|stringformat:"s" %}{{ turma.codigo }}{% endif %}{% endfor %}</strong>
-                                <span class="chip-x" aria-hidden="true">×</span>
-                            </a>
-                        {% endif %}
-                        <a class="chips-clear" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
-                    </div>
-                {% endif %}
-
-                <div class="results-meta">
-                    <span><strong>{{ page_obj.paginator.count }}</strong> aluno{{ page_obj.paginator.count|pluralize }}</span>
-                    <span><strong>{{ total_turmas }}</strong> turma{{ total_turmas|pluralize }}</span>
-                    {% if sem_abrigo %}
-                        <span class="meta-warn"><strong>{{ sem_abrigo }}</strong> sem abrigo</span>
-                    {% endif %}
-                    <span>Última sincronização: <strong>{% if ultima_sincronizacao %}{{ ultima_sincronizacao|date:"d/m/Y H:i" }}{% else %}não realizada{% endif %}</strong></span>
-                </div>
-
-                {# Tabela de alunos #}
-                <div class="table-wrap data-table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Turma</th>
-                                <th>Aluno</th>
-                                <th>Abrigo</th>
-                                <th>Movimentações</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for aluno in page_obj.object_list %}
-                                <tr>
-                                    {# Turma #}
-                                    <td>
-                                        <strong>{{ aluno.turma.nome|default:"Sem turma" }}</strong>
-                                        {% if aluno.turma %}
-                                            <span class="cell-muted">{{ aluno.turma.codigo }}</span>
-                                        {% endif %}
-                                    </td>
-
-                                    {# Aluno #}
-                                    <td>
-                                        <strong>{{ aluno.nome }}</strong>
-                                        <span class="cell-muted">{{ aluno.matricula }}</span>
-                                    </td>
-
-                                    {# Abrigo — select inline com form por linha #}
-                                    <td>
-                                        <form method="post"
-                                              action="{% url 'atribuir_abrigo' aluno.pk %}"
-                                              style="display: flex; gap: 6px; align-items: center;">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                            <select name="abrigo_id"
-                                                    style="font-size: 0.82rem; padding: 3px 6px; min-width: 90px;
-                                                           background: var(--surface); border: 1px solid var(--line);
-                                                           border-radius: 6px; color: var(--text);">
-                                                <option value="">— Sem abrigo —</option>
-                                                {% for abrigo in abrigos %}
-                                                    <option value="{{ abrigo.pk }}"
-                                                        {% if aluno.abrigo_id == abrigo.pk %}selected{% endif %}>
-                                                        {{ abrigo.identificador }}
-                                                    </option>
-                                                {% endfor %}
-                                            </select>
-                                            <button class="button compact-button secondary"
-                                                    type="submit"
-                                                    title="Salvar abrigo">
-                                                Salvar
-                                            </button>
-                                        </form>
-                                    </td>
-
-                                    {# Movimentações #}
-                                    <td>
-                                        {% if aluno.total_movimentacoes %}
-                                            <strong>{{ aluno.total_movimentacoes }}</strong>
-                                            <span class="cell-muted">registro(s)</span>
-                                        {% else %}
-                                            <span class="cell-muted">—</span>
-                                        {% endif %}
-                                    </td>
-
-                                    {# Status #}
-                                    <td>
-                                        {% if aluno.ativo %}
-                                            <span class="badge badge-devolvido">Ativo</span>
-                                        {% else %}
-                                            <span class="badge badge-atrasado">Inativo</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr class="empty-row">
-                                    <td colspan="5">
-                                        <div class="empty-state">
-                                            <strong>Nenhum aluno encontrado</strong>
-                                            <p>Revise a busca ou limpe os filtros para consultar todos os alunos disponíveis.</p>
-                                            <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar filtros</a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {# Paginação #}
-                {% if page_obj.paginator.count %}
-                    <div class="pagination-summary">
-                        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-                        <span>Exibindo {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }}</span>
-                    </div>
-                {% endif %}
-
-                {% if page_obj.paginator.num_pages > 1 %}
-                    <nav class="pagination" aria-label="Paginação">
-                        {% if page_obj.has_previous %}
-                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
-                        {% else %}
-                            <span class="page-link disabled">Anterior</span>
-                        {% endif %}
-
-                        {% for numero in page_obj.paginator.page_range %}
-                            {% if numero == page_obj.number %}
-                                <span class="page-link active">{{ numero }}</span>
-                            {% elif numero >= page_obj.number|add:"-2" and numero <= page_obj.number|add:"2" %}
-                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ numero }}">{{ numero }}</a>
+                        {# Movimentações #}
+                        <td>
+                            {% if aluno.total_movimentacoes %}
+                                <strong>{{ aluno.total_movimentacoes }}</strong>
+                                <span class="cell-muted">registro(s)</span>
+                            {% else %}
+                                <span class="cell-muted">—</span>
                             {% endif %}
-                        {% endfor %}
+                        </td>
 
-                        {% if page_obj.has_next %}
-                            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
-                        {% else %}
-                            <span class="page-link disabled">Próxima</span>
-                        {% endif %}
-                    </nav>
-                {% endif %}
+                        {# Status #}
+                        <td>
+                            {% if aluno.ativo %}
+                                <span class="badge badge-devolvido">Ativo</span>
+                            {% else %}
+                                <span class="badge badge-atrasado">Inativo</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr class="empty-row">
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <strong>Nenhum aluno encontrado</strong>
+                                <p>Revise a busca ou limpe os filtros para consultar todos os alunos disponíveis.</p>
+                                <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar filtros</a>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
-            </section>
-        </div>
-    </main>
+    {% include "partials/paginacao.html" %}
 {% endblock %}

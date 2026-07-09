@@ -1,100 +1,75 @@
-{% extends "gestao_cme/base.html" %}
+{% extends "layouts/painel.html" %}
 
 {% block title %}Gestão de CME | Novo empréstimo{% endblock %}
-{% block header_class %}header--compact{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}Novo empréstimo{% endblock %}
 
-{% block content %}
-    <main class="page-shell">
-        <div class="layout-grid">
-            <aside class="panel config-panel">
-                <p class="panel-copy">Registre um novo empréstimo vinculando o aluno ao kit de materiais retirado.</p>
+{% block sidebar_copy %}Registre um novo empréstimo vinculando o aluno ao kit de materiais retirado.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" with active_page="emprestimos_lista" %}{% endblock %}
 
-                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="emprestimos_lista" %}
-            </aside>
+{% block panel_title %}Registrar empréstimo{% endblock %}
+{% block panel_actions %}
+    <a class="button secondary" href="{% url 'emprestimos' %}">Voltar à listagem</a>
+{% endblock %}
 
-            <section class="panel results-panel">
-                <div class="results-topbar">
-                    <div>
-                        <h2>Registrar empréstimo</h2>
-                    </div>
-                    <a class="button secondary" href="{% url 'emprestimos' %}">Voltar à listagem</a>
-                </div>
+{% block panel %}
+    {% include "partials/form_errors.html" %}
 
-                {% if form.errors %}
-                    <div class="form-errors">
-                        <ul>
-                            {% for field in form %}
-                                {% for error in field.errors %}
-                                    <li>{{ error }}</li>
-                                {% endfor %}
-                            {% endfor %}
-                            {% for error in form.non_field_errors %}
-                                <li>{{ error }}</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                {% endif %}
+    <form class="form-stack form-stack-wide" method="post">
+        {% csrf_token %}
 
-                <form class="form-stack form-stack-wide" method="post">
-                    {% csrf_token %}
-
-                    <div class="field field-required">
-                        <label for="aluno">Aluno</label>
-                        {% regroup alunos by turma as alunos_por_turma %}
-                        <select id="aluno" name="aluno" required>
-                            <option value="">— Selecione o aluno —</option>
-                            {% for grupo in alunos_por_turma %}
-                                <optgroup label="{{ grupo.grouper.nome|default:'Sem turma' }} ({{ grupo.grouper.codigo|default:'—' }})">
-                                    {% for aluno in grupo.list %}
-                                        <option value="{{ aluno.pk }}" {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
-                                            {{ aluno.nome }}{% if aluno.matricula %} — {{ aluno.matricula }}{% endif %}
-                                        </option>
-                                    {% endfor %}
-                                </optgroup>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="field">
-                        <label for="kit">Kit <span class="field-optional">(opcional — os itens do kit serão adicionados automaticamente)</span></label>
-                        <select id="kit" name="kit">
-                            <option value="">— Sem kit vinculado —</option>
-                            {% for kit in kits %}
-                                <option value="{{ kit.pk }}" {% if form.kit.value == kit.pk|stringformat:"s" %}selected{% endif %}>
-                                    {{ kit.nome }} ({{ kit.codigo }}) — {{ kit.itens.count }} item(s)
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="field">
-                        <label for="data_prevista_devolucao">Data prevista de devolução <span class="field-optional">(opcional)</span></label>
-                        <input
-                            id="data_prevista_devolucao"
-                            type="date"
-                            name="data_prevista_devolucao"
-                            value="{{ form.data_prevista_devolucao.value|default:'' }}"
-                        >
-                    </div>
-
-                    <div class="field">
-                        <label for="observacoes">Observações <span class="field-optional">(opcional)</span></label>
-                        <textarea
-                            id="observacoes"
-                            name="observacoes"
-                            rows="3"
-                            placeholder="Observações sobre o estado dos materiais, condições especiais..."
-                        >{{ form.observacoes.value|default:'' }}</textarea>
-                    </div>
-
-                    <div class="form-actions">
-                        <button class="button primary" type="submit">Registrar empréstimo</button>
-                        <a class="button secondary" href="{% url 'emprestimos' %}">Cancelar</a>
-                    </div>
-                </form>
-            </section>
+        <div class="field field-required">
+            <label for="aluno">Aluno</label>
+            {% regroup alunos by turma as alunos_por_turma %}
+            <select id="aluno" name="aluno" required>
+                <option value="">— Selecione o aluno —</option>
+                {% for grupo in alunos_por_turma %}
+                    <optgroup label="{{ grupo.grouper.nome|default:'Sem turma' }} ({{ grupo.grouper.codigo|default:'—' }})">
+                        {% for aluno in grupo.list %}
+                            <option value="{{ aluno.pk }}" {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ aluno.nome }}{% if aluno.matricula %} — {{ aluno.matricula }}{% endif %}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
         </div>
-    </main>
+
+        <div class="field">
+            <label for="kit">Kit <span class="field-optional">(opcional — os itens do kit serão adicionados automaticamente)</span></label>
+            <select id="kit" name="kit">
+                <option value="">— Sem kit vinculado —</option>
+                {% for kit in kits %}
+                    <option value="{{ kit.pk }}" {% if form.kit.value == kit.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ kit.nome }} ({{ kit.codigo }}) — {{ kit.itens.count }} item(s)
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="data_prevista_devolucao">Data prevista de devolução <span class="field-optional">(opcional)</span></label>
+            <input
+                id="data_prevista_devolucao"
+                type="date"
+                name="data_prevista_devolucao"
+                value="{{ form.data_prevista_devolucao.value|default:'' }}"
+            >
+        </div>
+
+        <div class="field">
+            <label for="observacoes">Observações <span class="field-optional">(opcional)</span></label>
+            <textarea
+                id="observacoes"
+                name="observacoes"
+                rows="3"
+                placeholder="Observações sobre o estado dos materiais, condições especiais..."
+            >{{ form.observacoes.value|default:'' }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit">Registrar empréstimo</button>
+            <a class="button secondary" href="{% url 'emprestimos' %}">Cancelar</a>
+        </div>
+    </form>
 {% endblock %}

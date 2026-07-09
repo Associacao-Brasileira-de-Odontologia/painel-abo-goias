@@ -206,7 +206,7 @@ ROOT_URLCONF = "abo_goias.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -261,7 +261,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = _env("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles"))
-STATICFILES_DIRS = []
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_ROOT = Path(_env("DJANGO_MEDIA_ROOT", str(BASE_DIR)))
 MEDIA_URL = "/media/"

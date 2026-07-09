@@ -4,86 +4,62 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}{% if editando %}Editar equipe{% else %}Nova equipe{% endif %}{% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
-        <aside class="panel config-panel">
-            <p class="panel-copy">
-                {% if editando %}
-                    Atualize os dados da equipe de coordenação.
-                {% else %}
-                    Cadastre uma nova equipe de coordenação de laboratórios.
-                {% endif %}
-            </p>
+{% block sidebar_copy %}
+    {% if editando %}
+        Atualize os dados da equipe de coordenação.
+    {% else %}
+        Cadastre uma nova equipe de coordenação de laboratórios.
+    {% endif %}
+{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" with active_page="equipes" %}{% endblock %}
 
-            {% include "gestao_lab/partials/menu_lab.html" with active_page="equipes" %}
-        </aside>
+{% block panel_label %}<p class="section-label">Equipes</p>{% endblock %}
+{% block panel_title %}{% if editando %}{{ equipe.nome }}{% else %}Nova equipe{% endif %}{% endblock %}
+{% block panel_actions %}
+    <a class="button secondary" href="{% url 'lab_equipes' %}">Voltar</a>
+{% endblock %}
 
-        <section class="panel results-panel">
-            <div class="results-topbar">
-                <div>
-                    <p class="section-label">Equipes</p>
-                    <h2>{% if editando %}{{ equipe.nome }}{% else %}Nova equipe{% endif %}</h2>
-                </div>
-                <a class="button secondary" href="{% url 'lab_equipes' %}">Voltar</a>
-            </div>
+{% block panel %}
+    {% include "partials/form_errors.html" with com_rotulo=True %}
 
-            {% if form.errors %}
-                <div class="form-errors">
-                    <ul>
-                        {% for field in form %}
-                            {% for error in field.errors %}
-                                <li>{{ field.label }}: {{ error }}</li>
-                            {% endfor %}
-                        {% endfor %}
-                        {% for error in form.non_field_errors %}
-                            <li>{{ error }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
+    <form class="form-stack form-stack-wide" method="post">
+        {% csrf_token %}
+
+        <div class="field field-required">
+            <label for="id_nome">Nome da equipe</label>
+            <input id="id_nome" type="text" name="nome"
+                value="{{ form.nome.value|default:'' }}"
+                placeholder="Ex: Dentística, OrthoEvidence..." required>
+            {% if form.nome.errors %}
+                <span class="field-error">{{ form.nome.errors|join:", " }}</span>
             {% endif %}
+        </div>
 
-            <form class="form-stack form-stack-wide" method="post">
-                {% csrf_token %}
+        <div class="field field-required">
+            <label for="id_coordenador">Coordenador responsável</label>
+            <input id="id_coordenador" type="text" name="coordenador"
+                value="{{ form.coordenador.value|default:'' }}"
+                placeholder="Nome completo do coordenador" required>
+            {% if form.coordenador.errors %}
+                <span class="field-error">{{ form.coordenador.errors|join:", " }}</span>
+            {% endif %}
+        </div>
 
-                <div class="field field-required">
-                    <label for="id_nome">Nome da equipe</label>
-                    <input id="id_nome" type="text" name="nome"
-                        value="{{ form.nome.value|default:'' }}"
-                        placeholder="Ex: Dentística, OrthoEvidence..." required>
-                    {% if form.nome.errors %}
-                        <span class="field-error">{{ form.nome.errors|join:", " }}</span>
-                    {% endif %}
-                </div>
+        <div class="field">
+            <label for="id_whatsapp">WhatsApp (somente números)</label>
+            <input id="id_whatsapp" type="text" name="whatsapp"
+                value="{{ form.whatsapp.value|default:'' }}"
+                placeholder="Ex: 62981234567">
+            {% if form.whatsapp.errors %}
+                <span class="field-error">{{ form.whatsapp.errors|join:", " }}</span>
+            {% endif %}
+        </div>
 
-                <div class="field field-required">
-                    <label for="id_coordenador">Coordenador responsável</label>
-                    <input id="id_coordenador" type="text" name="coordenador"
-                        value="{{ form.coordenador.value|default:'' }}"
-                        placeholder="Nome completo do coordenador" required>
-                    {% if form.coordenador.errors %}
-                        <span class="field-error">{{ form.coordenador.errors|join:", " }}</span>
-                    {% endif %}
-                </div>
-
-                <div class="field">
-                    <label for="id_whatsapp">WhatsApp (somente números)</label>
-                    <input id="id_whatsapp" type="text" name="whatsapp"
-                        value="{{ form.whatsapp.value|default:'' }}"
-                        placeholder="Ex: 62981234567">
-                    {% if form.whatsapp.errors %}
-                        <span class="field-error">{{ form.whatsapp.errors|join:", " }}</span>
-                    {% endif %}
-                </div>
-
-                <div class="form-actions">
-                    <button class="button primary" type="submit">
-                        {% if editando %}Salvar alterações{% else %}Cadastrar equipe{% endif %}
-                    </button>
-                    <a class="button secondary" href="{% url 'lab_equipes' %}">Cancelar</a>
-                </div>
-            </form>
-        </section>
-    </div>
-</main>
+        <div class="form-actions">
+            <button class="button primary" type="submit">
+                {% if editando %}Salvar alterações{% else %}Cadastrar equipe{% endif %}
+            </button>
+            <a class="button secondary" href="{% url 'lab_equipes' %}">Cancelar</a>
+        </div>
+    </form>
 {% endblock %}
