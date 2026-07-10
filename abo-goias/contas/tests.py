@@ -150,30 +150,58 @@ class SolicitarAcessoViewTests(TestCase):
 
         self.assertContains(response, reverse("solicitar_acesso"))
 
+    def _email_para(self, destinatario: str):
+        """Retorna o e-mail do outbox endereçado ao destinatário, ou None."""
+
+        return next((e for e in mail.outbox if destinatario in e.to), None)
+
     @override_settings(ADMINS=[("Admin", "admin@example.com")])
     def test_post_valido_notifica_admin_configurado(self) -> None:
         self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
 
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("admin@example.com", mail.outbox[0].to)
-        self.assertIn("Fulano de Tal", mail.outbox[0].body)
-        self.assertIn("fulano", mail.outbox[0].body)
+        email_admin = self._email_para("admin@example.com")
+        self.assertIsNotNone(email_admin)
+        self.assertIn("Fulano de Tal", email_admin.body)
+        self.assertIn("fulano", email_admin.body)
 
     @override_settings(ADMINS=[])
-    def test_post_sem_admin_configurado_nao_envia_email(self) -> None:
+    def test_post_sem_admin_configurado_nao_notifica_admin(self) -> None:
         self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
 
-        self.assertEqual(len(mail.outbox), 0)
+        # Só o e-mail de confirmação ao solicitante — nenhum ao admin.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("fulano@example.com", mail.outbox[0].to)
 
     @override_settings(ADMINS=[("Admin", "admin@example.com")])
     def test_email_ao_admin_contem_link_de_revisao(self) -> None:
         self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
 
         solicitacao = SolicitacaoCadastro.objects.get(username="fulano")
+        email_admin = self._email_para("admin@example.com")
         self.assertIn(
             f"/admin/contas/solicitacaocadastro/{solicitacao.pk}/change/",
-            mail.outbox[0].body,
+            email_admin.body,
         )
+
+    def test_post_valido_confirma_recebimento_ao_solicitante(self) -> None:
+        self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
+
+        confirmacao = self._email_para("fulano@example.com")
+        self.assertIsNotNone(confirmacao)
+        self.assertEqual(
+            confirmacao.subject, "Recebemos sua solicitação de acesso - ABO Goiás"
+        )
+        self.assertIn("Fulano de Tal", confirmacao.body)
+        self.assertIn("fulano", confirmacao.body)
+        self.assertIn("será analisada por um administrador", confirmacao.body)
+
+    @override_settings(ADMINS=[("Admin", "admin@example.com")])
+    def test_post_valido_envia_confirmacao_e_notificacao(self) -> None:
+        self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
+
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIsNotNone(self._email_para("admin@example.com"))
+        self.assertIsNotNone(self._email_para("fulano@example.com"))
 
     @override_settings(ADMINS=[("Admin", "admin@example.com")])
     @patch("contas.emails.send_mail", side_effect=RuntimeError("SMTP fora do ar"))
