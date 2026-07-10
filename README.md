@@ -41,7 +41,7 @@ Pontos de atenção:
 - Por causa desse label legado, fixtures e migrations ainda referenciam modelos como `core.material`, `core.aluno`, etc.
 - URLs do admin também continuam no formato `/admin/core/...`.
 - O arquivo `.env.example` deve servir apenas como modelo. Não versionar credenciais reais.
-- Existe uma migration que cria um usuário de teste (`coordenador.teste`). Antes de produção, recomenda-se remover essa criação automática ou substituir por um comando/fixture exclusivo de desenvolvimento.
+- ~~Existe uma migration que cria um usuário de teste (`coordenador.teste`)~~ — **corrigido**: a migration `0003_emprestimo_coordenador_usuario` foi neutralizada (não cria mais nenhuma conta) e a migration `0011_remover_usuario_coordenador_teste` remove essa conta em qualquer banco onde ela já tenha sido criada, assim que `migrate` rodar novamente (inclusive em produção, no próximo deploy). A senha usada (`Coordenador@123`) continua exposta no **histórico do Git** — ver nota abaixo sobre reescrita de histórico.
 - A geração de identificadores ainda faz tentativa de atualização de localização pelo Eduq durante o request. Para produção, o ideal é separar sincronização e geração, ou mover a sincronização para uma rotina assíncrona.
 - **Pendência operacional (Gestão de Contratos)**: o envio assíncrono ao Dental Office e por WhatsApp depende de um worker Celery + Redis rodando em produção. Sem esses dois serviços configurados no Railway, o envio automático não funciona — mas a aplicação não trava por causa disso (ver [Processamento assíncrono](#processamento-assíncrono-celery--redis)).
 - **Pendência operacional (WhatsApp)**: o envio automático via Z-API exige uma instância criada e conectada (QR Code lido) no painel da Z-API. Sem isso configurado, o envio automático fica desativado e o fluxo manual (link `wa.me`) continua funcionando normalmente.
@@ -51,6 +51,15 @@ Pontos de atenção:
 - **Solicitação de acesso**: a tela de login tem o link "Solicitar acesso" (`/solicitar-acesso/`, pública), onde alguém sem conta preenche nome, e-mail e usuário desejado. O cadastro **nunca é automático** — cria uma `SolicitacaoCadastro` pendente (app `contas`) que um administrador revisa pelo Django Admin: a ação "Aprovar" cria o `User`, marca a solicitação e envia por e-mail o link de definição de senha (reutilizando o fluxo de reset); "Rejeitar" apenas registra a decisão. Essa mediação por aprovação preserva o controle de quem entra num sistema que manipula dados de pacientes.
 - Credenciais do WhatsApp (Z-API) e do carimbo de tempo (TSA) são lidas centralmente em `abo_goias/settings.py` (mesmo padrão já usado para Dental Office e e-mail), em vez de cada serviço ler `os.environ` diretamente.
 - O envio de WhatsApp é feito por uma camada de mensageria desacoplada de provedor (`mensageria/`, pacote compartilhado na raiz do projeto — não pertence a nenhuma app, para poder ser reusado por outras além de `gestao_contratos`) — `MessagingProvider` é a interface, `ZApiProvider` a implementação atual para a Z-API, e `MessagingService` é a fachada usada pelo resto da aplicação. Trocar de provedor no futuro (ex.: voltar à API oficial, ou usar outro serviço) significa implementar um novo `MessagingProvider`, sem tocar em views, models ou templates — ver [Envio automático por WhatsApp (Z-API)](#envio-automático-por-whatsapp-z-api).
+- **`DEBUG` inseguro por padrão**: `DEBUG = _env_bool("DJANGO_DEBUG", True)` em `abo_goias/settings.py:147` — se a variável `DJANGO_DEBUG` não for definida em algum ambiente (erro de configuração, novo serviço no Railway sem a variável copiada, etc.), o Django sobe em modo debug por padrão, inclusive expondo a `SECRET_KEY` insegura de fallback (linha 152). O comportamento correto do lado de `ALLOWED_HOSTS`/`SECRET_KEY` em produção (falha explícita com `ImproperlyConfigured` quando `DEBUG=False`) só se aplica depois que `DJANGO_DEBUG=false` já estiver de fato configurado.
+- **Sem `LOGGING` configurado**: `settings.py` não define `LOGGING` — o projeto depende do logging default do Django (sem handlers de arquivo/serviço externo, sem `ADMINS`/`MANAGERS` configurados para receber e-mail de erro 500). Módulos individuais usam `logging.getLogger` pontualmente, mas não há uma política central de log estruturado.
+- **Sem cache compartilhado**: não há `CACHES` configurado — o Django usa o cache local em memória por processo (`LocMemCache`), que não é compartilhado entre os workers do Gunicorn. O Redis do projeto hoje só é usado como broker/result-backend do Celery, não como cache de aplicação.
+- **E-mail cai para console se `DJANGO_EMAIL_HOST` não for definido, mesmo em produção**: sem essa variável, o backend padrão é `console.EmailBackend` (`settings.py:314-321`) mesmo com `DEBUG=false` — e-mails de reset de senha e aprovação de cadastro (`contas`) seriam apenas logados no stdout do container, nunca entregues, sem nenhum erro visível.
+- **`.env.example` desatualizado nas três variáveis centrais**: `abo-goias/.env.example` usa `SECRET_KEY`, `DEBUG` e `ALLOWED_HOSTS` (sem prefixo), mas `settings.py` lê `DJANGO_SECRET_KEY`, `DJANGO_DEBUG` e `DJANGO_ALLOWED_HOSTS`. Quem copiar o `.env.example` literalmente não configura essas três variáveis de fato — ver [Recomendações antes de produção](#recomendações-antes-de-produção).
+- **Dois `railway.toml` com comandos divergentes**: existe um na raiz (`railway.toml`, comandos com prefixo `abo-goias/manage.py` e `--chdir abo-goias`) e outro em `abo-goias/railway.toml` (comandos sem esse prefixo, assumindo que o *Root Directory* do serviço já é `abo-goias/`). Qual dos dois é efetivamente usado depende de como o *Root Directory* está configurado no painel do Railway — vale consolidar em um único arquivo para evitar drift entre eles.
+- **Sem CI configurado**: não há pipeline (`.github/workflows`, etc.) rodando testes/lint automaticamente a cada push ou PR — `manage.py check`, `manage.py test` e o `pre-commit` (`isort`/`black`/`flake8`) dependem de execução manual.
+- **Cobertura de testes desigual entre apps**: `gestao_contratos` tem ~4074 linhas de teste (100% da lógica de negócio, por documentação própria), enquanto `identificadores` tem apenas ~40 linhas — cobertura bem mais fraca no app de geração de PPTX.
+- **Senha em texto claro no histórico do Git**: a criação automática da conta `coordenador.teste` já foi neutralizada (ver item acima), mas a senha usada continua em texto claro nos commits antigos do histórico do repositório. Só sai dali com reescrita de histórico (`git filter-repo`/BFG) seguida de force-push e re-clone por todos os colaboradores — uma operação destrutiva e coordenada, fora do escopo desta atualização de código. Até lá, trate essa senha como comprometida: não a reutilize em nenhum ambiente.
 
 ## Estrutura do projeto
 
@@ -553,13 +562,38 @@ Para PostgreSQL, o sistema usa `DATABASE_URL` quando ela existir. O Railway tamb
 
 ## Recomendações antes de produção
 
+### Configuração e segredos
+
+- Corrigir `abo-goias/.env.example`: as chaves `SECRET_KEY`, `DEBUG` e `ALLOWED_HOSTS` não têm efeito nenhum — o `settings.py` lê `DJANGO_SECRET_KEY`, `DJANGO_DEBUG` e `DJANGO_ALLOWED_HOSTS`. Corrigir os nomes no arquivo antes que alguém configure um ambiente copiando-o literalmente.
+- Definir `DJANGO_DEBUG=false` explicitamente em todo ambiente que não seja desenvolvimento local — o padrão do código é `True` quando a variável não está definida (`settings.py:147`), o que também libera a `SECRET_KEY` insegura de fallback.
 - Remover credenciais reais de `.env.example`, caso existam, e rotacionar senhas já compartilhadas.
+- **[Feito]** A migration `0003_emprestimo_coordenador_usuario` foi neutralizada e a migration `0011_remover_usuario_coordenador_teste` remove a conta `coordenador.teste` em qualquer banco onde `migrate` rodar de novo. **Ainda pendente**: se essa migration já rodou em algum ambiente real antes desta correção (a branch `deploy` já continha o arquivo original), confirme que o próximo deploy realmente executou `migrate` e que a conta foi removida de fato — e trate a senha `Coordenador@123` como comprometida (não reutilizar em nenhum ambiente) até o histórico do Git ser reescrito, ver [nota acima](#status-atual).
 - Criar usuários por fluxo administrativo, comando de setup ou painel admin, não por migration.
+- Configurar `DJANGO_EMAIL_HOST` (e demais `DJANGO_EMAIL_*`) antes de ir para produção — sem isso, e-mails de reset de senha e aprovação de cadastro (`contas`) são apenas logados no console do container, nunca entregues, mesmo com `DEBUG=false`.
+- Consolidar os dois arquivos `railway.toml` (raiz e `abo-goias/`) em um só, de acordo com o *Root Directory* configurado no serviço Railway, para evitar que fiquem divergentes com o tempo.
+
+### Observabilidade e qualidade
+
+- Configurar `LOGGING` em `settings.py` (hoje inexistente) — pelo menos um handler estruturado para produção e, idealmente, `ADMINS`/`MANAGERS` para receber notificação de erro 500.
+- Adicionar logs estruturados para erros de integração Eduq e processamento de PPTX.
+- Configurar um pipeline de CI (ex.: GitHub Actions) rodando `manage.py check`, `manage.py test` e o `pre-commit` (`isort`/`black`/`flake8`) a cada push/PR — hoje essas validações dependem de execução manual.
+- Reforçar a cobertura de testes do app `identificadores` (~40 linhas hoje, bem abaixo dos demais apps).
+- Considerar `CACHES` com Redis (o projeto já usa Redis para o Celery) se o volume de acesso justificar cache compartilhado entre workers do Gunicorn — hoje usa o `LocMemCache` padrão, por processo.
+
+### Estrutura e domínio
+
 - Decidir se o label legado `core` será mantido permanentemente ou se haverá uma migration planejada para renomear app label/tabelas/admin.
 - Separar sincronização Eduq da geração de PPTX para evitar lentidão ou falha externa durante o download.
-- Adicionar logs estruturados para erros de integração Eduq e processamento de PPTX.
 - Rodar a suíte de testes completa após as refatorações de nomenclatura.
+- Definir e aplicar as regras de RBAC pendentes (`recepcao`/`coordenacao`/`gestao`, ver [Controle de acesso](#status-atual)) antes de operar com dados reais de pacientes — hoje qualquer usuário autenticado tem acesso igual a todo o sistema.
+
+### Infraestrutura operacional
+
 - Configurar um Volume persistente no Railway e `DJANGO_MEDIA_ROOT` antes de gerar contratos com pacientes reais — sem isso, os documentos assinados são perdidos a cada deploy.
 - Adicionar os serviços `worker` e `beat` do Celery no Railway (mais o plugin Redis) para que o envio automático ao Dental Office e por WhatsApp de fato funcione em produção — sem eles, os contratos continuam sendo assinados normalmente, mas o envio automático fica só registrado como pendente/erro, exigindo reenvio manual pelo staff.
 - Criar e conectar (ler o QR Code) uma instância no painel da Z-API antes de configurar `ZAPI_*` — sem uma sessão conectada, os envios automáticos falham.
+- Rodar `pip-audit` ou `safety check` (não configurado hoje) contra `requirements.txt` periodicamente, já que não há checagem automática de CVEs nas dependências.
+
+### Jurídico / LGPD
+
 - Preencher o contato do encarregado de dados na política de privacidade e decidir o prazo de retenção da auditoria antes de assinar contratos com pacientes reais — ver [Pendências (validade jurídica)](#pendências-validade-jurídica).
