@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -20,7 +22,13 @@ from gestao_lab.models import Paciente
 from gestao_lab.services.dental_sync import listar_todas_paginas
 
 from .forms import PacienteConfirmacaoForm
-from .models import TIPOS_CONTRATO, ContratoGerado
+from .models import (
+    TERMINAL_ATIVO_TTL_HORAS,
+    TIPOS_CONTRATO,
+    ContratoGerado,
+    TerminalAssinatura,
+    expirar_terminais_vencidos,
+)
 from .services.carimbo_tempo import solicitar_carimbo
 from .services.checklist import gerar_checklist, pendencias_obrigatorias
 from .services.documentos import gerar_e_salvar_contrato
@@ -633,3 +641,145 @@ def baixar_carimbo_tempo_view(request: HttpRequest, contrato_pk: int) -> HttpRes
     response = HttpResponse(conteudo, content_type="application/timestamp-reply")
     response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
     return response
+
+
+# ── Terminais de assinatura dedicados (ex.: tablet da recepção) ─────────────
+#
+# Gerenciados aqui (staff logado) em vez de restritos ao Django Admin: quem
+# cuida da recepção no dia a dia precisa poder cadastrar um terminal novo,
+# gerar um novo link (ex.: link antigo compartilhado por engano, tablet
+# trocado) ou trocar qual terminal está recebendo sessões, sem depender de
+# alguém com acesso de administrador.
+#
+# Regra: só um terminal pode ficar ativo por vez (ver
+# TerminalAssinatura.clean/outro_terminal_ativo) — evita que a recepção
+# envie uma sessão sem saber qual dos tablets vai de fato recebê-la.
+
+
+@login_required
+def terminais_view(request: HttpRequest) -> HttpResponse:
+    """Lista os terminais de assinatura cadastrados e permite criar novos."""
+
+    if request.method == "POST":
+        nome = request.POST.get("nome", "").strip()
+        if nome:
+            # Novo terminal sempre começa inativo — ativar é uma ação
+            # explícita (ver terminal_alternar_ativo_view), nunca implícita
+            # na criação, para não competir com o terminal já ativo.
+            TerminalAssinatura.objects.create(nome=nome, ativo=False)
+            messages.success(
+                request,
+                f'Terminal "{nome}" criado. Ative-o na lista abaixo quando '
+                "estiver pronto para receber sessões.",
+            )
+        else:
+            messages.error(request, "Informe um nome para o terminal.")
+        return redirect("contrato_terminais")
+
+    expirar_terminais_vencidos()
+
+    terminais = TerminalAssinatura.objects.all()
+    ja_existe_ativo = terminais.filter(ativo=True).exists()
+    return render(
+        request,
+        "gestao_contratos/terminais.html",
+        {
+            "terminais": [
+                {
+                    "obj": terminal,
+                    "link": request.build_absolute_uri(
+                        reverse("terminal_assinatura", args=[terminal.token])
+                    ),
+                    "pode_ativar": terminal.ativo or not ja_existe_ativo,
+                    "expira_em": (
+                        terminal.ativado_em + timedelta(hours=TERMINAL_ATIVO_TTL_HORAS)
+                        if terminal.ativado_em
+                        else None
+                    ),
+                }
+                for terminal in terminais
+            ],
+            "breadcrumbs": [
+                {"label": "Contratos", "url": reverse("contratos")},
+                {"label": "Terminais de assinatura", "url": None},
+            ],
+        },
+    )
+
+
+@login_required
+def terminal_regenerar_token_view(
+    request: HttpRequest, terminal_pk: int
+) -> HttpResponse:
+    """Gera um novo link para o terminal, invalidando o anterior na hora.
+
+    Uso típico: o link atual vazou ou foi compartilhado por engano, ou o
+    tablet foi trocado/perdido. Depois de gerar, é preciso abrir o novo link
+    no navegador do tablet — o link antigo passa a responder 404.
+    """
+
+    if request.method != "POST":
+        return redirect("contrato_terminais")
+
+    terminal = get_object_or_404(TerminalAssinatura, pk=terminal_pk)
+    terminal.regenerar_token()
+    messages.success(
+        request,
+        f'Novo link gerado para "{terminal.nome}". '
+        "Abra o novo link no navegador do tablet — o link antigo não funciona mais.",
+    )
+    return redirect("contrato_terminais")
+
+
+@login_required
+def terminal_alternar_ativo_view(
+    request: HttpRequest, terminal_pk: int
+) -> HttpResponse:
+    """Ativa ou desativa um terminal sem excluí-lo.
+
+    Só permite ativar se nenhum outro terminal estiver ativo — o sistema
+    aceita apenas um terminal ativo por vez, para que a recepção sempre
+    saiba, sem ambiguidade, qual tablet está de fato recebendo sessões.
+    Desativar nunca é bloqueado.
+    """
+
+    if request.method != "POST":
+        return redirect("contrato_terminais")
+
+    terminal = get_object_or_404(TerminalAssinatura, pk=terminal_pk)
+
+    if not terminal.ativo:
+        ativo_atual = terminal.outro_terminal_ativo()
+        if ativo_atual is not None:
+            messages.error(
+                request,
+                f"Só é possível ter um terminal ativo por vez. Desative "
+                f'"{ativo_atual.nome}" antes de ativar "{terminal.nome}".',
+            )
+            return redirect("contrato_terminais")
+
+    terminal.ativo = not terminal.ativo
+    terminal.save(update_fields=["ativo", "atualizado_em"])
+    estado = "ativado" if terminal.ativo else "desativado"
+    messages.success(request, f'Terminal "{terminal.nome}" {estado}.')
+    return redirect("contrato_terminais")
+
+
+@login_required
+def terminal_excluir_view(request: HttpRequest, terminal_pk: int) -> HttpResponse:
+    """Exclui definitivamente um terminal.
+
+    Sessões de assinatura que já apontavam para este terminal não são
+    afetadas — ``SessaoAssinatura.terminal`` usa ``on_delete=SET_NULL``,
+    então o histórico/auditoria permanece intacto, só perde a referência
+    a qual terminal físico foi usado.
+    """
+
+    if request.method != "POST":
+        return redirect("contrato_terminais")
+
+    terminal = get_object_or_404(TerminalAssinatura, pk=terminal_pk)
+    nome = terminal.nome
+    terminal.delete()
+    messages.success(request, f'Terminal "{nome}" excluído.')
+    return redirect("contrato_terminais")

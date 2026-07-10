@@ -11,20 +11,23 @@ import hashlib
 import io
 import json
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from gestao_contratos.models import (
+    TERMINAL_ATIVO_TTL_HORAS,
     ContratoGerado,
     EventoContrato,
     SessaoAssinatura,
     TerminalAssinatura,
+    expirar_terminais_vencidos,
 )
 from gestao_contratos.services.assinatura import (
     LIMITE_TENTATIVAS_IDENTIDADE,
@@ -2263,7 +2266,9 @@ class ZApiProviderTests(TestCase):
             provider.enviar_texto("5562999998888", "Olá!")
 
     @patch("mensageria.zapi.urlopen")
-    def test_http_404_vira_instancia_desconectada(self, mock_urlopen: MagicMock) -> None:
+    def test_http_404_vira_instancia_desconectada(
+        self, mock_urlopen: MagicMock
+    ) -> None:
         mock_urlopen.side_effect = _fake_http_error(404, '{"error": "not found"}')
 
         provider = ZApiProvider(self._config())
@@ -2299,7 +2304,9 @@ class ZApiProviderTests(TestCase):
             provider.enviar_texto("5562999998888", "Olá!")
 
     @patch("mensageria.zapi.urlopen")
-    def test_timeout_vira_messaging_timeout_error(self, mock_urlopen: MagicMock) -> None:
+    def test_timeout_vira_messaging_timeout_error(
+        self, mock_urlopen: MagicMock
+    ) -> None:
         mock_urlopen.side_effect = TimeoutError("tempo esgotado")
 
         provider = ZApiProvider(self._config())
@@ -4072,3 +4079,401 @@ class TerminalAssinaturaAdminTests(TestCase):
     def test_tela_de_adicao_carrega(self) -> None:
         response = self.client.get("/admin/gestao_contratos/terminalassinatura/add/")
         self.assertEqual(response.status_code, 200)
+
+
+class TerminalRegenerarTokenModelTests(TestCase):
+    def test_regenerar_token_troca_o_token(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        token_original = terminal.token
+
+        terminal.regenerar_token()
+
+        self.assertNotEqual(terminal.token, token_original)
+        terminal.refresh_from_db()
+        self.assertNotEqual(terminal.token, token_original)
+
+    def test_regenerar_token_invalida_link_antigo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        token_original = terminal.token
+
+        terminal.regenerar_token()
+
+        self.assertFalse(
+            TerminalAssinatura.objects.filter(token=token_original).exists()
+        )
+
+
+class TerminaisStaffViewTests(TestCase):
+    """Gestão de terminais pela recepção (staff logado), fora do Django Admin."""
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_exige_login(self) -> None:
+        self.client.logout()
+        response = self.client.get(reverse("contrato_terminais"))
+        self.assertRedirects(
+            response,
+            f'{reverse("login")}?next={reverse("contrato_terminais")}',
+            fetch_redirect_response=False,
+        )
+
+    def test_lista_terminais_existentes(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        response = self.client.get(reverse("contrato_terminais"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tablet Recepção")
+        self.assertContains(
+            response, reverse("terminal_assinatura", args=[terminal.token])
+        )
+
+    def test_cria_terminal_via_post(self) -> None:
+        response = self.client.post(
+            reverse("contrato_terminais"), {"nome": "Tablet Novo"}
+        )
+
+        self.assertRedirects(response, reverse("contrato_terminais"))
+        self.assertTrue(TerminalAssinatura.objects.filter(nome="Tablet Novo").exists())
+
+    def test_criar_sem_nome_nao_cria_terminal(self) -> None:
+        response = self.client.post(reverse("contrato_terminais"), {"nome": ""})
+
+        self.assertRedirects(response, reverse("contrato_terminais"))
+        self.assertEqual(TerminalAssinatura.objects.count(), 0)
+
+    def test_regenerar_token_exige_login(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        self.client.logout()
+
+        url = reverse("contrato_terminal_regenerar_token", args=[terminal.pk])
+        response = self.client.post(url)
+
+        self.assertRedirects(
+            response, f'{reverse("login")}?next={url}', fetch_redirect_response=False
+        )
+
+    def test_regenerar_token_via_post_gera_novo_link(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        token_original = terminal.token
+
+        response = self.client.post(
+            reverse("contrato_terminal_regenerar_token", args=[terminal.pk])
+        )
+
+        self.assertRedirects(response, reverse("contrato_terminais"))
+        terminal.refresh_from_db()
+        self.assertNotEqual(terminal.token, token_original)
+
+    def test_regenerar_token_via_get_nao_altera_nada(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        token_original = terminal.token
+
+        self.client.get(
+            reverse("contrato_terminal_regenerar_token", args=[terminal.pk])
+        )
+
+        terminal.refresh_from_db()
+        self.assertEqual(terminal.token, token_original)
+
+    def test_alternar_ativo_desativa_terminal_ativo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        self.assertTrue(terminal.ativo)
+
+        response = self.client.post(
+            reverse("contrato_terminal_alternar_ativo", args=[terminal.pk])
+        )
+
+        self.assertRedirects(response, reverse("contrato_terminais"))
+        terminal.refresh_from_db()
+        self.assertFalse(terminal.ativo)
+
+    def test_alternar_ativo_reativa_terminal_inativo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(
+            nome="Tablet Recepção", ativo=False
+        )
+
+        self.client.post(
+            reverse("contrato_terminal_alternar_ativo", args=[terminal.pk])
+        )
+
+        terminal.refresh_from_db()
+        self.assertTrue(terminal.ativo)
+
+    def test_link_antigo_para_de_funcionar_apos_regenerar(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        token_original = terminal.token
+
+        self.client.post(
+            reverse("contrato_terminal_regenerar_token", args=[terminal.pk])
+        )
+
+        response = self.client.get(
+            reverse("terminal_assinatura", args=[token_original])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_terminal_criado_via_post_comeca_inativo(self) -> None:
+        """Novo terminal nunca nasce ativo — evita concorrer com o já ativo."""
+
+        self.client.post(reverse("contrato_terminais"), {"nome": "Tablet Novo"})
+
+        terminal = TerminalAssinatura.objects.get(nome="Tablet Novo")
+        self.assertFalse(terminal.ativo)
+
+    def test_nao_permite_ativar_segundo_terminal(self) -> None:
+        ativo = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        outro = TerminalAssinatura.objects.create(nome="Tablet Sala 2", ativo=False)
+        self.assertTrue(ativo.ativo)
+
+        response = self.client.post(
+            reverse("contrato_terminal_alternar_ativo", args=[outro.pk])
+        )
+
+        self.assertRedirects(response, reverse("contrato_terminais"))
+        outro.refresh_from_db()
+        ativo.refresh_from_db()
+        self.assertFalse(outro.ativo)
+        self.assertTrue(ativo.ativo)
+
+    def test_mensagem_de_erro_nomeia_o_terminal_ja_ativo(self) -> None:
+        TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        outro = TerminalAssinatura.objects.create(nome="Tablet Sala 2", ativo=False)
+
+        response = self.client.post(
+            reverse("contrato_terminal_alternar_ativo", args=[outro.pk]),
+            follow=True,
+        )
+
+        self.assertContains(response, "Tablet Recepção")
+
+    def test_ativar_permitido_quando_nenhum_outro_esta_ativo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(
+            nome="Tablet Recepção", ativo=False
+        )
+
+        response = self.client.post(
+            reverse("contrato_terminal_alternar_ativo", args=[terminal.pk])
+        )
+
+        self.assertRedirects(response, reverse("contrato_terminais"))
+        terminal.refresh_from_db()
+        self.assertTrue(terminal.ativo)
+
+    def test_desativar_nunca_e_bloqueado_mesmo_sendo_o_unico_ativo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        self.client.post(
+            reverse("contrato_terminal_alternar_ativo", args=[terminal.pk])
+        )
+
+        terminal.refresh_from_db()
+        self.assertFalse(terminal.ativo)
+
+    def test_lista_mostra_botao_ativar_desabilitado_quando_bloqueado(self) -> None:
+        TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        TerminalAssinatura.objects.create(nome="Tablet Sala 2", ativo=False)
+
+        response = self.client.get(reverse("contrato_terminais"))
+
+        self.assertContains(response, "disabled")
+        self.assertContains(response, "Já existe um terminal ativo — desative-o antes")
+
+    def test_excluir_exige_login(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        self.client.logout()
+
+        url = reverse("contrato_terminal_excluir", args=[terminal.pk])
+        response = self.client.post(url)
+
+        self.assertRedirects(
+            response, f'{reverse("login")}?next={url}', fetch_redirect_response=False
+        )
+
+    def test_excluir_via_post_remove_terminal(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        response = self.client.post(
+            reverse("contrato_terminal_excluir", args=[terminal.pk])
+        )
+
+        self.assertRedirects(response, reverse("contrato_terminais"))
+        self.assertFalse(TerminalAssinatura.objects.filter(pk=terminal.pk).exists())
+
+    def test_excluir_via_get_nao_remove_nada(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+
+        self.client.get(reverse("contrato_terminal_excluir", args=[terminal.pk]))
+
+        self.assertTrue(TerminalAssinatura.objects.filter(pk=terminal.pk).exists())
+
+    def test_excluir_terminal_nao_apaga_sessao_associada(self) -> None:
+        pac = _paciente_completo(id_dental="777")
+        contrato = gerar_e_salvar_contrato(
+            paciente=pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        sessao = criar_sessao(contrato, criado_por=self.usuario, terminal=terminal)
+
+        self.client.post(reverse("contrato_terminal_excluir", args=[terminal.pk]))
+
+        sessao.refresh_from_db()
+        self.assertIsNone(sessao.terminal)
+        self.assertTrue(SessaoAssinatura.objects.filter(pk=sessao.pk).exists())
+
+
+class TerminalUnicoAtivoModelTests(TestCase):
+    def test_outro_terminal_ativo_retorna_none_sem_conflito(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        self.assertIsNone(terminal.outro_terminal_ativo())
+
+    def test_outro_terminal_ativo_encontra_conflito(self) -> None:
+        ativo = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        outro = TerminalAssinatura.objects.create(nome="Tablet Sala 2", ativo=False)
+
+        self.assertEqual(outro.outro_terminal_ativo(), ativo)
+
+    def test_clean_permite_ativar_sem_conflito(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet", ativo=False)
+        terminal.ativo = True
+        terminal.clean()  # não deve levantar
+
+    def test_clean_bloqueia_segundo_ativo(self) -> None:
+        TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        outro = TerminalAssinatura.objects.create(nome="Tablet Sala 2", ativo=False)
+
+        outro.ativo = True
+        with self.assertRaises(ValidationError):
+            outro.clean()
+
+    def test_clean_permite_desativar_mesmo_sendo_o_unico_ativo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        terminal.ativo = False
+        terminal.clean()  # não deve levantar
+
+    def test_full_clean_bloqueia_via_admin_form(self) -> None:
+        """Garante que a regra vale mesmo fora das views próprias (ex.:
+        alguém editando ``ativo`` direto pelo Django Admin)."""
+
+        TerminalAssinatura.objects.create(nome="Tablet Recepção")
+        outro = TerminalAssinatura.objects.create(nome="Tablet Sala 2", ativo=False)
+
+        outro.ativo = True
+        with self.assertRaises(ValidationError):
+            outro.full_clean()
+
+
+def _forcar_ativado_ha(terminal: TerminalAssinatura, horas: float) -> None:
+    """Backdata `ativado_em` para simular um terminal ativado há X horas,
+    sem passar pelo detector de transição do save() (usa update_fields
+    já contendo `ativado_em`, então o valor setado aqui é preservado)."""
+
+    terminal.ativado_em = timezone.now() - timedelta(hours=horas)
+    terminal.save(update_fields=["ativado_em"])
+
+
+class TerminalExpiracaoAutomaticaTests(TestCase):
+    def test_ativar_registra_ativado_em(self) -> None:
+        antes = timezone.now()
+        terminal = TerminalAssinatura.objects.create(nome="Tablet", ativo=False)
+
+        terminal.ativo = True
+        terminal.save(update_fields=["ativo", "atualizado_em"])
+
+        terminal.refresh_from_db()
+        self.assertIsNotNone(terminal.ativado_em)
+        self.assertGreaterEqual(terminal.ativado_em, antes)
+
+    def test_desativar_limpa_ativado_em(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet")  # nasce ativo
+        self.assertIsNotNone(terminal.ativado_em)
+
+        terminal.ativo = False
+        terminal.save(update_fields=["ativo", "atualizado_em"])
+
+        terminal.refresh_from_db()
+        self.assertIsNone(terminal.ativado_em)
+
+    def test_expirar_se_vencido_nao_faz_nada_se_inativo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet", ativo=False)
+        self.assertFalse(terminal.expirar_se_vencido())
+
+    def test_expirar_se_vencido_nao_faz_nada_dentro_do_prazo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet")
+        _forcar_ativado_ha(terminal, TERMINAL_ATIVO_TTL_HORAS - 1)
+
+        self.assertFalse(terminal.expirar_se_vencido())
+        terminal.refresh_from_db()
+        self.assertTrue(terminal.ativo)
+
+    def test_expirar_se_vencido_desativa_apos_o_prazo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet")
+        _forcar_ativado_ha(terminal, TERMINAL_ATIVO_TTL_HORAS + 1)
+
+        self.assertTrue(terminal.expirar_se_vencido())
+        terminal.refresh_from_db()
+        self.assertFalse(terminal.ativo)
+        self.assertIsNone(terminal.ativado_em)
+
+    def test_expirar_terminais_vencidos_ignora_terminal_dentro_do_prazo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet")
+        _forcar_ativado_ha(terminal, 1)
+
+        total = expirar_terminais_vencidos()
+
+        self.assertEqual(total, 0)
+        terminal.refresh_from_db()
+        self.assertTrue(terminal.ativo)
+
+    def test_expirar_terminais_vencidos_desativa_apenas_os_vencidos(self) -> None:
+        vencido = TerminalAssinatura.objects.create(nome="Vencido")
+        _forcar_ativado_ha(vencido, TERMINAL_ATIVO_TTL_HORAS + 2)
+
+        dentro_do_prazo = TerminalAssinatura.objects.create(
+            nome="Dentro do prazo", ativo=False
+        )
+
+        total = expirar_terminais_vencidos()
+
+        self.assertEqual(total, 1)
+        vencido.refresh_from_db()
+        dentro_do_prazo.refresh_from_db()
+        self.assertFalse(vencido.ativo)
+        self.assertFalse(dentro_do_prazo.ativo)  # já estava inativo, sem mudança
+
+    def test_link_do_terminal_para_de_funcionar_apos_vencer(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet")
+        _forcar_ativado_ha(terminal, TERMINAL_ATIVO_TTL_HORAS + 1)
+
+        response = self.client.get(
+            reverse("terminal_assinatura", args=[terminal.token])
+        )
+
+        self.assertEqual(response.status_code, 404)
+        terminal.refresh_from_db()
+        self.assertFalse(terminal.ativo)
+
+    def test_link_do_terminal_continua_funcionando_dentro_do_prazo(self) -> None:
+        terminal = TerminalAssinatura.objects.create(nome="Tablet")
+        _forcar_ativado_ha(terminal, TERMINAL_ATIVO_TTL_HORAS - 1)
+
+        response = self.client.get(
+            reverse("terminal_assinatura", args=[terminal.token])
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_lista_de_terminais_reflete_expiracao_ao_carregar(self) -> None:
+        usuario = _usuario()
+        self.client.force_login(usuario)
+        terminal = TerminalAssinatura.objects.create(nome="Tablet")
+        _forcar_ativado_ha(terminal, TERMINAL_ATIVO_TTL_HORAS + 1)
+
+        response = self.client.get(reverse("contrato_terminais"))
+
+        self.assertContains(response, "Inativo")
+        self.assertNotContains(response, ">Ativo<")
+        terminal.refresh_from_db()
+        self.assertFalse(terminal.ativo)

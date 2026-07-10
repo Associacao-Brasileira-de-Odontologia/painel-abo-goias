@@ -1,0 +1,107 @@
+{% extends "gestao_contratos/base.html" %}
+
+{% block title %}Terminais de assinatura{% endblock %}
+
+{% block sidebar_copy %}
+    Tablets dedicados para o paciente assinar na recepção, sem depender do
+    celular próprio. Apenas um terminal fica ativo por vez.
+{% endblock %}
+
+{% block breadcrumb %}{% include "partials/breadcrumb.html" %}{% endblock %}
+
+{% block panel_title %}Terminais de assinatura{% endblock %}
+
+{% block panel %}
+    <div class="kpi-section">
+        <p class="section-label">Novo terminal</p>
+        <form method="post" class="gc-row-campo-acao">
+            {% csrf_token %}
+            <div class="field">
+                <label for="id_nome_terminal">Nome</label>
+                <input id="id_nome_terminal" type="text" name="nome"
+                       placeholder="Ex.: Tablet Recepção" required>
+            </div>
+            <button class="button primary" type="submit">Criar terminal</button>
+        </form>
+        <p class="panel-copy gc-text-muted-sm gc-mt-sm">
+            Só um terminal pode ficar ativo de cada vez — para trocar, desative o
+            atual antes de ativar outro.
+        </p>
+    </div>
+
+    {% if terminais %}
+        {% for item in terminais %}
+            <div class="kpi-section">
+                <div class="gc-row-tight">
+                    <p class="section-label gc-m-0">{{ item.obj.nome }}</p>
+                    {% if item.obj.ativo %}
+                        <span class="badge badge-devolvido gc-badge-sm">Ativo</span>
+                    {% else %}
+                        <span class="badge badge-atrasado gc-badge-sm">Inativo</span>
+                    {% endif %}
+                </div>
+
+                {% if item.obj.ativo and item.expira_em %}
+                    <p class="panel-copy gc-text-muted-sm gc-mt-sm">
+                        Desativa automaticamente em {{ item.expira_em|date:"d/m/Y" }} às
+                        {{ item.expira_em|date:"H:i" }}, se ninguém desativar antes.
+                    </p>
+                {% endif %}
+
+                <p class="panel-copy gc-text-muted-sm gc-mt-sm">
+                    Link do terminal — abra no navegador do tablet, em modo quiosque:
+                </p>
+                <input type="text" readonly
+                       value="{{ item.link }}"
+                       onclick="this.select();"
+                       class="gc-full-width gc-mono gc-text-xs gc-mt-sm">
+
+                <div class="gc-row gc-mt-md">
+                    <form method="post"
+                          action="{% url 'contrato_terminal_regenerar_token' item.obj.pk %}">
+                        {% csrf_token %}
+                        <button class="button secondary compact-button" type="submit"
+                                data-confirm="Gerar um novo link para &quot;{{ item.obj.nome }}&quot;? O link atual deixará de funcionar imediatamente — será preciso abrir o novo link no navegador do tablet."
+                                data-confirm-title="Gerar novo link"
+                                data-confirm-label="Gerar novo link">
+                            Gerar novo link
+                        </button>
+                    </form>
+                    <form method="post"
+                          action="{% url 'contrato_terminal_alternar_ativo' item.obj.pk %}">
+                        {% csrf_token %}
+                        {% if item.pode_ativar %}
+                            <button class="button secondary compact-button" type="submit">
+                                {% if item.obj.ativo %}Desativar{% else %}Ativar{% endif %}
+                            </button>
+                        {% else %}
+                            <button class="button secondary compact-button gc-btn-disabled-look"
+                                    type="button" disabled
+                                    title="Já existe um terminal ativo — desative-o antes de ativar este.">
+                                Ativar
+                            </button>
+                        {% endif %}
+                    </form>
+                    <form method="post"
+                          action="{% url 'contrato_terminal_excluir' item.obj.pk %}">
+                        {% csrf_token %}
+                        <button class="button danger-button compact-button" type="submit"
+                                data-confirm="Excluir o terminal &quot;{{ item.obj.nome }}&quot;? O link atual deixa de funcionar e essa ação não pode ser desfeita. O histórico de assinaturas já feitas por ele não é afetado."
+                                data-confirm-title="Excluir terminal"
+                                data-confirm-label="Excluir terminal"
+                                data-confirm-danger="true">
+                            Excluir
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="kpi-section">
+            <div class="empty-state">
+                <strong>Nenhum terminal cadastrado</strong>
+                <p>Crie um terminal acima para gerar o link fixo do tablet da recepção.</p>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

@@ -112,4 +112,25 @@ urlpatterns = [
         views.whatsapp_status_view,
         name="contrato_whatsapp_status",
     ),
+    # ── Terminais de assinatura — gerenciados pela recepção (staff) ─────
+    path(
+        "terminais/",
+        views.terminais_view,
+        name="contrato_terminais",
+    ),
+    path(
+        "terminais/<int:terminal_pk>/regenerar-token/",
+        views.terminal_regenerar_token_view,
+        name="contrato_terminal_regenerar_token",
+    ),
+    path(
+        "terminais/<int:terminal_pk>/alternar-ativo/",
+        views.terminal_alternar_ativo_view,
+        name="contrato_terminal_alternar_ativo",
+    ),
+    path(
+        "terminais/<int:terminal_pk>/excluir/",
+        views.terminal_excluir_view,
+        name="contrato_terminal_excluir",
+    ),
 ]

@@ -19,6 +19,7 @@ sobre o layout padrão de painel.
 {% block sidebar_nav %}
     <nav class="side-nav" aria-label="Navegação de contratos">
         {% include "partials/side_link.html" with url_name="contratos" icon="contrato" label="Gerar contrato" %}
+        {% include "partials/side_link.html" with url_name="contrato_terminais" icon="lista" label="Terminais de assinatura" %}
         {% include "partials/side_link.html" with url_name="home" icon="voltar" label="Voltar ao portal" extra_class="side-link-return" %}
     </nav>
 {% endblock %}

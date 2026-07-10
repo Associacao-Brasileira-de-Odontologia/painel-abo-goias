@@ -17,7 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import ContratoGerado, TerminalAssinatura
+from .models import ContratoGerado, TerminalAssinatura, expirar_terminais_vencidos
 from .services.assinatura import (
     LIMITE_TENTATIVAS_IDENTIDADE,
     AssinaturaInvalida,
@@ -281,6 +281,8 @@ def contexto_status_assinatura(request: HttpRequest, contrato: ContratoGerado) -
 
     from .services.carimbo_tempo import carimbo_tempo_configurado
 
+    expirar_terminais_vencidos()
+
     return {
         "contrato": contrato,
         "sessao_assinatura": sessao,
@@ -306,6 +308,7 @@ def status_assinatura_fragment_view(
 
     contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
     contexto = contexto_status_assinatura(request, contrato)
+    contexto["incluir_documentos_oob"] = True
     return render(
         request, "gestao_contratos/_status_assinatura_fragment.html", contexto
     )

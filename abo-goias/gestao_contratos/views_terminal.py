@@ -12,7 +12,7 @@ do próprio tablet.
 
 from __future__ import annotations
 
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -22,7 +22,15 @@ from .views_assinatura import _excedeu_rate_limit
 
 
 def _resolver_terminal(token: str) -> TerminalAssinatura:
-    return get_object_or_404(TerminalAssinatura, token=token, ativo=True)
+    """Busca o terminal pelo token e expira sob demanda se estiver ativo
+    há mais de TERMINAL_ATIVO_TTL_HORAS — mesmo padrão de lazy-expire já
+    usado para sessões de assinatura (ver services/assinatura.py)."""
+
+    terminal = get_object_or_404(TerminalAssinatura, token=token)
+    terminal.expirar_se_vencido()
+    if not terminal.ativo:
+        raise Http404
+    return terminal
 
 
 def terminal_assinatura_view(request: HttpRequest, token: str) -> HttpResponse:
