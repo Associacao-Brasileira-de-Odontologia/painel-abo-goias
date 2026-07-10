@@ -448,6 +448,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "gestao_contratos.tasks.expirar_sessoes_vencidas_task",
         "schedule": 300.0,  # a cada 5 minutos
     },
+    "expirar-terminais-vencidos": {
+        "task": "gestao_contratos.tasks.expirar_terminais_vencidos_task",
+        "schedule": 1800.0,  # a cada 30 minutos — TTL é de horas, não precisa de mais frequência
+    },
     "cobrar-pedidos-de-material-atrasados": {
         "task": "gestao_lab.tasks.cobrar_pedidos_atrasados_task",
         "schedule": crontab(hour=9, minute=0),  # uma vez por dia, as 9h

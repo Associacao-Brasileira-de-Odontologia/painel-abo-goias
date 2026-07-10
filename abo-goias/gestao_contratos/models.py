@@ -1,9 +1,12 @@
 """Modelos de auditoria para geração de contratos e termos de consentimento."""
 
 import secrets
+from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from gestao_cme.models import ModeloBase
 
@@ -134,6 +137,9 @@ class ContratoGerado(ModeloBase):
         )
 
 
+TERMINAL_ATIVO_TTL_HORAS = 12
+
+
 class TerminalAssinatura(ModeloBase):
     """Dispositivo dedicado (ex.: tablet da recepção) para o paciente
     assinar no local, sem precisar de QR Code/link no próprio celular.
@@ -147,6 +153,15 @@ class TerminalAssinatura(ModeloBase):
 
     nome = models.CharField(max_length=100)
     token = models.CharField(max_length=64, unique=True, editable=False)
+    ativado_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "Quando o terminal foi ativado pela última vez — usado para "
+            "desativação automática após TERMINAL_ATIVO_TTL_HORAS."
+        ),
+    )
 
     class Meta:
         ordering = ["nome"]
@@ -156,10 +171,90 @@ class TerminalAssinatura(ModeloBase):
     def __str__(self) -> str:
         return self.nome
 
+    def clean(self) -> None:
+        super().clean()
+        if self.ativo and self.outro_terminal_ativo():
+            raise ValidationError(
+                "Só é possível ter um terminal ativo por vez. "
+                "Desative o terminal ativo atual antes de ativar este."
+            )
+
+    def outro_terminal_ativo(self) -> "TerminalAssinatura | None":
+        """Retorna outro terminal já ativo, se houver — usado para impedir
+        mais de um terminal ativo ao mesmo tempo (só um deve ficar
+        recebendo sessões de assinatura)."""
+
+        return TerminalAssinatura.objects.filter(ativo=True).exclude(pk=self.pk).first()
+
     def save(self, *args, **kwargs) -> None:
         if not self.token:
             self.token = secrets.token_urlsafe(24)
+
+        # Detecta a transição de ativo/inativo mesmo quando quem chamou
+        # .save() não sabe (ou não define) `ativado_em` — cobre tanto as
+        # views próprias quanto uma edição direta pelo Django Admin.
+        if self.pk:
+            estava_ativo = (
+                TerminalAssinatura.objects.filter(pk=self.pk)
+                .values_list("ativo", flat=True)
+                .first()
+            )
+        else:
+            estava_ativo = False
+
+        if self.ativo and not estava_ativo:
+            self.ativado_em = timezone.now()
+        elif not self.ativo and estava_ativo:
+            self.ativado_em = None
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "ativado_em" not in update_fields:
+            kwargs["update_fields"] = [*update_fields, "ativado_em"]
+
         super().save(*args, **kwargs)
+
+    def regenerar_token(self) -> None:
+        """Invalida o link atual e gera um novo — usado quando o link pode
+        ter vazado (ex.: compartilhado fora do tablet) ou por rotina de
+        segurança. Qualquer acesso ao link antigo passa a retornar 404,
+        já que a busca do terminal é feita pelo token."""
+
+        self.token = secrets.token_urlsafe(24)
+        self.save(update_fields=["token", "atualizado_em"])
+
+    def expirar_se_vencido(self) -> bool:
+        """Desativa o terminal se estiver ativo há mais de
+        TERMINAL_ATIVO_TTL_HORAS. Retorna True se desativou agora.
+
+        Chamado sob demanda (toda vez que o terminal é lido/usado) e
+        também periodicamente via Celery Beat — mesmo padrão de
+        lazy-expire já usado para SessaoAssinatura.expira_em, ver
+        services/assinatura.py.
+        """
+
+        if not self.ativo or not self.ativado_em:
+            return False
+
+        limite = self.ativado_em + timedelta(hours=TERMINAL_ATIVO_TTL_HORAS)
+        if timezone.now() < limite:
+            return False
+
+        self.ativo = False
+        self.save(update_fields=["ativo", "atualizado_em"])
+        return True
+
+
+def expirar_terminais_vencidos() -> int:
+    """Desativa, em lote, todos os terminais ativos há mais de
+    TERMINAL_ATIVO_TTL_HORAS. Retorna quantos foram desativados.
+
+    Rede de segurança complementar ao lazy-expire feito sob demanda em
+    TerminalAssinatura.expirar_se_vencido() — garante a desativação mesmo
+    que ninguém acesse o link do terminal nem a tela de gestão enquanto
+    o prazo vence (ex.: tablet desligado/sem rede)."""
+
+    vencidos = TerminalAssinatura.objects.filter(ativo=True, ativado_em__isnull=False)
+    return sum(1 for terminal in vencidos if terminal.expirar_se_vencido())
 
 
 STATUS_SESSAO_ASSINATURA = [

@@ -123,3 +123,25 @@ def expirar_sessoes_vencidas_task() -> int:
     if total:
         logger.info("expirar_sessoes_vencidas_task: %d sessão(ões) expirada(s)", total)
     return total
+
+
+@shared_task
+def expirar_terminais_vencidos_task() -> int:
+    """Limpeza periódica (Celery Beat) dos terminais ativos há mais de
+    TERMINAL_ATIVO_TTL_HORAS.
+
+    Rede de segurança complementar ao lazy-expire já feito sob demanda em
+    TerminalAssinatura.expirar_se_vencido() (toda vez que o link do
+    terminal é acessado, ou a tela /contratos/terminais/ é aberta) —
+    garante a desativação mesmo que o tablet fique desligado/sem rede e
+    ninguém abra a tela de gestão enquanto o prazo vence.
+    """
+
+    from .models import expirar_terminais_vencidos
+
+    total = expirar_terminais_vencidos()
+    if total:
+        logger.info(
+            "expirar_terminais_vencidos_task: %d terminal(is) desativado(s)", total
+        )
+    return total

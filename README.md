@@ -328,14 +328,21 @@ Alternativa ao QR Code para clínicas que preferem um tablet fixo na recepção 
 
 Para configurar um terminal:
 
-1. Acesse `/admin/gestao_contratos/terminalassinatura/` (usuário staff/superuser).
-2. Crie um novo terminal com um nome (ex.: "Tablet Recepção") — o token de acesso é gerado automaticamente.
-3. Copie o link exibido no admin (coluna "Link do terminal") e deixe-o aberto no navegador do tablet — idealmente em modo quiosque.
-4. Na tela de pós-geração, ao iniciar a assinatura, escolha o terminal no lugar de "QR Code" no seletor exibido (só aparece quando há ao menos um terminal ativo cadastrado).
+1. Acesse `/contratos/terminais/` (qualquer usuário logado — não exige acesso ao Django Admin; ver nota abaixo).
+2. Crie um novo terminal com um nome (ex.: "Tablet Recepção") — o token de acesso é gerado automaticamente. **Novo terminal nasce sempre inativo** (ver regra abaixo).
+3. Clique em "Ativar" no terminal recém-criado.
+4. Copie o link exibido (campo somente leitura, clique para selecionar) e deixe-o aberto no navegador do tablet — idealmente em modo quiosque.
+5. Na tela de pós-geração, ao iniciar a assinatura, escolha o terminal no lugar de "QR Code" no seletor exibido (só aparece quando há ao menos um terminal ativo cadastrado).
 
 Depois de assinar, a tela de conclusão volta sozinha (em ~8s, via `<meta http-equiv="refresh">`) para a tela de espera do terminal, pronta para o próximo paciente.
 
-O token do terminal deve ser tratado como sensível (não divulgado publicamente) — é longo e aleatório (`secrets.token_urlsafe`), mas quem tiver acesso a ele veria o mesmo fluxo de assinatura que o tablet mostra.
+**Apenas um terminal ativo por vez.** O sistema não permite dois terminais ativos simultaneamente — ao tentar ativar um segundo, o botão "Ativar" fica desabilitado (com dica explicando o motivo) e, se forçado via POST, a ação é rejeitada com uma mensagem nomeando o terminal que precisa ser desativado primeiro. A regra é reforçada em dois níveis: na view (`terminal_alternar_ativo_view`) e no próprio model (`TerminalAssinatura.clean()`), então nem uma edição direta pelo Django Admin consegue burlar. Motivo: evita a recepção enviar uma sessão sem saber ao certo qual tablet físico vai recebê-la. Desativar nunca é bloqueado, mesmo que seja o único terminal ativo no momento.
+
+**Desativação automática após 12h.** Todo terminal ativado é desativado sozinho depois de `TERMINAL_ATIVO_TTL_HORAS` (constante em `gestao_contratos/models.py`, padrão 12h) — reduz a janela de exposição caso o link vaze e evita um tablet esquecido ligado indefinidamente. A tela `/contratos/terminais/` mostra o horário exato em que isso vai acontecer para o terminal ativo. Implementado com o mesmo padrão de "lazy-expire" já usado nas sessões de assinatura (`SessaoAssinatura.expira_em`): checado sob demanda toda vez que o link do terminal é acessado (`TerminalAssinatura.expirar_se_vencido()`) e, como rede de segurança, varrido a cada 30 minutos pelo Celery Beat (`expirar_terminais_vencidos_task`) — assim o status fica correto mesmo se o tablet ficar desligado/sem rede e ninguém abrir a tela de gestão. Ativar de novo depois de expirado é uma ação manual (não reativa sozinho).
+
+**Excluir um terminal** ("Excluir", com confirmação) remove o cadastro e invalida o link imediatamente — sessões de assinatura já associadas a ele não são afetadas (`SessaoAssinatura.terminal` usa `on_delete=SET_NULL`, então o histórico de auditoria permanece intacto).
+
+O token do terminal deve ser tratado como sensível (não divulgado publicamente) — é longo e aleatório (`secrets.token_urlsafe`), mas quem tiver acesso a ele veria o mesmo fluxo de assinatura que o tablet mostra, incluindo o redirecionamento automático para a sessão de assinatura no instante em que a recepção a envia para aquele terminal (o polling é por token, não por dispositivo). Por isso a tela `/contratos/terminais/` tem um botão **"Gerar novo link"** por terminal: invalida o link atual na hora (passa a responder 404) e gera um novo — use se o link vazou, foi compartilhado por engano, ou o tablet foi trocado/perdido. Como essa é uma rotina operacional (pode ser necessária a qualquer momento, sem aviso prévio), ela fica disponível para qualquer colaborador logado, sem depender de acesso de administrador — o Django Admin (`/admin/gestao_contratos/terminalassinatura/`) continua funcionando para quem tiver acesso, mas só permite visualizar o token, não regenerá-lo.
 
 ### Carimbo de tempo (RFC 3161)
 
@@ -359,6 +366,7 @@ Após a assinatura, três tarefas são agendadas em segundo plano, de forma inde
 - `enviar_whatsapp_task`: envia o PDF por WhatsApp via Z-API — **só é agendada se a Z-API estiver configurada** (ver variáveis abaixo) e o paciente tiver celular cadastrado.
 - `solicitar_carimbo_tempo_task`: solicita o carimbo de tempo (RFC 3161) — **só é agendada se `CARIMBO_TEMPO_TSA_URL` estiver configurada**.
 - `expirar_sessoes_vencidas_task` (Celery Beat, a cada 5 min): limpeza em lote de sessões de assinatura abandonadas.
+- `expirar_terminais_vencidos_task` (Celery Beat, a cada 30 min): desativa terminais ativos há mais de `TERMINAL_ATIVO_TTL_HORAS` (padrão 12h) — ver [Terminal de assinatura dedicado](#terminal-de-assinatura-dedicado-tablet).
 
 Como essas tarefas rodam em paralelo e o carimbo de tempo depende de uma chamada de rede externa à TSA, **o envio automático ao Dental Office/WhatsApp normalmente é concluído antes do carimbo terminar** — ou seja, a cópia enviada automaticamente por esses dois canais costuma não ter o carimbo embutido ainda; só a versão baixada depois pela recepção ("Baixar contrato assinado") já estará completa. Isso não compromete a validade (hash e token continuam corretos e acessíveis), é só uma questão de ordenação.
 
@@ -466,6 +474,7 @@ Contratos (DOCX/PDF) e imagens de assinatura são salvos via `DJANGO_MEDIA_ROOT`
 | `/contratos/assinar/<token>/` | Página pública de assinatura — verificação de identidade + canvas (sem login) |
 | `/contratos/politica-privacidade/` | Política de privacidade pública |
 | `/contratos/terminal/<token>/` | Tela de espera do terminal dedicado (tablet), sem login |
+| `/contratos/terminais/` | Gestão de terminais (staff logado) — criar, copiar link, gerar novo link, ativar/desativar (só um ativo por vez) e excluir |
 | `/contratos/contrato/<id>/status-assinatura/` | Fragmento de status usado pelo polling HTMX |
 | `/contratos/contrato/<id>/carimbo-tempo/solicitar/` | Solicita (ou tenta novamente) o carimbo de tempo |
 | `/contratos/contrato/<id>/carimbo-tempo/baixar/` | Baixa o token de carimbo de tempo (.tsr) avulso |
