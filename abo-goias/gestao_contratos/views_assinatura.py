@@ -306,6 +306,7 @@ def status_assinatura_fragment_view(
 
     contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
     contexto = contexto_status_assinatura(request, contrato)
+    contexto["incluir_documentos_oob"] = True
     return render(
         request, "gestao_contratos/_status_assinatura_fragment.html", contexto
     )

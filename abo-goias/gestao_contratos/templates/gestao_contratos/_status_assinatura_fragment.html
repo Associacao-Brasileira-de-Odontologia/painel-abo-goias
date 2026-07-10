@@ -16,53 +16,8 @@ assinatura; ao mudar de status, o polling para automaticamente.
     {% if contrato.status == "assinado" %}
         <div class="checklist-alert checklist-alert-ok">
             <strong>Contrato assinado pelo paciente</strong>
-            <p>A versão assinada está disponível para download e envio.</p>
+            <p>Envie por WhatsApp ou e-mail abaixo. O download do PDF assinado fica em "Documentos", no fim da página.</p>
         </div>
-        <div class="form-actions gc-mt-md">
-            <a class="button gc-selar"
-               href="{% url 'contrato_baixar_assinado' contrato.pk %}">
-                Baixar contrato assinado (.pdf)
-            </a>
-        </div>
-
-        {% if carimbo_tempo_configurado %}
-            <div class="gc-mt-md">
-                {% if contrato.status_carimbo_tempo == "concluido" %}
-                    <span class="badge badge-devolvido gc-badge-sm">
-                        Carimbo de tempo obtido — {{ contrato.carimbo_tempo_em|date:"d/m/Y H:i" }}
-                    </span>
-                    <a class="button secondary compact-button gc-mt-sm gc-full-width"
-                       href="{% url 'contrato_baixar_carimbo_tempo' contrato.pk %}">
-                        Baixar carimbo de tempo (.tsr)
-                    </a>
-                {% else %}
-                    <span class="badge {% if contrato.status_carimbo_tempo == 'erro' %}badge-atrasado{% endif %} gc-badge-sm">
-                        {% if contrato.status_carimbo_tempo == "erro" %}
-                            Carimbo de tempo — falha ao obter
-                        {% else %}
-                            Carimbo de tempo — não solicitado
-                        {% endif %}
-                    </span>
-                    <form method="post"
-                          action="{% url 'contrato_solicitar_carimbo_tempo' contrato.pk %}"
-                          class="gc-mt-sm">
-                        {% csrf_token %}
-                        <button class="button secondary compact-button gc-full-width" type="submit">
-                            {% if contrato.status_carimbo_tempo == "erro" %}
-                                Tentar novamente
-                            {% else %}
-                                Solicitar carimbo de tempo
-                            {% endif %}
-                        </button>
-                    </form>
-                {% endif %}
-            </div>
-        {% elif request.user.is_staff %}
-            <p class="panel-copy gc-text-muted-sm gc-mt-sm">
-                Carimbo de tempo desativado — defina
-                <code>CARIMBO_TEMPO_TSA_URL</code> para ativar.
-            </p>
-        {% endif %}
     {% elif sessao_assinatura %}
         {% if sessao_assinatura.terminal %}
             <p class="panel-copy">
@@ -192,3 +147,7 @@ assinatura; ao mudar de status, o polling para automaticamente.
         </ul>
     {% endif %}
 </div>
+
+{% if incluir_documentos_oob %}
+    {% include "gestao_contratos/_documentos_fragment.html" with oob=True %}
+{% endif %}
