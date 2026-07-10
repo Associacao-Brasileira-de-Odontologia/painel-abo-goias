@@ -1,0 +1,166 @@
+﻿{% extends "layouts/painel.html" %}
+{% load static %}
+
+{% block title %}ABO Goiás | Identificadores de Bancada{% endblock %}
+{% block header_eyebrow %}ABO Goiás{% endblock %}
+{% block header_title %}Identificadores de Bancada{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'identificadores/css/identificadores.css' %}">
+{% endblock %}
+
+{% block sidebar_copy %}Selecione a turma e o modelo para gerar o arquivo de identificadores de bancada.{% endblock %}
+{% block sidebar_nav %}{% include "identificadores/partials/menu.html" %}{% endblock %}
+
+{% block sidebar_extra %}
+    <div class="metric-grid">
+        <div class="metric-card">
+            <span class="metric-label">Turmas</span>
+            <strong>{{ total_turmas }}</strong>
+        </div>
+        <div class="metric-card">
+            <span class="metric-label">Modelos</span>
+            <strong>{{ total_modelos_disponiveis }}/{{ total_modelos }}</strong>
+        </div>
+    </div>
+{% endblock %}
+
+{% block panel_title %}Selecione turma e modelo{% endblock %}
+{% block panel_actions %}
+    <div class="topbar-actions">
+        <form class="sync-form" method="post" action="{% url 'identificadores:sincronizar' %}">
+            {% csrf_token %}
+            <button class="button secondary compact-button" type="submit">Sincronizar turmas e alunos</button>
+        </form>
+    </div>
+{% endblock %}
+
+{% block panel %}
+    <form class="identifier-flow" method="post" data-identifier-form>
+        {% csrf_token %}
+
+        <section class="identifier-step">
+            <div class="step-content">
+                <div class="step-heading">
+                    <h3>Selecionar turma</h3>
+                </div>
+
+                <div class="field">
+                    <label for="turma">Turma</label>
+                    <select id="turma" name="turma" required data-turma-select>
+                        <option value="">Selecione uma turma</option>
+                        {% for turma in turmas %}
+                            <option value="{{ turma.pk }}" {% if turma_selecionada_id == turma.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ turma.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section class="identifier-step">
+            <div class="step-content">
+                <div class="step-heading">
+                    <h3>Escolher modelo</h3>
+                </div>
+
+                <div class="model-list" role="radiogroup" aria-label="Modelos de identificador">
+                    {% for modelo in modelos %}
+                        <label class="model-option {% if not modelo.disponivel %}unavailable{% endif %} {% if modelo_selecionado_id == modelo.id %}selected{% endif %}">
+                            <input
+                                type="radio"
+                                name="modelo"
+                                value="{{ modelo.id }}"
+                                {% if modelo_selecionado_id == modelo.id %}checked{% endif %}
+                                {% if not modelo.disponivel %}disabled{% endif %}
+                                data-modelo-input
+                            >
+                            <span class="model-option-check" aria-hidden="true"></span>
+                            <span class="model-preview">
+                                <span class="model-preview-logo">{{ modelo.iniciais }}</span>
+                                <span class="model-preview-line"></span>
+                                <span class="model-preview-line short"></span>
+                            </span>
+                            <span class="model-info">
+                                <strong>{{ modelo.nome }}</strong>
+                                {% if modelo.disponivel %}
+                                    <em class="model-status available">Disponível</em>
+                                {% else %}
+                                    <em class="model-status unavailable">Indisponível</em>
+                                {% endif %}
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="identifier-step generate-step">
+            <div class="step-content">
+                <button class="button primary generate-button" type="submit" disabled data-generate-button>
+                    Gerar identificadores
+                </button>
+                <p class="generate-hint" data-generate-hint>Selecione uma turma e um modelo disponível para gerar o arquivo.</p>
+            </div>
+        </section>
+    </form>
+
+    {% if resultado %}
+        <section class="generation-result" aria-label="Arquivo gerado">
+            <h3>Arquivo pronto</h3>
+
+            <div class="result-metrics">
+                <div class="result-metric">
+                    <span>Total de alunos</span>
+                    <strong>{{ resultado.total_alunos }}</strong>
+                </div>
+                <div class="result-metric">
+                    <span>Total de páginas</span>
+                    <strong>{{ resultado.total_paginas }}</strong>
+                </div>
+                <div class="result-metric wide">
+                    <span>Modelo</span>
+                    <strong>{{ resultado.modelo.nome }}</strong>
+                </div>
+            </div>
+
+            <a class="button download result-download" href="{% url 'identificadores:baixar' resultado.nome_arquivo %}">
+                Baixar PPTX
+            </a>
+        </section>
+    {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        (function () {
+            const form = document.querySelector("[data-identifier-form]");
+            if (!form) return;
+
+            const turmaSelect = form.querySelector("[data-turma-select]");
+            const modeloInputs = Array.from(form.querySelectorAll("[data-modelo-input]"));
+            const generateButton = form.querySelector("[data-generate-button]");
+            const generateHint = form.querySelector("[data-generate-hint]");
+
+            function updateState() {
+                const turmaSelecionada = Boolean(turmaSelect.value);
+                const modeloSelecionado = modeloInputs.some((input) => input.checked && !input.disabled);
+                const canGenerate = turmaSelecionada && modeloSelecionado;
+
+                generateButton.disabled = !canGenerate;
+                generateButton.classList.toggle("disabled", !canGenerate);
+                generateHint.textContent = canGenerate
+                    ? "Tudo pronto para gerar o arquivo da turma selecionada."
+                    : "Selecione uma turma e um modelo disponível para gerar o arquivo.";
+
+                modeloInputs.forEach((input) => {
+                    input.closest(".model-option").classList.toggle("selected", input.checked);
+                });
+            }
+
+            turmaSelect.addEventListener("change", updateState);
+            modeloInputs.forEach((input) => input.addEventListener("change", updateState));
+            updateState();
+        })();
+    </script>
+{% endblock %}
