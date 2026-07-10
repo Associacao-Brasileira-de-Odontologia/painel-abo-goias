@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 
+from .emails import notificar_admin_nova_solicitacao
 from .forms import SolicitacaoCadastroForm
 
 
@@ -29,7 +30,8 @@ def solicitar_acesso(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = SolicitacaoCadastroForm(request.POST)
         if form.is_valid():
-            form.save()
+            solicitacao = form.save()
+            notificar_admin_nova_solicitacao(request, solicitacao)
             return redirect("solicitar_acesso_enviado")
     else:
         form = SolicitacaoCadastroForm()

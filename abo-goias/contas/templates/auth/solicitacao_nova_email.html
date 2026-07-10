@@ -1,0 +1,11 @@
+Olá,
+
+{{ solicitacao.nome_completo }} solicitou acesso aos sistemas internos da ABO Goiás.
+
+Usuário desejado: {{ solicitacao.username }}
+E-mail: {{ solicitacao.email }}
+Cargo: {{ solicitacao.cargo|default:"não informado" }}
+Justificativa: {{ solicitacao.justificativa|default:"não informada" }}
+
+Revise e aprove ou rejeite pelo painel administrativo:
+{{ link_revisao }}

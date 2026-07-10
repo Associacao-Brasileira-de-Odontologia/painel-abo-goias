@@ -310,6 +310,12 @@ DEFAULT_FROM_EMAIL = (
     or "noreply@abogoias.local"
 )
 
+# E-mails que recebem a notificação de novas solicitações de acesso
+# (contas.solicitar_acesso) — separados por vírgula. Sem esta variável,
+# a notificação por e-mail simplesmente não é enviada; a solicitação
+# continua visível normalmente no Django Admin.
+ADMINS = [(email, email) for email in _env_list("DJANGO_ADMINS_EMAIL")]
+
 # Usa SMTP automaticamente quando EMAIL_HOST estiver definido; console em DEBUG
 if _env("DJANGO_EMAIL_BACKEND"):
     EMAIL_BACKEND = _env("DJANGO_EMAIL_BACKEND")
