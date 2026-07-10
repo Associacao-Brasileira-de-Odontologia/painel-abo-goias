@@ -58,7 +58,8 @@ Pontos de atenção:
 abo-goias/
 ├── abo_goias/          # Configurações Django do projeto principal + bootstrap do Celery
 ├── contas/             # Aplicação de autenticação (login, senha, perfil)
-├── gestao_cme/         # Aplicação Gestão de CME (inclui identificadores de bancada como sub-rota)
+├── gestao_cme/         # Aplicação Gestão de CME
+├── identificadores/    # Aplicação Identificador de Bancadas (app independente)
 ├── gestao_lab/         # Aplicação Gestão de Laboratório (sincronização Dental Office)
 ├── gestao_contratos/   # Aplicação Gestão de Contratos (geração, assinatura, envio)
 ├── mensageria/         # Pacote compartilhado de mensageria (WhatsApp/Z-API) — não é uma app Django

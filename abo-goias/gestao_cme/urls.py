@@ -1,10 +1,9 @@
-﻿from django.urls import include, path
+﻿from django.urls import path
 from django.views.generic import RedirectView
 
 from . import views
 
 urlpatterns = [
-    path("identificadores/", include("gestao_cme.identificadores.urls")),
     path(
         "catalog/",
         RedirectView.as_view(pattern_name="home", permanent=False),

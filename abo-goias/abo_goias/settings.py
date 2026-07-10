@@ -187,6 +187,7 @@ INSTALLED_APPS = [
     "gestao_cme.apps.GestaoCmeConfig",
     "gestao_lab.apps.GestaoLabConfig",
     "gestao_contratos.apps.GestaoContratosConfig",
+    "identificadores",
 ]
 
 MIDDLEWARE = [

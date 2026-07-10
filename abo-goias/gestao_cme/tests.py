@@ -931,31 +931,3 @@ class PaginasDeErroTests(TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertIn(b"Erro interno", response.content)
-
-
-class IdentificadoresSubRotaTests(TestCase):
-    """Identificadores deixou de ser um app Django isolado e passou a ser uma
-    sub-rota de gestao_cme (ver gestao_cme/identificadores/). Estes testes
-    cobrem o essencial da rota apos a fusao — os testes especificos de
-    geracao de PPTX continuam responsabilidade de gestao_cme/identificadores.
-    """
-
-    def test_anonimo_redireciona_para_login(self) -> None:
-        response = self.client.get(reverse("identificadores:index"))
-
-        self.assertRedirects(
-            response,
-            f'{reverse("login")}?next={reverse("identificadores:index")}',
-            fetch_redirect_response=False,
-        )
-
-    def test_usuario_logado_ve_tela_de_identificadores(self) -> None:
-        usuario = get_user_model().objects.create_user(
-            username="identificadores-teste", password="senha-segura"
-        )
-        self.client.force_login(usuario)
-
-        response = self.client.get(reverse("identificadores:index"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "identificadores/index.html")
