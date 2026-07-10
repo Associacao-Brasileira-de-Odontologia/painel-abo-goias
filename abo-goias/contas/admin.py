@@ -13,6 +13,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.forms import PasswordResetForm
 from django.http import HttpRequest
 
+from .emails import notificar_usuario_rejeitado
 from .models import SolicitacaoCadastro
 
 
@@ -83,13 +84,17 @@ class SolicitacaoCadastroAdmin(admin.ModelAdmin):
         rejeitadas = ignoradas = 0
         for solicitacao in queryset:
             if solicitacao.rejeitar(revisor=request.user):
+                notificar_usuario_rejeitado(solicitacao)
                 rejeitadas += 1
             else:
                 ignoradas += 1
 
         if rejeitadas:
             self.message_user(
-                request, f"{rejeitadas} solicitação(ões) rejeitada(s).", messages.SUCCESS
+                request,
+                f"{rejeitadas} solicitação(ões) rejeitada(s) — e-mail enviado "
+                "a quem solicitou.",
+                messages.SUCCESS,
             )
         if ignoradas:
             self.message_user(

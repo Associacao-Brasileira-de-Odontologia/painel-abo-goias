@@ -1,13 +1,14 @@
+from unittest.mock import patch
+
+from contas.admin import SolicitacaoCadastroAdmin
+from contas.forms import SolicitacaoCadastroForm
+from contas.models import SolicitacaoCadastro
 from django.contrib.admin.sites import site
 from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core import mail
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
-
-from contas.admin import SolicitacaoCadastroAdmin
-from contas.forms import SolicitacaoCadastroForm
-from contas.models import SolicitacaoCadastro
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
@@ -125,14 +126,10 @@ class SolicitarAcessoViewTests(TestCase):
 
         response = self.client.get(reverse("solicitar_acesso"))
 
-        self.assertRedirects(
-            response, reverse("home"), fetch_redirect_response=False
-        )
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
 
     def test_post_valido_cria_solicitacao_pendente_e_redireciona(self) -> None:
-        response = self.client.post(
-            reverse("solicitar_acesso"), _dados_solicitacao()
-        )
+        response = self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
 
         self.assertRedirects(
             response,
@@ -146,14 +143,55 @@ class SolicitarAcessoViewTests(TestCase):
     def test_post_nao_cria_usuario_de_imediato(self) -> None:
         self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
 
-        self.assertFalse(
-            get_user_model().objects.filter(username="fulano").exists()
-        )
+        self.assertFalse(get_user_model().objects.filter(username="fulano").exists())
 
     def test_link_para_solicitar_acesso_aparece_no_login(self) -> None:
         response = self.client.get(reverse("login"))
 
         self.assertContains(response, reverse("solicitar_acesso"))
+
+    @override_settings(ADMINS=[("Admin", "admin@example.com")])
+    def test_post_valido_notifica_admin_configurado(self) -> None:
+        self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("admin@example.com", mail.outbox[0].to)
+        self.assertIn("Fulano de Tal", mail.outbox[0].body)
+        self.assertIn("fulano", mail.outbox[0].body)
+
+    @override_settings(ADMINS=[])
+    def test_post_sem_admin_configurado_nao_envia_email(self) -> None:
+        self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
+
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(ADMINS=[("Admin", "admin@example.com")])
+    def test_email_ao_admin_contem_link_de_revisao(self) -> None:
+        self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
+
+        solicitacao = SolicitacaoCadastro.objects.get(username="fulano")
+        self.assertIn(
+            f"/admin/contas/solicitacaocadastro/{solicitacao.pk}/change/",
+            mail.outbox[0].body,
+        )
+
+    @override_settings(ADMINS=[("Admin", "admin@example.com")])
+    @patch("contas.emails.send_mail", side_effect=RuntimeError("SMTP fora do ar"))
+    def test_falha_ao_notificar_admin_nao_impede_solicitacao(
+        self, mock_send_mail
+    ) -> None:
+        """Uma falha de e-mail (ex.: SMTP mal configurado) não pode quebrar
+        a tela pública de solicitação de acesso — o pedido já foi salvo
+        antes da tentativa de notificação."""
+
+        response = self.client.post(reverse("solicitar_acesso"), _dados_solicitacao())
+
+        self.assertRedirects(
+            response,
+            reverse("solicitar_acesso_enviado"),
+            fetch_redirect_response=False,
+        )
+        self.assertTrue(SolicitacaoCadastro.objects.filter(username="fulano").exists())
 
 
 class SolicitacaoCadastroFormTests(TestCase):
@@ -163,9 +201,7 @@ class SolicitacaoCadastroFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
 
     def test_username_ja_existente_como_usuario_e_rejeitado(self) -> None:
-        get_user_model().objects.create_user(
-            username="fulano", password="senha-segura"
-        )
+        get_user_model().objects.create_user(username="fulano", password="senha-segura")
 
         form = SolicitacaoCadastroForm(data=_dados_solicitacao())
 
@@ -234,9 +270,7 @@ class SolicitacaoCadastroModelTests(TestCase):
         )
 
         self.assertIsNone(solicitacao.aprovar())
-        self.assertFalse(
-            get_user_model().objects.filter(username="maria").exists()
-        )
+        self.assertFalse(get_user_model().objects.filter(username="maria").exists())
 
     def test_rejeitar_marca_status_sem_criar_usuario(self) -> None:
         solicitacao = SolicitacaoCadastro.objects.create(
@@ -247,9 +281,7 @@ class SolicitacaoCadastroModelTests(TestCase):
         solicitacao.refresh_from_db()
         self.assertEqual(solicitacao.status, SolicitacaoCadastro.Status.REJEITADA)
         self.assertEqual(solicitacao.observacao_revisao, "Fora do escopo.")
-        self.assertFalse(
-            get_user_model().objects.filter(username="maria").exists()
-        )
+        self.assertFalse(get_user_model().objects.filter(username="maria").exists())
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
@@ -286,7 +318,7 @@ class SolicitacaoCadastroAdminActionTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("maria@example.com", mail.outbox[0].to)
 
-    def test_acao_rejeitar_marca_status_e_nao_envia_email(self) -> None:
+    def test_acao_rejeitar_marca_status_e_nao_cria_usuario(self) -> None:
         solicitacao = SolicitacaoCadastro.objects.create(
             nome_completo="Maria Silva",
             email="maria@example.com",
@@ -299,7 +331,46 @@ class SolicitacaoCadastroAdminActionTests(TestCase):
 
         solicitacao.refresh_from_db()
         self.assertEqual(solicitacao.status, SolicitacaoCadastro.Status.REJEITADA)
-        self.assertFalse(
-            get_user_model().objects.filter(username="maria").exists()
+        self.assertFalse(get_user_model().objects.filter(username="maria").exists())
+
+    def test_acao_rejeitar_avisa_por_email_quem_solicitou(self) -> None:
+        solicitacao = SolicitacaoCadastro.objects.create(
+            nome_completo="Maria Silva",
+            email="maria@example.com",
+            username="maria",
         )
+
+        self.model_admin.rejeitar_solicitacoes(
+            self._request(), SolicitacaoCadastro.objects.filter(pk=solicitacao.pk)
+        )
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("maria@example.com", mail.outbox[0].to)
+
+    def test_email_de_rejeicao_inclui_observacao_quando_houver(self) -> None:
+        solicitacao = SolicitacaoCadastro.objects.create(
+            nome_completo="Maria Silva",
+            email="maria@example.com",
+            username="maria",
+            observacao_revisao="Fora do escopo da instituição.",
+        )
+
+        self.model_admin.rejeitar_solicitacoes(
+            self._request(), SolicitacaoCadastro.objects.filter(pk=solicitacao.pk)
+        )
+
+        self.assertIn("Fora do escopo da instituição.", mail.outbox[0].body)
+
+    def test_rejeitar_solicitacao_ja_revisada_nao_reenvia_email(self) -> None:
+        solicitacao = SolicitacaoCadastro.objects.create(
+            nome_completo="Maria Silva",
+            email="maria@example.com",
+            username="maria",
+            status=SolicitacaoCadastro.Status.REJEITADA,
+        )
+
+        self.model_admin.rejeitar_solicitacoes(
+            self._request(), SolicitacaoCadastro.objects.filter(pk=solicitacao.pk)
+        )
+
         self.assertEqual(len(mail.outbox), 0)
