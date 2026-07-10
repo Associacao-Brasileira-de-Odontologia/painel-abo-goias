@@ -77,7 +77,6 @@
                     <th>Processo</th>
                     <th>Previsão de retorno</th>
                     <th>Sincronização</th>
-                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -117,17 +116,10 @@
                                 —
                             {% endif %}
                         </td>
-                        <td class="actions-cell">
-                            <a class="button compact-button secondary"
-                               href="{% url 'contrato_gerar' paciente.pk %}"
-                               title="Gerar termo de consentimento">
-                                Contrato
-                            </a>
-                        </td>
                     </tr>
                 {% empty %}
                     <tr class="empty-row">
-                        <td colspan="6">
+                        <td colspan="5">
                             <div class="empty-state">
                                 <strong>Nenhum paciente encontrado.</strong>
                                 <p>

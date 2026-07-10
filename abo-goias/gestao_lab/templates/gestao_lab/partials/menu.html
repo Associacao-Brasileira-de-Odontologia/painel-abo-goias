@@ -15,10 +15,9 @@ incluir este partial sem parâmetros.
     {% include "partials/side_link.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" match="lab_criar_laboratorio lab_editar_laboratorio" %}
     {% include "partials/side_link.html" with url_name="lab_equipes" icon="usuarios" label="Equipes" match="lab_criar_equipe lab_editar_equipe" %}
 
-    <p class="side-nav-label">Dental Office</p>
+    <p class="side-nav-label">Dental Office / EDUQ</p>
     {% include "partials/side_link.html" with url_name="lab_pacientes" icon="paciente" label="Pacientes" %}
     {% include "partials/side_link.html" with url_name="lab_alunos" icon="aluno" label="Alunos" %}
-    {% include "partials/side_link.html" with url_name="contratos" icon="contrato" label="Contratos" %}
 
     {% include "partials/side_link.html" with url_name="home" icon="voltar" label="Voltar ao portal" extra_class="side-link-return" %}
 </nav>
