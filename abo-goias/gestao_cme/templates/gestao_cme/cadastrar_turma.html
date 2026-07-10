@@ -1,118 +1,94 @@
-{% extends "gestao_cme/base.html" %}
+﻿{% extends "layouts/painel.html" %}
 
 {% block title %}Gestão de CME | Cadastrar turma{% endblock %}
 {% block header_eyebrow %}Cadastros acadêmicos{% endblock %}
 {% block header_title %}Cadastrar turma{% endblock %}
 
-{% block content %}
-    <main class="page-shell">
-        <div class="layout-grid">
-            <aside class="panel config-panel">
-                <p class="panel-copy">Cadastre uma turma manualmente, sem depender da sincronização com o Eduq.</p>
+{% block sidebar_copy %}Cadastre uma turma manualmente, sem depender da sincronização com o Eduq.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
-                {% include "gestao_cme/partials/menu_sistemas.html" with menu_app="cme" active_page="alunos" %}
-            </aside>
+{% block panel_title %}Cadastrar turma{% endblock %}
+{% block panel_actions %}
+    <a class="button secondary" href="{% url 'alunos_por_turma' %}">Voltar à listagem</a>
+{% endblock %}
 
-            <section class="panel results-panel">
-                <div class="results-topbar">
-                    <div>
-                        <h2>Cadastrar turma</h2>
-                    </div>
-                    <a class="button secondary" href="{% url 'alunos_por_turma' %}">Voltar à listagem</a>
-                </div>
+{% block panel %}
+    {% include "partials/form_errors.html" %}
 
-                {% if form.errors %}
-                    <div class="form-errors">
-                        <ul>
-                            {% for field in form %}
-                                {% for error in field.errors %}
-                                    <li>{{ error }}</li>
-                                {% endfor %}
-                            {% endfor %}
-                            {% for error in form.non_field_errors %}
-                                <li>{{ error }}</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                {% endif %}
+    <form class="form-stack form-stack-wide" method="post">
+        {% csrf_token %}
 
-                <form class="form-stack form-stack-wide" method="post">
-                    {% csrf_token %}
-
-                    <div class="field field-required">
-                        <label for="nome">Nome da turma</label>
-                        <input
-                            id="nome"
-                            type="text"
-                            name="nome"
-                            value="{{ form.nome.value|default:'' }}"
-                            placeholder="Ex.: Endodontia 2026"
-                            required
-                            maxlength="120"
-                        >
-                    </div>
-
-                    <div class="field field-required">
-                        <label for="codigo">Código</label>
-                        <input
-                            id="codigo"
-                            type="text"
-                            name="codigo"
-                            value="{{ form.codigo.value|default:'' }}"
-                            placeholder="Ex.: END-2026"
-                            required
-                            maxlength="30"
-                        >
-                    </div>
-
-                    <div class="field">
-                        <label for="curso">Curso <span class="field-optional">(opcional)</span></label>
-                        <input
-                            id="curso"
-                            type="text"
-                            name="curso"
-                            value="{{ form.curso.value|default:'' }}"
-                            placeholder="Nome do curso"
-                            maxlength="120"
-                        >
-                    </div>
-
-                    <div class="field">
-                        <label for="data_inicio">Data de início <span class="field-optional">(opcional)</span></label>
-                        <input
-                            id="data_inicio"
-                            type="date"
-                            name="data_inicio"
-                            value="{{ form.data_inicio.value|default:'' }}"
-                        >
-                    </div>
-
-                    <div class="field">
-                        <label for="data_fim">Data de fim <span class="field-optional">(opcional)</span></label>
-                        <input
-                            id="data_fim"
-                            type="date"
-                            name="data_fim"
-                            value="{{ form.data_fim.value|default:'' }}"
-                        >
-                    </div>
-
-                    <div class="field">
-                        <label for="observacoes">Observações <span class="field-optional">(opcional)</span></label>
-                        <textarea
-                            id="observacoes"
-                            name="observacoes"
-                            rows="3"
-                            placeholder="Informações adicionais sobre a turma..."
-                        >{{ form.observacoes.value|default:'' }}</textarea>
-                    </div>
-
-                    <div class="form-actions">
-                        <button class="button primary" type="submit">Cadastrar turma</button>
-                        <a class="button secondary" href="{% url 'alunos_por_turma' %}">Cancelar</a>
-                    </div>
-                </form>
-            </section>
+        <div class="field field-required">
+            <label for="nome">Nome da turma</label>
+            <input
+                id="nome"
+                type="text"
+                name="nome"
+                value="{{ form.nome.value|default:'' }}"
+                placeholder="Ex.: Endodontia 2026"
+                required
+                maxlength="120"
+            >
         </div>
-    </main>
+
+        <div class="field field-required">
+            <label for="codigo">Código</label>
+            <input
+                id="codigo"
+                type="text"
+                name="codigo"
+                value="{{ form.codigo.value|default:'' }}"
+                placeholder="Ex.: END-2026"
+                required
+                maxlength="30"
+            >
+        </div>
+
+        <div class="field">
+            <label for="curso">Curso <span class="field-optional">(opcional)</span></label>
+            <input
+                id="curso"
+                type="text"
+                name="curso"
+                value="{{ form.curso.value|default:'' }}"
+                placeholder="Nome do curso"
+                maxlength="120"
+            >
+        </div>
+
+        <div class="field">
+            <label for="data_inicio">Data de início <span class="field-optional">(opcional)</span></label>
+            <input
+                id="data_inicio"
+                type="date"
+                name="data_inicio"
+                value="{{ form.data_inicio.value|default:'' }}"
+            >
+        </div>
+
+        <div class="field">
+            <label for="data_fim">Data de fim <span class="field-optional">(opcional)</span></label>
+            <input
+                id="data_fim"
+                type="date"
+                name="data_fim"
+                value="{{ form.data_fim.value|default:'' }}"
+            >
+        </div>
+
+        <div class="field">
+            <label for="observacoes">Observações <span class="field-optional">(opcional)</span></label>
+            <textarea
+                id="observacoes"
+                name="observacoes"
+                rows="3"
+                placeholder="Informações adicionais sobre a turma..."
+            >{{ form.observacoes.value|default:'' }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit">Cadastrar turma</button>
+            <a class="button secondary" href="{% url 'alunos_por_turma' %}">Cancelar</a>
+        </div>
+    </form>
 {% endblock %}

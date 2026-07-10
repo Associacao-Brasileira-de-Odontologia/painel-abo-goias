@@ -1,0 +1,72 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}ABO Goiás{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800;900&family=Syne:wght@700;800&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    {% include "partials/icons.html" %}
+    {% include "partials/confirm_dialog.html" %}
+
+    <header class="app-header {% block header_class %}{% endblock %}">
+        <div class="header-inner">
+            <div class="brand">
+                <img class="brand-logo" src="{% static 'img/logo.png' %}" alt="ABO Goiás">
+                {% block header_brand_text %}
+                    <div>
+                        <p class="eyebrow">{% block header_eyebrow %}ABO Goiás{% endblock %}</p>
+                        <h1>{% block header_title %}Sistemas internos{% endblock %}</h1>
+                    </div>
+                {% endblock %}
+            </div>
+            {% if usuario_logado %}
+                <details class="user-menu-dropdown">
+                    <summary>{{ usuario_logado.get_full_name|default:usuario_logado.username }}</summary>
+                    <div class="dropdown-panel">
+                        <a href="{% url 'perfil' %}">Meu perfil</a>
+                        <a href="{% url 'password_change' %}">Trocar senha</a>
+                        {% if usuario_logado.is_staff %}
+                            <a href="/admin/">Administração</a>
+                        {% endif %}
+                        <form method="post" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <button type="submit">Sair</button>
+                        </form>
+                    </div>
+                </details>
+            {% endif %}
+        </div>
+    </header>
+
+    {% if messages %}
+        <div class="messages-banner">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">
+                    <span>{{ message }}</span>
+                    <button type="button" class="message-dismiss" aria-label="Dispensar mensagem">&times;</button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+    {% block footer %}
+        <footer class="footer">
+            Associação Brasileira de Odontologia de Goiás
+        </footer>
+    {% endblock %}
+
+    {% block extra_js %}{% endblock %}
+    <script defer src="{% static 'js/app.js' %}"></script>
+</body>
+</html>

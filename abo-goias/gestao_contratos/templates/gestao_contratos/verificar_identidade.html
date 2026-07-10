@@ -16,7 +16,7 @@
             <p class="eyebrow">ABO Goiás — Verificação de identidade</p>
             {% if menor %}
                 <h1>Confirme o CPF do responsável legal</h1>
-                <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+                <p class="texto-apoio">
                     <strong>{{ paciente.nome }}</strong> é menor de idade — para
                     assinar o termo de {{ contrato.get_tipo_display }} em nome
                     dele, confirme o CPF do responsável legal cadastrado
@@ -24,7 +24,7 @@
                 </p>
             {% else %}
                 <h1>Confirme sua data de nascimento</h1>
-                <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+                <p class="texto-apoio">
                     Para sua segurança, confirme a data de nascimento cadastrada
                     antes de assinar o termo de {{ contrato.get_tipo_display }}
                     de <strong>{{ paciente.nome }}</strong>.
@@ -32,7 +32,7 @@
             {% endif %}
 
             {% if erro %}
-                <div class="erro" style="margin-top:10px;">{{ erro }}</div>
+                <div class="erro mt-sm">{{ erro }}</div>
             {% endif %}
 
             <form method="post" action="">

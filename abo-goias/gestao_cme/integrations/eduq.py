@@ -6,12 +6,10 @@ personalizadas e normaliza respostas externas para estruturas internas.
 
 import hashlib
 import json
-import os
 import ssl
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, urlopen
@@ -73,74 +71,37 @@ class AlunoEduq:
     ativo: bool = True
 
 
-def carregar_arquivo_env(caminho: Path | None = None) -> None:
-    """Carrega variaveis de ambiente de arquivos .env conhecidos.
-
-    Valores ja presentes no ambiente sao preservados. Quando um caminho
-    especifico e informado, ele tem prioridade sobre os arquivos padrao do
-    projeto.
-    """
-
-    caminhos = []
-    if caminho:
-        caminhos.append(caminho)
-    caminhos.extend(
-        (
-            settings.BASE_DIR / ".env",
-            settings.BASE_DIR.parent / ".env",
-            settings.BASE_DIR / ".env.example",
-            settings.BASE_DIR.parent / ".env.example",
-        )
-    )
-
-    for arquivo in caminhos:
-        if not arquivo.exists():
-            continue
-        for linha in arquivo.read_text(encoding="utf-8").splitlines():
-            linha = linha.strip()
-            if not linha or linha.startswith("#") or "=" not in linha:
-                continue
-            chave, valor = linha.split("=", 1)
-            os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
-
-
 def carregar_config_eduq() -> ConfigEduq:
-    """Monta a configuracao da API Eduq a partir do ambiente e settings.
+    """Monta a configuracao da API Eduq a partir de settings.
 
     Valida credenciais obrigatorias e converte opcoes como consulta, timeout,
     proxy e verificacao TLS para os tipos usados pelo cliente HTTP.
     """
 
-    carregar_arquivo_env()
-
-    credenciais = {
-        "dominio": os.getenv("EDUQ_DOMINIO", "").strip(),
-        "usuario": os.getenv("EDUQ_USUARIO", "").strip(),
-        "senha": os.getenv("EDUQ_SENHA", "").strip(),
-    }
-    ausentes = [nome for nome, valor in credenciais.items() if not valor]
-    if ausentes:
-        variaveis = ", ".join(f"EDUQ_{nome.upper()}" for nome in ausentes)
+    if not settings.EDUQ_CONFIGURADO:
+        ausentes = [
+            nome
+            for nome, valor in (
+                ("DOMINIO", settings.EDUQ_DOMINIO),
+                ("USUARIO", settings.EDUQ_USUARIO),
+                ("SENHA", settings.EDUQ_SENHA),
+            )
+            if not valor
+        ]
+        variaveis = ", ".join(f"EDUQ_{nome}" for nome in ausentes)
         raise EduqAPIError(f"Configure as variaveis de ambiente: {variaveis}")
 
     return ConfigEduq(
-        dominio=credenciais["dominio"],
-        usuario=credenciais["usuario"],
-        senha=credenciais["senha"],
-        auth_url=os.getenv("EDUQ_AUTH_URL", settings.EDUQ_AUTH_URL).strip(),
-        data_url=os.getenv("EDUQ_DATA_URL", settings.EDUQ_DATA_URL).strip(),
-        consulta_turmas_id=int(
-            os.getenv("EDUQ_CONSULTA_TURMAS_ID", settings.EDUQ_CONSULTA_TURMAS_ID)
-        ),
-        consulta_detalhes_turma_id=int(
-            os.getenv(
-                "EDUQ_CONSULTA_DETALHES_TURMA_ID",
-                settings.EDUQ_CONSULTA_DETALHES_TURMA_ID,
-            )
-        ),
-        verify_tls=_ler_booleano("EDUQ_VERIFY_TLS", settings.EDUQ_VERIFY_TLS),
-        timeout=int(os.getenv("EDUQ_TIMEOUT", settings.EDUQ_TIMEOUT)),
-        use_proxy=_ler_booleano("EDUQ_USE_PROXY", settings.EDUQ_USE_PROXY),
+        dominio=settings.EDUQ_DOMINIO,
+        usuario=settings.EDUQ_USUARIO,
+        senha=settings.EDUQ_SENHA,
+        auth_url=settings.EDUQ_AUTH_URL,
+        data_url=settings.EDUQ_DATA_URL,
+        consulta_turmas_id=settings.EDUQ_CONSULTA_TURMAS_ID,
+        consulta_detalhes_turma_id=settings.EDUQ_CONSULTA_DETALHES_TURMA_ID,
+        verify_tls=settings.EDUQ_VERIFY_TLS,
+        timeout=settings.EDUQ_TIMEOUT,
+        use_proxy=settings.EDUQ_USE_PROXY,
     )
 
 
@@ -538,12 +499,3 @@ def _turma_codigo(raw: dict[str, Any]) -> str:
         return _primeiro_texto(turma, ("codigo", "codTurma", "id", "idTurma"))
 
     return ""
-
-
-def _ler_booleano(nome: str, padrao: bool = False) -> bool:
-    """Le uma variavel de ambiente booleana com valor padrao."""
-
-    valor = os.getenv(nome)
-    if valor is None:
-        return padrao
-    return valor.strip().lower() in {"1", "true", "yes", "sim", "on"}

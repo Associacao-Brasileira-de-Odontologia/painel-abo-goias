@@ -1,0 +1,10 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Sem permissão{% endblock %}
+{% block eyebrow %}Erro 403{% endblock %}
+{% block heading %}Sem permissão{% endblock %}
+{% block description %}Você não tem permissão para acessar esta página.{% endblock %}
+
+{% block content %}
+    <a class="button primary update-first auth-action" href="/">Voltar ao portal</a>
+{% endblock %}

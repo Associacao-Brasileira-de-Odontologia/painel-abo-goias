@@ -1,0 +1,10 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Solicitação enviada{% endblock %}
+{% block eyebrow %}Novo acesso{% endblock %}
+{% block heading %}Solicitação enviada{% endblock %}
+{% block description %}Recebemos seu pedido de acesso. Um administrador vai revisá-lo — se aprovado, você receberá um e-mail com o link para definir sua senha e entrar no sistema.{% endblock %}
+
+{% block content %}
+    <a class="button primary update-first auth-action" href="{% url 'login' %}">Voltar para o login</a>
+{% endblock %}

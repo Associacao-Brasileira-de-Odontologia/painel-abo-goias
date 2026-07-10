@@ -2,32 +2,87 @@
 
 Autentica via client_id/secret, armazena o token no cache Django (TTL 23h)
 e expoe um cliente HTTP base para os servicos de sincronizacao usarem.
+
+Paginacao: os endpoints de listagem (GET /customers, GET /users) retornam
+no maximo um numero fixo de registros por pagina (nao configuravel pela
+aplicacao — a API nao expoe nenhum parametro do tipo per_page/limit) e
+informam ``total_pages`` no corpo da resposta. Este modulo so busca UMA
+pagina por chamada (``page``); consolidar todas as paginas de uma busca e
+responsabilidade da camada de servico — ver
+``gestao_lab.services.dental_sync.listar_todas_paginas``.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import os
+import logging
 import ssl
+import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, urlopen
 
 from django.conf import settings
 from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
 
 # Margem de 1h abaixo do limite real (24h) para evitar uso de token prestes a expirar
 _DENTAL_TOKEN_TTL = 23 * 60 * 60
 
 
 class DentalAPIError(Exception):
-    """Erro de configuracao, autenticacao ou comunicacao com a API Dental Office."""
+    """Erro de configuracao, autenticacao ou comunicacao com a API Dental Office.
 
-    pass
+    Classe base — capturar ``DentalAPIError`` continua pegando qualquer
+    falha, mas os subtipos abaixo permitem tratamento especifico por causa
+    quando necessario.
+    """
+
+
+class DentalConfigurationError(DentalAPIError):
+    """Credenciais obrigatorias ausentes ou invalidas."""
+
+
+class DentalAuthenticationError(DentalAPIError):
+    """Token invalido, expirado ou sem permissao (HTTP 401/403)."""
+
+
+class DentalNotFoundError(DentalAPIError):
+    """Recurso nao encontrado (HTTP 404) — ex.: pagina alem do total_pages."""
+
+
+class DentalRateLimitError(DentalAPIError):
+    """Limite de requisicoes da API excedido (HTTP 429)."""
+
+
+class DentalServerError(DentalAPIError):
+    """Erro interno da API Dental Office (HTTP 5xx)."""
+
+
+class DentalTimeoutError(DentalAPIError):
+    """Timeout de rede ao comunicar com a API."""
+
+
+class DentalConnectionError(DentalAPIError):
+    """Falha de conexao (DNS, recusa de conexao, TLS, etc.)."""
+
+
+class DentalInvalidResponseError(DentalAPIError):
+    """Resposta da API com JSON malformado ou em formato inesperado."""
+
+
+# Erros elegiveis para retry automatico em chamadas de leitura (GET) — nunca
+# aplicado a escrita (POST), para nao arriscar duplicar um envio de documento.
+_ERROS_TRANSITORIOS: tuple[type[DentalAPIError], ...] = (
+    DentalTimeoutError,
+    DentalConnectionError,
+    DentalServerError,
+    DentalRateLimitError,
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +96,8 @@ class ConfigDental:
     verify_tls: bool
     timeout: int
     use_proxy: bool
+    max_retries: int = 3
+    retry_backoff_segundos: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -63,54 +120,34 @@ class AlunoLabDental:
     ativo: bool
 
 
-def _carregar_env() -> None:
-    """Carrega variaveis de ambiente de arquivos .env conhecidos do projeto."""
-
-    candidatos = [
-        settings.BASE_DIR / ".env",
-        settings.BASE_DIR.parent / ".env",
-    ]
-    for arquivo in candidatos:
-        if not Path(arquivo).exists():
-            continue
-        for linha in Path(arquivo).read_text(encoding="utf-8").splitlines():
-            linha = linha.strip()
-            if not linha or linha.startswith("#") or "=" not in linha:
-                continue
-            chave, valor = linha.split("=", 1)
-            os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
-        break
-
-
 def carregar_config_dental() -> ConfigDental:
-    """Monta a configuracao da API Dental Office a partir do ambiente e settings.
+    """Monta a configuracao da API Dental Office a partir de settings.
 
     Valida credenciais obrigatorias e converte opcoes de TLS, timeout e proxy.
     """
 
-    _carregar_env()
-    client_id = os.getenv("DENTAL_CLIENT_ID", "").strip()
-    secret = os.getenv("DENTAL_SECRET", "").strip()
+    client_id = (settings.DENTAL_CLIENT_ID or "").strip()
+    secret = (settings.DENTAL_SECRET or "").strip()
 
-    ausentes = [
-        nome
-        for nome, valor in (("CLIENT_ID", client_id), ("SECRET", secret))
-        if not valor
-    ]
-    if ausentes:
+    if not client_id or not secret:
+        ausentes = [
+            nome
+            for nome, valor in (("CLIENT_ID", client_id), ("SECRET", secret))
+            if not valor
+        ]
         variaveis = ", ".join(f"DENTAL_{nome}" for nome in ausentes)
-        raise DentalAPIError(f"Configure as variaveis de ambiente: {variaveis}")
+        raise DentalConfigurationError(f"Configure as variaveis de ambiente: {variaveis}")
 
     return ConfigDental(
         client_id=client_id,
         secret=secret,
-        auth_url=os.getenv("DENTAL_AUTH_URL", settings.DENTAL_AUTH_URL).strip(),
-        base_url=os.getenv("DENTAL_BASE_URL", settings.DENTAL_BASE_URL).strip(),
-        verify_tls=_ler_booleano("DENTAL_VERIFY_TLS", settings.DENTAL_VERIFY_TLS),
-        timeout=int(os.getenv("DENTAL_TIMEOUT", settings.DENTAL_TIMEOUT)),
-        use_proxy=_ler_booleano(
-            "DENTAL_USE_PROXY", getattr(settings, "DENTAL_USE_PROXY", False)
-        ),
+        auth_url=settings.DENTAL_AUTH_URL,
+        base_url=settings.DENTAL_BASE_URL,
+        verify_tls=settings.DENTAL_VERIFY_TLS,
+        timeout=settings.DENTAL_TIMEOUT,
+        use_proxy=settings.DENTAL_USE_PROXY,
+        max_retries=settings.DENTAL_MAX_RETRIES,
+        retry_backoff_segundos=float(settings.DENTAL_RETRY_BACKOFF_SECONDS),
     )
 
 
@@ -219,32 +256,72 @@ class DentalClient:
     # ------------------------------------------------------------------
 
     def _get_autenticado(self, path: str) -> Any:
-        """Executa GET autenticado, renovando o token em caso de 401/403."""
+        """Executa GET autenticado, com retry para falhas transitorias.
+
+        Erros de autenticacao (401/403) renovam o token e tentam mais uma
+        vez. Erros transitorios (timeout, indisponibilidade, limite de
+        requisicoes) sao tentados novamente com backoff exponencial, ate
+        ``DENTAL_MAX_RETRIES`` tentativas — GET e uma operacao de leitura,
+        entao repeti-la nao tem efeito colateral.
+        """
 
         token = self._autenticar()
         try:
-            return self._get_json(path, token=token)
-        except DentalAPIError as exc:
-            mensagem = str(exc)
-            if "Erro HTTP 401" in mensagem or "Erro HTTP 403" in mensagem:
-                cache.delete(self._cache_key)
-                token = self._renovar_token()
+            return self._get_com_retry(path, token)
+        except DentalAuthenticationError:
+            cache.delete(self._cache_key)
+            token = self._renovar_token()
+            return self._get_com_retry(path, token)
+
+    def _get_com_retry(self, path: str, token: str) -> Any:
+        """Executa um GET tentando novamente falhas transitorias.
+
+        Erros de autenticacao propagam imediatamente (sem retry aqui) para
+        que ``_get_autenticado`` renove o token; qualquer outro erro
+        nao-transitorio (destinatario/recurso invalido, resposta
+        malformada) tambem propaga sem retry.
+        """
+
+        ultimo_erro: DentalAPIError | None = None
+        tentativas = max(self.config.max_retries, 1)
+
+        for tentativa in range(1, tentativas + 1):
+            try:
                 return self._get_json(path, token=token)
-            raise
+            except _ERROS_TRANSITORIOS as exc:
+                ultimo_erro = exc
+                if tentativa >= tentativas:
+                    break
+                espera = self.config.retry_backoff_segundos * (2 ** (tentativa - 1))
+                logger.warning(
+                    "dental.retry path=%s tentativa=%s/%s aguardando=%.1fs motivo=%s",
+                    path,
+                    tentativa,
+                    tentativas,
+                    espera,
+                    exc.__class__.__name__,
+                )
+                time.sleep(espera)
+
+        assert ultimo_erro is not None
+        raise ultimo_erro
 
     def _post_autenticado(self, url: str, payload: dict[str, Any]) -> Any:
-        """Executa POST JSON autenticado com URL absoluta; renova token em 401/403."""
+        """Executa POST JSON autenticado com URL absoluta; renova token em 401/403.
+
+        Sem retry automatico para falhas transitorias — POST nao e
+        idempotente por padrao nesta API, e tentar de novo poderia
+        duplicar um registro criado no servidor mesmo apos uma resposta
+        de erro/timeout no cliente.
+        """
 
         token = self._autenticar()
         try:
             return self._post_json(url, payload, token=token)
-        except DentalAPIError as exc:
-            mensagem = str(exc)
-            if "Erro HTTP 401" in mensagem or "Erro HTTP 403" in mensagem:
-                cache.delete(self._cache_key)
-                token = self._renovar_token()
-                return self._post_json(url, payload, token=token)
-            raise
+        except DentalAuthenticationError:
+            cache.delete(self._cache_key)
+            token = self._renovar_token()
+            return self._post_json(url, payload, token=token)
 
     def _post_multipart_autenticado(
         self,
@@ -255,19 +332,18 @@ class DentalClient:
         """Executa POST multipart/form-data autenticado, renovando token em 401/403.
 
         ``campos`` é um dicionário nome→valor de campos de texto.
-        ``arquivos`` é nome→(filename, content_type, bytes).
+        ``arquivos`` é nome→(filename, content_type, bytes). Sem retry
+        automático para falhas transitórias — mesmo motivo de
+        ``_post_autenticado``.
         """
 
         token = self._autenticar()
         try:
             return self._post_multipart(url, campos, arquivos, token=token)
-        except DentalAPIError as exc:
-            mensagem = str(exc)
-            if "Erro HTTP 401" in mensagem or "Erro HTTP 403" in mensagem:
-                cache.delete(self._cache_key)
-                token = self._renovar_token()
-                return self._post_multipart(url, campos, arquivos, token=token)
-            raise
+        except DentalAuthenticationError:
+            cache.delete(self._cache_key)
+            token = self._renovar_token()
+            return self._post_multipart(url, campos, arquivos, token=token)
 
     def _post_multipart(
         self,
@@ -347,9 +423,18 @@ class DentalClient:
         return self._executar_request(request)
 
     def _executar_request(self, request: Request) -> Any:
-        """Abre a conexao HTTP respeitando TLS e proxy, retorna JSON."""
+        """Abre a conexao HTTP respeitando TLS e proxy, retorna JSON.
 
+        Registra um log estruturado por chamada (metodo, endpoint sem
+        query string, status HTTP, duracao, sucesso) — nunca inclui
+        token, credenciais nem o conteudo de parametros de busca (podem
+        conter nome de paciente).
+        """
+
+        endpoint = urlsplit(request.full_url).path
+        metodo = request.get_method()
         context = None if self.config.verify_tls else ssl._create_unverified_context()
+        inicio = time.monotonic()
 
         try:
             if self.config.use_proxy:
@@ -366,17 +451,27 @@ class DentalClient:
                 )
 
             with response:
+                status_http = getattr(response, "status", None) or response.getcode()
                 body = response.read().decode("utf-8")
 
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise DentalAPIError(
-                f"Erro HTTP {exc.code} ao consultar Dental Office: {detail}"
-            ) from exc
+            self._log_requisicao(metodo, endpoint, exc.code, inicio, sucesso=False)
+            raise self._erro_para_status(exc.code, detail) from exc
+        except TimeoutError as exc:
+            self._log_requisicao(metodo, endpoint, None, inicio, sucesso=False)
+            raise DentalTimeoutError(f"Timeout ao consultar Dental Office: {exc}") from exc
         except URLError as exc:
-            raise DentalAPIError(
+            self._log_requisicao(metodo, endpoint, None, inicio, sucesso=False)
+            if isinstance(exc.reason, TimeoutError):
+                raise DentalTimeoutError(
+                    f"Timeout ao consultar Dental Office: {exc.reason}"
+                ) from exc
+            raise DentalConnectionError(
                 f"Falha de conexao ao consultar Dental Office: {exc.reason}"
             ) from exc
+
+        self._log_requisicao(metodo, endpoint, status_http, inicio, sucesso=True)
 
         if not body.strip():
             return {}
@@ -385,9 +480,51 @@ class DentalClient:
             return json.loads(body)
         except json.JSONDecodeError as exc:
             trecho = body[:200].replace("\n", " ")
-            raise DentalAPIError(
+            raise DentalInvalidResponseError(
                 f"A API do Dental Office retornou resposta nao-JSON: {trecho!r}"
             ) from exc
+
+    def _erro_para_status(self, status_http: int, detail: str) -> DentalAPIError:
+        """Traduz um status HTTP de erro para o subtipo especifico de DentalAPIError."""
+
+        if status_http in (401, 403):
+            return DentalAuthenticationError(
+                f"Erro HTTP {status_http} ao consultar Dental Office: {detail}"
+            )
+        if status_http == 404:
+            return DentalNotFoundError(
+                f"Erro HTTP {status_http} ao consultar Dental Office: {detail}"
+            )
+        if status_http == 429:
+            return DentalRateLimitError(
+                f"Erro HTTP {status_http} ao consultar Dental Office: {detail}"
+            )
+        if 500 <= status_http < 600:
+            return DentalServerError(
+                f"Erro HTTP {status_http} ao consultar Dental Office: {detail}"
+            )
+        return DentalAPIError(
+            f"Erro HTTP {status_http} ao consultar Dental Office: {detail}"
+        )
+
+    def _log_requisicao(
+        self,
+        metodo: str,
+        endpoint: str,
+        status_http: int | None,
+        inicio: float,
+        *,
+        sucesso: bool,
+    ) -> None:
+        logger.info(
+            "dental.request metodo=%s endpoint=%s status_http=%s duracao_ms=%d "
+            "sucesso=%s",
+            metodo,
+            endpoint,
+            status_http,
+            int((time.monotonic() - inicio) * 1000),
+            sucesso,
+        )
 
 
 def normalizar_paciente(item: dict[str, Any]) -> PacienteDental | None:
@@ -521,10 +658,3 @@ def _formatar_cpf(cpf_raw: str) -> str:
     if len(digitos) == 11:
         return f"{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}"
     return cpf_raw
-
-
-def _ler_booleano(nome: str, padrao: bool = False) -> bool:
-    valor = os.getenv(nome)
-    if valor is None:
-        return padrao
-    return valor.strip().lower() in {"1", "true", "yes", "sim", "on"}

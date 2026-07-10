@@ -1,280 +1,257 @@
-{% extends "gestao_cme/base.html" %}
-{% load static %}
+{% extends "gestao_contratos/base.html" %}
 
 {% block title %}Gestão de Contratos{% endblock %}
-{% block header_eyebrow %}ABO Goiás{% endblock %}
-{% block header_title %}Contratos e Termos{% endblock %}
-{% block body_class %}gestao-contratos{% endblock %}
 
-{% block extra_css %}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'gestao_contratos/css/contratos.css' %}">
+{% block sidebar_copy %}
+    Gere termos de consentimento preenchidos automaticamente com os dados
+    do paciente a partir do Dental Office.
 {% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
+{% block sidebar_nav %}
+    <nav class="side-nav" aria-label="Navegação de contratos">
+        {% include "partials/side_link.html" with url_name="contratos" icon="contrato" label="Gerar contrato" %}
+        {% include "partials/side_link.html" with url_name="home" icon="voltar" label="Voltar ao portal" extra_class="side-link-return" %}
+    </nav>
+{% endblock %}
 
-        {# ── Barra lateral ──────────────────────────────────────────── #}
-        <aside class="panel config-panel">
-            <p class="panel-copy">
-                Gere termos de consentimento preenchidos automaticamente com os dados
-                do paciente a partir do Dental Office.
-            </p>
-
-            <nav class="side-nav" aria-label="Navegação de contratos">
-                <a class="side-link active" href="{% url 'contratos' %}">
-                    <span class="side-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                        </svg>
-                    </span>
-                    <span>Gerar contrato</span>
-                </a>
-                <a class="side-link side-link-return" href="{% url 'home' %}">
-                    <span class="side-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M19 12H5"/>
-                            <path d="m12 19-7-7 7-7"/>
-                        </svg>
-                    </span>
-                    <span>Voltar ao portal</span>
-                </a>
-            </nav>
-
-            <div class="metric-grid gc-mt-lg">
-                <div class="metric-card">
-                    <span class="metric-label">Pacientes no sistema</span>
-                    <strong>{{ total }}</strong>
-                </div>
-            </div>
-        </aside>
-
-        {# ── Painel principal ──────────────────────────────────────── #}
-        <section class="panel results-panel">
-            <div class="results-topbar">
-                <div>
-                    <h2>Selecione um paciente</h2>
-                </div>
-            </div>
-
-            {# Barra de busca #}
-            <form class="results-search" method="get" autocomplete="off">
-                <label class="search-label" for="results-q-contratos">Buscar paciente</label>
-                <div class="results-search-row">
-                    <div class="search-control">
-                        <input id="results-q-contratos" type="search" name="q"
-                               value="{{ busca }}"
-                               placeholder="Digite o nome do paciente...">
-                    </div>
-                    <button class="button primary" type="submit">Buscar</button>
-                    <button class="button secondary" type="submit" name="dental" value="1"
-                            title="Consulta também os pacientes cadastrados no Dental Office">
-                        Buscar no Dental Office
-                    </button>
-                    {% if busca %}
-                        <a class="button secondary" href="{% url 'contratos' %}">Limpar</a>
-                    {% endif %}
-                </div>
-            </form>
-
-            {# Chips de resumo da busca #}
-            {% if busca %}
-                <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Buscando por</span>
-                        <strong>"{{ busca }}"</strong>
-                    </div>
-                    <div class="info-chip">
-                        <span>No sistema</span>
-                        <strong>{{ total }} resultado(s)</strong>
-                    </div>
-                    {% if dental_pesquisado %}
-                        {% if pacientes_api %}
-                            <div class="info-chip">
-                                <span>No Dental Office</span>
-                                <strong>{{ pacientes_api|length }} resultado(s)</strong>
-                            </div>
-                        {% elif erro_api %}
-                            <div class="info-chip gc-danger-chip">
-                                <span>Dental Office</span>
-                                <strong class="gc-danger-text">Erro na consulta</strong>
-                            </div>
-                        {% else %}
-                            <div class="info-chip gc-danger-chip">
-                                <span>No Dental Office</span>
-                                <strong class="gc-danger-text">Não encontrado</strong>
-                            </div>
-                        {% endif %}
-                    {% endif %}
-                </div>
-            {% else %}
-                <div class="selection-summary">
-                    <div class="info-chip">
-                        <span>Total de pacientes</span>
-                        <strong>{{ total }}</strong>
-                    </div>
-                    {% if page_obj.paginator.num_pages > 1 %}
-                        <div class="info-chip">
-                            <span>Página</span>
-                            <strong>{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</strong>
-                        </div>
-                    {% endif %}
-                </div>
-            {% endif %}
-
-            {# ── Tabela de resultados locais (DB) ────────────────────── #}
-            {% if pacientes %}
-                {% if busca %}
-                    <p class="section-label gc-mt-sm">Encontrado no sistema</p>
-                {% endif %}
-                <div class="table-wrap data-table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Paciente</th>
-                                <th>Celular</th>
-                                <th>Dados para contrato</th>
-                                <th>Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for paciente in pacientes %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ paciente.nome }}</strong>
-                                        {% if paciente.data_nascimento %}
-                                            <span class="cell-muted">Nasc: {{ paciente.data_nascimento|date:"d/m/Y" }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if paciente.celular %}
-                                            {{ paciente.celular }}
-                                        {% else %}
-                                            <span class="cell-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if paciente.dados_contrato_completos %}
-                                            <span class="badge badge-devolvido">Completo</span>
-                                        {% else %}
-                                            <span class="badge badge-atrasado">Busca automática</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="actions-cell">
-                                        <a class="button compact-button primary"
-                                           href="{% url 'contrato_gerar' paciente.pk %}">
-                                            Gerar contrato
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% endif %}
-
-            {# ── Resultados da API do Dental Office ──────────────────── #}
-            {% if pacientes_api %}
-                <div class="kpi-section {% if pacientes %}gc-mt-lg{% endif %}">
-                    <div class="gc-row-tight gc-mt-sm">
-                        <p class="section-label" style="margin: 0;">Encontrado no Dental Office</p>
-                        <span class="badge gc-selo gc-badge-sm">
-                            Não importado
-                        </span>
-                    </div>
-                    <p class="panel-copy gc-mt-sm" style="font-size: 0.88rem;">
-                        Ao clicar em <strong>Importar e gerar</strong>, os dados são trazidos do
-                        Dental Office automaticamente e o paciente fica disponível no sistema.
-                    </p>
-                    <div class="table-wrap data-table-wrap gc-mt-md">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Paciente</th>
-                                    <th>Celular</th>
-                                    <th>Origem</th>
-                                    <th>Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for pac in pacientes_api %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ pac.nome }}</strong>
-                                            <span class="cell-muted">ID #{{ pac.id_dental }}</span>
-                                        </td>
-                                        <td>
-                                            {% if pac.celular %}
-                                                {{ pac.celular }}
-                                            {% else %}
-                                                <span class="cell-muted">—</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if pac.ja_existe %}
-                                                <span class="badge badge-devolvido">Já no sistema</span>
-                                            {% else %}
-                                                <span class="badge gc-selo">Dental Office</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="actions-cell">
-                                            <a class="button compact-button primary"
-                                               href="{% url 'contrato_importar' pac.id_dental %}">
-                                                {% if pac.ja_existe %}Atualizar e gerar{% else %}Importar e gerar{% endif %}
-                                            </a>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            {% endif %}
-
-            {# Paginação da lista local #}
-            {% if pacientes %}
-                {% include "gestao_cme/partials/paginacao.html" %}
-            {% endif %}
-
-            {# ── Estado vazio ────────────────────────────────────────── #}
-            {% if not pacientes and not pacientes_api %}
-                <div class="kpi-section">
-                    <div class="empty-state">
-                        {% if erro_api %}
-                            <strong>Erro ao consultar o Dental Office</strong>
-                            <p>{{ erro_api }}</p>
-                        {% elif busca and dental_pesquisado and not pacientes_api %}
-                            <strong>Paciente não cadastrado no Dental Office</strong>
-                            <p>
-                                "{{ busca }}" não foi localizado no sistema nem no Dental Office.
-                                Verifique se o nome foi digitado corretamente ou
-                                <a href="{% url 'contratos' %}">limpe o filtro</a> para ver todos.
-                            </p>
-                        {% elif busca %}
-                            <strong>Nenhum resultado para "{{ busca }}"</strong>
-                            <p>
-                                Nenhum paciente encontrado no sistema com esse nome.
-                                <a href="{% url 'contratos' %}">Limpe o filtro</a> para ver todos.
-                            </p>
-                        {% else %}
-                            <strong>Nenhum paciente no sistema</strong>
-                            <p>
-                                Sincronize pacientes no módulo
-                                <a href="{% url 'lab_pacientes' %}">Gestão de Laboratório</a>
-                                ou busque pelo nome para importar diretamente do Dental Office.
-                            </p>
-                        {% endif %}
-                    </div>
-                </div>
-            {% endif %}
-
-        </section>
+{% block sidebar_extra %}
+    <div class="metric-grid gc-mt-lg">
+        <div class="metric-card">
+            <span class="metric-label">Pacientes no sistema</span>
+            <strong>{{ total }}</strong>
+        </div>
     </div>
-</main>
+{% endblock %}
+
+{% block panel_title %}Selecione um paciente{% endblock %}
+
+{% block panel %}
+    {# Barra de busca #}
+    <form class="results-search" method="get" autocomplete="off" id="form-busca-contratos">
+        <label class="search-label" for="results-q-contratos">Buscar paciente</label>
+        <div class="results-search-row">
+            <div class="search-control">
+                <input id="results-q-contratos" type="search" name="q"
+                       value="{{ busca }}"
+                       placeholder="Digite o nome do paciente...">
+            </div>
+            <button class="button primary" type="submit" id="btn-buscar-contratos">Buscar</button>
+            {% if busca %}
+                <a class="button gc-btn-ghost" href="{% url 'contratos' %}">Limpar busca</a>
+            {% endif %}
+        </div>
+        <p class="gc-text-muted-sm gc-search-hint">
+            A busca consulta o cadastro local e o Dental Office automaticamente.
+        </p>
+    </form>
+
+    {# Chips de resumo da busca #}
+    {% if busca %}
+        <div class="selection-summary">
+            <div class="info-chip">
+                <span>No sistema</span>
+                <strong>{{ total }} resultado(s)</strong>
+            </div>
+            {% if dental_pesquisado %}
+                {% if pacientes_api %}
+                    <div class="info-chip">
+                        <span>No Dental Office</span>
+                        <strong>{{ pacientes_api|length }} resultado(s)</strong>
+                    </div>
+                {% elif erro_api %}
+                    <div class="info-chip gc-danger-chip">
+                        <span>Dental Office</span>
+                        <strong class="gc-danger-text">Erro na consulta</strong>
+                    </div>
+                {% else %}
+                    <div class="info-chip gc-danger-chip">
+                        <span>No Dental Office</span>
+                        <strong class="gc-danger-text">Não encontrado</strong>
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="selection-summary">
+            <div class="info-chip">
+                <span>Total de pacientes</span>
+                <strong>{{ total }}</strong>
+            </div>
+            {% if page_obj.paginator.num_pages > 1 %}
+                <div class="info-chip">
+                    <span>Página</span>
+                    <strong>{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</strong>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {# ── Tabela de resultados locais (DB) ────────────────────── #}
+    {% if pacientes %}
+        {% if busca %}
+            <p class="section-label gc-mt-sm">Encontrado no sistema</p>
+        {% endif %}
+        <div class="table-wrap data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Paciente</th>
+                        <th>Celular</th>
+                        <th>Dados para contrato</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for paciente in pacientes %}
+                        <tr>
+                            <td>
+                                <strong>{{ paciente.nome }}</strong>
+                                {% if paciente.data_nascimento %}
+                                    <span class="cell-muted">Nasc: {{ paciente.data_nascimento|date:"d/m/Y" }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if paciente.celular %}
+                                    {{ paciente.celular }}
+                                {% else %}
+                                    <span class="cell-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if paciente.dados_contrato_completos %}
+                                    <span class="badge badge-devolvido">Completo</span>
+                                {% else %}
+                                    <span class="badge badge-atrasado">Busca automática</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions-cell">
+                                <a class="button compact-button primary"
+                                   href="{% url 'contrato_gerar' paciente.pk %}">
+                                    Gerar contrato
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {# ── Resultados da API do Dental Office ──────────────────── #}
+    {% if pacientes_api %}
+        <div class="kpi-section {% if pacientes %}gc-mt-lg{% endif %}">
+            <div class="gc-row-tight gc-mt-sm">
+                <p class="section-label gc-m-0">Encontrado no Dental Office</p>
+                <span class="badge gc-selo gc-badge-sm">
+                    Não importado
+                </span>
+            </div>
+            <p class="panel-copy gc-mt-sm gc-text-sm">
+                Ao clicar em <strong>Importar e gerar</strong>, os dados são trazidos do
+                Dental Office automaticamente e o paciente fica disponível no sistema.
+            </p>
+            <div class="table-wrap data-table-wrap gc-mt-md">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>Celular</th>
+                            <th>Origem</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pac in pacientes_api %}
+                            <tr>
+                                <td>
+                                    <strong>{{ pac.nome }}</strong>
+                                    <span class="cell-muted">ID #{{ pac.id_dental }}</span>
+                                </td>
+                                <td>
+                                    {% if pac.celular %}
+                                        {{ pac.celular }}
+                                    {% else %}
+                                        <span class="cell-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if pac.ja_existe %}
+                                        <span class="badge badge-devolvido">Já no sistema</span>
+                                    {% else %}
+                                        <span class="badge gc-selo">Dental Office</span>
+                                    {% endif %}
+                                </td>
+                                <td class="actions-cell">
+                                    <a class="button compact-button primary"
+                                       href="{% url 'contrato_importar' pac.id_dental %}">
+                                        {% if pac.ja_existe %}Atualizar e gerar{% else %}Importar e gerar{% endif %}
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    {# Paginação da lista local #}
+    {% if pacientes %}
+        {% include "partials/paginacao.html" %}
+    {% endif %}
+
+    {# ── Estado vazio ────────────────────────────────────────── #}
+    {% if not pacientes and not pacientes_api %}
+        <div class="kpi-section">
+            <div class="empty-state">
+                {% if erro_api %}
+                    <strong>Erro ao consultar o Dental Office</strong>
+                    <p>{{ erro_api }}</p>
+                {% elif busca and dental_pesquisado and not pacientes_api %}
+                    <strong>Paciente não cadastrado no Dental Office</strong>
+                    <p>
+                        "{{ busca }}" não foi localizado no sistema nem no Dental Office.
+                        Verifique se o nome foi digitado corretamente ou
+                        <a href="{% url 'contratos' %}">limpe o filtro</a> para ver todos.
+                    </p>
+                {% elif busca %}
+                    <strong>Nenhum resultado para "{{ busca }}"</strong>
+                    <p>
+                        Nenhum paciente encontrado no sistema com esse nome.
+                        <a href="{% url 'contratos' %}">Limpe o filtro</a> para ver todos.
+                    </p>
+                {% else %}
+                    <strong>Nenhum paciente no sistema</strong>
+                    <p>
+                        Sincronize pacientes no módulo
+                        <a href="{% url 'lab_pacientes' %}">Gestão de Laboratório</a>
+                        ou busque pelo nome para importar diretamente do Dental Office.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        var form = document.getElementById("form-busca-contratos");
+        var botao = document.getElementById("btn-buscar-contratos");
+        if (!form || !botao) return;
+        var rotulo = botao.textContent;
+        form.addEventListener("submit", function () {
+            botao.disabled = true;
+            botao.textContent = "Buscando…";
+        });
+        // Voltar via histórico (bfcache) restaura o DOM congelado —
+        // sem isto o botão ficaria preso em "Buscando…".
+        window.addEventListener("pageshow", function (evento) {
+            if (evento.persisted) {
+                botao.disabled = false;
+                botao.textContent = rotulo;
+            }
+        });
+    })();
+</script>
 {% endblock %}

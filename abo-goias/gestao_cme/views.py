@@ -407,7 +407,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         "gestao_cme/alunos_por_turma.html",
         {
             "usuario_logado": request.user,
-            "active_page": "alunos",
             "busca": busca,
             "turma_id": turma_id,
             "status_aluno": status_aluno,
@@ -676,9 +675,6 @@ def _contexto_movimentacao(
             else "Registre a devolução de um pacote pelo aluno."
         ),
         "submit_label": f"Registrar {tipo_label.lower()}",
-        "active_page": (
-            "nova_saida" if tipo == Movimentacao.Tipo.SAIDA else "nova_entrada"
-        ),
         "alunos": form.fields["aluno"].queryset,
         "materiais": form.fields["material"].queryset,
         "form": form,
@@ -720,16 +716,12 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
     Avisa quando o aluno nao tem abrigo cadastrado, mas nao bloqueia o registro.
     """
     form = EntradaForm(request.POST or None)
-    aluno_sem_abrigo = False
 
     if request.method == "POST" and form.is_valid():
         aluno: Aluno = form.cleaned_data["aluno"]
         quantidade: int = form.cleaned_data["quantidade"]
         data_hora = form.cleaned_data["data_hora"]
         observacoes = form.cleaned_data.get("observacoes", "")
-
-        if not aluno.abrigo:
-            aluno_sem_abrigo = True
 
         # Continua a sequencia numerica global dos pacotes existentes
         codigos_existentes = Movimentacao.objects.values_list(
@@ -740,8 +732,10 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
             if str(codigo).isdigit():
                 max_seq = max(max_seq, int(codigo))
 
+        codigos_gerados = [str(max_seq + i) for i in range(1, quantidade + 1)]
+
         with transaction.atomic():
-            for i in range(1, quantidade + 1):
+            for codigo in codigos_gerados:
                 Movimentacao.objects.create(
                     data_hora=data_hora,
                     tipo=Movimentacao.Tipo.ENTRADA,
@@ -750,7 +744,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
                     aluno_nome=aluno.nome,
                     aluno_codigo_externo=aluno.matricula,
                     turma_nome=aluno.turma.nome if aluno.turma else "",
-                    pacote_codigo=str(max_seq + i),
+                    pacote_codigo=codigo,
                     retirado=False,
                     arquivo_origem="painel",
                     row_hash=_gerar_row_hash(),
@@ -758,19 +752,17 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
                     observacoes=observacoes,
                 )
 
-        msg = f"{quantidade} pacote(s) de entrada registrado(s) para {aluno.nome}."
-        if aluno_sem_abrigo:
-            messages.warning(
-                request,
-                f"{msg} Atenção: {aluno.nome} não tem abrigo cadastrado — "
-                "defina o abrigo na ficha do aluno.",
-            )
-        else:
-            messages.success(
-                request,
-                f"{msg} Abrigo: {aluno.abrigo.identificador}.",
-            )
-        return redirect("cme_home")
+        # A confirmação com os códigos gerados precisa sobreviver ao
+        # redirect (post/redirect/get) e ficar visível até o operador
+        # etiquetar os pacotes — por isso sessão, e não messages.
+        request.session["cme_entrada_confirmada"] = {
+            "codigos": codigos_gerados,
+            "aluno_nome": aluno.nome,
+            "abrigo": aluno.abrigo.identificador if aluno.abrigo else "",
+            "quantidade": quantidade,
+            "data_hora": timezone.localtime(data_hora).strftime("%d/%m/%Y %H:%M"),
+        }
+        return redirect("registrar_entrada")
 
     alunos = (
         Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
@@ -785,7 +777,7 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "form": form,
             "alunos": alunos,
-            "active_page": "nova_entrada",
+            "confirmacao": request.session.pop("cme_entrada_confirmada", None),
         },
     )
 
@@ -878,7 +870,6 @@ def registrar_saida(request: HttpRequest) -> HttpResponse:
             "aluno": aluno,
             "aluno_id": aluno_id or "",
             "pacotes_pendentes": pacotes_pendentes,
-            "active_page": "nova_saida",
         },
     )
 
@@ -987,7 +978,10 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
             "mov": mov,
             "status_label": status_label,
             "status_classe": status_classe,
-            "active_page": "emprestimos",
+            "breadcrumbs": [
+                {"label": "Movimentações", "url": reverse("cme_home")},
+                {"label": "Editar registro", "url": None},
+            ],
         },
     )
 
@@ -1050,7 +1044,6 @@ def cadastrar_aluno(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "titulo": "Cadastrar aluno",
-            "active_page": "alunos",
             "turmas": form.fields["turma"].queryset,
             "form": form,
         },
@@ -1075,7 +1068,6 @@ def cadastrar_turma(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "titulo": "Cadastrar turma",
-            "active_page": "alunos",
             "form": form,
         },
     )
@@ -1105,7 +1097,6 @@ def cadastrar_abrigo(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "titulo": "Cadastrar abrigo",
             "is_edit": False,
-            "active_page": "armarios",
             "form": form,
         },
     )
@@ -1132,7 +1123,6 @@ def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
             "titulo": f"Editar abrigo {abrigo.identificador}",
             "is_edit": True,
             "objeto": abrigo,
-            "active_page": "armarios",
             "form": form,
         },
     )
@@ -1157,7 +1147,6 @@ def cadastrar_material(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "titulo": "Cadastrar material",
             "is_edit": False,
-            "active_page": "materiais",
             "form": form,
         },
     )
@@ -1182,7 +1171,6 @@ def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
             "titulo": f"Editar {material.nome}",
             "is_edit": True,
             "objeto": material,
-            "active_page": "materiais",
             "form": form,
         },
     )
@@ -1290,7 +1278,6 @@ def criar_emprestimo(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "titulo": "Novo empréstimo",
-            "active_page": "emprestimos",
             "alunos": form.fields["aluno"].queryset,
             "kits": form.fields["kit"].queryset,
             "form": form,
@@ -1450,7 +1437,6 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
         "gestao_cme/dashboard_cme.html",
         {
             "usuario_logado": request.user,
-            "active_page": "dashboard",
             "hoje": hoje,
             "data_inicio_str": data_inicio_str,
             "data_fim_str": data_fim_str,

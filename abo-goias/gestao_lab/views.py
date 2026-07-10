@@ -140,6 +140,9 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
             status=PedidoMaterial.Status.ATRASADO
         ).count(),
     }
+    metricas["total"] = (
+        metricas["em_dia"] + metricas["a_confirmar"] + metricas["atrasado"]
+    )
 
     page_obj, query_string = _paginar(request, qs)
     status_label = STATUS_LABELS.get(status_filtro, "Todos")
@@ -154,10 +157,8 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
             "busca": busca,
             "status_filtro": status_filtro,
             "status_label": status_label,
-            "status_opcoes": STATUS_OPCOES,
             "metricas": metricas,
             "hoje": hoje,
-            "form_envio": PedidoEnvioForm(),
         },
     )
 
@@ -225,9 +226,6 @@ def detalhe_pedido(request: HttpRequest, pk: int) -> HttpResponse:
         "gestao_lab/detalhe_pedido.html",
         {
             "pedido": pedido,
-            "form_envio": PedidoEnvioForm(),
-            "form_entrega": PedidoEntregaForm(),
-            "form_faturamento": PedidoFaturamentoForm(instance=pedido),
             "hoje": date_type.today(),
         },
     )
@@ -327,10 +325,6 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
 
     page_obj, query_string = _paginar(request, qs)
 
-    forms_faturamento = {
-        pedido.pk: PedidoFaturamentoForm(instance=pedido) for pedido in page_obj
-    }
-
     return render(
         request,
         "gestao_lab/pedidos_faturamento.html",
@@ -339,7 +333,6 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
             "page_obj": page_obj,
             "query_string": query_string,
             "busca": busca,
-            "forms_faturamento": forms_faturamento,
         },
     )
 
@@ -356,6 +349,8 @@ FILTRO_MOLDAGEM_OPCOES = [
     ("convertida", "Convertida em pedido"),
     ("nao_convertida", "Não convertida"),
 ]
+
+FILTRO_MOLDAGEM_LABELS = dict(FILTRO_MOLDAGEM_OPCOES)
 
 
 @login_required
@@ -408,6 +403,7 @@ def moldagens(request: HttpRequest) -> HttpResponse:
             "query_string": query_string,
             "busca": busca,
             "filtro": filtro,
+            "filtro_label": FILTRO_MOLDAGEM_LABELS.get(filtro, "Todas"),
             "filtro_opcoes": FILTRO_MOLDAGEM_OPCOES,
             "metricas": metricas,
         },

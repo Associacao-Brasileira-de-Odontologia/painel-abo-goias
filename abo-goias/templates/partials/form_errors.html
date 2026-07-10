@@ -1,0 +1,20 @@
+{% comment %}
+Bloco padrão de erros de formulário.
+Parâmetros:
+  form        — o formulário Django
+  com_rotulo  — se verdadeiro, prefixa cada erro com o label do campo
+{% endcomment %}
+{% if form.errors %}
+    <div class="form-errors">
+        <ul>
+            {% for field in form %}
+                {% for error in field.errors %}
+                    <li>{% if com_rotulo %}{{ field.label }}: {% endif %}{{ error }}</li>
+                {% endfor %}
+            {% endfor %}
+            {% for error in form.non_field_errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}

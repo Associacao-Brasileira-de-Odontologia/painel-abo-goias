@@ -1,0 +1,470 @@
+/*
+ * Base — reset, tipografia, esqueleto de página e mensagens globais.
+ *
+ * Estrutura comum a todas as telas autenticadas: cabeçalho institucional,
+ * casco de página (page-shell), grade de dois painéis (sidebar + resultados)
+ * e o banner fixo de mensagens. Componentes reutilizáveis (botões, campos,
+ * tabelas...) vivem em components.css.
+ */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+    background:
+        radial-gradient(circle at 15% 0%, rgba(29, 110, 238, 0.16), transparent 34rem),
+        linear-gradient(135deg, #020b1e 0%, #04122b 48%, #020917 100%);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.5;
+}
+
+button,
+input,
+select {
+    font: inherit;
+}
+
+/* ── Foco visível para navegação por teclado ────────────────────── */
+
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+    outline: 3px solid var(--accent-focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ── Tipografia ─────────────────────────────────────────────────── */
+
+.eyebrow,
+.section-label {
+    margin: 0 0 7px;
+    color: var(--accent-text);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+    margin-top: 0;
+}
+
+h1,
+h2 {
+    font-family: var(--font-display);
+    letter-spacing: 0;
+}
+
+h1 {
+    margin-bottom: 0;
+    font-size: clamp(2rem, 3.4vw, 3.15rem);
+    line-height: 1.02;
+}
+
+h2 {
+    margin-bottom: 0;
+    font-size: 1.55rem;
+    line-height: 1.16;
+}
+
+h3 {
+    margin-top: 0;
+    margin-bottom: 0;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    line-height: 1.2;
+    color: var(--text);
+}
+
+/* ── Cabeçalho institucional ────────────────────────────────────── */
+
+.app-header {
+    color: #ffffff;
+}
+
+.header-inner {
+    width: min(1240px, calc(100% - 32px));
+    min-height: 148px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 28px;
+    padding: 30px 0;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.brand-logo {
+    width: 250px;
+    height: 82px;
+    flex: 0 0 auto;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.user-menu-dropdown {
+    position: relative;
+    color: var(--muted-strong);
+    font-weight: 500;
+}
+
+.user-menu-dropdown summary {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    border-radius: var(--radius-control);
+    cursor: pointer;
+    list-style: none;
+}
+
+.user-menu-dropdown summary::marker,
+.user-menu-dropdown summary::-webkit-details-marker {
+    display: none;
+    content: "";
+}
+
+.user-menu-dropdown summary::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-top: -4px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    opacity: 0.6;
+    transform: rotate(45deg);
+}
+
+.user-menu-dropdown[open] summary::after {
+    margin-top: 2px;
+    transform: rotate(-135deg);
+}
+
+.user-menu-dropdown summary:hover,
+.user-menu-dropdown[open] summary {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.dropdown-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 190px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--panel);
+    box-shadow: var(--shadow);
+}
+
+.dropdown-panel a,
+.dropdown-panel button {
+    display: block;
+    width: 100%;
+    padding: 9px 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.dropdown-panel a:hover,
+.dropdown-panel button:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.dropdown-panel form {
+    margin: 0;
+}
+
+/* ── Cabeçalho compacto para telas operacionais ─────────────────── */
+
+.header--compact .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    min-height: 72px;
+    padding: 14px 0;
+}
+
+.header--compact .brand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.header--compact .brand > div {
+    padding-left: 0;
+}
+
+.header--compact .brand-logo {
+    width: 136px;
+    height: 46px;
+}
+
+.header--compact .eyebrow {
+    margin-bottom: 2px;
+    font-size: 0.68rem;
+}
+
+.header--compact h1 {
+    font-size: 1.35rem;
+    line-height: 1.1;
+}
+
+.header--compact ~ .page-shell {
+    margin-top: 8px;
+}
+
+.header--compact .user-menu-dropdown {
+    align-items: center;
+    flex-direction: row;
+}
+
+/* ── Casco da página e grade de painéis ─────────────────────────── */
+
+.page-shell {
+    width: min(1240px, calc(100% - 32px));
+    margin: -26px auto 0;
+    position: relative;
+    z-index: 1;
+}
+
+.layout-grid {
+    display: grid;
+    grid-template-columns: minmax(310px, 370px) minmax(0, 1fr);
+    gap: 22px;
+    align-items: stretch;
+}
+
+.panel {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow);
+}
+
+.config-panel {
+    display: flex;
+    flex-direction: column;
+    padding: 26px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+        var(--sidebar);
+}
+
+.results-panel {
+    padding: 26px;
+    overflow: hidden;
+    background: rgba(4, 20, 46, 0.86);
+    backdrop-filter: blur(18px);
+}
+
+.panel-copy {
+    margin: 14px 0 0;
+    color: var(--muted);
+}
+
+.footer {
+    width: min(1240px, calc(100% - 32px));
+    margin: 28px auto 24px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* ── Mensagens globais ──────────────────────────────────────────── */
+
+.messages {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 18px;
+}
+
+.message {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    padding: 12px 16px;
+    color: var(--muted-strong);
+    font-weight: 600;
+    pointer-events: auto;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+    animation: message-appear 0.22s ease, message-dismiss 5s 0.5s ease forwards;
+}
+
+.message:hover,
+.message:focus-within {
+    animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .message {
+        animation: none;
+    }
+}
+
+.message-dismiss {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 0 0 0 4px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.message-dismiss:hover {
+    opacity: 1;
+}
+
+.message.success {
+    border-color: var(--success-border);
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.message.error {
+    border-color: var(--danger-border);
+    background: var(--danger-bg);
+    color: var(--danger-text-strong);
+}
+
+.messages-banner {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    z-index: 1000;
+    display: grid;
+    gap: 8px;
+    width: min(420px, calc(100vw - 48px));
+    pointer-events: none;
+}
+
+@keyframes message-appear {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes message-dismiss {
+    0%,  75% { opacity: 1; transform: translateY(0); }
+    100%     { opacity: 0; transform: translateY(6px); }
+}
+
+/* ── Revelação escalonada de entrada ────────────────────────────── */
+
+@keyframes panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .layout-grid > .panel {
+        animation: panel-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+
+    .layout-grid > .panel:nth-child(2) {
+        animation-delay: 70ms;
+    }
+}
+
+/* ── Responsivo ─────────────────────────────────────────────────── */
+
+@media (min-width: 981px) {
+    .header-inner {
+        display: grid;
+        grid-template-columns: minmax(310px, 370px) minmax(0, 1fr) auto;
+        gap: 22px;
+        align-items: center;
+    }
+
+    .brand {
+        display: contents;
+    }
+
+    .brand-logo {
+        grid-column: 1;
+    }
+
+    .brand > div {
+        grid-column: 2;
+        padding-left: 26px;
+    }
+
+    .user-menu-dropdown {
+        grid-column: 3;
+        justify-self: end;
+    }
+}
+
+@media (max-width: 980px) {
+    .layout-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 620px) {
+    .header-inner,
+    .page-shell,
+    .footer {
+        width: min(100% - 20px, 1240px);
+    }
+
+    .brand {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .header-inner {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .brand-logo {
+        width: min(245px, 100%);
+        height: 74px;
+    }
+
+    .config-panel,
+    .results-panel {
+        padding: 18px;
+        border-radius: var(--radius-panel);
+    }
+
+    .header--compact .header-inner {
+        flex-wrap: wrap;
+    }
+
+    .header--compact .brand {
+        flex-direction: row;
+        align-items: center;
+    }
+}

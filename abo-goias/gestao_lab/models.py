@@ -224,6 +224,15 @@ class PedidoMaterial(ModeloBase):
     numero_nota_fiscal = models.CharField(max_length=30, blank=True)
     data_vencimento = models.DateField(null=True, blank=True)
 
+    cobranca_whatsapp_enviada_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Última vez que este pedido entrou numa cobrança automática por "
+            "WhatsApp ao laboratório — evita cobrar de novo no mesmo dia."
+        ),
+    )
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

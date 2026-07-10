@@ -1,101 +1,63 @@
-{% extends "gestao_lab/base.html" %}
+﻿{% extends "gestao_lab/base.html" %}
 
 {% block title %}Gestão de Laboratório | Nova moldagem{% endblock %}
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Nova moldagem{% endblock %}
 
-{% block content %}
-<main class="page-shell">
-    <div class="layout-grid">
-        <aside class="panel config-panel">
-            <p class="panel-copy">Registre a moldagem realizada pelo aluno. Após o registro, encaminhe para o laboratório convertendo em pedido de material.</p>
+{% block sidebar_copy %}Registre a moldagem realizada pelo aluno. Após o registro, encaminhe para o laboratório convertendo em pedido de material.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
-            {% include "gestao_lab/partials/menu_lab.html" with active_page="moldagens" %}
+{% block sidebar_extra %}
+    {% include "gestao_lab/partials/busca_dental.html" with busca_next="lab_criar_moldagem" %}
+{% endblock %}
 
-            {% include "gestao_lab/partials/busca_dental.html" with busca_next="lab_criar_moldagem" %}
-        </aside>
+{% block panel_label %}<p class="section-label">Fluxo de moldagens</p>{% endblock %}
+{% block panel_title %}Registrar moldagem{% endblock %}
+{% block panel_actions %}
+    <a class="button secondary" href="{% url 'lab_moldagens' %}">Voltar à listagem</a>
+{% endblock %}
 
-        <section class="panel results-panel">
-            <div class="results-topbar">
-                <div>
-                    <p class="section-label">Fluxo de moldagens</p>
-                    <h2>Registrar moldagem</h2>
-                </div>
-                <a class="button secondary" href="{% url 'lab_moldagens' %}">Voltar à listagem</a>
-            </div>
+{% block panel %}
+    {% include "partials/form_errors.html" with com_rotulo=True %}
 
-            {% if form.errors %}
-                <div class="form-errors">
-                    <ul>
-                        {% for field in form %}
-                            {% for error in field.errors %}
-                                <li>{{ field.label }}: {{ error }}</li>
-                            {% endfor %}
-                        {% endfor %}
-                        {% for error in form.non_field_errors %}
-                            <li>{{ error }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
+    <form class="form-stack form-stack-wide" method="post">
+        {% csrf_token %}
+
+        <div class="field field-required">
+            <label for="id_paciente">Paciente</label>
+            {{ form.paciente }}
+            {% if form.paciente.errors %}
+                <span class="field-error">{{ form.paciente.errors|join:", " }}</span>
             {% endif %}
+        </div>
 
-            <form class="form-stack form-stack-wide" method="post">
-                {% csrf_token %}
+        <div class="field field-required">
+            <label for="id_aluno">Aluno</label>
+            {{ form.aluno }}
+            {% if form.aluno.errors %}
+                <span class="field-error">{{ form.aluno.errors|join:", " }}</span>
+            {% endif %}
+        </div>
 
-                <div class="field field-required">
-                    <label for="id_paciente">Paciente</label>
-                    <select id="id_paciente" name="paciente" required>
-                        <option value="">— Selecione o paciente —</option>
-                        {% for paciente in form.fields.paciente.queryset %}
-                            <option value="{{ paciente.pk }}"
-                                {% if form.paciente.value == paciente.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ paciente.nome }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    {% if form.paciente.errors %}
-                        <span class="field-error">{{ form.paciente.errors|join:", " }}</span>
-                    {% endif %}
-                </div>
+        <div class="field field-checkbox">
+            <label>
+                <input type="checkbox" name="faturado"
+                    {% if form.faturado.value %}checked{% endif %}>
+                Paciente já realizou o pagamento pelo procedimento
+            </label>
+        </div>
 
-                <div class="field field-required">
-                    <label for="id_aluno">Aluno</label>
-                    <select id="id_aluno" name="aluno" required>
-                        <option value="">— Selecione o aluno —</option>
-                        {% for aluno in form.fields.aluno.queryset %}
-                            <option value="{{ aluno.pk }}"
-                                {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ aluno.nome }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    {% if form.aluno.errors %}
-                        <span class="field-error">{{ form.aluno.errors|join:", " }}</span>
-                    {% endif %}
-                </div>
+        <div class="field field-checkbox">
+            <label>
+                <input type="checkbox" name="entregue"
+                    {% if form.entregue.value %}checked{% endif %}>
+                Moldagem já foi entregue ao laboratório
+            </label>
+        </div>
 
-                <div class="field">
-                    <label>
-                        <input type="checkbox" name="faturado"
-                            {% if form.faturado.value %}checked{% endif %}>
-                        Paciente já realizou o pagamento pelo procedimento
-                    </label>
-                </div>
-
-                <div class="field">
-                    <label>
-                        <input type="checkbox" name="entregue"
-                            {% if form.entregue.value %}checked{% endif %}>
-                        Moldagem já foi entregue ao laboratório
-                    </label>
-                </div>
-
-                <div class="form-actions">
-                    <button class="button primary" type="submit">Registrar moldagem</button>
-                    <a class="button secondary" href="{% url 'lab_moldagens' %}">Cancelar</a>
-                </div>
-            </form>
-        </section>
-    </div>
-</main>
+        <div class="form-actions">
+            <button class="button primary" type="submit">Registrar moldagem</button>
+            <a class="button secondary" href="{% url 'lab_moldagens' %}">Cancelar</a>
+        </div>
+    </form>
 {% endblock %}

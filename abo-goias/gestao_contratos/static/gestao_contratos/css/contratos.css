@@ -1,26 +1,27 @@
 /*
  * Gestão de Contratos — camada visual própria da app.
  *
- * Tudo aqui é escopado em `body.gestao-contratos` (declarado via
- * {% block body_class %} nos templates que estendem gestao_cme/base.html).
- * Isso garante que NADA aqui vaza para as demais apps do sistema, que
- * continuam usando exclusivamente gestao_cme/static/gestao_cme/css/home.css.
+ * As regras visuais são escopadas em `body.gestao-contratos` (definido em
+ * gestao_contratos/base.html). Isso garante que nada aqui vaza para as
+ * demais apps, que usam apenas o design system global (static/css/).
  *
- * Conceito: "Termo & Selo" — documento legal + precisão clínica. O
- * dourado-tinta (--gc-ink) é reservado para o momento da assinatura;
- * o resto da interface continua usando os tokens semânticos do sistema
- * (azul = navegação/ação, verde/vermelho = sucesso/erro).
+ * Conceito: "Termo & Selo" — documento legal + precisão clínica. A
+ * tinta-azul de caneta/carimbo oficial (--gc-ink, do céu #27BAFF ao
+ * royal #0348BB da paleta ABO Goiás) é reservada ao momento da
+ * assinatura; o resto da interface continua usando os tokens
+ * semânticos do sistema (azul = navegação/ação, turquesa/vermelho =
+ * sucesso/erro).
  */
 
 body.gestao-contratos {
     /* ── Tokens próprios da app ──────────────────────────────────── */
-    --gc-ink: #e0a855;
-    --gc-ink-dark: #a8701f;
-    --gc-ink-soft: rgba(224, 168, 85, 0.16);
-    --gc-ink-line: rgba(224, 168, 85, 0.4);
-    --accent: var(--blue); /* corrige --accent nunca declarada em home.css */
+    --gc-ink: #27baff;
+    --gc-ink-dark: #0348bb;
+    --gc-ink-soft: rgba(39, 186, 255, 0.16);
+    --gc-ink-line: rgba(39, 186, 255, 0.4);
+    --accent: var(--blue); /* alias local: --accent não existe nos tokens globais */
 
-    /* fontes desta camada — DM Sans do home.css permanece para corpo de texto */
+    /* fontes desta camada — DM Sans (tokens globais) permanece no corpo de texto */
     --gc-serif: "Fraunces", "Syne", Georgia, serif;
     --gc-mono: "IBM Plex Mono", "Courier New", monospace;
 }
@@ -74,7 +75,7 @@ body.gestao-contratos .panel::before {
     content: "";
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(rgba(224, 168, 85, 0.07) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(39, 186, 255, 0.07) 1px, transparent 1px);
     background-size: 22px 22px;
     border-radius: inherit;
     pointer-events: none;
@@ -106,12 +107,12 @@ body.gestao-contratos textarea:focus-visible {
 
 body.gestao-contratos .button.gc-selar {
     background: linear-gradient(135deg, var(--gc-ink), var(--gc-ink-dark));
-    box-shadow: 0 18px 42px rgba(224, 168, 85, 0.28);
-    color: #1c1204;
+    box-shadow: 0 18px 42px rgba(39, 186, 255, 0.28);
+    color: #ffffff;
 }
 
 body.gestao-contratos .button.gc-selar:hover {
-    box-shadow: 0 22px 50px rgba(224, 168, 85, 0.4);
+    box-shadow: 0 22px 50px rgba(39, 186, 255, 0.4);
 }
 
 body.gestao-contratos .badge.gc-selo {
@@ -172,7 +173,7 @@ body.gestao-contratos .badge.gc-selo {
     font-size: 11px;
 }
 
-/* Variantes de .contrato-form-row (home.css) para linhas com proporções
+/* Variantes de .contrato-form-row para linhas com proporções
    diferentes — a versão anterior usava style="flex:" em filhos de um
    grid, o que não tem efeito nenhum (flex não atua em item de grid). */
 .gc-row-logradouro {
@@ -189,9 +190,20 @@ body.gestao-contratos .badge.gc-selo {
     align-items: start;
 }
 
+/* Campo + botão de ação na mesma linha (assinatura, WhatsApp, e-mail).
+   O botão alinha à base do campo; em telas estreitas empilham na ordem
+   campo → botão, mantendo o par agrupado. */
+.gc-row-campo-acao {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 16px;
+    align-items: end;
+}
+
 @media (max-width: 640px) {
     .gc-row-logradouro,
-    .gc-row-endereco-3 {
+    .gc-row-endereco-3,
+    .gc-row-campo-acao {
         grid-template-columns: 1fr;
     }
 }
@@ -203,6 +215,74 @@ body.gestao-contratos .badge.gc-selo {
 
 .gc-btn-sm {
     font-size: 0.75rem;
+}
+
+/* Ação secundária discreta ao lado de uma primária — ex.: "Limpar busca". */
+body.gestao-contratos .gc-btn-ghost {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font-weight: 700;
+    box-shadow: none;
+}
+
+body.gestao-contratos .gc-btn-ghost:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Nota curta sob a linha de busca — <p> participa do grid do form. */
+body.gestao-contratos .gc-search-hint {
+    margin: 0;
+}
+
+.gc-m-0 {
+    margin: 0;
+}
+
+.gc-mb-md {
+    margin-bottom: 16px;
+}
+
+.gc-muted {
+    color: var(--muted);
+}
+
+.gc-text-sm {
+    font-size: 0.88rem;
+}
+
+.gc-text-xs {
+    font-size: 0.8rem;
+}
+
+/* Busca com rótulo e dica — usada na listagem de pacientes. */
+.results-search {
+    display: grid;
+    gap: 9px;
+    margin-bottom: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    background: rgba(2, 11, 30, 0.42);
+}
+
+.results-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.results-search .button {
+    min-height: 50px;
+    border-radius: 12px;
+}
+
+@media (max-width: 620px) {
+    .results-search-row {
+        grid-template-columns: 1fr;
+    }
 }
 
 .gc-historico-item {
@@ -226,7 +306,194 @@ body.gestao-contratos .badge.gc-selo {
     border-radius: 14px;
     background: #fff;
     padding: 10px;
-    box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 34px rgba(224, 168, 85, 0.22);
+    box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 34px rgba(39, 186, 255, 0.22);
+}
+
+/* ══ Checklist de prontidão do paciente ═══════════════════════════ */
+
+.checklist-wrap {
+    margin-bottom: 28px;
+}
+
+.checklist-alert {
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+}
+
+.checklist-alert strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+
+.checklist-alert p {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: inherit;
+    opacity: 0.9;
+}
+
+.checklist-alert-ok {
+    background: rgba(18, 227, 199, 0.12);
+    border: 1px solid var(--success-border);
+    color: var(--success);
+}
+
+.checklist-alert-blocked {
+    background: rgba(255, 100, 100, 0.1);
+    border: 1px solid var(--danger-border);
+    color: var(--danger-text);
+}
+
+.checklist-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(2, 11, 30, 0.35);
+}
+
+.checklist-item.checklist-ok {
+    border-color: rgba(18, 227, 199, 0.2);
+}
+
+.checklist-item.checklist-pendente {
+    border-color: var(--danger-border);
+    background: rgba(255, 100, 100, 0.06);
+}
+
+.checklist-item.checklist-opcional {
+    opacity: 0.65;
+}
+
+.checklist-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    overflow: hidden;
+}
+
+.checklist-icon svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+    fill: none;
+}
+
+.checklist-item.checklist-ok .checklist-icon svg {
+    stroke: var(--success);
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    width: 18px;
+    height: 18px;
+}
+
+.checklist-item.checklist-pendente .checklist-icon svg {
+    stroke: var(--danger-text);
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    width: 18px;
+    height: 18px;
+}
+
+.checklist-item.checklist-opcional .checklist-icon svg {
+    stroke: var(--muted);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    width: 18px;
+    height: 18px;
+}
+
+.checklist-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.checklist-label {
+    font-size: 0.82rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.checklist-valor {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.checklist-mensagem {
+    font-size: 0.8rem;
+    color: var(--danger-text);
+    margin-top: 2px;
+}
+
+.checklist-badge-opcional {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(142, 218, 253, 0.12);
+    color: var(--muted);
+    align-self: center;
+}
+
+/* ══ Caixa de dados do paciente ═══════════════════════════════════ */
+
+.contrato-info-box {
+    padding: 14px 18px;
+    background: rgba(2, 11, 30, 0.5);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-top: 10px;
+}
+
+.contrato-info-box--blocked {
+    border-color: rgba(255, 100, 100, 0.25);
+    background: rgba(255, 100, 100, 0.05);
+}
+
+.contrato-info-text {
+    margin: 0;
+    font-size: 0.93rem;
+    line-height: 1.65;
+    color: var(--text);
+}
+
+/* ══ Grid de dois campos no formulário de contrato ════════════════ */
+
+.contrato-form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+    gap: 16px;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    .contrato-form-row {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ══ Movimento ══════════════════════════════════════════════════── */
@@ -242,8 +509,8 @@ body.gestao-contratos .badge.gc-selo {
 }
 
 @keyframes gc-qr-pulse {
-    0%, 100% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 24px rgba(224, 168, 85, 0.18); }
-    50% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 46px rgba(224, 168, 85, 0.4); }
+    0%, 100% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 24px rgba(39, 186, 255, 0.18); }
+    50% { box-shadow: 0 0 0 1px var(--gc-ink-line), 0 0 46px rgba(39, 186, 255, 0.4); }
 }
 
 /* Entrada escalonada — só no carregamento inicial da página, nunca no

@@ -5,8 +5,11 @@ from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.http import HttpResponse
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -29,6 +32,7 @@ from gestao_cme.models import (
     OrigemDados,
     Turma,
 )
+from gestao_cme.permissoes import GRUPO_GESTAO, GRUPOS_PADRAO, requer_grupo
 from gestao_cme.services.eduq_sync import (
     sincronizar_alunos_eduq,
     sincronizar_eduq,
@@ -59,7 +63,7 @@ class RotasIniciaisTests(TestCase):
         response = self.client.get(reverse("login"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "gestao_cme/auth/login.html")
+        self.assertTemplateUsed(response, "auth/login.html")
 
     def test_catalog_legado_redireciona_para_home(self) -> None:
         response = self.client.get("/catalog/")
@@ -295,7 +299,7 @@ class RotasIniciaisTests(TestCase):
         )
         self.client.force_login(usuario)
 
-        response = self.client.get(reverse("armarios"), {"ocupacao": "ocupado"})
+        response = self.client.get(reverse("abrigos"), {"ocupacao": "ocupado"})
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_cme/armarios.html")
@@ -766,3 +770,164 @@ class MigracaoLegadoTests(TestCase):
             ],
         }
         return dados[path.name]
+
+
+class RequerGrupoTests(TestCase):
+    """Testa o decorator isoladamente — ele ainda não está aplicado a
+    nenhuma view real, então a checagem é feita numa view trivial criada
+    só para o teste."""
+
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+
+        @requer_grupo(GRUPO_GESTAO)
+        def view(request):
+            return HttpResponse("ok")
+
+        self.view = view
+
+    def test_usuario_anonimo_redireciona_para_login(self) -> None:
+        from django.contrib.auth.models import AnonymousUser
+
+        request = self.factory.get("/qualquer-rota/")
+        request.user = AnonymousUser()
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+
+    def test_usuario_sem_grupo_recebe_permission_denied(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="sem-grupo", password="senha-segura"
+        )
+        request = self.factory.get("/qualquer-rota/")
+        request.user = usuario
+
+        with self.assertRaises(PermissionDenied):
+            self.view(request)
+
+    def test_usuario_no_grupo_correto_acessa(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="da-gestao", password="senha-segura"
+        )
+        usuario.groups.add(Group.objects.create(name=GRUPO_GESTAO))
+        request = self.factory.get("/qualquer-rota/")
+        request.user = usuario
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"ok")
+
+    def test_superuser_acessa_sem_pertencer_a_nenhum_grupo(self) -> None:
+        usuario = get_user_model().objects.create_superuser(
+            username="admin", password="senha-segura", email="admin@example.com"
+        )
+        request = self.factory.get("/qualquer-rota/")
+        request.user = usuario
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 200)
+
+
+class CriarGruposPadraoTests(TestCase):
+    def test_cria_os_tres_grupos_padrao(self) -> None:
+        call_command("criar_grupos_padrao")
+
+        self.assertEqual(
+            Group.objects.filter(name__in=GRUPOS_PADRAO).count(), len(GRUPOS_PADRAO)
+        )
+
+    def test_comando_e_idempotente(self) -> None:
+        call_command("criar_grupos_padrao")
+        call_command("criar_grupos_padrao")
+
+        self.assertEqual(
+            Group.objects.filter(name__in=GRUPOS_PADRAO).count(), len(GRUPOS_PADRAO)
+        )
+
+
+class MenuDoUsuarioTests(TestCase):
+    def test_dropdown_exibe_trocar_senha_e_sair(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="comum", password="senha-segura"
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "user-menu-dropdown")
+        self.assertContains(response, "Trocar senha")
+        self.assertContains(response, "Sair")
+
+    def test_dropdown_esconde_administracao_para_usuario_comum(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="comum2", password="senha-segura"
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertNotContains(response, "Administração")
+
+    def test_dropdown_exibe_administracao_para_staff(self) -> None:
+        usuario = get_user_model().objects.create_user(
+            username="staff", password="senha-segura", is_staff=True
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "Administração")
+
+
+class PaginasDeErroTests(TestCase):
+    """Os templates 404/403/500 estendem auth/base_auth.html porque as views
+    padrão do Django (django.views.defaults) renderizam sem context
+    processors — 500 nem recebe request. Por isso os testes chamam as views
+    diretamente com RequestFactory em vez de depender do Client."""
+
+    def setUp(self) -> None:
+        self.factory = RequestFactory()
+
+    def _request_autenticado(self, path: str):
+        from django.contrib.auth.models import AnonymousUser
+
+        request = self.factory.get(path)
+        # page_not_found/permission_denied passam `request` ao template (ao
+        # contrário de server_error) — o context processor usuario_logado
+        # precisa de request.user, normalmente populado pelo
+        # AuthenticationMiddleware. RequestFactory não roda middleware, então
+        # simulamos aqui um visitante anônimo.
+        request.user = AnonymousUser()
+        return request
+
+    def test_pagina_404_renderiza(self) -> None:
+        from django.http import Http404
+        from django.views.defaults import page_not_found
+
+        request = self._request_autenticado("/rota-que-nao-existe/")
+        response = page_not_found(request, Http404("não encontrado"))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn(b"P\xc3\xa1gina n\xc3\xa3o encontrada", response.content)
+
+    def test_pagina_403_renderiza(self) -> None:
+        from django.views.defaults import permission_denied
+
+        request = self._request_autenticado("/qualquer-rota/")
+        response = permission_denied(request, PermissionDenied())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(b"Sem permiss\xc3\xa3o", response.content)
+
+    def test_pagina_500_renderiza_sem_contexto(self) -> None:
+        from django.views.defaults import server_error
+
+        request = self.factory.get("/qualquer-rota/")
+        response = server_error(request)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn(b"Erro interno", response.content)

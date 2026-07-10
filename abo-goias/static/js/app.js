@@ -1,0 +1,82 @@
+// JS global do painel ABO Goiás — modal de confirmação genérico e dispensa
+// de mensagens (toast). Vanilla, sem dependências, carregado em toda página
+// que estende templates/base.html.
+
+(function () {
+    var dialog = document.getElementById("confirm-dialog");
+    if (!dialog) return;
+
+    var titleEl = dialog.querySelector('[data-role="title"]');
+    var messageEl = dialog.querySelector('[data-role="message"]');
+    var acceptEl = dialog.querySelector('[data-role="accept"]');
+
+    document.addEventListener("click", function (event) {
+        var trigger = event.target.closest("[data-confirm]");
+        if (!trigger) return;
+
+        event.preventDefault();
+
+        titleEl.textContent = trigger.dataset.confirmTitle || "Confirmar ação";
+        messageEl.textContent = trigger.dataset.confirm;
+        acceptEl.textContent = trigger.dataset.confirmLabel || "Confirmar";
+        acceptEl.classList.toggle("danger-button", trigger.dataset.confirmDanger === "true");
+
+        acceptEl.onclick = function () {
+            dialog.close();
+            var form = trigger.closest("form");
+            if (form) form.requestSubmit(trigger);
+        };
+
+        dialog.showModal();
+    });
+
+    // Fecha ao clicar fora do conteúdo (no próprio elemento <dialog>, que
+    // ocupa a área do backdrop fora do <form> interno).
+    dialog.addEventListener("click", function (event) {
+        if (event.target === dialog) dialog.close();
+    });
+})();
+
+(function () {
+    document.addEventListener("click", function (event) {
+        document.querySelectorAll(".user-menu-dropdown[open]").forEach(function (menu) {
+            if (!menu.contains(event.target)) menu.removeAttribute("open");
+        });
+    });
+})();
+
+(function () {
+    function removerMensagem(mensagem) {
+        if (mensagem) mensagem.remove();
+    }
+
+    document.addEventListener("click", function (event) {
+        var botao = event.target.closest(".message-dismiss");
+        if (!botao) return;
+        removerMensagem(botao.closest(".message"));
+    });
+
+    document.querySelectorAll(".messages-banner .message").forEach(function (mensagem) {
+        mensagem.addEventListener("animationend", function (event) {
+            if (event.animationName === "message-dismiss") removerMensagem(mensagem);
+        });
+    });
+})();
+
+(function () {
+    // Feedback de carregamento em formulários que disparam sincronizações
+    // externas (Eduq, Dental Office) — a resposta é um redirect, então o
+    // estado de loading fica visível até a próxima página carregar.
+    document.addEventListener("submit", function (event) {
+        var form = event.target.closest(".sync-form");
+        if (!form) return;
+
+        var botao = form.querySelector('button[type="submit"]');
+        if (!botao || botao.disabled) return;
+
+        botao.dataset.originalLabel = botao.textContent;
+        botao.textContent = "Sincronizando…";
+        botao.disabled = true;
+        botao.classList.add("is-loading");
+    });
+})();

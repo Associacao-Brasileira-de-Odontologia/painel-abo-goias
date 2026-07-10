@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
+from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -182,6 +183,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "contas.apps.ContasConfig",
     "gestao_cme.apps.GestaoCmeConfig",
     "gestao_lab.apps.GestaoLabConfig",
     "gestao_contratos.apps.GestaoContratosConfig",
@@ -206,14 +208,14 @@ ROOT_URLCONF = "abo_goias.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "gestao_cme.context_processors.usuario_logado",
+                "contas.context_processors.usuario_logado",
             ],
         },
     },
@@ -261,7 +263,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = _env("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles"))
-STATICFILES_DIRS = []
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_ROOT = Path(_env("DJANGO_MEDIA_ROOT", str(BASE_DIR)))
 MEDIA_URL = "/media/"
@@ -279,6 +281,14 @@ if importlib.util.find_spec("whitenoise"):
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"
+
+# Sessao expira apos 8h (turno de trabalho) e tambem ao fechar o navegador;
+# antes disso o cookie de sessao usava o padrao do Django (2 semanas), o que
+# nao fazia sentido para um sistema que manipula dados de pacientes.
+SESSION_COOKIE_AGE = _env_int("DJANGO_SESSION_COOKIE_AGE", 60 * 60 * 8)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = _env_bool(
+    "DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE", True
+)
 
 EMAIL_HOST = _env("EMAIL_HOST") or _env("DJANGO_EMAIL_HOST")
 EMAIL_PORT = _env_int("EMAIL_PORT", 0) or _env_int("DJANGO_EMAIL_PORT", 587)
@@ -335,61 +345,69 @@ SECURE_PROXY_SSL_HEADER = (
     else None
 )
 
-DENTAL_SYNC_TOKEN = os.environ.get("DENTAL_SYNC_TOKEN", "")
-DENTAL_CLINIC_ID = int(os.environ.get("DENTAL_CLINIC_ID", "1"))
-DENTAL_USER_GROUP_ALUNO = int(os.environ.get("DENTAL_USER_GROUP_ALUNO", "8"))
+# Credenciais e parametros de todas as integracoes externas (WhatsApp, carimbo
+# de tempo, Dental Office, Eduq) sao lidos aqui, centralizados num unico ponto
+# de configuracao, em vez de cada servico ler os.environ (e recarregar o
+# .env) diretamente. Os flags *_CONFIGURADO permitem que views/templates
+# verifiquem se uma integracao esta ativa sem duplicar a logica de "campos
+# obrigatorios".
+# Z-API (envio automático de WhatsApp) — ver mensageria/ (pacote compartilhado
+# entre apps, na raiz do projeto).
+ZAPI_INSTANCE_ID = _env("ZAPI_INSTANCE_ID")
+ZAPI_TOKEN = _env("ZAPI_TOKEN")
+ZAPI_CLIENT_TOKEN = _env("ZAPI_CLIENT_TOKEN")
+ZAPI_BASE_URL = _env("ZAPI_BASE_URL", "https://api.z-api.io")
+ZAPI_TIMEOUT = _env_int("ZAPI_TIMEOUT", 30)
+ZAPI_MAX_RETRIES = _env_int("ZAPI_MAX_RETRIES", 3)
+ZAPI_RETRY_BACKOFF_SECONDS = _env_int("ZAPI_RETRY_BACKOFF_SECONDS", 2)
+ZAPI_CONFIGURADO = bool(ZAPI_INSTANCE_ID and ZAPI_TOKEN)
 
-DENTAL_AUTH_URL = os.environ.get(
+CARIMBO_TEMPO_TSA_URL = _env("CARIMBO_TEMPO_TSA_URL")
+CARIMBO_TEMPO_TSA_USERNAME = _env("CARIMBO_TEMPO_TSA_USERNAME")
+CARIMBO_TEMPO_TSA_PASSWORD = _env("CARIMBO_TEMPO_TSA_PASSWORD")
+CARIMBO_TEMPO_TIMEOUT = _env_int("CARIMBO_TEMPO_TIMEOUT", 30)
+CARIMBO_TEMPO_CONFIGURADO = bool(CARIMBO_TEMPO_TSA_URL)
+
+DENTAL_SYNC_TOKEN = _env("DENTAL_SYNC_TOKEN")
+DENTAL_CLINIC_ID = _env_int("DENTAL_CLINIC_ID", 1)
+DENTAL_USER_GROUP_ALUNO = _env_int("DENTAL_USER_GROUP_ALUNO", 8)
+DENTAL_CLIENT_ID = _env("DENTAL_CLIENT_ID")
+DENTAL_SECRET = _env("DENTAL_SECRET")
+DENTAL_AUTH_URL = _env(
     "DENTAL_AUTH_URL",
     "https://demo.api.app.dentaloffice.com.br/v1/auth/tokens",
 )
-DENTAL_BASE_URL = os.environ.get(
+DENTAL_BASE_URL = _env(
     "DENTAL_BASE_URL",
     "https://demo.api.app.dentaloffice.com.br/v1",
 )
-DENTAL_VERIFY_TLS = os.environ.get("DENTAL_VERIFY_TLS", "true").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
-DENTAL_TIMEOUT = int(os.environ.get("DENTAL_TIMEOUT", "30"))
-DENTAL_USE_PROXY = os.environ.get("DENTAL_USE_PROXY", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
+DENTAL_VERIFY_TLS = _env_bool("DENTAL_VERIFY_TLS", True)
+DENTAL_TIMEOUT = _env_int("DENTAL_TIMEOUT", 30)
+DENTAL_USE_PROXY = _env_bool("DENTAL_USE_PROXY", False)
+# Retry com backoff exponencial para falhas transitorias (timeout,
+# indisponibilidade, limite de requisicoes) em chamadas de leitura (GET) —
+# nunca aplicado a POST, para nao arriscar duplicar envios de documento.
+DENTAL_MAX_RETRIES = _env_int("DENTAL_MAX_RETRIES", 3)
+DENTAL_RETRY_BACKOFF_SECONDS = _env_int("DENTAL_RETRY_BACKOFF_SECONDS", 1)
+DENTAL_CONFIGURADO = bool(DENTAL_CLIENT_ID and DENTAL_SECRET)
 
-EDUQ_AUTH_URL = os.environ.get(
+EDUQ_DOMINIO = _env("EDUQ_DOMINIO")
+EDUQ_USUARIO = _env("EDUQ_USUARIO")
+EDUQ_SENHA = _env("EDUQ_SENHA")
+EDUQ_AUTH_URL = _env(
     "EDUQ_AUTH_URL",
     "https://apisistema.eduqtecnologia.com.br/autenticacao/logar",
 )
-EDUQ_DATA_URL = os.environ.get(
+EDUQ_DATA_URL = _env(
     "EDUQ_DATA_URL",
     "https://apisistema.eduqtecnologia.com.br/emissao-consulta-personalizada/obter-dados",
 )
-EDUQ_CONSULTA_TURMAS_ID = int(os.environ.get("EDUQ_CONSULTA_TURMAS_ID", "4"))
-EDUQ_CONSULTA_DETALHES_TURMA_ID = int(
-    os.environ.get("EDUQ_CONSULTA_DETALHES_TURMA_ID", "5")
-)
-EDUQ_VERIFY_TLS = os.environ.get("EDUQ_VERIFY_TLS", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
-EDUQ_TIMEOUT = int(os.environ.get("EDUQ_TIMEOUT", "30"))
-EDUQ_USE_PROXY = os.environ.get("EDUQ_USE_PROXY", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "sim",
-    "on",
-}
+EDUQ_CONSULTA_TURMAS_ID = _env_int("EDUQ_CONSULTA_TURMAS_ID", 4)
+EDUQ_CONSULTA_DETALHES_TURMA_ID = _env_int("EDUQ_CONSULTA_DETALHES_TURMA_ID", 5)
+EDUQ_VERIFY_TLS = _env_bool("EDUQ_VERIFY_TLS", False)
+EDUQ_TIMEOUT = _env_int("EDUQ_TIMEOUT", 30)
+EDUQ_USE_PROXY = _env_bool("EDUQ_USE_PROXY", False)
+EDUQ_CONFIGURADO = bool(EDUQ_DOMINIO and EDUQ_USUARIO and EDUQ_SENHA)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Celery — processamento assíncrono (envio ao Dental Office, limpeza de
@@ -429,5 +447,9 @@ CELERY_BEAT_SCHEDULE = {
     "expirar-sessoes-assinatura-vencidas": {
         "task": "gestao_contratos.tasks.expirar_sessoes_vencidas_task",
         "schedule": 300.0,  # a cada 5 minutos
+    },
+    "cobrar-pedidos-de-material-atrasados": {
+        "task": "gestao_lab.tasks.cobrar_pedidos_atrasados_task",
+        "schedule": crontab(hour=9, minute=0),  # uma vez por dia, as 9h
     },
 }

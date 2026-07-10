@@ -1,0 +1,81 @@
+/*
+ * Design tokens — identidade visual ABO Goiás.
+ *
+ * Fonte única de verdade para paleta, estados semânticos, raios, sombras e
+ * tipografia. Nenhuma regra de componente vive aqui; os demais arquivos
+ * (base.css, components.css, portal.css, auth.css e os CSS por app) só
+ * consomem estas variáveis.
+ *
+ * Paleta institucional:
+ *   Royal   #0348BB   Azul     #1D6EEE   Céu      #27BAFF
+ *   Claro   #8EDAFD   Marinho  #032253   Turquesa #67F9E0 / #12E3C7
+ */
+
+:root {
+    /* ── Superfícies ────────────────────────────────────────────── */
+    --bg: #020b1e;
+    --bg-soft: #041127;
+    --sidebar: #051534;
+    --panel: #061a3e;
+    --panel-strong: #032253;
+    --line: rgba(142, 218, 253, 0.16);
+    --line-strong: rgba(142, 218, 253, 0.26);
+
+    /* ── Texto ──────────────────────────────────────────────────── */
+    --text: #edf4ff;
+    --muted: #8ba7cc;
+    --muted-strong: #bacded;
+
+    /* ── Marca ──────────────────────────────────────────────────── */
+    --blue: #1d6eee;
+    --blue-dark: #0348bb;
+    --blue-soft: rgba(29, 110, 238, 0.16);
+    --gold: #f7a51f;
+
+    /* ── Acento da aplicação (wayfinding entre sistemas) ────────── */
+    --accent-text: #27baff;
+    --accent-soft: rgba(29, 110, 238, 0.16);
+    --accent-strong: #d9ecff;
+    --accent-focus: rgba(29, 110, 238, 0.82);
+    --accent-ring: rgba(29, 110, 238, 0.13);
+
+    /* ── Estados semânticos ─────────────────────────────────────── */
+    --success: #67f9e0;
+    --success-bg: rgba(18, 227, 199, 0.14);
+    --success-border: rgba(18, 227, 199, 0.3);
+
+    --danger-text: #ff9e9e;
+    --danger-text-strong: #ffb8b8;
+    --danger-bg: rgba(255, 94, 94, 0.12);
+    --danger-bg-strong: rgba(255, 94, 94, 0.16);
+    --danger-border: rgba(255, 94, 94, 0.3);
+
+    --warn-text: #ffd89a;
+    --warn-bg: rgba(247, 165, 31, 0.16);
+    --warn-border: rgba(247, 165, 31, 0.3);
+
+    --info-text: #8edafd;
+
+    /* ── Sombra e raios ─────────────────────────────────────────── */
+    --shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+    --radius-panel: 20px;
+    --radius-card: 12px;
+    --radius-control: 12px;
+    --radius-chip: 999px;
+    --radius: var(--radius-panel);
+
+    /* ── Tipografia ─────────────────────────────────────────────── */
+    --font-body: "DM Sans", "Segoe UI", Arial, sans-serif;
+    --font-display: "Syne", "Segoe UI", Arial, sans-serif;
+    --mono: "Spline Sans Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+/* ── Acento por aplicação (wayfinding entre sistemas) ───────────── */
+
+.app-lab {
+    --accent-text: #67f9e0;
+    --accent-soft: rgba(18, 227, 199, 0.14);
+    --accent-strong: #d9fdf6;
+    --accent-focus: rgba(18, 227, 199, 0.7);
+    --accent-ring: rgba(18, 227, 199, 0.12);
+}

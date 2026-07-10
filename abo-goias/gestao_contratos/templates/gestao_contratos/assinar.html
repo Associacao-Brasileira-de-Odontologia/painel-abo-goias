@@ -34,20 +34,20 @@
     <div class="card">
         {% if sessao.assinado_por_responsavel %}
             <h1>Assinatura do responsável legal</h1>
-            <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+            <p class="texto-apoio">
                 Desenhe a assinatura de {{ paciente.nome_responsavel }},
                 responsável legal por {{ paciente.nome }}, no quadro abaixo
                 usando o dedo ou uma caneta touch.
             </p>
         {% else %}
             <h1>Sua assinatura</h1>
-            <p style="font-size:.88rem; color:var(--gc-paper-muted); margin-top:4px;">
+            <p class="texto-apoio">
                 Desenhe sua assinatura no quadro abaixo usando o dedo ou uma caneta touch.
             </p>
         {% endif %}
 
         {% if erro %}
-            <div class="erro" style="margin-top:10px;">{{ erro }}</div>
+            <div class="erro mt-sm">{{ erro }}</div>
         {% endif %}
 
         <div class="canvas-wrap">
@@ -60,8 +60,8 @@
             {% csrf_token %}
             <input type="hidden" name="assinatura" id="assinatura-data">
             <button class="btn btn-outline" type="button" id="btn-limpar">Limpar</button>
-            <button class="btn btn-primary" type="submit" id="btn-assinar"
-                    style="margin-top:8px;" disabled>
+            <button class="btn btn-primary mt-sm" type="submit" id="btn-assinar"
+                    disabled>
                 Aceitar e assinar
             </button>
         </form>

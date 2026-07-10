@@ -517,10 +517,10 @@ def processar_assinatura(
 
     # Dispara o envio por WhatsApp em segundo plano, independente do envio
     # ao Dental Office — o paciente deve receber sua cópia mesmo que a
-    # integração com o Dental falhe. Só é agendado quando a Meta Cloud API
-    # está configurada (sem credenciais, o fluxo manual — link wa.me na
-    # tela de pós-geração — continua sendo o único caminho) e o paciente
-    # tem celular cadastrado.
+    # integração com o Dental falhe. Só é agendado quando a Z-API está
+    # configurada (sem credenciais, o fluxo manual — link wa.me na tela de
+    # pós-geração — continua sendo o único caminho) e o paciente tem
+    # celular cadastrado.
     from .whatsapp import whatsapp_configurado
 
     if whatsapp_configurado() and contrato.paciente.celular:

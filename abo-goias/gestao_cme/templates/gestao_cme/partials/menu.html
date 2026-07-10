@@ -1,0 +1,22 @@
+{% comment %}
+Navegação lateral da Gestão de CME. O item ativo é resolvido automaticamente
+a partir da rota atual (ver partials/side_link.html) — basta incluir este
+partial sem parâmetros.
+{% endcomment %}
+<nav class="side-nav" aria-label="Navegação da aplicação">
+    {% include "partials/side_link.html" with url_name="cme_dashboard" icon="dashboard" label="Visão Geral" %}
+    {% include "partials/side_link.html" with url_name="cme_home" icon="lista" label="Movimentações" match="editar_movimentacao" %}
+    {% include "partials/side_link.html" with url_name="alunos_por_turma" icon="usuarios" label="Alunos por turma" match="cadastrar_turma cadastrar_aluno" %}
+    {% include "partials/side_link.html" with url_name="abrigos" icon="abrigo" label="Abrigos" match="cadastrar_abrigo editar_abrigo" %}
+    {% include "partials/side_link.html" with url_name="materiais" icon="material" label="Materiais" match="cadastrar_material editar_material" %}
+    {% include "partials/side_link.html" with url_name="kits" icon="kit" label="Kits" %}
+    {% include "partials/side_link.html" with url_name="emprestimos" icon="emprestimo" label="Empréstimos" match="criar_emprestimo" %}
+
+    <div class="side-quick-actions">
+        <p class="section-label">Ações rápidas</p>
+        <a class="button primary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
+        <a class="button secondary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
+    </div>
+
+    {% include "partials/side_link.html" with url_name="home" icon="voltar" label="Voltar ao portal" extra_class="side-link-return" %}
+</nav>

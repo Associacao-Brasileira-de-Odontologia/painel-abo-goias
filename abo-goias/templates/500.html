@@ -1,0 +1,10 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Erro interno{% endblock %}
+{% block eyebrow %}Erro 500{% endblock %}
+{% block heading %}Erro interno{% endblock %}
+{% block description %}Algo deu errado do nosso lado. Tente novamente em instantes.{% endblock %}
+
+{% block content %}
+    <a class="button primary update-first auth-action" href="/">Voltar ao portal</a>
+{% endblock %}

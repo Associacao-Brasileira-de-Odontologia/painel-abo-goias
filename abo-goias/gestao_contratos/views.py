@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from gestao_lab.integrations.dental import (
     DentalAPIError,
@@ -16,6 +17,7 @@ from gestao_lab.integrations.dental import (
     normalizar_paciente_detalhado,
 )
 from gestao_lab.models import Paciente
+from gestao_lab.services.dental_sync import listar_todas_paginas
 
 from .forms import PacienteConfirmacaoForm
 from .models import TIPOS_CONTRATO, ContratoGerado
@@ -34,7 +36,7 @@ _PACIENTES_POR_PAGINA = 25
 
 @login_required
 def contratos(request: HttpRequest) -> HttpResponse:
-    """Lista pacientes locais e, quando a busca retorna zero, consulta a API."""
+    """Lista pacientes locais e, havendo busca, consulta também a API."""
 
     busca = request.GET.get("q", "").strip()
     pacientes_qs = Paciente.objects.filter(ativo=True).order_by("nome")
@@ -45,23 +47,28 @@ def contratos(request: HttpRequest) -> HttpResponse:
     pacientes_api: list[dict] = []
     erro_api: str = ""
     dental_pesquisado: bool = False
-    busca_dental_explicita = request.GET.get("dental") == "1"
+    primeira_pagina = request.GET.get("page") in (None, "", "1")
 
-    # Busca no Dental Office quando solicitado explicitamente ou como
-    # fallback quando o banco local retornou zero resultados.
-    if busca and (busca_dental_explicita or not pacientes_qs.exists()):
+    # Toda busca consulta também o Dental Office, mas só na primeira
+    # página — paginar os resultados locais não deve repetir a chamada.
+    if busca and primeira_pagina:
         clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
         if clinic_id:
             try:
                 client = DentalClient()
-                resposta = client.listar_pacientes(clinic_id=clinic_id, q=busca)
+                itens = listar_todas_paginas(
+                    lambda page: client.listar_pacientes(
+                        clinic_id=clinic_id, page=page, q=busca
+                    ),
+                    contexto="pacientes:busca_contratos",
+                )
                 dental_pesquisado = True
                 ids_locais = set(
                     Paciente.objects.filter(ativo=True).values_list(
                         "id_dental", flat=True
                     )
                 )
-                for item in resposta.get("results") or []:
+                for item in itens:
                     pac = normalizar_paciente(item)
                     if pac:
                         pacientes_api.append(
@@ -276,6 +283,11 @@ def confirmar_dados_view(request: HttpRequest, paciente_pk: int) -> HttpResponse
         {
             "paciente": paciente,
             "form": form,
+            "breadcrumbs": [
+                {"label": "Contratos", "url": reverse("contratos")},
+                {"label": paciente.nome, "url": None},
+                {"label": "Confirmar dados", "url": None},
+            ],
         },
     )
 
@@ -318,6 +330,14 @@ def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
             "checklist": checklist,
             "pendencias": pendencias,
             "gerado_bloqueado": bool(pendencias),
+            "breadcrumbs": [
+                {"label": "Contratos", "url": reverse("contratos")},
+                {
+                    "label": paciente.nome,
+                    "url": reverse("contrato_confirmar_dados", args=[paciente.pk]),
+                },
+                {"label": "Gerar contrato", "url": None},
+            ],
         },
     )
 
@@ -345,11 +365,20 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
     prof_cro = request.POST.get("profissional_cro", "").strip()
     local = request.POST.get("local_assinatura", "Goiânia - GO").strip()
     email_form = request.POST.get("email_paciente", "").strip()
+    whatsapp_form = request.POST.get("whatsapp_paciente", "").strip()
 
-    # Salva o e-mail preenchido no formulário de volta ao paciente
+    # Salva e-mail e WhatsApp preenchidos no formulário de volta ao paciente.
+    # O WhatsApp alimenta paciente.celular, que é o número usado pelo link
+    # de envio na tela de pós-geração.
+    campos_alterados = []
     if email_form and email_form != paciente.email:
         paciente.email = email_form
-        paciente.save(update_fields=["email", "atualizado_em"])
+        campos_alterados.append("email")
+    if whatsapp_form and whatsapp_form != paciente.celular:
+        paciente.celular = whatsapp_form
+        campos_alterados.append("celular")
+    if campos_alterados:
+        paciente.save(update_fields=[*campos_alterados, "atualizado_em"])
 
     tipos_validos = {t[0] for t in TIPOS_CONTRATO}
     if tipo not in tipos_validos:
@@ -389,6 +418,15 @@ def pos_geracao_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
     contexto = {
         "paciente": paciente,
         "link_whatsapp": link_whatsapp,
+        "whatsapp_automatico_configurado": settings.ZAPI_CONFIGURADO,
+        "breadcrumbs": [
+            {"label": "Contratos", "url": reverse("contratos")},
+            {
+                "label": paciente.nome,
+                "url": reverse("contrato_gerar", args=[paciente.pk]),
+            },
+            {"label": "Enviar contrato", "url": None},
+        ],
     }
     contexto.update(contexto_status_assinatura(request, contrato))
 
@@ -521,6 +559,18 @@ def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpRespons
         return redirect("contratos")
 
     contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
+
+    # Só o documento assinado pelo paciente vai para a ficha no Dental
+    # Office — sem assinatura, o serviço cairia no PDF sem assinatura
+    # (fallback de obter_melhor_pdf_bytes), arquivando um documento
+    # sem valor. A UI desabilita o botão; esta guarda cobre POST direto.
+    if contrato.status != "assinado":
+        messages.error(
+            request,
+            "O contrato ainda não foi assinado pelo paciente — só o "
+            "documento assinado pode ser enviado ao Dental Office.",
+        )
+        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
 
     ok, erro = enviar_contrato_ao_dental(contrato)
 

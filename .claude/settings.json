@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:/Users/Gustavo/AppData/Local/Temp/claude/c--Users-Gustavo-Desktop-abo-painel-abo-goias/e9de290f-0edb-485b-8b52-8ae683deda6f/scratchpad/venv/Scripts/python.exe\" manage.py test gestao_contratos)",
+      "Bash(\"C:/Users/Gustavo/AppData/Local/Temp/claude/c--Users-Gustavo-Desktop-abo-painel-abo-goias/e9de290f-0edb-485b-8b52-8ae683deda6f/scratchpad/venv/Scripts/python.exe\" manage.py collectstatic --noinput)"
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-"""Testes da aplicação de gestão de contratos.
+﻿"""Testes da aplicação de gestão de contratos.
 
 Cobre views, serviço de checklist e integração com o Dental Office.
 Prioridade: views e integração Dental → checklist service → models.
@@ -57,11 +57,6 @@ from gestao_contratos.services.documentos import (
 )
 from gestao_contratos.services.envio import normalizar_celular
 from gestao_contratos.services.whatsapp import enviar_whatsapp_contrato
-from gestao_contratos.services.whatsapp.meta_cloud import (
-    MetaWhatsAppClient,
-    MetaWhatsAppError,
-    carregar_config_meta,
-)
 from gestao_contratos.tasks import (
     enviar_dental_task,
     enviar_whatsapp_task,
@@ -70,6 +65,19 @@ from gestao_contratos.tasks import (
 )
 from gestao_lab.integrations.dental import DentalAPIError
 from gestao_lab.models import Paciente
+from mensageria import MessagingResult
+from mensageria.exceptions import (
+    InstanceDisconnectedError,
+    InvalidRecipientError,
+    MessageRejectedError,
+    MessagingAuthenticationError,
+    MessagingError,
+    MessagingTimeoutError,
+    ProviderUnavailableError,
+    RateLimitExceededError,
+)
+from mensageria.validators import validar_destinatario
+from mensageria.zapi import ZApiProvider, carregar_config_zapi
 
 User = get_user_model()
 
@@ -299,7 +307,10 @@ class ContratosViewTests(TestCase):
         self.assertContains(response, "Carlos Ativo")
         self.assertNotContains(response, "Ana Inativa")
 
-    def test_busca_filtra_pacientes_por_nome(self) -> None:
+    @override_settings(DENTAL_CLINIC_ID="clinic-001")
+    @patch("gestao_contratos.views.DentalClient")
+    def test_busca_filtra_pacientes_por_nome(self, MockDental: MagicMock) -> None:
+        MockDental.return_value.listar_pacientes.return_value = {"results": []}
         _paciente(nome="Fernanda Lima", id_dental="A3")
         _paciente(nome="Roberto Souza", id_dental="A4")
         response = self.client.get(reverse("contratos"), {"q": "Fernanda"})
@@ -352,16 +363,9 @@ class ContratosViewTests(TestCase):
             MockDental.assert_not_called()
         self.assertEqual(response.status_code, 200)
 
-    def test_resultado_local_encontrado_nao_consulta_api(self) -> None:
-        _paciente(nome="Marcos Local", id_dental="A6")
-        with patch("gestao_contratos.views.DentalClient") as MockDental:
-            response = self.client.get(reverse("contratos"), {"q": "Marcos"})
-            MockDental.assert_not_called()
-        self.assertContains(response, "Marcos Local")
-
     @override_settings(DENTAL_CLINIC_ID="clinic-001")
     @patch("gestao_contratos.views.DentalClient")
-    def test_busca_explicita_consulta_api_mesmo_com_resultado_local(
+    def test_busca_com_resultado_local_tambem_consulta_api(
         self, MockDental: MagicMock
     ) -> None:
         _paciente(nome="Helena Local", id_dental="A7")
@@ -377,11 +381,66 @@ class ContratosViewTests(TestCase):
             ]
         }
 
-        response = self.client.get(reverse("contratos"), {"q": "Helena", "dental": "1"})
+        response = self.client.get(reverse("contratos"), {"q": "Helena"})
 
         mock_client.listar_pacientes.assert_called_once()
         self.assertContains(response, "Helena Local")
         self.assertContains(response, "Helena Dental")
+
+    @override_settings(DENTAL_CLINIC_ID="clinic-001")
+    def test_paginacao_nao_repete_consulta_api(self) -> None:
+        _paciente(nome="Marcos Local", id_dental="A6")
+        with patch("gestao_contratos.views.DentalClient") as MockDental:
+            response = self.client.get(
+                reverse("contratos"), {"q": "Marcos", "page": "2"}
+            )
+            MockDental.assert_not_called()
+        self.assertContains(response, "Marcos Local")
+
+    @override_settings(DENTAL_CLINIC_ID="clinic-001")
+    @patch("gestao_contratos.views.DentalClient")
+    def test_busca_consolida_multiplas_paginas_da_api(
+        self, MockDental: MagicMock
+    ) -> None:
+        """Regressão do bug de paginação: uma busca com mais resultados do
+        que o limite por página da API não deve mais ficar restrita à
+        primeira página."""
+
+        mock_client = MockDental.return_value
+        mock_client.listar_pacientes.side_effect = [
+            {
+                "results": [
+                    {
+                        "id": i,
+                        "name": f"Paciente API {i}",
+                        "active": True,
+                        "contacts_attributes": [],
+                    }
+                    for i in range(1, 61)
+                ],
+                "total_pages": 2,
+            },
+            {
+                "results": [
+                    {
+                        "id": 61,
+                        "name": "Paciente API 61",
+                        "active": True,
+                        "contacts_attributes": [],
+                    }
+                ],
+                "total_pages": 2,
+            },
+        ]
+
+        response = self.client.get(reverse("contratos"), {"q": "Paciente"})
+
+        self.assertEqual(mock_client.listar_pacientes.call_count, 2)
+        pacientes_api = response.context["pacientes_api"]
+        self.assertEqual(len(pacientes_api), 61)
+        nomes = {p["nome"] for p in pacientes_api}
+        self.assertIn("Paciente API 1", nomes)
+        self.assertIn("Paciente API 61", nomes)
 
 
 # ---------------------------------------------------------------------------
@@ -1133,12 +1192,9 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "token-teste",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-        },
+    @override_settings(
+        ZAPI_INSTANCE_ID="instancia-teste",
+        ZAPI_TOKEN="token-teste",
     )
     def test_assinatura_agenda_envio_whatsapp_quando_configurado_e_com_celular(
         self,
@@ -1151,9 +1207,11 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
 
         self.mock_enviar_whatsapp_delay.assert_called_once_with(self.contrato.pk)
 
-    def test_assinatura_nao_agenda_whatsapp_sem_meta_configurado(self) -> None:
-        """Sem credenciais da Meta, o envio automático fica desativado —
-        mesmo com celular cadastrado."""
+    @override_settings(ZAPI_INSTANCE_ID="", ZAPI_TOKEN="")
+    def test_assinatura_nao_agenda_whatsapp_sem_zapi_configurado(self) -> None:
+        """Sem credenciais da Z-API, o envio automático fica desativado —
+        mesmo com celular cadastrado. Zera as settings explicitamente para
+        não depender do que estiver no .env do desenvolvedor."""
         self.pac.celular = "62999998888"
         self.pac.save(update_fields=["celular"])
         sessao = criar_sessao(self.contrato, criado_por=self.usuario)
@@ -1162,12 +1220,9 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
 
         self.mock_enviar_whatsapp_delay.assert_not_called()
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "token-teste",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-        },
+    @override_settings(
+        ZAPI_INSTANCE_ID="instancia-teste",
+        ZAPI_TOKEN="token-teste",
     )
     def test_assinatura_nao_agenda_whatsapp_sem_celular(self) -> None:
         """Configurado, mas sem celular do paciente, não há para quem enviar."""
@@ -1177,12 +1232,9 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
 
         self.mock_enviar_whatsapp_delay.assert_not_called()
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "token-teste",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-        },
+    @override_settings(
+        ZAPI_INSTANCE_ID="instancia-teste",
+        ZAPI_TOKEN="token-teste",
     )
     def test_falha_ao_enfileirar_whatsapp_nao_quebra_a_assinatura(self) -> None:
         self.pac.celular = "62999998888"
@@ -1982,7 +2034,7 @@ class ExpirarSessoesVencidasTaskTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Testes do envio automático por WhatsApp — Meta Cloud API (Fase 5)
+# Testes do envio automático por WhatsApp — Z-API (Fase 7)
 # ---------------------------------------------------------------------------
 
 
@@ -2003,54 +2055,67 @@ class NormalizarCelularTests(TestCase):
         self.assertEqual(normalizar_celular("abc"), "")
 
 
-class CarregarConfigMetaTests(TestCase):
-    @patch.dict("os.environ", {}, clear=True)
-    def test_sem_variaveis_retorna_none(self) -> None:
-        self.assertIsNone(carregar_config_meta())
+class ValidarDestinatarioTests(TestCase):
+    def test_numero_valido_e_retornado_sem_alteracao(self) -> None:
+        self.assertEqual(validar_destinatario("5562999998888"), "5562999998888")
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "tok",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123",
-        },
-        clear=True,
+    def test_numero_vazio_levanta_invalid_recipient(self) -> None:
+        with self.assertRaises(InvalidRecipientError):
+            validar_destinatario("")
+
+    def test_numero_curto_demais_levanta_invalid_recipient(self) -> None:
+        with self.assertRaises(InvalidRecipientError):
+            validar_destinatario("123")
+
+    def test_numero_com_letras_levanta_invalid_recipient(self) -> None:
+        with self.assertRaises(InvalidRecipientError):
+            validar_destinatario("55629999-8888")
+
+
+class CarregarConfigZApiTests(TestCase):
+    @override_settings(ZAPI_INSTANCE_ID="", ZAPI_TOKEN="")
+    def test_sem_variaveis_retorna_none(self) -> None:
+        self.assertIsNone(carregar_config_zapi())
+
+    @override_settings(
+        ZAPI_INSTANCE_ID="inst",
+        ZAPI_TOKEN="tok",
+        ZAPI_CLIENT_TOKEN="",
+        ZAPI_BASE_URL="https://api.z-api.io",
+        ZAPI_TIMEOUT=30,
     )
     def test_com_variaveis_obrigatorias_usa_padroes_para_opcionais(self) -> None:
-        config = carregar_config_meta()
+        config = carregar_config_zapi()
         self.assertIsNotNone(config)
+        self.assertEqual(config.instance_id, "inst")
         self.assertEqual(config.token, "tok")
-        self.assertEqual(config.phone_number_id, "123")
-        self.assertEqual(config.api_version, "v21.0")
-        self.assertEqual(config.template_lang, "pt_BR")
-        self.assertEqual(config.template_name, "")
+        self.assertEqual(config.client_token, "")
+        self.assertEqual(config.base_url, "https://api.z-api.io")
+        self.assertEqual(config.timeout, 30)
 
-    @patch.dict(
-        "os.environ",
-        {
-            "WHATSAPP_META_TOKEN": "tok",
-            "WHATSAPP_META_PHONE_NUMBER_ID": "123",
-            "WHATSAPP_META_TEMPLATE_NAME": "contrato_assinado",
-            "WHATSAPP_META_TEMPLATE_LANG": "pt_PT",
-            "WHATSAPP_META_API_VERSION": "v20.0",
-        },
-        clear=True,
+    @override_settings(
+        ZAPI_INSTANCE_ID="inst",
+        ZAPI_TOKEN="tok",
+        ZAPI_CLIENT_TOKEN="client-tok",
+        ZAPI_BASE_URL="https://api.z-api.io/",
+        ZAPI_TIMEOUT=45,
     )
     def test_respeita_variaveis_opcionais_quando_definidas(self) -> None:
-        config = carregar_config_meta()
-        self.assertEqual(config.template_name, "contrato_assinado")
-        self.assertEqual(config.template_lang, "pt_PT")
-        self.assertEqual(config.api_version, "v20.0")
+        config = carregar_config_zapi()
+        self.assertEqual(config.client_token, "client-tok")
+        self.assertEqual(config.base_url, "https://api.z-api.io")
+        self.assertEqual(config.timeout, 45)
 
-    @patch.dict("os.environ", {"WHATSAPP_META_TOKEN": "tok"}, clear=True)
-    def test_apenas_token_sem_phone_number_id_retorna_none(self) -> None:
-        self.assertIsNone(carregar_config_meta())
+    @override_settings(ZAPI_INSTANCE_ID="inst", ZAPI_TOKEN="")
+    def test_apenas_instance_id_sem_token_retorna_none(self) -> None:
+        self.assertIsNone(carregar_config_zapi())
 
 
-def _fake_http_response(corpo: dict) -> MagicMock:
+def _fake_http_response(corpo: dict, status: int = 200) -> MagicMock:
     """Simula o context manager retornado por urlopen()."""
     cm = MagicMock()
     cm.__enter__.return_value.read.return_value = json.dumps(corpo).encode("utf-8")
+    cm.__enter__.return_value.status = status
     return cm
 
 
@@ -2059,7 +2124,7 @@ def _fake_http_error(status: int, corpo: str):
 
     fp = io.BytesIO(corpo.encode("utf-8"))
     return HTTPError(
-        url="https://graph.facebook.com/teste",
+        url="https://api.z-api.io/teste",
         code=status,
         msg="erro",
         hdrs=None,
@@ -2067,136 +2132,315 @@ def _fake_http_error(status: int, corpo: str):
     )
 
 
-class MetaWhatsAppClientTests(TestCase):
+class ZApiProviderTests(TestCase):
     def _config(self, **kwargs):
-        with patch.dict(
-            "os.environ",
-            {
-                "WHATSAPP_META_TOKEN": "tok",
-                "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-                **kwargs,
-            },
-            clear=True,
-        ):
-            return carregar_config_meta()
+        valores = {"ZAPI_INSTANCE_ID": "inst", "ZAPI_TOKEN": "tok", **kwargs}
+        with override_settings(**valores):
+            return carregar_config_zapi()
 
     def test_sem_config_levanta_erro_ao_instanciar(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
-            with self.assertRaises(MetaWhatsAppError):
-                MetaWhatsAppClient()
+        with override_settings(ZAPI_INSTANCE_ID="", ZAPI_TOKEN=""):
+            with self.assertRaises(MessagingError):
+                ZApiProvider()
 
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_envia_via_template_quando_configurado(
-        self, mock_urlopen: MagicMock
-    ) -> None:
-        config = self._config(WHATSAPP_META_TEMPLATE_NAME="contrato_assinado")
-        mock_urlopen.side_effect = [
-            _fake_http_response({"id": "media-1"}),
-            _fake_http_response({"messages": [{"id": "wamid.1"}]}),
-        ]
+    @patch("mensageria.zapi.urlopen")
+    def test_envia_texto_com_sucesso(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-1"})
 
-        client = MetaWhatsAppClient(config)
-        message_id = client.enviar_documento(
+        provider = ZApiProvider(self._config())
+        resultado = provider.enviar_texto("5562999998888", "Olá!")
+
+        self.assertTrue(resultado.sucesso)
+        self.assertEqual(resultado.message_id, "zaap-1")
+        chamada = mock_urlopen.call_args[0][0]
+        self.assertTrue(chamada.full_url.endswith("/send-text"))
+        payload = json.loads(chamada.data)
+        self.assertEqual(payload["phone"], "5562999998888")
+        self.assertEqual(payload["message"], "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_envia_documento_com_sucesso(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-2"})
+
+        provider = ZApiProvider(self._config())
+        resultado = provider.enviar_documento(
             destinatario="5562999998888",
             arquivo_bytes=b"%PDF-fake",
             nome_arquivo="contrato.pdf",
-            nome_paciente="Maria",
+            legenda="Segue o contrato",
         )
 
-        self.assertEqual(message_id, "wamid.1")
-        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertTrue(resultado.sucesso)
+        self.assertEqual(resultado.message_id, "zaap-2")
+        chamada = mock_urlopen.call_args[0][0]
+        self.assertTrue(chamada.full_url.endswith("/send-document/pdf"))
+        payload = json.loads(chamada.data)
+        self.assertEqual(payload["fileName"], "contrato.pdf")
+        self.assertEqual(payload["caption"], "Segue o contrato")
+        self.assertTrue(payload["document"].startswith("data:application/pdf;base64,"))
 
-        segunda_chamada = mock_urlopen.call_args_list[1][0][0]
-        payload = json.loads(segunda_chamada.data)
-        self.assertEqual(payload["type"], "template")
-        self.assertEqual(payload["template"]["name"], "contrato_assinado")
-        header = payload["template"]["components"][0]
-        self.assertEqual(header["parameters"][0]["document"]["id"], "media-1")
+    @patch("mensageria.zapi.urlopen")
+    def test_envia_imagem_com_sucesso(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-3"})
 
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_envia_como_documento_de_sessao_sem_template(
+        provider = ZApiProvider(self._config())
+        resultado = provider.enviar_imagem(
+            destinatario="5562999998888", arquivo_bytes=b"\x89PNG-fake", legenda="Foto"
+        )
+
+        self.assertTrue(resultado.sucesso)
+        chamada = mock_urlopen.call_args[0][0]
+        self.assertTrue(chamada.full_url.endswith("/send-image"))
+        payload = json.loads(chamada.data)
+        self.assertTrue(payload["image"].startswith("data:image/png;base64,"))
+
+    @patch("mensageria.zapi.urlopen")
+    def test_enviar_arquivo_escolhe_imagem_por_content_type(
         self, mock_urlopen: MagicMock
     ) -> None:
-        config = self._config()
-        mock_urlopen.side_effect = [
-            _fake_http_response({"id": "media-1"}),
-            _fake_http_response({"messages": [{"id": "wamid.2"}]}),
-        ]
+        mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-4"})
 
-        client = MetaWhatsAppClient(config)
-        message_id = client.enviar_documento(
-            destinatario="5562999998888",
-            arquivo_bytes=b"%PDF-fake",
-            nome_arquivo="contrato.pdf",
-            nome_paciente="Maria",
+        provider = ZApiProvider(self._config())
+        provider.enviar_arquivo(
+            "5562999998888", b"dados", "foto.jpg", "image/jpeg", legenda="Foto"
         )
 
-        self.assertEqual(message_id, "wamid.2")
-        segunda_chamada = mock_urlopen.call_args_list[1][0][0]
-        payload = json.loads(segunda_chamada.data)
-        self.assertEqual(payload["type"], "document")
-        self.assertEqual(payload["document"]["id"], "media-1")
+        chamada = mock_urlopen.call_args[0][0]
+        self.assertTrue(chamada.full_url.endswith("/send-image"))
 
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_upload_sem_id_levanta_erro(self, mock_urlopen: MagicMock) -> None:
-        config = self._config()
-        mock_urlopen.return_value = _fake_http_response({"erro": "sem id"})
+    @patch("mensageria.zapi.urlopen")
+    def test_enviar_arquivo_escolhe_documento_por_content_type(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        mock_urlopen.return_value = _fake_http_response({"messageId": "zaap-5"})
 
-        client = MetaWhatsAppClient(config)
-        with self.assertRaises(MetaWhatsAppError):
-            client.enviar_documento(
-                destinatario="5562999998888",
-                arquivo_bytes=b"%PDF-fake",
-                nome_arquivo="contrato.pdf",
-                nome_paciente="Maria",
-            )
+        provider = ZApiProvider(self._config())
+        provider.enviar_arquivo(
+            "5562999998888",
+            b"dados",
+            "planilha.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_resposta_sem_messages_levanta_erro(self, mock_urlopen: MagicMock) -> None:
-        config = self._config()
-        mock_urlopen.side_effect = [
-            _fake_http_response({"id": "media-1"}),
-            _fake_http_response({"algo": "inesperado"}),
-        ]
+        chamada = mock_urlopen.call_args[0][0]
+        self.assertTrue(chamada.full_url.endswith("/send-document/xlsx"))
 
-        client = MetaWhatsAppClient(config)
-        with self.assertRaises(MetaWhatsAppError):
-            client.enviar_documento(
-                destinatario="5562999998888",
-                arquivo_bytes=b"%PDF-fake",
-                nome_arquivo="contrato.pdf",
-                nome_paciente="Maria",
-            )
+    @patch("mensageria.zapi.urlopen")
+    def test_destinatario_invalido_nao_chega_a_chamar_a_api(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(InvalidRecipientError):
+            provider.enviar_texto("", "Olá!")
+        mock_urlopen.assert_not_called()
 
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_http_error_vira_meta_whatsapp_error(self, mock_urlopen: MagicMock) -> None:
-        config = self._config()
+    @patch("mensageria.zapi.urlopen")
+    def test_resposta_com_error_vira_message_rejected(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        mock_urlopen.return_value = _fake_http_response(
+            {"error": "number-not-whatsapp"}
+        )
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(MessageRejectedError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_resposta_sem_id_levanta_erro(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.return_value = _fake_http_response({"algo": "inesperado"})
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(MessagingError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_http_401_vira_erro_de_autenticacao(self, mock_urlopen: MagicMock) -> None:
         mock_urlopen.side_effect = _fake_http_error(401, '{"error": "token invalido"}')
 
-        client = MetaWhatsAppClient(config)
-        with self.assertRaises(MetaWhatsAppError):
-            client.enviar_documento(
-                destinatario="5562999998888",
-                arquivo_bytes=b"%PDF-fake",
-                nome_arquivo="contrato.pdf",
-                nome_paciente="Maria",
-            )
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(MessagingAuthenticationError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_http_404_vira_instancia_desconectada(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.side_effect = _fake_http_error(404, '{"error": "not found"}')
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(InstanceDisconnectedError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_http_429_vira_limite_excedido(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.side_effect = _fake_http_error(429, '{"error": "rate limit"}')
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(RateLimitExceededError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_http_500_vira_provedor_indisponivel(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.side_effect = _fake_http_error(500, '{"error": "internal"}')
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(ProviderUnavailableError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_falha_de_conexao_vira_provedor_indisponivel(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        from urllib.error import URLError
+
+        mock_urlopen.side_effect = URLError("conexão recusada")
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(ProviderUnavailableError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_timeout_vira_messaging_timeout_error(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.side_effect = TimeoutError("tempo esgotado")
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(MessagingTimeoutError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_corpo_vazio_retorna_dict_vazio_e_falta_de_id_levanta_erro(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        cm = MagicMock()
+        cm.__enter__.return_value.read.return_value = b""
+        cm.__enter__.return_value.status = 200
+        mock_urlopen.return_value = cm
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(MessagingError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+    @patch("mensageria.zapi.urlopen")
+    def test_resposta_nao_json_levanta_erro(self, mock_urlopen: MagicMock) -> None:
+        cm = MagicMock()
+        cm.__enter__.return_value.read.return_value = b"<html>erro</html>"
+        cm.__enter__.return_value.status = 200
+        mock_urlopen.return_value = cm
+
+        provider = ZApiProvider(self._config())
+        with self.assertRaises(MessagingError):
+            provider.enviar_texto("5562999998888", "Olá!")
+
+
+class ZApiProviderDisponibilidadeTests(TestCase):
+    def _config(self, **kwargs):
+        valores = {"ZAPI_INSTANCE_ID": "inst", "ZAPI_TOKEN": "tok", **kwargs}
+        with override_settings(**valores):
+            return carregar_config_zapi()
+
+    @patch("mensageria.zapi.urlopen")
+    def test_instancia_conectada(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.return_value = _fake_http_response({"connected": True})
+
+        resultado = ZApiProvider(self._config()).verificar_disponibilidade()
+
+        self.assertTrue(resultado.disponivel)
+
+    @patch("mensageria.zapi.urlopen")
+    def test_instancia_desconectada(self, mock_urlopen: MagicMock) -> None:
+        mock_urlopen.return_value = _fake_http_response({"connected": False})
+
+        resultado = ZApiProvider(self._config()).verificar_disponibilidade()
+
+        self.assertFalse(resultado.disponivel)
+        self.assertIn("QR Code", resultado.detalhe)
+
+    @patch("mensageria.zapi.urlopen")
+    def test_erro_de_rede_reporta_indisponivel_sem_levantar_excecao(
+        self, mock_urlopen: MagicMock
+    ) -> None:
+        from urllib.error import URLError
+
+        mock_urlopen.side_effect = URLError("indisponível")
+
+        resultado = ZApiProvider(self._config()).verificar_disponibilidade()
+
+        self.assertFalse(resultado.disponivel)
+        self.assertTrue(resultado.detalhe)
+
+
+class MessagingServiceRetryTests(TestCase):
+    """Testa o retry com backoff do MessagingService isoladamente, sem HTTP —
+    a comunicação em si já é coberta por ZApiProviderTests."""
+
+    def setUp(self) -> None:
+        from mensageria import MessagingService
+
+        self.provider = MagicMock()
+        self.service = MessagingService(
+            self.provider, tentativas=3, backoff_base_segundos=0
+        )
+
+    def test_sucesso_de_primeira_nao_tenta_novamente(self) -> None:
+        self.provider.enviar_texto.return_value = MessagingResult.ok("id-1")
+
+        resultado = self.service.enviar_texto("5562999998888", "Olá!")
+
+        self.assertTrue(resultado.sucesso)
+        self.assertEqual(self.provider.enviar_texto.call_count, 1)
+
+    def test_erro_transitorio_e_tentado_novamente_ate_suceder(self) -> None:
+        self.provider.enviar_texto.side_effect = [
+            ProviderUnavailableError("instável"),
+            MessagingResult.ok("id-2"),
+        ]
+
+        resultado = self.service.enviar_texto("5562999998888", "Olá!")
+
+        self.assertTrue(resultado.sucesso)
+        self.assertEqual(self.provider.enviar_texto.call_count, 2)
+
+    def test_erro_transitorio_persistente_esgota_tentativas_e_retorna_falha(
+        self,
+    ) -> None:
+        self.provider.enviar_texto.side_effect = ProviderUnavailableError("fora do ar")
+
+        resultado = self.service.enviar_texto("5562999998888", "Olá!")
+
+        self.assertFalse(resultado.sucesso)
+        self.assertEqual(self.provider.enviar_texto.call_count, 3)
+
+    def test_erro_nao_transitorio_nao_e_tentado_novamente(self) -> None:
+        self.provider.enviar_texto.side_effect = InvalidRecipientError("inválido")
+
+        resultado = self.service.enviar_texto("5562999998888", "Olá!")
+
+        self.assertFalse(resultado.sucesso)
+        self.assertEqual(self.provider.enviar_texto.call_count, 1)
+
+    def test_verificar_disponibilidade_nunca_levanta_excecao(self) -> None:
+        self.provider.verificar_disponibilidade.side_effect = MessagingError("falha")
+
+        resultado = self.service.verificar_disponibilidade()
+
+        self.assertFalse(resultado.disponivel)
 
 
 class EnviarWhatsappContratoTests(AssinaturaBaseTests):
-    """Testa enviar_whatsapp_contrato() mockando o cliente Meta inteiro —
-    a comunicação HTTP em si já é coberta por MetaWhatsAppClientTests."""
+    """Testa enviar_whatsapp_contrato() mockando o serviço de mensageria
+    inteiro — a comunicação HTTP com a Z-API já é coberta por ZApiProviderTests."""
 
     def setUp(self) -> None:
         super().setUp()
         self.pac.celular = "62999998888"
         self.pac.save(update_fields=["celular"])
 
-    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
+    @patch("gestao_contratos.services.whatsapp.get_messaging_service")
     def test_sucesso_atualiza_status_e_registra_evento(
-        self, MockClient: MagicMock
+        self, mock_get_service: MagicMock
     ) -> None:
-        MockClient.return_value.enviar_documento.return_value = "wamid.123"
+        mock_get_service.return_value.enviar_documento.return_value = (
+            MessagingResult.ok("zaap-123")
+        )
 
         ok, erro = enviar_whatsapp_contrato(self.contrato)
 
@@ -2208,17 +2452,19 @@ class EnviarWhatsappContratoTests(AssinaturaBaseTests):
             contrato=self.contrato, tipo="whatsapp_concluido"
         ).first()
         self.assertIsNotNone(evento)
-        self.assertEqual(evento.payload.get("message_id"), "wamid.123")
+        self.assertEqual(evento.payload.get("message_id"), "zaap-123")
         self.assertTrue(
             EventoContrato.objects.filter(
                 contrato=self.contrato, tipo="whatsapp_iniciado"
             ).exists()
         )
 
-    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
-    def test_erro_da_api_registra_evento_de_erro(self, MockClient: MagicMock) -> None:
-        MockClient.return_value.enviar_documento.side_effect = MetaWhatsAppError(
-            "falha simulada"
+    @patch("gestao_contratos.services.whatsapp.get_messaging_service")
+    def test_erro_da_api_registra_evento_de_erro(
+        self, mock_get_service: MagicMock
+    ) -> None:
+        mock_get_service.return_value.enviar_documento.return_value = (
+            MessagingResult.falha("falha simulada")
         )
 
         ok, erro = enviar_whatsapp_contrato(self.contrato)
@@ -2231,24 +2477,24 @@ class EnviarWhatsappContratoTests(AssinaturaBaseTests):
         self.assertIsNotNone(evento)
         self.assertIn("falha simulada", evento.payload.get("erro", ""))
 
-    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
-    def test_sem_celular_nao_chama_a_api(self, MockClient: MagicMock) -> None:
+    @patch("gestao_contratos.services.whatsapp.get_messaging_service")
+    def test_sem_celular_nao_chama_a_api(self, mock_get_service: MagicMock) -> None:
         self.pac.celular = ""
         self.pac.save(update_fields=["celular"])
 
         ok, erro = enviar_whatsapp_contrato(self.contrato)
 
         self.assertFalse(ok)
-        MockClient.assert_not_called()
+        mock_get_service.assert_not_called()
         self.assertTrue(
             EventoContrato.objects.filter(
                 contrato=self.contrato, tipo="whatsapp_erro"
             ).exists()
         )
 
-    @patch("gestao_contratos.services.whatsapp.MetaWhatsAppClient")
+    @patch("gestao_contratos.services.whatsapp.get_messaging_service")
     def test_prefere_pdf_assinado_quando_disponivel(
-        self, MockClient: MagicMock
+        self, mock_get_service: MagicMock
     ) -> None:
         from django.core.files.base import ContentFile
 
@@ -2259,12 +2505,14 @@ class EnviarWhatsappContratoTests(AssinaturaBaseTests):
         self.contrato.arquivo_pdf_assinado.save(
             "assinado.pdf", ContentFile(conteudo_assinado), save=True
         )
-        MockClient.return_value.enviar_documento.return_value = "wamid.999"
+        mock_get_service.return_value.enviar_documento.return_value = (
+            MessagingResult.ok("zaap-999")
+        )
 
         ok, erro = enviar_whatsapp_contrato(self.contrato)
 
         self.assertTrue(ok)
-        kwargs = MockClient.return_value.enviar_documento.call_args.kwargs
+        kwargs = mock_get_service.return_value.enviar_documento.call_args.kwargs
         self.assertEqual(kwargs["arquivo_bytes"], conteudo_assinado)
 
 
@@ -2304,7 +2552,7 @@ class EnviarWhatsappTaskTests(TestCase):
     def test_falha_persistente_esgota_tentativas_sem_propagar(
         self, mock_enviar: MagicMock
     ) -> None:
-        mock_enviar.return_value = (False, "Meta Cloud API fora do ar")
+        mock_enviar.return_value = (False, "Z-API fora do ar")
 
         enviar_whatsapp_task.delay(self.contrato.pk)
 
@@ -2448,6 +2696,8 @@ class PosGeracaoActionViewsTests(AssinaturaBaseTests):
     @patch("gestao_contratos.views.enviar_contrato_ao_dental")
     def test_enviar_ao_dental_sucesso(self, mock_enviar: MagicMock) -> None:
         mock_enviar.return_value = (True, "")
+        self.contrato.status = "assinado"
+        self.contrato.save(update_fields=["status"])
 
         response = self.client.post(
             reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
@@ -2458,6 +2708,8 @@ class PosGeracaoActionViewsTests(AssinaturaBaseTests):
     @patch("gestao_contratos.views.enviar_contrato_ao_dental")
     def test_enviar_ao_dental_falha(self, mock_enviar: MagicMock) -> None:
         mock_enviar.return_value = (False, "erro simulado")
+        self.contrato.status = "assinado"
+        self.contrato.save(update_fields=["status"])
 
         response = self.client.post(
             reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
@@ -2465,6 +2717,38 @@ class PosGeracaoActionViewsTests(AssinaturaBaseTests):
 
         self.assertContains(response, "Falha ao enviar o contrato")
         self.assertContains(response, "erro simulado")
+
+    @patch("gestao_contratos.views.enviar_contrato_ao_dental")
+    def test_enviar_ao_dental_bloqueado_sem_assinatura(
+        self, mock_enviar: MagicMock
+    ) -> None:
+        """Regressão: contrato não assinado não pode ir ao Dental Office —
+        o serviço cairia no PDF sem assinatura e arquivaria um documento
+        sem valor na ficha do paciente."""
+        response = self.client.post(
+            reverse("contrato_enviar_dental", args=[self.contrato.pk]), follow=True
+        )
+
+        self.assertContains(response, "ainda não foi assinado")
+        mock_enviar.assert_not_called()
+
+    def test_pos_geracao_desabilita_envio_dental_sem_assinatura(self) -> None:
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertContains(response, "Disponível após a assinatura do paciente")
+
+    def test_pos_geracao_habilita_envio_dental_apos_assinatura(self) -> None:
+        self.contrato.status = "assinado"
+        self.contrato.save(update_fields=["status"])
+
+        response = self.client.get(
+            reverse("contrato_pos_geracao", args=[self.contrato.pk])
+        )
+
+        self.assertNotContains(response, "Disponível após a assinatura do paciente")
+        self.assertContains(response, "Enviar ao Dental Office")
 
     def test_enviar_ao_dental_get_redireciona(self) -> None:
         response = self.client.get(
@@ -2909,74 +3193,6 @@ class ExtrairErroRespostaTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Cobertura adicional (Fase 6) — cliente Meta: erros de conexão e resposta
-# ---------------------------------------------------------------------------
-
-
-class MetaWhatsAppClientEdgeCasesTests(TestCase):
-    def _config(self):
-        with patch.dict(
-            "os.environ",
-            {
-                "WHATSAPP_META_TOKEN": "tok",
-                "WHATSAPP_META_PHONE_NUMBER_ID": "123456",
-            },
-            clear=True,
-        ):
-            return carregar_config_meta()
-
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_falha_de_conexao_vira_meta_whatsapp_error(
-        self, mock_urlopen: MagicMock
-    ) -> None:
-        from urllib.error import URLError
-
-        mock_urlopen.side_effect = URLError("timeout")
-
-        client = MetaWhatsAppClient(self._config())
-        with self.assertRaises(MetaWhatsAppError):
-            client.enviar_documento(
-                destinatario="5562999998888",
-                arquivo_bytes=b"%PDF-fake",
-                nome_arquivo="contrato.pdf",
-                nome_paciente="Maria",
-            )
-
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_corpo_vazio_retorna_dict_vazio(self, mock_urlopen: MagicMock) -> None:
-        cm = MagicMock()
-        cm.__enter__.return_value.read.return_value = b""
-        mock_urlopen.return_value = cm
-
-        client = MetaWhatsAppClient(self._config())
-        with self.assertRaises(MetaWhatsAppError):
-            # upload de mídia sem 'id' na resposta (corpo vazio → {})
-            client.enviar_documento(
-                destinatario="5562999998888",
-                arquivo_bytes=b"%PDF-fake",
-                nome_arquivo="contrato.pdf",
-                nome_paciente="Maria",
-            )
-
-    @patch("gestao_contratos.services.whatsapp.meta_cloud.urlopen")
-    def test_resposta_nao_json_vira_meta_whatsapp_error(
-        self, mock_urlopen: MagicMock
-    ) -> None:
-        cm = MagicMock()
-        cm.__enter__.return_value.read.return_value = b"<html>erro</html>"
-        mock_urlopen.return_value = cm
-
-        client = MetaWhatsAppClient(self._config())
-        with self.assertRaises(MetaWhatsAppError):
-            client.enviar_documento(
-                destinatario="5562999998888",
-                arquivo_bytes=b"%PDF-fake",
-                nome_arquivo="contrato.pdf",
-                nome_paciente="Maria",
-            )
-
-
-# ---------------------------------------------------------------------------
 # Cobertura adicional (Fase 6) — views_assinatura.py: rate-limit e guardas
 # ---------------------------------------------------------------------------
 
@@ -3154,12 +3370,17 @@ _TSA_URL = "https://freetsa.org/tsr"
 
 
 class CarimboTempoConfigTests(TestCase):
-    @patch.dict("os.environ", {}, clear=True)
+    @override_settings(CARIMBO_TEMPO_TSA_URL="")
     def test_sem_tsa_url_fica_desativado(self) -> None:
         self.assertIsNone(carregar_config_carimbo_tempo())
         self.assertFalse(carimbo_tempo_configurado())
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     def test_com_tsa_url_fica_ativado(self) -> None:
         config = carregar_config_carimbo_tempo()
         self.assertIsNotNone(config)
@@ -3167,15 +3388,11 @@ class CarimboTempoConfigTests(TestCase):
         self.assertEqual(config.timeout, 30)
         self.assertTrue(carimbo_tempo_configurado())
 
-    @patch.dict(
-        "os.environ",
-        {
-            "CARIMBO_TEMPO_TSA_URL": _TSA_URL,
-            "CARIMBO_TEMPO_TSA_USERNAME": "user",
-            "CARIMBO_TEMPO_TSA_PASSWORD": "pass",
-            "CARIMBO_TEMPO_TIMEOUT": "45",
-        },
-        clear=True,
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="user",
+        CARIMBO_TEMPO_TSA_PASSWORD="pass",
+        CARIMBO_TEMPO_TIMEOUT=45,
     )
     def test_credenciais_e_timeout_customizados(self) -> None:
         config = carregar_config_carimbo_tempo()
@@ -3192,7 +3409,7 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
         self.contrato.refresh_from_db()
 
     def test_sem_tsa_configurada_retorna_erro_sem_solicitar(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
+        with override_settings(CARIMBO_TEMPO_TSA_URL=""):
             ok, erro = solicitar_carimbo(self.contrato)
 
         self.assertFalse(ok)
@@ -3203,7 +3420,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     def test_sem_hash_calculado_marca_erro(self) -> None:
         self.contrato.hash_sha256 = ""
         self.contrato.save(update_fields=["hash_sha256"])
@@ -3219,7 +3441,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_sucesso_salva_token_e_data_atestada(
@@ -3265,7 +3492,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
         self.assertEqual(leitor.attachments["carimbo_tempo.tsr"], [b"token-tsr-fake"])
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.RemoteTimestamper")
     def test_falha_na_tsa_marca_erro(self, MockTimestamper: MagicMock) -> None:
         MockTimestamper.return_value.timestamp.side_effect = RuntimeError(
@@ -3284,7 +3516,12 @@ class SolicitarCarimboTests(AssinaturaBaseTests):
             ).exists()
         )
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_sucesso_sem_pdf_assinado_nao_quebra(
@@ -3361,7 +3598,12 @@ class SolicitarCarimboTempoTaskTests(TestCase):
 
 
 class ProcessarAssinaturaCarimboTempoTests(AssinaturaBaseTests):
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     def test_agenda_carimbo_quando_configurado(self) -> None:
         with patch(
             "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"
@@ -3371,7 +3613,7 @@ class ProcessarAssinaturaCarimboTempoTests(AssinaturaBaseTests):
 
         mock_delay.assert_called_once_with(self.contrato.pk)
 
-    @patch.dict("os.environ", {}, clear=True)
+    @override_settings(CARIMBO_TEMPO_TSA_URL="")
     def test_nao_agenda_carimbo_quando_nao_configurado(self) -> None:
         with patch(
             "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"
@@ -3432,7 +3674,12 @@ class CarimboTempoViewsTests(AssinaturaBaseTests):
         )
         self.assertContains(response, "ainda não possui carimbo de tempo")
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_baixar_com_carimbo_retorna_arquivo(
@@ -3452,7 +3699,12 @@ class CarimboTempoViewsTests(AssinaturaBaseTests):
         self.assertEqual(response.content, b"token-tsr-fake")
         self.assertEqual(response["Content-Type"], "application/timestamp-reply")
 
-    @patch.dict("os.environ", {"CARIMBO_TEMPO_TSA_URL": _TSA_URL}, clear=True)
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
     @patch("rfc3161ng.get_timestamp")
     @patch("rfc3161ng.RemoteTimestamper")
     def test_baixar_contrato_assinado_ja_leva_o_carimbo_embutido(

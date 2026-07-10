@@ -1,0 +1,62 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Solicitar acesso{% endblock %}
+{% block eyebrow %}Novo acesso{% endblock %}
+{% block heading %}Solicitar acesso{% endblock %}
+{% block description %}Preencha seus dados para pedir uma conta. Um administrador vai revisar a solicitação e, se aprovada, você receberá um e-mail para definir sua senha.{% endblock %}
+
+{% block content %}
+    {% if form.non_field_errors %}
+        <div class="form-errors">
+            {{ form.non_field_errors }}
+        </div>
+    {% endif %}
+
+    <form class="auth-form" method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="field field-required{% if form.nome_completo.errors %} has-error{% endif %}">
+            <label for="{{ form.nome_completo.id_for_label }}">Nome completo</label>
+            {{ form.nome_completo }}
+            {% for erro in form.nome_completo.errors %}
+                <span class="field-error">{{ erro }}</span>
+            {% endfor %}
+        </div>
+
+        <div class="field field-required{% if form.email.errors %} has-error{% endif %}">
+            <label for="{{ form.email.id_for_label }}">E-mail</label>
+            {{ form.email }}
+            {% for erro in form.email.errors %}
+                <span class="field-error">{{ erro }}</span>
+            {% endfor %}
+        </div>
+
+        <div class="field field-required{% if form.username.errors %} has-error{% endif %}">
+            <label for="{{ form.username.id_for_label }}">Usuário desejado</label>
+            {{ form.username }}
+            <span class="field-hint">{{ form.username.help_text }}</span>
+            {% for erro in form.username.errors %}
+                <span class="field-error">{{ erro }}</span>
+            {% endfor %}
+        </div>
+
+        <div class="field{% if form.cargo.errors %} has-error{% endif %}">
+            <label for="{{ form.cargo.id_for_label }}">Cargo / função <span class="field-optional">(opcional)</span></label>
+            {{ form.cargo }}
+            {% for erro in form.cargo.errors %}
+                <span class="field-error">{{ erro }}</span>
+            {% endfor %}
+        </div>
+
+        <div class="field{% if form.justificativa.errors %} has-error{% endif %}">
+            <label for="{{ form.justificativa.id_for_label }}">Justificativa <span class="field-optional">(opcional)</span></label>
+            {{ form.justificativa }}
+            {% for erro in form.justificativa.errors %}
+                <span class="field-error">{{ erro }}</span>
+            {% endfor %}
+        </div>
+
+        <button class="button primary update-first" type="submit">Enviar solicitação</button>
+        <a class="auth-link" href="{% url 'login' %}">Voltar para o login</a>
+    </form>
+{% endblock %}

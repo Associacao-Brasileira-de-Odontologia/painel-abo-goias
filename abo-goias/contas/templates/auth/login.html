@@ -1,0 +1,31 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Entrar{% endblock %}
+{% block eyebrow %}Acesso do coordenador{% endblock %}
+{% block heading %}Entrar no sistema{% endblock %}
+{% block description %}Use seu usuário institucional para acompanhar apenas os empréstimos registrados por você.{% endblock %}
+
+{% block content %}
+    {% if form.errors %}
+        <div class="form-alert">Usuário ou senha inválidos.</div>
+    {% endif %}
+
+    <form class="auth-form" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <div class="field">
+            <label for="{{ form.username.id_for_label }}">Usuário</label>
+            {{ form.username }}
+        </div>
+
+        <div class="field">
+            <label for="{{ form.password.id_for_label }}">Senha</label>
+            {{ form.password }}
+        </div>
+
+        <button class="button primary update-first" type="submit">Entrar</button>
+        <a class="auth-link" href="{% url 'password_reset' %}">Esqueci minha senha</a>
+        <a class="auth-link" href="{% url 'solicitar_acesso' %}">Não tem acesso? Solicitar acesso</a>
+    </form>
+{% endblock %}
