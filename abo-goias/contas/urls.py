@@ -49,6 +49,12 @@ urlpatterns = [
         ),
         name="password_reset_complete",
     ),
+    path("solicitar-acesso/", views.solicitar_acesso, name="solicitar_acesso"),
+    path(
+        "solicitar-acesso/enviado/",
+        views.solicitar_acesso_enviado,
+        name="solicitar_acesso_enviado",
+    ),
     path("perfil/", views.perfil, name="perfil"),
     path(
         "senha/trocar/",

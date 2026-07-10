@@ -1207,9 +1207,11 @@ class ProcessarAssinaturaTests(AssinaturaBaseTests):
 
         self.mock_enviar_whatsapp_delay.assert_called_once_with(self.contrato.pk)
 
+    @override_settings(ZAPI_INSTANCE_ID="", ZAPI_TOKEN="")
     def test_assinatura_nao_agenda_whatsapp_sem_zapi_configurado(self) -> None:
         """Sem credenciais da Z-API, o envio automático fica desativado —
-        mesmo com celular cadastrado."""
+        mesmo com celular cadastrado. Zera as settings explicitamente para
+        não depender do que estiver no .env do desenvolvedor."""
         self.pac.celular = "62999998888"
         self.pac.save(update_fields=["celular"])
         sessao = criar_sessao(self.contrato, criado_por=self.usuario)
