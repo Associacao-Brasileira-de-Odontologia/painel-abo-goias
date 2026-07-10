@@ -1,8 +1,14 @@
 {% comment %}
-Seção "Documentos" — download do contrato assinado e do carimbo de tempo.
-Fica deliberadamente discreta e no fim da página de pós-geração: o fluxo
-principal é o envio automático/manual por WhatsApp e e-mail, não o download
-manual.
+Seção "Documentos" — download do contrato assinado e status do carimbo de
+tempo. Fica deliberadamente discreta e no fim da página de pós-geração: o
+fluxo principal é o envio automático/manual por WhatsApp e e-mail, não o
+download manual.
+
+O arquivo .tsr do carimbo de tempo não tem download direto nesta tela —
+o colaborador da recepção não tem como avaliar a validade/uso desse
+arquivo isoladamente. O carimbo continua sendo obtido e embutido
+automaticamente dentro do PDF assinado (ver services/carimbo_tempo.py);
+só o botão de download avulso do .tsr foi removido daqui.
 
 Incluída diretamente na renderização inicial de pos_geracao.html (sem OOB) e,
 quando `oob` é passado, embutida como hx-swap-oob dentro da resposta de
@@ -26,10 +32,6 @@ página.
                     <span class="badge badge-devolvido gc-badge-sm">
                         Carimbo de tempo obtido — {{ contrato.carimbo_tempo_em|date:"d/m/Y H:i" }}
                     </span>
-                    <a class="button secondary compact-button gc-mt-sm gc-full-width"
-                       href="{% url 'contrato_baixar_carimbo_tempo' contrato.pk %}">
-                        Baixar carimbo de tempo (.tsr)
-                    </a>
                 {% else %}
                     <span class="badge {% if contrato.status_carimbo_tempo == 'erro' %}badge-atrasado{% endif %} gc-badge-sm">
                         {% if contrato.status_carimbo_tempo == "erro" %}
