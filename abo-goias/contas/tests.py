@@ -318,6 +318,43 @@ class SolicitacaoCadastroAdminActionTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("maria@example.com", mail.outbox[0].to)
 
+    def test_email_de_aprovacao_usa_texto_de_boas_vindas(self) -> None:
+        """O e-mail de aprovação não pode reusar o texto do reset de senha —
+        quem acabou de ser aprovado nunca teve senha nem pediu redefinição."""
+
+        solicitacao = SolicitacaoCadastro.objects.create(
+            nome_completo="Maria Silva",
+            email="maria@example.com",
+            username="maria",
+        )
+
+        self.model_admin.aprovar_solicitacoes(
+            self._request(), SolicitacaoCadastro.objects.filter(pk=solicitacao.pk)
+        )
+
+        email = mail.outbox[0]
+        self.assertEqual(email.subject, "Sua conta foi criada - ABO Goiás")
+        self.assertIn("foi aprovada", email.body)
+        self.assertIn("defina sua senha", email.body)
+        self.assertNotIn("redefinir a senha", email.body)
+
+    def test_email_de_aprovacao_contem_usuario_e_link_de_definicao(self) -> None:
+        solicitacao = SolicitacaoCadastro.objects.create(
+            nome_completo="Maria Silva",
+            email="maria@example.com",
+            username="maria",
+        )
+
+        self.model_admin.aprovar_solicitacoes(
+            self._request(), SolicitacaoCadastro.objects.filter(pk=solicitacao.pk)
+        )
+
+        corpo = mail.outbox[0].body
+        self.assertIn("maria", corpo)
+        # Link gerado por PasswordResetForm: /senha/resetar/<uidb64>/<token>/
+        self.assertIn("/senha/resetar/", corpo)
+        self.assertIn(reverse("login"), corpo)
+
     def test_acao_rejeitar_marca_status_e_nao_cria_usuario(self) -> None:
         solicitacao = SolicitacaoCadastro.objects.create(
             nome_completo="Maria Silva",

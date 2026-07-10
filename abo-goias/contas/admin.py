@@ -18,10 +18,12 @@ from .models import SolicitacaoCadastro
 
 
 def _enviar_email_definir_senha(request: HttpRequest, email: str) -> None:
-    """Dispara o e-mail de definição de senha reutilizando o fluxo de reset.
+    """Dispara o e-mail de boas-vindas com o link de definição de senha.
 
-    Usa os mesmos templates do 'esqueci minha senha' — o usuário recém-criado
-    tem senha aleatória e define a própria pelo link recebido.
+    Reutiliza o mecanismo do fluxo de reset (PasswordResetForm gera o link
+    seguro uidb64+token), mas com templates próprios de conta criada — o
+    texto do reset ("recebemos uma solicitação para redefinir a senha")
+    confundia quem nunca teve senha nem pediu redefinição.
     """
 
     form = PasswordResetForm({"email": email})
@@ -29,8 +31,8 @@ def _enviar_email_definir_senha(request: HttpRequest, email: str) -> None:
         form.save(
             request=request,
             use_https=request.is_secure(),
-            email_template_name="auth/password_reset_email.html",
-            subject_template_name="auth/password_reset_subject.txt",
+            email_template_name="auth/conta_criada_email.html",
+            subject_template_name="auth/conta_criada_subject.txt",
         )
 
 

@@ -1,0 +1,12 @@
+Olá {{ user.get_full_name|default:user.get_username }},
+
+Sua solicitação de acesso aos sistemas internos da ABO Goiás foi aprovada e sua conta já está criada.
+
+Usuário para entrar no sistema: {{ user.get_username }}
+
+Para começar a usar, defina sua senha pelo link abaixo:
+{{ protocol }}://{{ domain }}{% url 'password_reset_confirm' uidb64=uid token=token %}
+
+Depois de definir a senha, acesse o sistema em {{ protocol }}://{{ domain }}{% url 'login' %}
+
+Se você não solicitou este acesso, ignore esta mensagem.
