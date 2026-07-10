@@ -3,17 +3,23 @@
 A conta em si e o ``django.contrib.auth.models.User`` padrao, ja
 administravel pelo admin nativo. Este modulo registra apenas
 :class:`~contas.models.SolicitacaoCadastro`, com acoes para o
-administrador aprovar (criando o usuario e enviando o e-mail de definicao
-de senha) ou rejeitar pedidos de acesso.
+administrador aprovar (criando o usuario e enviando o e-mail de boas-vindas)
+ou rejeitar pedidos de acesso, alem da tela de convite direto ("Convidar
+usuario"), que cria e aprova numa unica acao — o caminho inverso da
+solicitacao publica.
 """
 
 from __future__ import annotations
 
 from django.contrib import admin, messages
 from django.contrib.auth.forms import PasswordResetForm
-from django.http import HttpRequest
+from django.core.exceptions import PermissionDenied
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import redirect, render
+from django.urls import path
 
 from .emails import notificar_usuario_rejeitado
+from .forms import ConviteUsuarioForm
 from .models import SolicitacaoCadastro
 
 
@@ -55,6 +61,59 @@ class SolicitacaoCadastroAdmin(admin.ModelAdmin):
         "usuario_criado",
     )
     actions = ("aprovar_solicitacoes", "rejeitar_solicitacoes")
+    change_list_template = "admin/contas/solicitacaocadastro/change_list.html"
+
+    def get_urls(self):
+        return [
+            path(
+                "convidar/",
+                self.admin_site.admin_view(self.convidar_view),
+                name="contas_solicitacaocadastro_convidar",
+            ),
+            *super().get_urls(),
+        ]
+
+    def convidar_view(self, request: HttpRequest) -> HttpResponse:
+        """Convite direto: cria a solicitação já aprovada numa única ação.
+
+        Caminho inverso da solicitação pública — o administrador preenche
+        nome, e-mail e usuário; o sistema cria o ``User`` (via
+        ``SolicitacaoCadastro.aprovar()``, preservando a trilha de quem
+        convidou/quando) e envia o mesmo e-mail de boas-vindas com o link
+        de definição de senha usado na aprovação.
+        """
+
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+
+        if request.method == "POST":
+            form = ConviteUsuarioForm(request.POST)
+            if form.is_valid():
+                solicitacao = form.save()
+                usuario = solicitacao.aprovar(
+                    revisor=request.user,
+                    observacao="Convite direto pelo administrador.",
+                )
+                _enviar_email_definir_senha(request, usuario.email)
+                self.message_user(
+                    request,
+                    f'Usuário "{usuario.username}" convidado — e-mail de '
+                    f"boas-vindas enviado para {usuario.email}.",
+                    messages.SUCCESS,
+                )
+                return redirect("admin:contas_solicitacaocadastro_changelist")
+        else:
+            form = ConviteUsuarioForm()
+
+        contexto = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "title": "Convidar usuário",
+            "form": form,
+        }
+        return render(
+            request, "admin/contas/solicitacaocadastro/convidar.html", contexto
+        )
 
     @admin.action(description="Aprovar solicitações selecionadas (cria o usuário)")
     def aprovar_solicitacoes(self, request: HttpRequest, queryset) -> None:

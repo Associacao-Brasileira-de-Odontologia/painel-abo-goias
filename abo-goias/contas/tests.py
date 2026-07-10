@@ -411,3 +411,109 @@ class SolicitacaoCadastroAdminActionTests(TestCase):
         )
 
         self.assertEqual(len(mail.outbox), 0)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class ConviteUsuarioAdminTests(TestCase):
+    """Convite direto pelo Django Admin — cria e aprova numa única ação."""
+
+    def setUp(self) -> None:
+        self.admin_user = get_user_model().objects.create_superuser(
+            username="admin", email="admin@example.com", password="senha-segura"
+        )
+        self.client.force_login(self.admin_user)
+        self.url = reverse("admin:contas_solicitacaocadastro_convidar")
+
+    def _dados_convite(self, **kwargs) -> dict:
+        base = {
+            "nome_completo": "Maria Silva",
+            "email": "maria@example.com",
+            "username": "maria",
+            "cargo": "Recepção",
+        }
+        base.update(kwargs)
+        return base
+
+    def test_anonimo_e_redirecionado_ao_login_do_admin(self) -> None:
+        self.client.logout()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response.url)
+
+    def test_staff_sem_permissao_de_add_recebe_403(self) -> None:
+        limitado = get_user_model().objects.create_user(
+            username="staff-limitado", password="senha-segura", is_staff=True
+        )
+        self.client.force_login(limitado)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_exibe_formulario_sem_justificativa(self) -> None:
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(
+            response, "admin/contas/solicitacaocadastro/convidar.html"
+        )
+        self.assertContains(response, "nome_completo")
+        self.assertNotContains(response, "justificativa")
+
+    def test_post_valido_cria_usuario_aprovado_em_uma_acao(self) -> None:
+        response = self.client.post(self.url, self._dados_convite())
+
+        self.assertRedirects(
+            response,
+            reverse("admin:contas_solicitacaocadastro_changelist"),
+            fetch_redirect_response=False,
+        )
+        usuario = get_user_model().objects.get(username="maria")
+        self.assertTrue(usuario.is_active)
+        self.assertEqual(usuario.email, "maria@example.com")
+
+        solicitacao = SolicitacaoCadastro.objects.get(username="maria")
+        self.assertEqual(solicitacao.status, SolicitacaoCadastro.Status.APROVADA)
+        self.assertEqual(solicitacao.revisado_por, self.admin_user)
+        self.assertEqual(solicitacao.usuario_criado, usuario)
+        self.assertIn("Convite direto", solicitacao.observacao_revisao)
+
+    def test_post_valido_envia_email_de_boas_vindas(self) -> None:
+        self.client.post(self.url, self._dados_convite())
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertIn("maria@example.com", email.to)
+        self.assertEqual(email.subject, "Sua conta foi criada - ABO Goiás")
+        self.assertIn("/senha/resetar/", email.body)
+
+    def test_username_ja_existente_nao_cria_nada(self) -> None:
+        get_user_model().objects.create_user(username="maria", password="senha-segura")
+
+        response = self.client.post(self.url, self._dados_convite())
+
+        self.assertEqual(response.status_code, 200)  # form reexibido com erro
+        self.assertContains(response, "Já existe um usuário com esse nome")
+        self.assertFalse(SolicitacaoCadastro.objects.filter(username="maria").exists())
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_email_ja_existente_nao_cria_nada(self) -> None:
+        get_user_model().objects.create_user(
+            username="outra", password="senha-segura", email="maria@example.com"
+        )
+
+        response = self.client.post(self.url, self._dados_convite())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(get_user_model().objects.filter(username="maria").exists())
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_botao_convidar_aparece_na_listagem(self) -> None:
+        response = self.client.get(
+            reverse("admin:contas_solicitacaocadastro_changelist")
+        )
+
+        self.assertContains(response, self.url)
+        self.assertContains(response, "Convidar usuário")

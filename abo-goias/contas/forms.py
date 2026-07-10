@@ -71,3 +71,16 @@ class SolicitacaoCadastroForm(forms.ModelForm):
                 "Já existe uma solicitação pendente com esse e-mail."
             )
         return email
+
+
+class ConviteUsuarioForm(SolicitacaoCadastroForm):
+    """Formulário do convite direto pelo administrador (Django Admin).
+
+    Mesmos campos e validações de duplicidade da solicitação pública —
+    username/e-mail já em uso são rejeitados antes de criar qualquer coisa —
+    apenas sem o campo de justificativa, que não faz sentido quando é o
+    próprio administrador quem está convidando.
+    """
+
+    class Meta(SolicitacaoCadastroForm.Meta):
+        fields = ["nome_completo", "email", "username", "cargo"]

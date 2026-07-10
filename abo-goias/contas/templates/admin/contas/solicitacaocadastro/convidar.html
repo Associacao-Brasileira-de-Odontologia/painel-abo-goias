@@ -1,0 +1,45 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Tela do convite direto (SolicitacaoCadastroAdmin.convidar_view): o
+administrador preenche os dados e, num único passo, o usuário é criado
+(solicitação já aprovada) e recebe o e-mail de boas-vindas com o link
+para definir a própria senha.
+{% endcomment %}
+
+{% block breadcrumbs %}
+    <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}">Início</a>
+        &rsaquo; <a href="{% url 'admin:app_list' app_label='contas' %}">Contas</a>
+        &rsaquo; <a href="{% url 'admin:contas_solicitacaocadastro_changelist' %}">Solicitações de cadastro</a>
+        &rsaquo; Convidar usuário
+    </div>
+{% endblock %}
+
+{% block content %}
+    <p>
+        O usuário é criado imediatamente (sem passar pela fila de solicitações
+        pendentes) e recebe por e-mail o link para definir a própria senha.
+        Fica registrado quem convidou e quando, na própria solicitação.
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <fieldset class="module aligned">
+            {% for field in form %}
+                <div class="form-row{% if field.errors %} errors{% endif %}">
+                    {{ field.errors }}
+                    <div>
+                        {{ field.label_tag }}
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="help">{{ field.help_text }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </fieldset>
+        <div class="submit-row">
+            <input type="submit" value="Convidar e enviar e-mail" class="default">
+            <a href="{% url 'admin:contas_solicitacaocadastro_changelist' %}" class="closelink">Cancelar</a>
+        </div>
+    </form>
+{% endblock %}
