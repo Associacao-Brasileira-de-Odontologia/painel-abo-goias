@@ -108,6 +108,7 @@ def assinar_view(request: HttpRequest, token: str) -> HttpResponse:
                 request.POST.get("assinatura", ""),
                 ip=_ip_do_request(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                validacao_url=request.build_absolute_uri(reverse("validar_documento")),
             )
         except AssinaturaInvalida as exc:
             return render(

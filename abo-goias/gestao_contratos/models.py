@@ -80,6 +80,19 @@ class ContratoGerado(ModeloBase):
         blank=True,
         help_text="SHA-256 do PDF gerado; recalculado após a assinatura.",
     )
+    hash_arquivo_assinado = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "SHA-256 do arquivo assinado final (arquivo_pdf_assinado), já "
+            "incluindo o carimbo de tempo embutido quando houver — é a "
+            "impressão digital conferida pela página pública de validação. "
+            "Difere de hash_sha256 quando um carimbo de tempo é embutido "
+            "após a assinatura, pois isso reescreve os bytes do PDF."
+        ),
+    )
     status_envio = models.CharField(
         max_length=25,
         choices=STATUS_ENVIO,

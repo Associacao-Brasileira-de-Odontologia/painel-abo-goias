@@ -133,6 +133,97 @@ p {
     color: var(--gc-paper-muted);
 }
 
+.info-esq {
+    text-align: left;
+}
+
+/* ══ Página de validação de documentos ══════════════════════════ */
+
+.form-validar {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.campo-arquivo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+}
+
+.campo-arquivo-label {
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--gc-ink-onlight);
+}
+
+.campo-arquivo input[type="file"] {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--gc-paper-line);
+    background: #fff;
+    font-family: "DM Sans", sans-serif;
+    font-size: 0.92rem;
+    color: var(--gc-paper-ink);
+    cursor: pointer;
+}
+
+.campo-arquivo input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 0;
+    background: rgba(3, 72, 187, 0.1);
+    color: var(--gc-ink-onlight);
+    font-family: "DM Sans", sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.campo-arquivo input[type="file"]:focus-visible {
+    outline: 3px solid var(--gc-ink-onlight);
+    outline-offset: 2px;
+}
+
+.selo {
+    border-top-width: 4px;
+    border-top-style: solid;
+}
+
+.selo-valido {
+    border-top-color: var(--gc-sucesso);
+}
+
+.selo-invalido {
+    border-top-color: var(--gc-erro);
+}
+
+.titulo-erro {
+    color: var(--gc-erro);
+}
+
+.hash-linha {
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--gc-paper-muted);
+    margin-top: 14px;
+    word-break: break-all;
+}
+
+.hash-linha span {
+    display: inline-block;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--gc-ink-onlight);
+    margin-bottom: 2px;
+}
+
 .btn {
     display: inline-flex;
     width: 100%;
