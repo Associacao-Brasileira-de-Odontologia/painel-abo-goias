@@ -67,6 +67,7 @@ def aplicar_assinatura_no_pdf(
             1.15 * cm,
             f"Confira a autenticidade deste documento em: {validacao_url}",
         )
+        _desenhar_qr_validacao(c, validacao_url)
     c.save()
     overlay_buf.seek(0)
 
@@ -80,6 +81,29 @@ def aplicar_assinatura_no_pdf(
     saida = io.BytesIO()
     writer.write(saida)
     return saida.getvalue()
+
+
+def _desenhar_qr_validacao(c: "rl_canvas.Canvas", url: str) -> None:
+    """Desenha, no canto inferior direito do rodapé, um QR Code que abre a
+    página pública de validação — atalho de conferência para quem tem o
+    documento impresso em mãos (a mesma URL também é impressa em texto).
+    """
+
+    import qrcode
+
+    qr_lado = 1.9 * cm
+    qr_x = A4[0] - PDF_MARGEM_ESQUERDA - qr_lado
+    qr_y = 0.9 * cm
+
+    imagem = qrcode.make(url, box_size=6, border=1)
+    buf = io.BytesIO()
+    imagem.save(buf, format="PNG")
+    buf.seek(0)
+
+    c.drawImage(ImageReader(buf), qr_x, qr_y, width=qr_lado, height=qr_lado)
+    c.setFont("Helvetica", 5.5)
+    c.setFillGray(0.45)
+    c.drawCentredString(qr_x + qr_lado / 2, qr_y + qr_lado + 3, "Validar documento")
 
 
 def anexar_carimbo_tempo(

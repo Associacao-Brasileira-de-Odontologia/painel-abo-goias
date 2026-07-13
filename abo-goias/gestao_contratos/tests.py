@@ -4495,18 +4495,29 @@ class ValidacaoDocumentoTests(AssinaturaBaseTests):
     MEDIA_ROOT temporário e as tarefas Celery mockadas.
     """
 
+    def _assinar_contrato(self, contrato, validacao_url: str | None = None) -> bytes:
+        """Assina um contrato e devolve os bytes do PDF assinado final."""
+
+        sessao = criar_sessao(contrato, criado_por=self.usuario)
+        _confirmar_identidade_sessao(sessao)
+        processar_assinatura(
+            sessao,
+            _assinatura_data_url(),
+            ip=None,
+            user_agent="",
+            validacao_url=validacao_url,
+        )
+
+        contrato.refresh_from_db()
+        contrato.arquivo_pdf_assinado.open("rb")
+        pdf = contrato.arquivo_pdf_assinado.read()
+        contrato.arquivo_pdf_assinado.close()
+        return pdf
+
     def _assinar(self) -> bytes:
         """Assina self.contrato e devolve os bytes do PDF assinado final."""
 
-        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
-        _confirmar_identidade_sessao(sessao)
-        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
-
-        self.contrato.refresh_from_db()
-        self.contrato.arquivo_pdf_assinado.open("rb")
-        pdf = self.contrato.arquivo_pdf_assinado.read()
-        self.contrato.arquivo_pdf_assinado.close()
-        return pdf
+        return self._assinar_contrato(self.contrato)
 
     # ── Serviço ──────────────────────────────────────────────────────
 
@@ -4620,3 +4631,26 @@ class ValidacaoDocumentoTests(AssinaturaBaseTests):
             page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages
         )
         self.assertIn("validar", texto)
+
+    def test_qr_de_validacao_adicionado_ao_rodape(self) -> None:
+        from pypdf import PdfReader
+
+        def imagens_ultima_pagina(pdf: bytes) -> int:
+            return len(list(PdfReader(io.BytesIO(pdf)).pages[-1].images))
+
+        pdf_sem = self._assinar_contrato(self.contrato, validacao_url=None)
+
+        outro = gerar_e_salvar_contrato(
+            paciente=_paciente_completo(id_dental="601"),
+            tipo="modelo_1",
+            gerado_por=self.usuario,
+        )
+        pdf_com = self._assinar_contrato(
+            outro, validacao_url="https://exemplo.test/contratos/validar/"
+        )
+
+        # O PDF com URL de validação leva uma imagem a mais no rodapé (o QR
+        # Code), além da assinatura desenhada presente em ambos.
+        self.assertEqual(
+            imagens_ultima_pagina(pdf_com), imagens_ultima_pagina(pdf_sem) + 1
+        )
