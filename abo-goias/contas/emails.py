@@ -55,6 +55,31 @@ def notificar_admin_nova_solicitacao(
         )
 
 
+def confirmar_recebimento_solicitacao(solicitacao: SolicitacaoCadastro) -> None:
+    """Confirma a quem solicitou acesso que o pedido foi registrado.
+
+    Fecha o ciclo do formulário público: sem isto, o solicitante fica sem
+    nenhum retorno até ser aprovado ou rejeitado. Mesmo padrão fail-safe
+    da notificação ao administrador — o pedido já foi salvo antes desta
+    chamada, então uma falha de envio é só logada, nunca propagada.
+    """
+
+    contexto = {"solicitacao": solicitacao}
+
+    try:
+        assunto = render_to_string(
+            "auth/solicitacao_recebida_subject.txt", contexto
+        ).strip()
+        corpo = render_to_string("auth/solicitacao_recebida_email.html", contexto)
+        send_mail(assunto, corpo, settings.DEFAULT_FROM_EMAIL, [solicitacao.email])
+    except Exception:
+        logger.exception(
+            "confirmar_recebimento_solicitacao: falha ao enviar e-mail "
+            "(solicitacao=%s)",
+            solicitacao.pk,
+        )
+
+
 def notificar_usuario_rejeitado(solicitacao: SolicitacaoCadastro) -> None:
     """Avisa por e-mail quem solicitou acesso que o pedido foi rejeitado.
 

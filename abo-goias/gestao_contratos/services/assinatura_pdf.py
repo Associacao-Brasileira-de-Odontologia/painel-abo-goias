@@ -26,10 +26,14 @@ def aplicar_assinatura_no_pdf(
     pdf_bytes: bytes,
     assinatura_png: bytes,
     carimbo: str,
+    validacao_url: str | None = None,
 ) -> bytes:
     """Retorna um novo PDF com a assinatura mesclada na última página.
 
     ``carimbo`` é a linha de auditoria impressa no rodapé (data/hora, IP).
+    ``validacao_url``, quando informada, é impressa como uma segunda linha
+    no rodapé, orientando qualquer pessoa a conferir a autenticidade do
+    documento na página pública de validação.
     """
 
     imagem = ImageReader(io.BytesIO(assinatura_png))
@@ -56,6 +60,13 @@ def aplicar_assinatura_no_pdf(
     c.setFont("Helvetica", 7)
     c.setFillGray(0.45)
     c.drawString(PDF_MARGEM_ESQUERDA, 1.5 * cm, carimbo)
+    if validacao_url:
+        c.setFont("Helvetica", 6.5)
+        c.drawString(
+            PDF_MARGEM_ESQUERDA,
+            1.15 * cm,
+            f"Confira a autenticidade deste documento em: {validacao_url}",
+        )
     c.save()
     overlay_buf.seek(0)
 

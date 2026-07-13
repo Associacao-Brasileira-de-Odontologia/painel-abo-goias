@@ -17,6 +17,7 @@ feita — o restante do fluxo de assinatura permanece inalterado.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import timezone as dt_timezone
@@ -131,6 +132,7 @@ def solicitar_carimbo(contrato: "ContratoGerado") -> tuple[bool, str]:
             "carimbo_tempo_tsa",
             "status_carimbo_tempo",
             "arquivo_pdf_assinado",
+            "hash_arquivo_assinado",
             "atualizado_em",
         ]
     )
@@ -181,6 +183,10 @@ def _embutir_carimbo_no_pdf_assinado(contrato: "ContratoGerado", token: bytes) -
     contrato.arquivo_pdf_assinado.save(
         nome_arquivo, ContentFile(pdf_com_carimbo), save=False
     )
+    # O arquivo final mudou (agora com o token embutido); reajusta a
+    # impressão digital conferida pela página de validação. hash_sha256
+    # permanece intocado — é o digest que o próprio token cobre.
+    contrato.hash_arquivo_assinado = hashlib.sha256(pdf_com_carimbo).hexdigest()
 
 
 def _marcar_erro(contrato: "ContratoGerado", erro: str) -> None:

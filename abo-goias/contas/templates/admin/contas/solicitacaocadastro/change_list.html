@@ -1,0 +1,17 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+Adiciona o botão "Convidar usuário" na listagem de solicitações — o
+caminho direto para o administrador criar um acesso sem esperar a pessoa
+solicitar (ver SolicitacaoCadastroAdmin.convidar_view).
+{% endcomment %}
+
+{% block object-tools-items %}
+    {% if has_add_permission %}
+        <li>
+            <a href="{% url 'admin:contas_solicitacaocadastro_convidar' %}" class="addlink">
+                Convidar usuário
+            </a>
+        </li>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}

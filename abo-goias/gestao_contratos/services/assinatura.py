@@ -406,8 +406,14 @@ def processar_assinatura(
     assinatura_data_url: str,
     ip: str | None,
     user_agent: str,
+    validacao_url: str | None = None,
 ) -> "ContratoGerado":
     """Valida a imagem, faz o claim atômico da sessão e gera o PDF assinado.
+
+    ``validacao_url``, quando informada, é impressa no rodapé do PDF
+    assinado, orientando qualquer pessoa a conferir a autenticidade do
+    documento na página pública de validação (ver services/validacao.py).
+    A view pública a monta com o host correto via request.build_absolute_uri.
 
     Raises AssinaturaInvalida (imagem ruim) ou SessaoInvalida (corrida com
     outra assinatura / sessão não mais ativa).
@@ -447,7 +453,9 @@ def processar_assinatura(
     try:
         pdf_original = _obter_pdf_original(contrato)
         carimbo = _texto_carimbo(sessao, ip, agora)
-        pdf_assinado = aplicar_assinatura_no_pdf(pdf_original, png_bytes, carimbo)
+        pdf_assinado = aplicar_assinatura_no_pdf(
+            pdf_original, png_bytes, carimbo, validacao_url
+        )
     except Exception:
         # Reverte o claim para permitir nova tentativa do paciente.
         sessao.status = "aberta"
@@ -472,6 +480,11 @@ def processar_assinatura(
     )
     contrato.status = "assinado"
     contrato.hash_sha256 = hashlib.sha256(pdf_assinado).hexdigest()
+    # Neste ponto o arquivo salvo é exatamente ``pdf_assinado`` (o carimbo de
+    # tempo, quando houver, é embutido depois — ver services/carimbo_tempo.py,
+    # que reescreve o arquivo e reajusta este campo). Por isso os dois hashes
+    # coincidem aqui.
+    contrato.hash_arquivo_assinado = contrato.hash_sha256
     contrato.save()
 
     registrar_evento(

@@ -18,6 +18,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -59,6 +60,7 @@ from gestao_contratos.services.documentos import (
     gerar_pdf,
 )
 from gestao_contratos.services.envio import normalizar_celular
+from gestao_contratos.services.validacao import ArquivoInvalido, validar_pdf
 from gestao_contratos.services.whatsapp import enviar_whatsapp_contrato
 from gestao_contratos.tasks import (
     enviar_dental_task,
@@ -302,6 +304,13 @@ class ContratosViewTests(TestCase):
         response = self.client.get(reverse("contratos"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_contratos/contratos.html")
+
+    def test_barra_lateral_tem_link_de_validacao(self) -> None:
+        # A listagem de pacientes deve herdar a barra lateral do base.html,
+        # incluindo o link "Validar documento" — sem sobrescrever o bloco.
+        response = self.client.get(reverse("contratos"))
+        self.assertContains(response, "Validar documento")
+        self.assertContains(response, reverse("validar_documento"))
 
     def test_lista_pacientes_ativos(self) -> None:
         _paciente(nome="Carlos Ativo", id_dental="A1")
@@ -4477,3 +4486,137 @@ class TerminalExpiracaoAutomaticaTests(TestCase):
         self.assertNotContains(response, ">Ativo<")
         terminal.refresh_from_db()
         self.assertFalse(terminal.ativo)
+
+
+class ValidacaoDocumentoTests(AssinaturaBaseTests):
+    """Validação pública de PDF assinado — serviço e página.
+
+    Herda de AssinaturaBaseTests para ter um contrato real com PDF em um
+    MEDIA_ROOT temporário e as tarefas Celery mockadas.
+    """
+
+    def _assinar(self) -> bytes:
+        """Assina self.contrato e devolve os bytes do PDF assinado final."""
+
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        _confirmar_identidade_sessao(sessao)
+        processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.contrato.refresh_from_db()
+        self.contrato.arquivo_pdf_assinado.open("rb")
+        pdf = self.contrato.arquivo_pdf_assinado.read()
+        self.contrato.arquivo_pdf_assinado.close()
+        return pdf
+
+    # ── Serviço ──────────────────────────────────────────────────────
+
+    def test_hash_arquivo_assinado_gravado_na_assinatura(self) -> None:
+        pdf = self._assinar()
+
+        self.assertEqual(
+            self.contrato.hash_arquivo_assinado,
+            hashlib.sha256(pdf).hexdigest(),
+        )
+
+    def test_validar_pdf_autentico(self) -> None:
+        pdf = self._assinar()
+
+        resultado = validar_pdf(pdf)
+
+        self.assertTrue(resultado.autentico)
+        self.assertEqual(resultado.contrato, self.contrato)
+        self.assertIsNotNone(resultado.sessao)
+        self.assertEqual(resultado.hash_sha256, hashlib.sha256(pdf).hexdigest())
+
+    def test_validar_pdf_adulterado_nao_confere(self) -> None:
+        pdf = self._assinar()
+        adulterado = pdf + b"%alteracao"
+
+        resultado = validar_pdf(adulterado)
+
+        self.assertFalse(resultado.autentico)
+        self.assertIsNone(resultado.contrato)
+
+    def test_validar_pdf_nao_emitido_nao_confere(self) -> None:
+        resultado = validar_pdf(b"%PDF-1.4 documento qualquer nao emitido aqui")
+
+        self.assertFalse(resultado.autentico)
+
+    def test_validar_arquivo_vazio_levanta(self) -> None:
+        with self.assertRaises(ArquivoInvalido):
+            validar_pdf(b"")
+
+    def test_validar_nao_pdf_levanta(self) -> None:
+        with self.assertRaises(ArquivoInvalido):
+            validar_pdf(b"isto nao e um PDF")
+
+    # ── Página pública ───────────────────────────────────────────────
+
+    def test_get_renderiza_formulario(self) -> None:
+        self.client.logout()
+
+        response = self.client.get(reverse("validar_documento"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Validar documento")
+
+    def test_post_pdf_autentico_mostra_selo(self) -> None:
+        pdf = self._assinar()
+        self.client.logout()  # página é pública
+
+        response = self.client.post(
+            reverse("validar_documento"),
+            {"documento": SimpleUploadedFile("assinado.pdf", pdf, "application/pdf")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Documento autêntico")
+        self.assertContains(response, self.pac.nome)
+
+    def test_post_pdf_adulterado_mostra_falha(self) -> None:
+        pdf = self._assinar()
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("validar_documento"),
+            {
+                "documento": SimpleUploadedFile(
+                    "adulterado.pdf", pdf + b"x", "application/pdf"
+                )
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Não foi possível validar")
+        self.assertNotContains(response, self.pac.nome)
+
+    def test_post_sem_arquivo_mostra_erro(self) -> None:
+        self.client.logout()
+
+        response = self.client.post(reverse("validar_documento"), {})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Selecione um arquivo PDF")
+
+    def test_url_validacao_impressa_no_rodape_do_pdf(self) -> None:
+        from pypdf import PdfReader
+
+        sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+        _confirmar_identidade_sessao(sessao)
+        processar_assinatura(
+            sessao,
+            _assinatura_data_url(),
+            ip=None,
+            user_agent="",
+            validacao_url="https://exemplo.test/contratos/validar/",
+        )
+
+        self.contrato.refresh_from_db()
+        self.contrato.arquivo_pdf_assinado.open("rb")
+        pdf = self.contrato.arquivo_pdf_assinado.read()
+        self.contrato.arquivo_pdf_assinado.close()
+
+        texto = "".join(
+            page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages
+        )
+        self.assertIn("validar", texto)

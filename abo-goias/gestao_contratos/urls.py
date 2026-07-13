@@ -1,8 +1,14 @@
 from django.urls import path
 
-from . import views, views_assinatura, views_terminal
+from . import views, views_assinatura, views_terminal, views_validacao
 
 urlpatterns = [
+    # ── Validação pública de documentos assinados ──────────────────────
+    path(
+        "validar/",
+        views_validacao.validar_documento_view,
+        name="validar_documento",
+    ),
     # ── Assinatura remota — público (paciente, via QR Code) ────────────
     path(
         "assinar/<str:token>/",

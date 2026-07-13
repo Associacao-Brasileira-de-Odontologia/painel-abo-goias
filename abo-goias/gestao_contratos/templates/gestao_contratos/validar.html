@@ -1,0 +1,83 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Validar documento — ABO Goiás</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Fraunces:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'gestao_contratos/css/assinatura.css' %}">
+</head>
+<body>
+    <div class="gc-wrap">
+        <div class="card centro">
+            <div class="eyebrow">ABO Goiás · Validação</div>
+            <div class="icone">🔎</div>
+            <h1>Validar documento assinado</h1>
+            <p class="texto-apoio">
+                Envie o PDF assinado para conferir sua autenticidade e se ele
+                não foi alterado depois da assinatura.
+            </p>
+
+            {% if erro %}
+                <div class="erro mt-sm">{{ erro }}</div>
+            {% endif %}
+
+            <form method="post" enctype="multipart/form-data" class="form-validar">
+                {% csrf_token %}
+                <label class="campo-arquivo">
+                    <span class="campo-arquivo-label">Arquivo PDF</span>
+                    <input type="file" name="documento" accept="application/pdf,.pdf" required>
+                </label>
+                <button type="submit" class="btn btn-primary">Validar documento</button>
+            </form>
+        </div>
+
+        {% if resultado %}
+            {% if resultado.autentico %}
+                <div class="card centro selo selo-valido">
+                    <div class="icone-sucesso">✓</div>
+                    <h1 class="titulo-sucesso">Documento autêntico</h1>
+                    <p class="texto-apoio">
+                        O arquivo confere, bit a bit, com o documento assinado
+                        registrado no sistema. Nenhuma alteração foi feita desde
+                        a assinatura.
+                    </p>
+                    <div class="info info-esq">
+                        <p><span>Tipo:</span> {{ resultado.contrato.get_tipo_display }}</p>
+                        <p><span>Signatário:</span> {{ resultado.contrato.paciente.nome }}</p>
+                        {% if resultado.sessao.assinada_em %}
+                            <p><span>Assinado em:</span> {{ resultado.sessao.assinada_em|date:"d/m/Y H:i" }}</p>
+                        {% endif %}
+                        {% if resultado.sessao.identidade_confirmada_como %}
+                            <p><span>Identidade confirmada como:</span> {{ resultado.sessao.get_identidade_confirmada_como_display }}</p>
+                        {% endif %}
+                        {% if resultado.contrato.status_carimbo_tempo == "concluido" %}
+                            <p><span>Carimbo de tempo (RFC 3161):</span> {{ resultado.contrato.carimbo_tempo_em|date:"d/m/Y H:i" }}</p>
+                        {% endif %}
+                    </div>
+                    <p class="hash-linha"><span>SHA-256 conferido</span><br>{{ resultado.hash_sha256 }}</p>
+                </div>
+            {% else %}
+                <div class="card centro selo selo-invalido">
+                    <div class="icone">⚠️</div>
+                    <h1 class="titulo-erro">Não foi possível validar</h1>
+                    <p class="texto-apoio">
+                        Este arquivo não corresponde a nenhum documento assinado
+                        pelo sistema. Ele pode ter sido alterado após a assinatura
+                        ou não ter sido emitido por esta plataforma.
+                    </p>
+                    <p class="hash-linha"><span>SHA-256 do arquivo enviado</span><br>{{ resultado.hash_sha256 }}</p>
+                </div>
+            {% endif %}
+        {% endif %}
+
+        <p class="rodape">
+            A conferência usa apenas o hash SHA-256 do arquivo — nenhum dado é
+            enviado a serviços de terceiros.
+        </p>
+    </div>
+</body>
+</html>
