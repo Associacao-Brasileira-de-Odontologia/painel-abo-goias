@@ -305,6 +305,13 @@ class ContratosViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "gestao_contratos/contratos.html")
 
+    def test_barra_lateral_tem_link_de_validacao(self) -> None:
+        # A listagem de pacientes deve herdar a barra lateral do base.html,
+        # incluindo o link "Validar documento" — sem sobrescrever o bloco.
+        response = self.client.get(reverse("contratos"))
+        self.assertContains(response, "Validar documento")
+        self.assertContains(response, reverse("validar_documento"))
+
     def test_lista_pacientes_ativos(self) -> None:
         _paciente(nome="Carlos Ativo", id_dental="A1")
         _paciente(nome="Ana Inativa", id_dental="A2", ativo=False)
