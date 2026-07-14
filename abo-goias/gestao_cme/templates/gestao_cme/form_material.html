@@ -15,10 +15,6 @@
 
 {% block panel_label %}<p class="section-label">Catálogo</p>{% endblock %}
 {% block panel_title %}{{ titulo }}{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'materiais' %}">Voltar à listagem</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" %}
 

@@ -8,10 +8,6 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Cadastrar aluno{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'alunos_por_turma' %}">Voltar à listagem</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" %}
 

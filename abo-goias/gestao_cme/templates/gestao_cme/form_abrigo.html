@@ -14,10 +14,6 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}{{ titulo }}{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'abrigos' %}">Voltar à listagem</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" %}
 

@@ -13,10 +13,6 @@
 
 {% block panel_label %}<p class="section-label">Fluxo de moldagens</p>{% endblock %}
 {% block panel_title %}Registrar moldagem{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'lab_moldagens' %}">Voltar à listagem</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" with com_rotulo=True %}
 

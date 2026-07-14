@@ -80,3 +80,20 @@
         botao.classList.add("is-loading");
     });
 })();
+
+(function () {
+    // Feedback de carregamento nas buscas que recarregam a página: filtros de
+    // listagem (.filter-bar) e importação pontual do Dental Office
+    // (.js-loading-submit). Mesmo mecanismo do .sync-form, mas mantém o rótulo
+    // do botão — só adiciona o spinner e desabilita até a próxima página.
+    document.addEventListener("submit", function (event) {
+        var form = event.target.closest(".filter-bar, .js-loading-submit");
+        if (!form) return;
+
+        var botao = form.querySelector('button[type="submit"]');
+        if (!botao || botao.disabled) return;
+
+        botao.disabled = true;
+        botao.classList.add("is-loading");
+    });
+})();
