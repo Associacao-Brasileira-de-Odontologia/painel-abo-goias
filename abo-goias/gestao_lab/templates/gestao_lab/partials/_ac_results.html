@@ -12,9 +12,9 @@ locais utilizáveis no formulário.
     <p class="ac-aviso ac-aviso--erro">{{ erro_dental }}</p>
 {% elif veio_do_dental %}
     {% if importados %}
-        <p class="ac-aviso ac-aviso--ok">{{ importados }} registro{{ importados|pluralize }} encontrado{{ importados|pluralize }} no Dental Office.</p>
+        <p class="ac-aviso ac-aviso--ok">{{ importados }} registro{{ importados|pluralize }} encontrado{{ importados|pluralize }}.</p>
     {% else %}
-        <p class="ac-aviso">Nada encontrado no Dental Office para &ldquo;{{ busca }}&rdquo;.</p>
+        <p class="ac-aviso">Nada encontrado para &ldquo;{{ busca }}&rdquo;.</p>
     {% endif %}
 {% endif %}
 
@@ -39,7 +39,7 @@ locais utilizáveis no formulário.
     {% endif %}
 {% elif busca %}
     <p class="help-text search-results-empty">
-        Nenhum registro já sincronizado corresponde a &ldquo;{{ busca }}&rdquo;.
+        Nenhum resultado na lista para &ldquo;{{ busca }}&rdquo;.
     </p>
 {% else %}
     <p class="help-text search-results-empty">Digite o nome para buscar.</p>
@@ -50,6 +50,6 @@ locais utilizáveis no formulário.
             hx-get="{{ url_dental }}?q={{ busca|urlencode }}"
             hx-target="closest .search-results-wrap"
             hx-swap="innerHTML">
-        {% if itens %}Não encontrou? {% endif %}Buscar &ldquo;{{ busca }}&rdquo; no Dental Office
+        {% if itens %}Não encontrou? {% endif %}Procurar &ldquo;{{ busca }}&rdquo; em todos os cadastros
     </button>
 {% endif %}

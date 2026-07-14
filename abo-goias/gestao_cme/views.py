@@ -42,6 +42,7 @@ from .models import (
     Turma,
 )
 from .services.eduq_sync import sincronizar_eduq
+from .utils import normalizar_texto
 
 REGISTROS_POR_PAGINA = 10
 
@@ -276,7 +277,11 @@ def home(request: HttpRequest) -> HttpResponse:
 
     if busca:
         movimentacoes = movimentacoes.filter(
+            # `aluno_nome`/`turma_nome` sao copias textuais do momento do
+            # registro (podem existir sem FK, ex.: dados legados); o campo
+            # normalizado do aluno cobre a busca sem acento quando ha vinculo.
             Q(aluno_nome__icontains=busca)
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(aluno_codigo_externo__icontains=busca)
             | Q(turma_nome__icontains=busca)
             | Q(pacote_codigo__icontains=busca)
@@ -365,10 +370,10 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         alunos = alunos.filter(turma_id=turma_id)
     if busca:
         alunos = alunos.filter(
-            Q(nome__icontains=busca)
+            Q(nome_normalizado__icontains=normalizar_texto(busca))
             | Q(matricula__icontains=busca)
             | Q(email__icontains=busca)
-            | Q(turma__nome__icontains=busca)
+            | Q(turma__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(turma__codigo__icontains=busca)
         )
 
@@ -1209,7 +1214,10 @@ def buscar_alunos(request: HttpRequest) -> HttpResponse:
         ).distinct()
     alunos = alunos.select_related("turma", "abrigo").order_by("nome")
     if q:
-        alunos = alunos.filter(Q(nome__icontains=q) | Q(matricula__icontains=q))
+        alunos = alunos.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(matricula__icontains=q)
+        )
     alunos = alunos[:20]
 
     return render(
@@ -1234,7 +1242,7 @@ def atualizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
     else:
         messages.success(
             request,
-            "Alunos atualizados pelo Eduq: "
+            "Lista de alunos atualizada: "
             f"{resultado.alunos.criados} novo(s), "
             f"{resultado.alunos.atualizados} atualizado(s).",
         )
@@ -1300,7 +1308,7 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
 
     if busca:
         queryset = queryset.filter(
-            Q(aluno__nome__icontains=busca)
+            Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(aluno__matricula__icontains=busca)
             | Q(kit__nome__icontains=busca)
             | Q(kit__codigo__icontains=busca)

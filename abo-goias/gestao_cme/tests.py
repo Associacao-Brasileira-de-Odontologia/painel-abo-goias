@@ -435,7 +435,7 @@ class EduqSyncTests(TestCase):
         self.assertEqual(turma.curso, "Especializacao em Endodontia")
         self.assertEqual(turma.data_inicio.isoformat(), "2026-03-06")
         self.assertEqual(turma.data_fim.isoformat(), "2027-11-27")
-        self.assertEqual(turma.observacoes, "Matriculas ativas no Eduq: 11")
+        self.assertEqual(turma.observacoes, "Matriculas ativas: 11")
         self.assertEqual(turma.origem, OrigemDados.EDUQ)
         self.assertIsNotNone(turma.ultima_sincronizacao)
         aluno = Aluno.objects.select_related("turma").get(matricula="A-20260001")
@@ -960,6 +960,33 @@ class MateriaisFase32Tests(TestCase):
 
         self.assertContains(response, "Carlos Andrade")
         self.assertNotContains(response, "Outro Nome")
+
+    def test_buscar_alunos_ignora_acento(self) -> None:
+        """Os cadastros vem do Eduq com grafia mista e o operador digita sem
+        acento — as duas formas precisam encontrar o mesmo conjunto."""
+
+        Aluno.objects.create(
+            nome="Ana Júlia Gonçalves", matricula="MAT-9", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+
+        for termo in ("Goncalves", "Gonçalves", "JULIA", "júlia"):
+            with self.subTest(termo=termo):
+                response = self.client.get(reverse("buscar_alunos"), {"q": termo})
+                self.assertContains(response, "Ana Júlia Gonçalves")
+
+    def test_nome_normalizado_e_derivado_do_nome(self) -> None:
+        aluno = Aluno.objects.create(
+            nome="José da Silva Araújo", matricula="MAT-10", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+        self.assertEqual(aluno.nome_normalizado, "JOSE DA SILVA ARAUJO")
+
+        # o derivado acompanha a renomeacao, inclusive com update_fields
+        aluno.nome = "João Pereira"
+        aluno.save(update_fields=["nome"])
+        aluno.refresh_from_db()
+        self.assertEqual(aluno.nome_normalizado, "JOAO PEREIRA")
 
     def test_campo_de_busca_de_aluno_envia_o_termo(self) -> None:
         """Regressão: sem `name` no input, o HTMX não envia `q` e a listagem

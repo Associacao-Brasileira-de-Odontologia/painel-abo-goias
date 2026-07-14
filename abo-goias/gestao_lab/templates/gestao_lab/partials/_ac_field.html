@@ -14,8 +14,6 @@ O comportamento de clique/troca é do handler genérico [data-ac] em app.js.
 
     <div data-ac-busca{% if ac_id %} hidden{% endif %}>
         <div class="search-control">
-            {# `name="q"` é obrigatório: o HTMX só envia o valor de um elemento
-               que tenha name — sem ele a busca vai vazia e a lista não filtra. #}
             <input type="search" id="ac-busca-{{ ac_name }}" name="q" autocomplete="off"
                    placeholder="Buscar {{ ac_label|lower }} por nome..."
                    hx-get="{{ ac_url }}"

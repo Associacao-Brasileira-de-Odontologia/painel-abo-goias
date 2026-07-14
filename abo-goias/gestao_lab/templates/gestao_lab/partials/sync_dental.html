@@ -3,16 +3,16 @@ Seção de sincronização com o Dental Office na sidebar.
 Espera no contexto: ultima_sync e historico_sync (renderizado pelo include).
 {% endcomment %}
 <div class="sidebar-section">
-    <p class="section-label">Sincronização</p>
+    <p class="section-label">Atualização da lista</p>
     {% if ultima_sync %}
         <p class="panel-copy">Última atualização: <strong>{{ ultima_sync|date:"d/m/Y H:i" }}</strong></p>
     {% else %}
-        <p class="panel-copy">Nenhuma sincronização realizada ainda.</p>
+        <p class="panel-copy">A lista ainda não foi atualizada.</p>
     {% endif %}
     <form class="sync-form" method="post" action="{% url 'lab_sincronizar' %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button class="button secondary" type="submit">Sincronizar com Dental Office</button>
+        <button class="button secondary" type="submit">Atualizar lista</button>
     </form>
 </div>
 

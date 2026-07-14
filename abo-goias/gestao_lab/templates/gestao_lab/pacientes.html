@@ -5,7 +5,7 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Pacientes{% endblock %}
 
-{% block sidebar_copy %}Pacientes sincronizados do Dental Office com processos ativos na clínica.{% endblock %}
+{% block sidebar_copy %}Pacientes com processos ativos na clínica.{% endblock %}
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% block sidebar_extra %}
@@ -76,7 +76,7 @@
                     <th>Celular</th>
                     <th>Processo</th>
                     <th>Previsão de retorno</th>
-                    <th>Sincronização</th>
+                    <th>Atualização</th>
                 </tr>
             </thead>
             <tbody>
@@ -127,8 +127,8 @@
                                         Revise os filtros ou
                                         <a href="{% url 'lab_pacientes' %}">limpe a busca</a>.
                                     {% else %}
-                                        Nenhum paciente sincronizado ainda. Use o botão
-                                        <strong>Sincronizar com Dental Office</strong> no painel lateral.
+                                        Nenhum paciente na lista ainda. Use o botão
+                                        <strong>Atualizar lista</strong> no painel lateral.
                                     {% endif %}
                                 </p>
                             </div>

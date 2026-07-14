@@ -14,6 +14,7 @@ from gestao_cme.services.eduq_sync import (
     sincronizar_eduq,
     sincronizar_localizacao_alunos_turma,
 )
+from gestao_cme.utils import normalizar_texto
 
 from .services.modelos import (
     buscar_modelo,
@@ -117,7 +118,7 @@ def index(request: HttpRequest) -> HttpResponse:
                         request,
                         (
                             "Nao foi possivel atualizar a localizacao dos alunos "
-                            "pelo Eduq agora."
+                            "agora."
                         ),
                     )
             alunos_sem_local = alunos.filter(Q(cidade="") | Q(uf="")).count()
@@ -209,7 +210,10 @@ def buscar_turmas(request: HttpRequest) -> HttpResponse:
         Turma.objects.exclude(origem=OrigemDados.EXEMPLO), status, hoje
     )
     if q:
-        turmas = turmas.filter(Q(nome__icontains=q) | Q(codigo__icontains=q))
+        turmas = turmas.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(codigo__icontains=q)
+        )
     turmas = turmas.order_by("nome")[:30]
 
     return render(
@@ -264,7 +268,7 @@ def sincronizar(request: HttpRequest) -> HttpResponse:
             sincronizar_alunos=True,
         )
     except EduqAPIError as exc:
-        messages.error(request, f"Não foi possível sincronizar com o Eduq: {exc}")
+        messages.error(request, f"Não foi possível atualizar turmas e alunos agora: {exc}")
     else:
         erros_turmas = len(resultado.turmas.erros)
         erros_alunos = len(resultado.alunos.erros)

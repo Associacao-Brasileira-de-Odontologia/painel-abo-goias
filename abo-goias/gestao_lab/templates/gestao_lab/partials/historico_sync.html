@@ -1,6 +1,6 @@
 {% if historico_sync %}
 <div class="sidebar-section">
-    <p class="section-label">Histórico de sincronizações</p>
+    <p class="section-label">Histórico de atualizações</p>
     <ul class="sync-history-list">
         {% for reg in historico_sync %}
             <li class="sync-history-item {% if reg.sucesso %}sync-ok{% else %}sync-erro{% endif %}">

@@ -30,6 +30,8 @@ from .forms import (
     PedidoFaturamentoForm,
     PedidoMaterialForm,
 )
+from gestao_cme.utils import normalizar_texto
+
 from .models import (
     AlunoLab,
     Equipe,
@@ -140,8 +142,8 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
 
     if busca:
         qs = qs.filter(
-            Q(paciente__nome__icontains=busca)
-            | Q(aluno__nome__icontains=busca)
+            Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(laboratorio__nome__icontains=busca)
             | Q(descricao_servico__icontains=busca)
         )
@@ -367,8 +369,8 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
     busca = request.GET.get("q", "").strip()
     if busca:
         qs = qs.filter(
-            Q(paciente__nome__icontains=busca)
-            | Q(aluno__nome__icontains=busca)
+            Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(laboratorio__nome__icontains=busca)
         )
 
@@ -415,7 +417,8 @@ def moldagens(request: HttpRequest) -> HttpResponse:
 
     if busca:
         qs = qs.filter(
-            Q(paciente__nome__icontains=busca) | Q(aluno__nome__icontains=busca)
+            Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
         )
 
     if filtro == "faturado":
@@ -674,14 +677,20 @@ def excluir_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
 def _pacientes_locais(q: str):
     itens = Paciente.objects.filter(ativo=True).order_by("nome")
     if q:
-        itens = itens.filter(Q(nome__icontains=q) | Q(celular__icontains=q))
+        itens = itens.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(celular__icontains=q)
+        )
     return itens
 
 
 def _alunos_locais(q: str):
     itens = AlunoLab.objects.filter(ativo=True).order_by("nome")
     if q:
-        itens = itens.filter(Q(nome__icontains=q) | Q(celular__icontains=q))
+        itens = itens.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(celular__icontains=q)
+        )
     return itens
 
 
@@ -746,13 +755,13 @@ def buscar_pacientes_dental(request: HttpRequest) -> HttpResponse:
     if q:
         clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
         if not clinic_id:
-            erro = "DENTAL_CLINIC_ID não configurado no ambiente."
+            erro = "A busca não está configurada. Avise o suporte técnico."
         else:
             try:
                 resultado = buscar_e_importar_pacientes(q=q, clinic_id=clinic_id)
                 importados = resultado["criados"] + resultado["atualizados"]
             except DentalAPIError as exc:
-                erro = f"Erro na API Dental Office: {exc}"
+                erro = f"Não foi possível buscar agora: {exc}"
 
     itens = _pacientes_locais(q)
     return render(
@@ -788,7 +797,7 @@ def buscar_alunos_lab_dental(request: HttpRequest) -> HttpResponse:
             resultado = buscar_e_importar_alunos(q=q, user_group=user_group)
             importados = resultado["criados"] + resultado["atualizados"]
         except DentalAPIError as exc:
-            erro = f"Erro na API Dental Office: {exc}"
+            erro = f"Não foi possível buscar agora: {exc}"
 
     itens = _alunos_locais(q)
     return render(
@@ -818,7 +827,10 @@ def alunos_lab(request: HttpRequest) -> HttpResponse:
     qs = AlunoLab.objects.filter(ativo=True).order_by("nome")
     busca = request.GET.get("q", "").strip()
     if busca:
-        qs = qs.filter(Q(nome__icontains=busca) | Q(celular__icontains=busca))
+        qs = qs.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(celular__icontains=busca)
+        )
 
     total = AlunoLab.objects.filter(ativo=True).count()
     ultima_sync = AlunoLab.objects.aggregate(s=Max("ultima_sincronizacao"))["s"]
@@ -848,7 +860,10 @@ def pacientes(request: HttpRequest) -> HttpResponse:
     busca = request.GET.get("q", "").strip()
     processo = request.GET.get("processo", "").strip()
     if busca:
-        qs = qs.filter(Q(nome__icontains=busca) | Q(celular__icontains=busca))
+        qs = qs.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(celular__icontains=busca)
+        )
     if processo == "aberto":
         qs = qs.filter(processo_aberto=True)
 
@@ -900,7 +915,7 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
     )
 
     if not clinic_id:
-        messages.error(request, "DENTAL_CLINIC_ID não configurado no ambiente.")
+        messages.error(request, "A atualização da lista não está configurada. Avise o suporte técnico.")
         return destino
 
     try:
@@ -919,7 +934,7 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
             f"{registro.alunos_atualizados} atualizado(s).",
         )
     except DentalAPIError as exc:
-        messages.error(request, f"Erro na API Dental Office: {exc}")
+        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
 
     return destino
 
@@ -950,7 +965,7 @@ def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
     if not clinic_id:
-        messages.error(request, "DENTAL_CLINIC_ID não configurado no ambiente.")
+        messages.error(request, "A atualização da lista não está configurada. Avise o suporte técnico.")
         return redirect(next_name)
 
     try:
@@ -968,7 +983,7 @@ def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
                 "Selecione o paciente na lista abaixo.",
             )
     except DentalAPIError as exc:
-        messages.error(request, f"Erro na API Dental Office: {exc}")
+        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
 
     return redirect(next_name)
 
@@ -1005,7 +1020,7 @@ def buscar_aluno_dental(request: HttpRequest) -> HttpResponse:
                 "Selecione o aluno na lista abaixo.",
             )
     except DentalAPIError as exc:
-        messages.error(request, f"Erro na API Dental Office: {exc}")
+        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
 
     return redirect(next_name)
 

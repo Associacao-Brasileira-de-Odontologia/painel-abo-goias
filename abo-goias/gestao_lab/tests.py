@@ -657,7 +657,10 @@ class SincronizarDentalViewTests(TestCase):
         response = self.client.post(reverse("lab_sincronizar"), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "DENTAL_CLINIC_ID")
+        # A mensagem e para o operador: diz o que fazer, sem citar a variavel de
+        # ambiente nem o sistema de origem.
+        self.assertContains(response, "não está configurada")
+        self.assertContains(response, "suporte técnico")
 
     @override_settings(DENTAL_CLINIC_ID="clinic-test")
     @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
@@ -1437,7 +1440,10 @@ class BuscaSelecaoLabTests(TestCase):
             reverse("lab_buscar_pacientes_dental"), {"q": "Gustavo"}
         )
 
-        self.assertContains(response, "Erro na API Dental Office")
+        # A mensagem nao nomeia o sistema de origem (o operador nao precisa
+        # saber de onde vem o dado), mas preserva o detalhe para o suporte.
+        self.assertContains(response, "Não foi possível buscar agora")
+        self.assertContains(response, "indisponível")
 
     def test_pedido_aceita_pk_vindo_do_campo_oculto(self) -> None:
         equipe = _equipe()

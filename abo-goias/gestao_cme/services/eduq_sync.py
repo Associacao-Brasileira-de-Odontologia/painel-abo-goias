@@ -4,7 +4,6 @@ Este modulo orquestra consultas ao cliente Eduq, normaliza dados recebidos e
 grava turmas, alunos e localizacoes no banco local.
 """
 
-import unicodedata
 from dataclasses import dataclass, field
 from time import sleep
 from typing import Any
@@ -21,6 +20,7 @@ from gestao_cme.integrations.eduq import (
     normalizar_turma,
 )
 from gestao_cme.models import Aluno, OrigemDados, Turma
+from gestao_cme.utils import normalizar_texto
 
 
 @dataclass
@@ -255,8 +255,9 @@ def sincronizar_localizacao_alunos_turma(
 
 
 def _normalizar_nome(nome: str) -> str:
-    """Remove acentos, normaliza caixa e compacta espacos de um nome."""
+    """Remove acentos, normaliza caixa e compacta espacos de um nome.
 
-    sem_acento = unicodedata.normalize("NFKD", str(nome or ""))
-    ascii_nome = sem_acento.encode("ascii", "ignore").decode("ascii")
-    return " ".join(ascii_nome.upper().split())
+    Mesma normalizacao usada nas buscas por nome (ver ``gestao_cme.utils``).
+    """
+
+    return normalizar_texto(nome)

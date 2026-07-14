@@ -13,7 +13,7 @@ from datetime import date
 
 from django.db import models
 
-from gestao_cme.models import ModeloBase
+from gestao_cme.models import ModeloBase, NomeNormalizadoMixin
 
 
 class OrigemDados(models.TextChoices):
@@ -69,7 +69,7 @@ class Laboratorio(ModeloBase):
         return self.nome
 
 
-class AlunoLab(ModeloBase):
+class AlunoLab(NomeNormalizadoMixin, ModeloBase):
     """Aluno sincronizado do Dental Office para uso nos pedidos de laboratorio.
 
     Contem apenas os dados necessarios para o fluxo de pedidos: nome e celular.
@@ -95,7 +95,7 @@ class AlunoLab(ModeloBase):
         return self.nome
 
 
-class Paciente(ModeloBase):
+class Paciente(NomeNormalizadoMixin, ModeloBase):
     """Paciente sincronizado do Dental Office.
 
     Armazena dados de contato, indicador de processo em aberto e previsao de

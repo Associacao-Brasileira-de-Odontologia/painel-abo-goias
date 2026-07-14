@@ -106,6 +106,27 @@ estão em empréstimo.
   `registrar_entrada`, `editar_movimentacao` — mantido o "Cancelar" na barra de ações.
   (`registrar_saida` mantém o "Voltar" do topo por não ter Cancelar no rodapé.)
 - Verificado no navegador (`cadastrar_turma`) — alinha com o mockup aprovado.
+### A-19 · Busca era sensível a acento — **crítico** (encontrado na investigação, CORRIGIDO)
+Os cadastros chegam do Eduq/Dental com grafia mista e o operador digita sem acento — mas a
+busca era acento-sensível (`nome__icontains`). Medido nos 378 alunos reais:
+
+| Digitando | Antes | Depois |
+|---|---|---|
+| `HONORIO` | **0** | 1 |
+| `GONCALVES` | 1 | **7** |
+| `GONÇALVES` | 6 | **7** |
+| `ARAUJO` / `ARAÚJO` | 2 / 3 | **5 / 5** |
+
+Ou seja: quem digitava "Honorio" **não achava ninguém**, e as duas grafias devolviam conjuntos
+diferentes. **Correção:** campo derivado `nome_normalizado` (sem acento, caixa alta, indexado)
+em `Aluno`, `Turma`, `Paciente` e `AlunoLab` via `NomeNormalizadoMixin` — recalculado no
+`save()` (cobre cadastro manual, sincronização e admin, inclusive com `update_fields`) — mais
+migrations com backfill dos registros existentes (378 alunos + 43 turmas). As buscas por nome
+passaram a casar pelo campo normalizado; matrícula/código/celular seguem como estavam.
+Normalização centralizada em `gestao_cme/utils.py::normalizar_texto` (o `eduq_sync` reusa a
+mesma função). Escolhido campo derivado em vez do `unaccent` do PostgreSQL para funcionar
+igual no SQLite de dev/testes.
+
 **Fase 2.1 — spinner de busca:** `static/js/app.js` estendido para aplicar `.button.is-loading`
 + desabilitar o botão no submit de `.filter-bar` (todas as listagens com busca) e
 `.js-loading-submit`. Verificado no navegador (`materiais`).

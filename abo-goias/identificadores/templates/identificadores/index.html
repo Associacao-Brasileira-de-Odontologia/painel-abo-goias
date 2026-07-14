@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{% static 'identificadores/css/identificadores.css' %}">
 {% endblock %}
 
-{% block sidebar_copy %}Pesquise a turma, confira os alunos sincronizados e gere o arquivo de identificadores de bancada.{% endblock %}
+{% block sidebar_copy %}Pesquise a turma, confira os alunos e gere o arquivo de identificadores de bancada.{% endblock %}
 {% block sidebar_nav %}{% include "identificadores/partials/menu.html" %}{% endblock %}
 
 {% block sidebar_extra %}
@@ -16,7 +16,7 @@
         <p class="section-label">Panorama</p>
         <div class="metric-grid">
             <div class="metric-card metric-blue">
-                <span class="metric-label">Turmas sincronizadas</span>
+                <span class="metric-label">Turmas</span>
                 <strong>{{ total_turmas }}</strong>
             </div>
             <div class="metric-card metric-success">
@@ -28,7 +28,7 @@
                 <strong>{{ finalizadas_count }}</strong>
             </div>
             <div class="metric-card metric-blue">
-                <span class="metric-label">Alunos sincronizados</span>
+                <span class="metric-label">Alunos</span>
                 <strong>{{ total_alunos_sinc }}</strong>
             </div>
         </div>
@@ -46,7 +46,7 @@
     <div class="topbar-actions">
         <form class="sync-form" method="post" action="{% url 'identificadores:sincronizar' %}">
             {% csrf_token %}
-            <button class="button secondary compact-button" type="submit">Sincronizar turmas e alunos</button>
+            <button class="button secondary compact-button" type="submit">Atualizar turmas e alunos</button>
         </form>
     </div>
 {% endblock %}

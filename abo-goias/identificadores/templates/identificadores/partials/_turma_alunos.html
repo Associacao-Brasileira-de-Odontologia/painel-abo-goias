@@ -14,16 +14,16 @@
     </div>
 
     <div class="turma-meta">
-        <div class="info-chip"><span>Alunos sincronizados</span><strong>{{ total_alunos }}</strong></div>
+        <div class="info-chip"><span>Alunos</span><strong>{{ total_alunos }}</strong></div>
         {% if turma.data_inicio %}<div class="info-chip"><span>Início</span><strong>{{ turma.data_inicio|date:"d/m/Y" }}</strong></div>{% endif %}
         {% if turma.data_fim %}<div class="info-chip"><span>Término</span><strong>{{ turma.data_fim|date:"d/m/Y" }}</strong></div>{% endif %}
-        {% if turma.observacoes %}<div class="info-chip"><span>Eduq</span><strong>{{ turma.observacoes }}</strong></div>{% endif %}
+        {% if turma.observacoes %}<div class="info-chip"><span>Detalhes</span><strong>{{ turma.observacoes }}</strong></div>{% endif %}
     </div>
 
     {% if sem_localizacao %}
         <p class="turma-aviso">
             {{ sem_localizacao }} aluno(s) sem cidade/UF cadastrada. A localização é
-            atualizada pelo Eduq automaticamente ao gerar o arquivo.
+            atualizada automaticamente ao gerar o arquivo.
         </p>
     {% endif %}
 
@@ -52,8 +52,8 @@
         </div>
     {% else %}
         <p class="turma-aviso">
-            Esta turma ainda não tem alunos sincronizados. Use &ldquo;Sincronizar turmas e
-            alunos&rdquo; para importar do Eduq.
+            Esta turma ainda não tem alunos na lista. Use &ldquo;Atualizar turmas e
+            alunos&rdquo; no topo da tela.
         </p>
     {% endif %}
 </div>

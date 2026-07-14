@@ -79,4 +79,29 @@ Sem vazamento. Mantido como confirmação positiva.
 
 ## 6. Implementado nesta rodada (Fases 2 e 3)
 
-_A preencher — a Fase 2 (spinner de busca / conformidade de botões) afeta portal e auth._
+**Copy — origem dos dados deixou de aparecer para o operador.** A UI expunha a arquitetura
+("Buscar no Dental Office", "Atualizar alunos (Eduq)", "Nenhum registro já sincronizado",
+seção de menu "Dental Office / EDUQ"). O operador só quer achar a pessoa — de onde vem o dado
+é problema do sistema. Regra adotada:
+
+- **Telas de operação: zero jargão.** Botões, buscas, estados vazios e o rótulo do menu
+  ("Dental Office / EDUQ" → "Pessoas"). Ex.: "Importar paciente" → "Procurar paciente";
+  "Sincronizar com Dental Office" → "Atualizar lista"; "Atualizar alunos (Eduq)" → "Atualizar
+  lista de alunos"; "Sincronizar turmas e alunos" → "Atualizar turmas e alunos".
+- **Procedência preservada, sem jargão.** "Última sincronização" → "Última atualização";
+  "Histórico de sincronizações" → "Histórico de atualizações". O coordenador precisa saber se
+  o dado está velho — mantido o conceito, trocada a palavra.
+- **Mensagens de erro** neutralizadas ("Erro na API Dental Office: X" → "Não foi possível
+  atualizar a lista agora: X"), mantendo o detalhe técnico para suporte.
+- **Mantido como está:** `/admin/` (área técnica) e os *docstrings* do código — ali nomear
+  Eduq/Dental é correto e necessário para quem dá manutenção.
+
+Arquivos: `menu.html`, `sync_dental.html`, `historico_sync.html`, `busca_dental.html`,
+`_ac_results.html`, `alunos.html`, `pacientes.html`, `registrar_entrada/saida.html`,
+`armarios.html`, `portal.html`, `cadastrar_aluno/turma.html`, `identificadores/index.html` +
+partials, e as mensagens em `gestao_cme/views.py`, `gestao_lab/views.py`,
+`identificadores/views.py`.
+
+> **Limitação assumida:** isto é cosmético. O botão "Procurar em todos os cadastros" continua
+> levando ~9s e importando todos os resultados — isso é o item 3 (busca unificada), fora
+> desta rodada.

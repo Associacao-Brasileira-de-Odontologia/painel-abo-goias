@@ -5,7 +5,7 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Alunos{% endblock %}
 
-{% block sidebar_copy %}Alunos sincronizados do Dental Office. Utilize a sincronização para atualizar os dados.{% endblock %}
+{% block sidebar_copy %}Alunos disponíveis para os pedidos. Use "Atualizar lista" para trazer novos cadastros.{% endblock %}
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% block sidebar_extra %}
@@ -52,7 +52,7 @@
                     <th>Aluno</th>
                     <th>Celular</th>
                     <th>ID Dental</th>
-                    <th>Última sincronização</th>
+                    <th>Última atualização</th>
                 </tr>
             </thead>
             <tbody>
@@ -89,8 +89,8 @@
                                         Revise os termos de busca ou
                                         <a href="{% url 'lab_alunos' %}">limpe o filtro</a>.
                                     {% else %}
-                                        Nenhum aluno sincronizado ainda. Use o botão
-                                        <strong>Sincronizar com Dental Office</strong> no painel lateral.
+                                        Nenhum aluno na lista ainda. Use o botão
+                                        <strong>Atualizar lista</strong> no painel lateral.
                                     {% endif %}
                                 </p>
                             </div>
