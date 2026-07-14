@@ -25,6 +25,7 @@ from gestao_cme.models import (
     Aluno,
     Armario,
     Emprestimo,
+    ItemEmprestimo,
     Kit,
     KitMaterial,
     Material,
@@ -931,3 +932,89 @@ class PaginasDeErroTests(TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertIn(b"Erro interno", response.content)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class MateriaisFase32Tests(TestCase):
+    """Autocomplete de aluno, atualizacao via Eduq e exclusao de material (Fase 3.2)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-3-2", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma X", codigo="TX", origem=OrigemDados.EDUQ
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Carlos Andrade", matricula="MAT-1", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+        Aluno.objects.create(
+            nome="Outro Nome", matricula="MAT-2", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+
+    def test_buscar_alunos_filtra_por_nome(self) -> None:
+        response = self.client.get(reverse("buscar_alunos"), {"q": "Carlos"})
+
+        self.assertContains(response, "Carlos Andrade")
+        self.assertNotContains(response, "Outro Nome")
+
+    def test_buscar_alunos_pendencias_so_alunos_com_pacotes(self) -> None:
+        vazio = self.client.get(reverse("buscar_alunos"), {"pendencias": "1"})
+        self.assertNotContains(vazio, "Carlos Andrade")
+
+        Movimentacao.objects.create(
+            data_hora=timezone.now(), tipo=Movimentacao.Tipo.ENTRADA, aluno=self.aluno,
+            aluno_nome=self.aluno.nome, pacote_codigo="1", retirado=False,
+            arquivo_origem="painel", row_hash="h1", origem=OrigemDados.MANUAL,
+        )
+        com = self.client.get(reverse("buscar_alunos"), {"pendencias": "1"})
+        self.assertContains(com, "Carlos Andrade")
+
+    def test_excluir_material_sem_vinculos(self) -> None:
+        material = Material.objects.create(
+            nome="Livre", codigo="C-LIVRE", origem=OrigemDados.MANUAL
+        )
+        response = self.client.post(reverse("excluir_material", args=[material.pk]))
+
+        self.assertRedirects(response, reverse("materiais"))
+        self.assertFalse(Material.objects.filter(pk=material.pk).exists())
+
+    def test_excluir_material_com_emprestimo_e_bloqueado(self) -> None:
+        material = Material.objects.create(
+            nome="Vinculado", codigo="C-VINC", origem=OrigemDados.MANUAL
+        )
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno, status=Emprestimo.Status.EMPRESTADO
+        )
+        ItemEmprestimo.objects.create(emprestimo=emp, material=material, quantidade=3)
+
+        response = self.client.post(reverse("excluir_material", args=[material.pk]))
+
+        self.assertRedirects(response, reverse("editar_material", args=[material.pk]))
+        self.assertTrue(Material.objects.filter(pk=material.pk).exists())
+
+    def test_editar_material_expoe_unidades_em_emprestimo(self) -> None:
+        material = Material.objects.create(
+            nome="Vinculado2", codigo="C-VINC2", origem=OrigemDados.MANUAL
+        )
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno, status=Emprestimo.Status.ATRASADO
+        )
+        ItemEmprestimo.objects.create(emprestimo=emp, material=material, quantidade=5)
+
+        response = self.client.get(reverse("editar_material", args=[material.pk]))
+
+        self.assertEqual(response.context["em_emprestimo"], 5)
+
+    @patch("gestao_cme.views.sincronizar_eduq")
+    def test_atualizar_alunos_eduq_dispara_sync_e_redireciona(self, mock_sync) -> None:
+        mock_sync.return_value = SimpleNamespace(
+            alunos=SimpleNamespace(criados=2, atualizados=1),
+        )
+        response = self.client.post(reverse("atualizar_alunos_eduq"))
+
+        self.assertTrue(mock_sync.called)
+        self.assertEqual(response.status_code, 302)

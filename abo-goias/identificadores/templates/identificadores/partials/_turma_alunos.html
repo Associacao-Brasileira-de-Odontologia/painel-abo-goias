@@ -1,0 +1,59 @@
+<div class="turma-selecionada" aria-live="polite">
+    <input type="hidden" name="turma" value="{{ turma.pk }}">
+
+    <div class="turma-head">
+        <div>
+            <h3>{{ turma.nome }}</h3>
+            <p class="turma-sub mono">{{ turma.codigo }}{% if turma.curso %} · {{ turma.curso }}{% endif %}</p>
+        </div>
+        {% if turma.data_fim and turma.data_fim < hoje %}
+            <span class="badge badge-neutro">Finalizada</span>
+        {% else %}
+            <span class="badge badge-em-dia">Ativa</span>
+        {% endif %}
+    </div>
+
+    <div class="turma-meta">
+        <div class="info-chip"><span>Alunos sincronizados</span><strong>{{ total_alunos }}</strong></div>
+        {% if turma.data_inicio %}<div class="info-chip"><span>Início</span><strong>{{ turma.data_inicio|date:"d/m/Y" }}</strong></div>{% endif %}
+        {% if turma.data_fim %}<div class="info-chip"><span>Término</span><strong>{{ turma.data_fim|date:"d/m/Y" }}</strong></div>{% endif %}
+        {% if turma.observacoes %}<div class="info-chip"><span>Eduq</span><strong>{{ turma.observacoes }}</strong></div>{% endif %}
+    </div>
+
+    {% if sem_localizacao %}
+        <p class="turma-aviso">
+            {{ sem_localizacao }} aluno(s) sem cidade/UF cadastrada. A localização é
+            atualizada pelo Eduq automaticamente ao gerar o arquivo.
+        </p>
+    {% endif %}
+
+    {% if alunos %}
+        <div class="table-wrap data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr><th>Aluno</th><th>Matrícula</th><th>Cidade / UF</th></tr>
+                </thead>
+                <tbody>
+                    {% for aluno in alunos %}
+                        <tr>
+                            <td><strong>{{ aluno.nome }}</strong></td>
+                            <td class="mono">{{ aluno.matricula }}</td>
+                            <td>
+                                {% if aluno.cidade or aluno.uf %}
+                                    {{ aluno.cidade }}{% if aluno.uf %} / {{ aluno.uf }}{% endif %}
+                                {% else %}
+                                    <span class="cell-muted">Sem localização</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="turma-aviso">
+            Esta turma ainda não tem alunos sincronizados. Use &ldquo;Sincronizar turmas e
+            alunos&rdquo; para importar do Eduq.
+        </p>
+    {% endif %}
+</div>

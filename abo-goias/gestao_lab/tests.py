@@ -1348,3 +1348,115 @@ class BuscarEImportarMultiplasPaginasTests(TestCase):
         self.assertEqual(resultado["criados"], 61)
         self.assertEqual(AlunoLab.objects.count(), 61)
         self.assertEqual(mock_client.listar_usuarios.call_count, 2)
+
+
+# ---------------------------------------------------------------------------
+# Fase 3.3 — busca com seleção e exclusão de pedidos/moldagens
+# ---------------------------------------------------------------------------
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class BuscaSelecaoLabTests(TestCase):
+    """Autocomplete de paciente e aluno nos formulários de pedido/moldagem."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="lab-3-3", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.pac = _paciente(nome="Maria Aparecida", id_dental="P1")
+        _paciente(nome="Outro Paciente", id_dental="P2")
+        self.aluno = _aluno(nome="Joao Pedro", id_dental="A1", celular="62999")
+        _aluno(nome="Outro Aluno", id_dental="A2")
+
+    def test_buscar_pacientes_filtra_por_nome(self) -> None:
+        response = self.client.get(reverse("lab_buscar_pacientes"), {"q": "Maria"})
+
+        self.assertContains(response, "Maria Aparecida")
+        self.assertNotContains(response, "Outro Paciente")
+
+    def test_buscar_alunos_lab_filtra_por_nome(self) -> None:
+        response = self.client.get(reverse("lab_buscar_alunos_lab"), {"q": "Joao"})
+
+        self.assertContains(response, "Joao Pedro")
+        self.assertNotContains(response, "Outro Aluno")
+
+    def test_form_pedido_usa_autocomplete_e_nao_select(self) -> None:
+        response = self.client.get(reverse("lab_criar_pedido"))
+        conteudo = response.content.decode()
+
+        self.assertIn('data-ac-hidden', conteudo)
+        self.assertNotIn('<select id="id_paciente"', conteudo)
+
+    def test_pedido_aceita_pk_vindo_do_campo_oculto(self) -> None:
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        response = self.client.post(
+            reverse("lab_criar_pedido"),
+            {
+                "paciente": self.pac.pk,
+                "aluno": self.aluno.pk,
+                "laboratorio": lab.pk,
+                "equipe": equipe.pk,
+                "previsao_entrega": (date.today() + timedelta(days=5)).isoformat(),
+                "descricao_servico": "Serviço de teste",
+            },
+        )
+
+        self.assertRedirects(response, reverse("lab_pedidos"))
+        self.assertEqual(PedidoMaterial.objects.count(), 1)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class ExclusaoLabTests(TestCase):
+    """Exclusão de pedidos e moldagens a partir das listagens."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="lab-excluir", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.pac = _paciente(id_dental="P9")
+        self.aluno = _aluno(id_dental="A9")
+        self.equipe = _equipe()
+        self.lab = _laboratorio(equipe=self.equipe)
+
+    def test_excluir_pedido_remove_registro(self) -> None:
+        pedido = _pedido(self.pac, self.aluno, self.lab, self.equipe)
+
+        response = self.client.post(reverse("lab_excluir_pedido", args=[pedido.pk]))
+
+        self.assertRedirects(response, reverse("lab_pedidos"))
+        self.assertFalse(PedidoMaterial.objects.filter(pk=pedido.pk).exists())
+
+    def test_excluir_pedido_devolve_moldagem_para_nao_convertida(self) -> None:
+        pedido = _pedido(self.pac, self.aluno, self.lab, self.equipe)
+        moldagem = Moldagem.objects.create(
+            paciente=self.pac, aluno=self.aluno, pedido_material=pedido
+        )
+
+        self.client.post(reverse("lab_excluir_pedido", args=[pedido.pk]))
+
+        moldagem.refresh_from_db()
+        self.assertIsNone(moldagem.pedido_material)
+        self.assertFalse(moldagem.convertida)
+
+    def test_excluir_moldagem_remove_registro(self) -> None:
+        moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+
+        response = self.client.post(
+            reverse("lab_excluir_moldagem", args=[moldagem.pk])
+        )
+
+        self.assertRedirects(response, reverse("lab_moldagens"))
+        self.assertFalse(Moldagem.objects.filter(pk=moldagem.pk).exists())
+
+    def test_exclusao_respeita_next(self) -> None:
+        moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+        destino = reverse("lab_moldagens") + "?filtro=nao_convertida"
+
+        response = self.client.post(
+            reverse("lab_excluir_moldagem", args=[moldagem.pk]), {"next": destino}
+        )
+
+        self.assertRedirects(response, destino)

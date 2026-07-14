@@ -82,6 +82,56 @@
 })();
 
 (function () {
+    // Campos de busca com seleção (autocomplete) montados por
+    // partials/_ac_field.html. Ao clicar num resultado, preenche o campo oculto
+    // do formulário e troca a busca por um "chip" do item escolhido; "Trocar"
+    // desfaz a seleção. Genérico: funciona para vários campos na mesma tela.
+    function bloco(el) {
+        return el.closest("[data-ac]");
+    }
+
+    document.addEventListener("click", function (event) {
+        var resultado = event.target.closest(".ac-result");
+        if (resultado) {
+            var b = bloco(resultado);
+            if (!b) return;
+            b.querySelector("[data-ac-hidden]").value = resultado.dataset.id;
+            b.querySelector("[data-ac-nome]").textContent = resultado.dataset.nome;
+            b.querySelector("[data-ac-selecionado]").hidden = false;
+            b.querySelector("[data-ac-busca]").hidden = true;
+            var lista = b.querySelector(".search-results-wrap");
+            if (lista) lista.innerHTML = "";
+            return;
+        }
+
+        var trocar = event.target.closest("[data-ac-trocar]");
+        if (trocar) {
+            var alvo = bloco(trocar);
+            if (!alvo) return;
+            alvo.querySelector("[data-ac-hidden]").value = "";
+            alvo.querySelector("[data-ac-selecionado]").hidden = true;
+            var busca = alvo.querySelector("[data-ac-busca]");
+            busca.hidden = false;
+            var campo = busca.querySelector('input[type="search"]');
+            if (campo) {
+                campo.value = "";
+                campo.focus();
+            }
+        }
+    });
+
+    // Enter num campo de busca não deve submeter o formulário do registro.
+    document.addEventListener("keydown", function (event) {
+        if (
+            event.key === "Enter" &&
+            event.target.matches('[data-ac] input[type="search"]')
+        ) {
+            event.preventDefault();
+        }
+    });
+})();
+
+(function () {
     // Feedback de carregamento nas buscas que recarregam a página: filtros de
     // listagem (.filter-bar) e importação pontual do Dental Office
     // (.js-loading-submit). Mesmo mecanismo do .sync-form, mas mantém o rótulo

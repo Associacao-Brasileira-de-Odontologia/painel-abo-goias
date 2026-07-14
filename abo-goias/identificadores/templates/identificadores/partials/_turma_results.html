@@ -1,0 +1,31 @@
+{% if turmas %}
+    <ul class="turma-results" role="listbox" aria-label="Resultados da busca de turmas">
+        {% for turma in turmas %}
+            <li>
+                <button type="button" class="turma-result"
+                        hx-get="{% url 'identificadores:turma_alunos' turma.pk %}"
+                        hx-target="#turma-detalhe"
+                        hx-swap="innerHTML"
+                        hx-indicator="#turma-detalhe-spin">
+                    <span class="turma-result-main">
+                        <strong>{{ turma.nome }}</strong>
+                        <span class="turma-result-cod mono">{{ turma.codigo }}</span>
+                    </span>
+                    {% if turma.data_fim and turma.data_fim < hoje %}
+                        <span class="badge badge-neutro">Finalizada</span>
+                    {% else %}
+                        <span class="badge badge-em-dia">Ativa</span>
+                    {% endif %}
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p class="turma-results-empty">
+        {% if busca %}
+            Nenhuma turma encontrada para &ldquo;{{ busca }}&rdquo;.
+        {% else %}
+            Nenhuma turma nesta situação. Sincronize com o Eduq ou troque o filtro.
+        {% endif %}
+    </p>
+{% endif %}

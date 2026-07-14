@@ -267,3 +267,120 @@
         width: 100%;
     }
 }
+
+/* ── Busca de turma (Fase 3.1) ─────────────────────────────────────── */
+
+.status-seg {
+    margin-top: 14px;
+}
+
+.turma-inline-spin {
+    display: inline-block;
+    margin: 8px 0 0 4px;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.turma-results-wrap {
+    margin-top: 14px;
+}
+
+.turma-results {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.turma-result {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: rgba(2, 11, 30, 0.44);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.turma-result:hover {
+    border-color: rgba(29, 110, 238, 0.46);
+    background: var(--blue-soft);
+}
+
+.turma-result.selected {
+    border-color: var(--accent-focus);
+    background: var(--accent-soft);
+}
+
+.turma-result-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.turma-result-main strong {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.turma-result-cod {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.turma-results-empty {
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+/* ── Detalhe da turma selecionada ──────────────────────────────────── */
+
+.turma-selecionada {
+    margin-top: 22px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+}
+
+.turma-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.turma-sub {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.turma-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.turma-aviso {
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-card);
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    font-size: 0.86rem;
+}
+

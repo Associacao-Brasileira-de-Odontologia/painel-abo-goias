@@ -70,6 +70,14 @@ urlpatterns = [
     # Pacientes (Dental Office)
     path("pacientes/", views.pacientes, name="lab_pacientes"),
     # Sincronização Dental Office
+    path("pedidos/<int:pk>/excluir/", views.excluir_pedido, name="lab_excluir_pedido"),
+    path(
+        "moldagens/<int:pk>/excluir/",
+        views.excluir_moldagem,
+        name="lab_excluir_moldagem",
+    ),
+    path("buscar-pacientes/", views.buscar_pacientes, name="lab_buscar_pacientes"),
+    path("buscar-alunos-lab/", views.buscar_alunos_lab, name="lab_buscar_alunos_lab"),
     path("sincronizar/", views.sincronizar_dental, name="lab_sincronizar"),
     # Busca direcionada Dental Office (importação pontual)
     path("buscar-paciente/", views.buscar_paciente_dental, name="lab_buscar_paciente"),

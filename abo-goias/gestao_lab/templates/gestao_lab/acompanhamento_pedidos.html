@@ -134,6 +134,18 @@
                                 </a>
                             {% endif %}
                             <a class="button compact-button secondary" href="{% url 'lab_detalhe_pedido' pedido.pk %}">Ver</a>
+                            <form method="post" action="{% url 'lab_excluir_pedido' pedido.pk %}" class="inline-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="button compact-button danger-button" type="submit"
+                                        title="Excluir pedido"
+                                        data-confirm="Excluir o pedido #{{ pedido.pk }} de {{ pedido.paciente.nome }} ({{ pedido.laboratorio.nome }})? Se veio de uma moldagem, ela volta para 'não convertida'. Esta ação é irreversível."
+                                        data-confirm-title="Excluir pedido"
+                                        data-confirm-label="Excluir pedido"
+                                        data-confirm-danger="true">
+                                    Excluir
+                                </button>
+                            </form>
                         </td>
                     </tr>
                 {% empty %}

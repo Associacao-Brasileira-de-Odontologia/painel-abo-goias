@@ -1,10 +1,12 @@
 ﻿from __future__ import annotations
 
+from datetime import date
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from gestao_cme.integrations.eduq import EduqAPIError
 from gestao_cme.models import Aluno, OrigemDados, Turma
@@ -21,6 +23,24 @@ from .services.modelos import (
 )
 
 
+STATUS_TURMA_OPCOES = ("ativas", "finalizadas", "todas")
+
+
+def _filtrar_turmas_status(queryset, status: str, hoje: date):
+    """Filtra turmas por situacao.
+
+    Uma turma e considerada *finalizada* quando tem data de finalizacao (vinda
+    do Eduq) anterior a hoje; *ativa* nos demais casos (sem data ou data futura).
+    """
+
+    finalizadas = Q(data_fim__isnull=False, data_fim__lt=hoje)
+    if status == "finalizadas":
+        return queryset.filter(finalizadas)
+    if status == "ativas":
+        return queryset.exclude(finalizadas)
+    return queryset
+
+
 @login_required
 def index(request: HttpRequest) -> HttpResponse:
     """Exibe e processa a geracao de identificadores por turma.
@@ -31,11 +51,12 @@ def index(request: HttpRequest) -> HttpResponse:
     exibicao no template.
     """
 
-    turmas = (
-        Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .filter(ativo=True)
-        .order_by("nome")
-    )
+    hoje = date.today()
+    base_turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
+    status = request.GET.get("status", "ativas")
+    if status not in STATUS_TURMA_OPCOES:
+        status = "ativas"
+
     modelos = listar_modelos()
     turma_selecionada_id = (
         request.POST.get("turma", "") if request.method == "POST" else ""
@@ -44,10 +65,12 @@ def index(request: HttpRequest) -> HttpResponse:
         request.POST.get("modelo", "") if request.method == "POST" else ""
     )
     resultado = None
+    turma_selecionada = None
+    alunos_turma = Aluno.objects.none()
 
     if request.method == "POST":
         turma = (
-            turmas.filter(pk=turma_selecionada_id).first()
+            base_turmas.filter(pk=turma_selecionada_id).first()
             if turma_selecionada_id.isdigit()
             else None
         )
@@ -60,6 +83,7 @@ def index(request: HttpRequest) -> HttpResponse:
             else Aluno.objects.none()
         )
         total_alunos = alunos.count()
+        turma_selecionada = turma
 
         if turma is None:
             messages.error(request, "Selecione uma turma valida.")
@@ -124,6 +148,18 @@ def index(request: HttpRequest) -> HttpResponse:
                 )
             messages.success(request, "Arquivo de identificadores gerado com sucesso.")
 
+        if turma is not None:
+            alunos_turma = alunos
+
+    total_turmas = base_turmas.count()
+    finalizadas_count = base_turmas.filter(
+        data_fim__isnull=False, data_fim__lt=hoje
+    ).count()
+    ativas_count = total_turmas - finalizadas_count
+    total_alunos_sinc = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).count()
+
+    turmas = _filtrar_turmas_status(base_turmas, status, hoje).order_by("nome")[:30]
+
     return render(
         request,
         "identificadores/index.html",
@@ -131,14 +167,86 @@ def index(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "turmas": turmas,
             "modelos": modelos,
+            "status": status,
+            "status_opcoes": [
+                ("ativas", "Ativas", ativas_count),
+                ("finalizadas", "Finalizadas", finalizadas_count),
+                ("todas", "Todas", total_turmas),
+            ],
             "turma_selecionada_id": turma_selecionada_id,
+            "turma_selecionada": turma_selecionada,
+            "alunos_turma": alunos_turma,
             "modelo_selecionado_id": modelo_selecionado_id,
             "resultado": resultado,
-            "total_turmas": turmas.count(),
+            "hoje": hoje,
+            "total_turmas": total_turmas,
+            "ativas_count": ativas_count,
+            "finalizadas_count": finalizadas_count,
+            "total_alunos_sinc": total_alunos_sinc,
             "total_modelos": len(modelos),
             "total_modelos_disponiveis": sum(
                 1 for modelo in modelos if modelo.disponivel
             ),
+        },
+    )
+
+
+@login_required
+def buscar_turmas(request: HttpRequest) -> HttpResponse:
+    """Fragmento HTMX com as turmas filtradas por busca e situacao.
+
+    Consumido pelo campo de pesquisa de turma. Recebe ``q`` (texto) e ``status``
+    (ativas/finalizadas/todas) e devolve a lista de resultados clicaveis.
+    """
+
+    hoje = date.today()
+    q = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "ativas")
+    if status not in STATUS_TURMA_OPCOES:
+        status = "ativas"
+
+    turmas = _filtrar_turmas_status(
+        Turma.objects.exclude(origem=OrigemDados.EXEMPLO), status, hoje
+    )
+    if q:
+        turmas = turmas.filter(Q(nome__icontains=q) | Q(codigo__icontains=q))
+    turmas = turmas.order_by("nome")[:30]
+
+    return render(
+        request,
+        "identificadores/partials/_turma_results.html",
+        {"turmas": turmas, "busca": q, "hoje": hoje},
+    )
+
+
+@login_required
+def turma_alunos(request: HttpRequest, turma_id: int) -> HttpResponse:
+    """Fragmento HTMX com os dados da turma e seus alunos sincronizados (Eduq).
+
+    Exibido ao selecionar uma turma na busca. Traz o resumo da turma e a lista
+    de alunos com a localizacao (cidade/UF) retornada pelo Eduq, alem de um
+    campo oculto ``turma`` que alimenta o formulario de geracao.
+    """
+
+    turma = get_object_or_404(
+        Turma.objects.exclude(origem=OrigemDados.EXEMPLO), pk=turma_id
+    )
+    alunos = (
+        Aluno.objects.filter(turma=turma)
+        .exclude(origem=OrigemDados.EXEMPLO)
+        .order_by("nome")
+    )
+    sem_localizacao = alunos.filter(Q(cidade="") | Q(uf="")).count()
+
+    return render(
+        request,
+        "identificadores/partials/_turma_alunos.html",
+        {
+            "turma": turma,
+            "alunos": alunos,
+            "total_alunos": alunos.count(),
+            "sem_localizacao": sem_localizacao,
+            "hoje": date.today(),
         },
     )
 

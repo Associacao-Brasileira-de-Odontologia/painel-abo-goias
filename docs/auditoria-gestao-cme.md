@@ -111,3 +111,21 @@ estão em empréstimo.
 `.js-loading-submit`. Verificado no navegador (`materiais`).
 - Nota operacional: após o pull foi necessário `manage.py migrate` (migrations `0011`,
   `0015`, `0016`); a `0011` remove o usuário `coordenador.teste`.
+
+**Fase 3.2 — Controle de materiais (implementada e verificada no navegador):**
+- **Autocomplete de aluno** em `registrar_entrada` e `registrar_saida` (HTMX → nova view
+  `buscar_alunos`, por nome/matrícula; `hidden` com o pk alimenta o form). Na saída, a busca
+  usa `pendencias=1` (só alunos com pacotes aguardando retirada) e navega ao selecionar.
+- **Botão "Atualizar alunos (Eduq)"** nas duas telas (`.sync-form` → nova view
+  `atualizar_alunos_eduq` = `sincronizar_eduq(turmas+alunos)`; loading pela 2.1).
+- **Exclusão de material**: nova view `excluir_material` (POST, espelha `excluir_movimentacao`)
+  + "Zona de exclusão" no `form_material` (edição) com botão `.danger-button` + `data-confirm`
+  informando irreversibilidade e **N unidades em empréstimo** (`Σ ItemEmprestimo.quantidade`
+  com status EMPRESTADO/ATRASADO). `ProtectedError` tratado → mensagem clara + redireciona.
+- Arquivos: `gestao_cme/{views,urls}.py`, `registrar_entrada.html`, `registrar_saida.html`,
+  `form_material.html`, `partials/_aluno_results.html`, `static/css/components.css`
+  (`.search-results`/`.selected-chip`). **6 testes novos** (suíte `gestao_cme` 55/55 verde).
+- Verificação ao vivo: busca+seleção de aluno, POST de entrada, filtro de pendências na saída,
+  exclusão de material livre (OK) e bloqueio de material em empréstimo (ProtectedError).
+- Backlog (novo): a "Atualizar alunos" roda o sync do Eduq **síncrono** no request (pode ser
+  lento com muitas turmas) → mover para rotina assíncrona (Celery) — mesmo ponto do A-03.

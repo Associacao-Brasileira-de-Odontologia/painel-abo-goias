@@ -1,0 +1,39 @@
+{% comment %}
+Campo de busca com seleção (autocomplete). Substitui um <select> longo.
+Parâmetros do include:
+  ac_name   — nome do campo no formulário (ex.: "paciente", "aluno")
+  ac_label  — rótulo exibido
+  ac_url    — endpoint HTMX que devolve os resultados
+  ac_id     — pk já selecionado (preserva a escolha quando o form volta com erro)
+  ac_nome   — nome do registro já selecionado
+  ac_errors — erros do campo
+O comportamento de clique/troca é do handler genérico [data-ac] em app.js.
+{% endcomment %}
+<div class="field field-required" data-ac>
+    <label for="ac-busca-{{ ac_name }}">{{ ac_label }}</label>
+
+    <div data-ac-busca{% if ac_id %} hidden{% endif %}>
+        <div class="search-control">
+            <input type="search" id="ac-busca-{{ ac_name }}" autocomplete="off"
+                   placeholder="Buscar {{ ac_label|lower }} por nome..."
+                   hx-get="{{ ac_url }}"
+                   hx-trigger="keyup changed delay:300ms"
+                   hx-target="#ac-results-{{ ac_name }}"
+                   hx-swap="innerHTML"
+                   hx-indicator="#ac-spin-{{ ac_name }}">
+        </div>
+        <span id="ac-spin-{{ ac_name }}" class="htmx-indicator field-hint">Buscando…</span>
+        <div id="ac-results-{{ ac_name }}" class="search-results-wrap"></div>
+    </div>
+
+    <div class="selected-chip" data-ac-selecionado{% if not ac_id %} hidden{% endif %}>
+        <strong data-ac-nome>{{ ac_nome|default:"" }}</strong>
+        <button type="button" class="button secondary compact-button" data-ac-trocar>Trocar</button>
+    </div>
+
+    <input type="hidden" name="{{ ac_name }}" value="{{ ac_id|default:'' }}" data-ac-hidden>
+
+    {% if ac_errors %}
+        <span class="field-error">{{ ac_errors|join:", " }}</span>
+    {% endif %}
+</div>

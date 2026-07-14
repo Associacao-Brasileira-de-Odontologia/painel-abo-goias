@@ -10,7 +10,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db.models import Q
 from django.db.models.query import QuerySet
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
@@ -44,6 +49,21 @@ STATUS_OPCOES = [
 ]
 
 STATUS_LABELS = {v: l for v, l in STATUS_OPCOES}
+
+
+def _selecionado(form, campo: str, model):
+    """Objeto escolhido num campo de autocomplete, para exibir o "chip".
+
+    Aceita tanto o valor cru enviado no POST (pk) quanto o objeto vindo de
+    ``initial`` (ex.: pedido pre-preenchido a partir de uma moldagem).
+    """
+
+    valor = form[campo].value()
+    if not valor:
+        return None
+    if isinstance(valor, model):
+        return valor
+    return model.objects.filter(pk=valor).first()
 
 
 def _paginar(request: HttpRequest, queryset: QuerySet) -> tuple[Page, str]:
@@ -204,6 +224,8 @@ def criar_pedido(request: HttpRequest) -> HttpResponse:
         {
             "form": form,
             "moldagem_origem": moldagem_origem,
+            "paciente_sel": _selecionado(form, "paciente", Paciente),
+            "aluno_sel": _selecionado(form, "aluno", AlunoLab),
         },
     )
 
@@ -299,6 +321,33 @@ def alternar_faturado_lab(request: HttpRequest, pk: int) -> HttpResponse:
     pedido.save(update_fields=["faturado_lab", "status", "atualizado_em"])
     next_url = request.POST.get("next") or "lab_pedidos_faturamento"
     return redirect(next_url)
+
+
+@login_required
+@require_POST
+def excluir_pedido(request: HttpRequest, pk: int) -> HttpResponse:
+    """Remove permanentemente um pedido de material.
+
+    Se o pedido tiver vindo de uma moldagem, o vinculo e desfeito (SET_NULL) e a
+    moldagem volta a figurar como nao convertida.
+    """
+
+    pedido = get_object_or_404(
+        PedidoMaterial.objects.select_related("paciente"), pk=pk
+    )
+    identificacao = f"#{pedido.pk} — {pedido.paciente.nome}"
+    tinha_moldagem = Moldagem.objects.filter(pedido_material=pedido).exists()
+    pedido.delete()
+
+    msg = f"Pedido {identificacao} excluído permanentemente."
+    if tinha_moldagem:
+        msg += " A moldagem de origem voltou para 'não convertida'."
+    messages.success(request, msg)
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("lab_pedidos")
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +472,15 @@ def criar_moldagem(request: HttpRequest) -> HttpResponse:
     else:
         form = MoldagemForm()
 
-    return render(request, "gestao_lab/form_moldagem.html", {"form": form})
+    return render(
+        request,
+        "gestao_lab/form_moldagem.html",
+        {
+            "form": form,
+            "paciente_sel": _selecionado(form, "paciente", Paciente),
+            "aluno_sel": _selecionado(form, "aluno", AlunoLab),
+        },
+    )
 
 
 @login_required
@@ -590,6 +647,62 @@ def editar_equipe(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
+@login_required
+@require_POST
+def excluir_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
+    """Remove permanentemente uma moldagem.
+
+    Nao afeta o pedido de material gerado a partir dela, quando existir.
+    """
+
+    moldagem = get_object_or_404(Moldagem.objects.select_related("paciente"), pk=pk)
+    identificacao = f"#{moldagem.pk} — {moldagem.paciente.nome}"
+    moldagem.delete()
+    messages.success(request, f"Moldagem {identificacao} excluída permanentemente.")
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("lab_moldagens")
+
+
+# ---------------------------------------------------------------------------
+# Busca com selecao (autocomplete) de paciente e aluno
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def buscar_pacientes(request: HttpRequest) -> HttpResponse:
+    """Fragmento HTMX com pacientes locais filtrados por nome ou celular."""
+
+    q = request.GET.get("q", "").strip()
+    itens = Paciente.objects.filter(ativo=True).order_by("nome")
+    if q:
+        itens = itens.filter(Q(nome__icontains=q) | Q(celular__icontains=q))
+
+    return render(
+        request,
+        "gestao_lab/partials/_ac_results.html",
+        {"itens": itens[:20], "busca": q},
+    )
+
+
+@login_required
+def buscar_alunos_lab(request: HttpRequest) -> HttpResponse:
+    """Fragmento HTMX com alunos locais filtrados por nome ou celular."""
+
+    q = request.GET.get("q", "").strip()
+    itens = AlunoLab.objects.filter(ativo=True).order_by("nome")
+    if q:
+        itens = itens.filter(Q(nome__icontains=q) | Q(celular__icontains=q))
+
+    return render(
+        request,
+        "gestao_lab/partials/_ac_results.html",
+        {"itens": itens[:20], "busca": q},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Alunos e pacientes (Dental Office)
 # ---------------------------------------------------------------------------
@@ -675,9 +788,17 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
     user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
 
+    # Volta para a listagem de origem (alunos ou pacientes), quando informada.
+    next_url = request.POST.get("next", "")
+    destino = (
+        HttpResponseRedirect(next_url)
+        if next_url.startswith("/")
+        else redirect("lab_pacientes")
+    )
+
     if not clinic_id:
         messages.error(request, "DENTAL_CLINIC_ID não configurado no ambiente.")
-        return redirect("lab_pacientes")
+        return destino
 
     try:
         registro = executar_sync_e_registrar(
@@ -697,7 +818,7 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
     except DentalAPIError as exc:
         messages.error(request, f"Erro na API Dental Office: {exc}")
 
-    return redirect("lab_pacientes")
+    return destino
 
 
 # ---------------------------------------------------------------------------

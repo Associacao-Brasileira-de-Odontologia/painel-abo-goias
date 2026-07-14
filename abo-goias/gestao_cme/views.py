@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db import transaction
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, ProtectedError, Q, Sum
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -764,19 +764,21 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
         }
         return redirect("registrar_entrada")
 
-    alunos = (
-        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .filter(ativo=True)
-        .select_related("turma", "abrigo")
-        .order_by("turma__nome", "nome")
-    )
+    # Preserva o aluno escolhido no autocomplete quando o formulario volta com erro.
+    aluno_selecionado = None
+    aluno_pk = form["aluno"].value()
+    if aluno_pk:
+        aluno_selecionado = (
+            Aluno.objects.select_related("turma", "abrigo").filter(pk=aluno_pk).first()
+        )
+
     return render(
         request,
         "gestao_cme/registrar_entrada.html",
         {
             "usuario_logado": request.user,
             "form": form,
-            "alunos": alunos,
+            "aluno_selecionado": aluno_selecionado,
             "confirmacao": request.session.pop("cme_entrada_confirmada", None),
         },
     )
@@ -1163,6 +1165,19 @@ def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"Material {material.nome} atualizado com sucesso.")
         return redirect("materiais")
 
+    # Unidades deste material atualmente em emprestimo (emprestado ou atrasado),
+    # usado para avisar antes da exclusao irreversivel.
+    em_emprestimo = (
+        ItemEmprestimo.objects.filter(
+            material=material,
+            emprestimo__status__in=[
+                Emprestimo.Status.EMPRESTADO,
+                Emprestimo.Status.ATRASADO,
+            ],
+        ).aggregate(total=Sum("quantidade"))["total"]
+        or 0
+    )
+
     return render(
         request,
         "gestao_cme/form_material.html",
@@ -1172,8 +1187,90 @@ def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
             "is_edit": True,
             "objeto": material,
             "form": form,
+            "em_emprestimo": em_emprestimo,
         },
     )
+
+
+@login_required
+def buscar_alunos(request: HttpRequest) -> HttpResponse:
+    """Fragmento HTMX com alunos filtrados por nome ou matricula (autocomplete).
+
+    Usado nos registros de entrada e retirada. Com ``pendencias=1`` restringe aos
+    alunos que possuem pacotes de entrada aguardando retirada (fluxo de saida).
+    """
+
+    q = request.GET.get("q", "").strip()
+    alunos = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).filter(ativo=True)
+    if request.GET.get("pendencias") == "1":
+        alunos = alunos.filter(
+            movimentacoes__tipo=Movimentacao.Tipo.ENTRADA,
+            movimentacoes__retirado=False,
+        ).distinct()
+    alunos = alunos.select_related("turma", "abrigo").order_by("nome")
+    if q:
+        alunos = alunos.filter(Q(nome__icontains=q) | Q(matricula__icontains=q))
+    alunos = alunos[:20]
+
+    return render(
+        request,
+        "gestao_cme/partials/_aluno_results.html",
+        {"alunos": alunos, "busca": q},
+    )
+
+
+@login_required
+@require_POST
+def atualizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
+    """Sincroniza turmas e alunos com o Eduq e volta para a tela de origem."""
+
+    try:
+        resultado = sincronizar_eduq(
+            sincronizar_turmas=True,
+            sincronizar_alunos=True,
+        )
+    except EduqAPIError as exc:
+        messages.error(request, f"Não foi possível atualizar os alunos: {exc}")
+    else:
+        messages.success(
+            request,
+            "Alunos atualizados pelo Eduq: "
+            f"{resultado.alunos.criados} novo(s), "
+            f"{resultado.alunos.atualizados} atualizado(s).",
+        )
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("registrar_entrada")
+
+
+@login_required
+@require_POST
+def excluir_material(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exclui um material do catalogo permanentemente.
+
+    Quando o material tem vinculos protegidos (emprestimos, kits ou estoques), a
+    exclusao e bloqueada e a view orienta a inativar o material em vez de excluir.
+    """
+
+    material = get_object_or_404(Material, pk=pk)
+    nome = material.nome
+    try:
+        material.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            (
+                f"Não foi possível excluir o material {nome}: há empréstimos, kits "
+                "ou estoques vinculados. Marque-o como indisponível/inativo em vez "
+                "de excluir."
+            ),
+        )
+        return redirect("editar_material", pk=pk)
+
+    messages.success(request, f"Material {nome} excluído permanentemente.")
+    return redirect("materiais")
 
 
 # ── Fase 3: fluxo de empréstimos ─────────────────────────────────────────────

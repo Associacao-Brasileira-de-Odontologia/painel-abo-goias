@@ -1,4 +1,4 @@
-﻿{% extends "layouts/painel.html" %}
+{% extends "layouts/painel.html" %}
 {% load static %}
 
 {% block title %}ABO Goiás | Identificadores de Bancada{% endblock %}
@@ -8,23 +8,40 @@
     <link rel="stylesheet" href="{% static 'identificadores/css/identificadores.css' %}">
 {% endblock %}
 
-{% block sidebar_copy %}Selecione a turma e o modelo para gerar o arquivo de identificadores de bancada.{% endblock %}
+{% block sidebar_copy %}Pesquise a turma, confira os alunos sincronizados e gere o arquivo de identificadores de bancada.{% endblock %}
 {% block sidebar_nav %}{% include "identificadores/partials/menu.html" %}{% endblock %}
 
 {% block sidebar_extra %}
-    <div class="metric-grid">
-        <div class="metric-card">
-            <span class="metric-label">Turmas</span>
-            <strong>{{ total_turmas }}</strong>
+    <div class="sidebar-section">
+        <p class="section-label">Panorama</p>
+        <div class="metric-grid">
+            <div class="metric-card metric-blue">
+                <span class="metric-label">Turmas sincronizadas</span>
+                <strong>{{ total_turmas }}</strong>
+            </div>
+            <div class="metric-card metric-success">
+                <span class="metric-label">Ativas</span>
+                <strong>{{ ativas_count }}</strong>
+            </div>
+            <div class="metric-card metric-neutral">
+                <span class="metric-label">Finalizadas</span>
+                <strong>{{ finalizadas_count }}</strong>
+            </div>
+            <div class="metric-card metric-blue">
+                <span class="metric-label">Alunos sincronizados</span>
+                <strong>{{ total_alunos_sinc }}</strong>
+            </div>
         </div>
-        <div class="metric-card">
-            <span class="metric-label">Modelos</span>
-            <strong>{{ total_modelos_disponiveis }}/{{ total_modelos }}</strong>
+        <div class="metric-grid" style="margin-top: 12px;">
+            <div class="metric-card metric-neutral">
+                <span class="metric-label">Modelos disponíveis</span>
+                <strong>{{ total_modelos_disponiveis }}/{{ total_modelos }}</strong>
+            </div>
         </div>
     </div>
 {% endblock %}
 
-{% block panel_title %}Selecione turma e modelo{% endblock %}
+{% block panel_title %}Gerar identificadores{% endblock %}
 {% block panel_actions %}
     <div class="topbar-actions">
         <form class="sync-form" method="post" action="{% url 'identificadores:sincronizar' %}">
@@ -35,34 +52,57 @@
 {% endblock %}
 
 {% block panel %}
+    {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <form class="identifier-flow" method="post" data-identifier-form>
         {% csrf_token %}
 
         <section class="identifier-step">
             <div class="step-content">
-                <div class="step-heading">
-                    <h3>Selecionar turma</h3>
+                <div class="step-heading"><h3>Pesquisar turma</h3></div>
+
+                <div class="status-seg" role="tablist" aria-label="Situação da turma">
+                    {% for valor, rotulo, contagem in status_opcoes %}
+                        <a class="{% if status == valor %}active{% endif %}" href="?status={{ valor }}">
+                            {{ rotulo }} <span class="seg-count">{{ contagem }}</span>
+                        </a>
+                    {% endfor %}
                 </div>
 
-                <div class="field">
-                    <label for="turma">Turma</label>
-                    <select id="turma" name="turma" required data-turma-select>
-                        <option value="">Selecione uma turma</option>
-                        {% for turma in turmas %}
-                            <option value="{{ turma.pk }}" {% if turma_selecionada_id == turma.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ turma.nome }}
-                            </option>
-                        {% endfor %}
-                    </select>
+                <div class="search-control">
+                    <input type="search" name="q" placeholder="Buscar turma por nome ou código..."
+                           autocomplete="off"
+                           hx-get="{% url 'identificadores:buscar_turmas' %}"
+                           hx-trigger="keyup changed delay:300ms, search"
+                           hx-vals='{"status": "{{ status }}"}'
+                           hx-target="#turma-results"
+                           hx-swap="innerHTML"
+                           hx-indicator="#turma-search-spin">
+                    <span id="turma-search-spin" class="htmx-indicator turma-inline-spin">Buscando…</span>
+                </div>
+
+                <div id="turma-results" class="turma-results-wrap">
+                    {% include "identificadores/partials/_turma_results.html" %}
                 </div>
             </div>
         </section>
 
+        <span id="turma-detalhe-spin" class="htmx-indicator turma-inline-spin">Carregando alunos…</span>
+        <div id="turma-detalhe">
+            {% if turma_selecionada %}
+                {% include "identificadores/partials/_turma_alunos.html" with turma=turma_selecionada alunos=alunos_turma total_alunos=alunos_turma.count sem_localizacao=0 %}
+            {% endif %}
+        </div>
+
         <section class="identifier-step">
             <div class="step-content">
-                <div class="step-heading">
-                    <h3>Escolher modelo</h3>
-                </div>
+                <div class="step-heading"><h3>Escolher modelo</h3></div>
 
                 <div class="model-list" role="radiogroup" aria-label="Modelos de identificador">
                     {% for modelo in modelos %}
@@ -100,7 +140,7 @@
                 <button class="button primary generate-button" type="submit" disabled data-generate-button>
                     Gerar identificadores
                 </button>
-                <p class="generate-hint" data-generate-hint>Selecione uma turma e um modelo disponível para gerar o arquivo.</p>
+                <p class="generate-hint" data-generate-hint>Pesquise e selecione uma turma e um modelo disponível para gerar o arquivo.</p>
             </div>
         </section>
     </form>
@@ -132,34 +172,66 @@
 {% endblock %}
 
 {% block extra_js %}
+    <script src="{% static 'js/htmx.min.js' %}"></script>
     <script>
         (function () {
             const form = document.querySelector("[data-identifier-form]");
             if (!form) return;
 
-            const turmaSelect = form.querySelector("[data-turma-select]");
-            const modeloInputs = Array.from(form.querySelectorAll("[data-modelo-input]"));
             const generateButton = form.querySelector("[data-generate-button]");
             const generateHint = form.querySelector("[data-generate-hint]");
 
-            function updateState() {
-                const turmaSelecionada = Boolean(turmaSelect.value);
-                const modeloSelecionado = modeloInputs.some((input) => input.checked && !input.disabled);
-                const canGenerate = turmaSelecionada && modeloSelecionado;
-
-                generateButton.disabled = !canGenerate;
-                generateButton.classList.toggle("disabled", !canGenerate);
-                generateHint.textContent = canGenerate
-                    ? "Tudo pronto para gerar o arquivo da turma selecionada."
-                    : "Selecione uma turma e um modelo disponível para gerar o arquivo.";
-
-                modeloInputs.forEach((input) => {
-                    input.closest(".model-option").classList.toggle("selected", input.checked);
-                });
+            function modeloInputs() {
+                return Array.from(form.querySelectorAll("[data-modelo-input]"));
+            }
+            function turmaSelecionada() {
+                const campo = form.querySelector('#turma-detalhe input[name="turma"]');
+                return campo && campo.value;
             }
 
-            turmaSelect.addEventListener("change", updateState);
-            modeloInputs.forEach((input) => input.addEventListener("change", updateState));
+            function updateState() {
+                const temTurma = Boolean(turmaSelecionada());
+                const temModelo = modeloInputs().some((i) => i.checked && !i.disabled);
+                const pode = temTurma && temModelo;
+                generateButton.disabled = !pode;
+                generateButton.classList.toggle("disabled", !pode);
+                generateHint.textContent = pode
+                    ? "Tudo pronto para gerar o arquivo da turma selecionada."
+                    : "Pesquise e selecione uma turma e um modelo disponível para gerar o arquivo.";
+                modeloInputs().forEach((i) =>
+                    i.closest(".model-option").classList.toggle("selected", i.checked)
+                );
+            }
+
+            form.addEventListener("change", function (event) {
+                if (event.target.matches("[data-modelo-input]")) updateState();
+            });
+
+            // Enter no campo de busca não deve submeter o formulário de geração.
+            form.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" && event.target.matches('input[type="search"]')) {
+                    event.preventDefault();
+                }
+            });
+
+            // Realça a turma clicada na lista de resultados.
+            document.body.addEventListener("click", function (event) {
+                const item = event.target.closest(".turma-result");
+                if (!item) return;
+                form.querySelectorAll(".turma-result.selected").forEach((el) =>
+                    el.classList.remove("selected")
+                );
+                item.classList.add("selected");
+            });
+
+            // Reavalia o estado após o HTMX trazer o detalhe da turma.
+            document.body.addEventListener("htmx:afterSwap", function (event) {
+                if (event.target && event.target.id === "turma-detalhe") {
+                    updateState();
+                    event.target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                }
+            });
+
             updateState();
         })();
     </script>

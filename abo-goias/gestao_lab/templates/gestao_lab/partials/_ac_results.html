@@ -1,0 +1,31 @@
+{% comment %}
+Resultados de um campo de busca com seleção (autocomplete). Recebe `itens`
+(pacientes ou alunos) e `busca`. Cada item vira um botão .ac-result, tratado
+pelo handler genérico [data-ac] em static/js/app.js.
+{% endcomment %}
+{% if itens %}
+    <ul class="search-results" role="listbox" aria-label="Resultados da busca">
+        {% for item in itens %}
+            <li>
+                <button type="button" class="search-result ac-result"
+                        data-id="{{ item.pk }}" data-nome="{{ item.nome }}">
+                    <span class="search-result-main">
+                        <strong>{{ item.nome }}</strong>
+                        {% if item.celular %}
+                            <span class="cell-muted">{{ item.celular }}</span>
+                        {% endif %}
+                    </span>
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p class="help-text search-results-empty">
+        {% if busca %}
+            Nenhum resultado para &ldquo;{{ busca }}&rdquo;. Use a busca no Dental Office
+            (painel lateral) para importar.
+        {% else %}
+            Digite o nome para buscar.
+        {% endif %}
+    </p>
+{% endif %}

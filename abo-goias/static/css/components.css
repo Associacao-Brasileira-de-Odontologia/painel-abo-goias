@@ -292,6 +292,76 @@ select option {
     transform: translateY(-1px);
 }
 
+/* ── Autocomplete (resultados de busca clicáveis) ───────────────── */
+
+.search-results-wrap {
+    margin-top: 8px;
+}
+
+.search-results {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.search-result {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 50px;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: rgba(2, 11, 30, 0.44);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.search-result:hover {
+    border-color: rgba(29, 110, 238, 0.46);
+    background: var(--blue-soft);
+}
+
+.search-result-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.search-result-main strong {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.search-results-empty {
+    margin-top: 8px;
+}
+
+.selected-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 50px;
+    padding: 8px 16px;
+    border: 1px solid var(--accent-focus);
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+}
+
+.selected-chip strong {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
 /* ── Botões ─────────────────────────────────────────────────────── */
 
 .button {

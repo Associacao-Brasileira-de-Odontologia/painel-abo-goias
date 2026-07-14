@@ -155,6 +155,18 @@
                             {% else %}
                                 <span class="badge badge-neutro">Convertida</span>
                             {% endif %}
+                            <form method="post" action="{% url 'lab_excluir_moldagem' moldagem.pk %}" class="inline-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <button class="button compact-button danger-button" type="submit"
+                                        title="Excluir moldagem"
+                                        data-confirm="Excluir a moldagem #{{ moldagem.pk }} de {{ moldagem.paciente.nome }}?{% if moldagem.convertida %} O pedido #{{ moldagem.pedido_material.pk }} gerado a partir dela não será afetado.{% endif %} Esta ação é irreversível."
+                                        data-confirm-title="Excluir moldagem"
+                                        data-confirm-label="Excluir moldagem"
+                                        data-confirm-danger="true">
+                                    Excluir
+                                </button>
+                            </form>
                         </td>
                     </tr>
                 {% empty %}

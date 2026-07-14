@@ -1,0 +1,25 @@
+{% if alunos %}
+    <ul class="search-results" role="listbox" aria-label="Resultados da busca de alunos">
+        {% for aluno in alunos %}
+            <li>
+                <button type="button" class="search-result aluno-result"
+                        data-id="{{ aluno.pk }}" data-nome="{{ aluno.nome }}">
+                    <span class="search-result-main">
+                        <strong>{{ aluno.nome }}</strong>
+                        <span class="cell-muted">
+                            {{ aluno.matricula }}{% if aluno.turma %} · {{ aluno.turma.codigo }}{% endif %}{% if aluno.abrigo %} · Abrigo {{ aluno.abrigo.identificador }}{% endif %}
+                        </span>
+                    </span>
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p class="help-text search-results-empty">
+        {% if busca %}
+            Nenhum aluno encontrado para &ldquo;{{ busca }}&rdquo;.
+        {% else %}
+            Digite o nome ou a matrícula para buscar um aluno.
+        {% endif %}
+    </p>
+{% endif %}

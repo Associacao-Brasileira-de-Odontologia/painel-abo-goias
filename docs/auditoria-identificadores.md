@@ -48,13 +48,18 @@ renderizam templates com `{% static %}`. Causa: `settings.py` ativa
 O README indica `manage.py test` como passo de validação sem mencionar essa dependência.
 → Ver "Necessidades de alteração" / backlog B-01.
 
-### A-02 · `Turma.ativo` nunca reflete a realidade do Eduq — **moderado**
-`ModeloBase.ativo` tem default `True`; a sincronização (`eduq_sync.py`) cria turmas com
-`ativo=True` e **preserva** o valor em atualizações (`eduq_sync.py:137`). A "Data de
-Finalização"/"Matrículas Ativas" retornadas pelo Eduq **não** alimentam esse flag. Como o
-`index` filtra `ativo=True`, a tela hoje lista "todas as turmas não desativadas
-manualmente", **não** "turmas realmente ativas". `data_fim` também não é usado para
-distinguir turma finalizada. → base para a feature 3.1 (filtro ativa/finalizada).
+### A-02 · Índice não distinguia turma ativa de finalizada — **moderado** (CORRIGIDO na 3.1)
+> Correção do achado: uma leitura mais atenta de `eduq.py` mostrou que os dados **já vêm**
+> do Eduq — `_turma_ativa()` deriva `ativo` de "Matrículas ativas > 0" e `data_fim` é mapeado
+> de "Data de Finalização" (`normalizar_turma`). A afirmação inicial ("ativo nunca vira
+> False / Eduq não alimenta") estava **errada**.
+
+O problema real: o `index` filtrava só `ativo=True` e **não expunha** nenhuma distinção
+ativa/finalizada nem usava `data_fim`. Com dados reais (sync de 43 turmas), `ativo`
+(matrículas) e `data_fim<hoje` **divergem** (ex.: turma com data de término passada mas ainda
+com matrículas). Para "ativa vs finalizada" o critério semântico correto é `data_fim`
+(curso encerrado). → Resolvido na 3.1 (filtro por `data_fim`), sem precisar tocar no
+`eduq_sync.py`.
 
 ### A-03 · Sincronização Eduq acoplada ao request de geração — **leve**
 Ao gerar o PPTX, se houver alunos sem cidade/UF, a view faz uma chamada externa síncrona
@@ -90,4 +95,20 @@ tela (só usados internamente na geração).
 
 ## 6. Implementado nesta rodada (Fases 2 e 3)
 
-_A preencher ao concluir as fases 2 e 3._
+**Fase 3.1 — Identificadores (implementada e verificada no navegador com dados reais do Eduq):**
+- **Busca de turma → alunos:** o `<select>` virou um campo de pesquisa com autocomplete
+  (HTMX → nova view `buscar_turmas`). Ao selecionar a turma, um fragmento (view `turma_alunos`)
+  exibe os alunos sincronizados com cidade/UF (Eduq), datas e "matrículas ativas", além do
+  campo oculto `turma` que alimenta a geração.
+- **Filtro ativa/finalizada:** chips `.status-seg` (Ativas / Finalizadas / Todas) com contagem,
+  no padrão GET. Critério: *finalizada* = `data_fim < hoje`; *ativa* = sem data ou data futura.
+- **Dashboard (sidebar):** Turmas sincronizadas · Ativas · Finalizadas · Alunos sincronizados
+  · Modelos disponíveis (reusa `.metric-grid`).
+- **Geração:** passou a aceitar qualquer turma selecionada (inclusive finalizada), não só ativas.
+- Arquivos: `identificadores/{views,urls}.py`, `templates/identificadores/index.html` +
+  `partials/_turma_results.html` + `partials/_turma_alunos.html`, `identificadores.css`. HTMX
+  carregado por página (`static/js/htmx.min.js`).
+- **Testes:** 6 novos casos (busca por texto/situação, contagens do painel, alunos por turma,
+  badge finalizada) — suíte de `identificadores` em 9 testes, verde.
+- Verificação: busca, seleção, exibição de 23 alunos (turma 50174) e geração de PPTX validadas
+  ao vivo (servidor local + Eduq real).

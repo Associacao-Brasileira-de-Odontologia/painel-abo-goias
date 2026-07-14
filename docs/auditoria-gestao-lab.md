@@ -108,3 +108,35 @@ no navegador (`form_pedido`).
 **Fase 2.1 + busca lateral:** os botões "Importar paciente/aluno" da `busca_dental.html` viraram
 botão real (compacto, com borda/fundo) e ganharam o spinner de carregamento no submit (a
 importação bate na API do Dental). Verificado no navegador.
+
+**Fase 3.3 — Pedidos e moldagens (implementada e verificada no navegador):**
+- **Busca com seleção (A-09 resolvido):** os `<select>` de **Paciente** e **Aluno** em
+  `form_pedido` e `form_moldagem` viraram autocomplete (HTMX → novas views `buscar_pacientes`
+  e `buscar_alunos_lab`, por nome/celular). Implementado com um partial reutilizável
+  (`partials/_ac_field.html` + `_ac_results.html`) e um handler genérico `[data-ac]` em
+  `app.js` — os dois campos funcionam de forma independente na mesma tela, com chip do
+  selecionado e botão "Trocar". `Laboratório`/`Equipe` seguem como `<select>` (listas curtas).
+  A seleção é preservada quando o formulário volta com erro (helper `_selecionado`).
+- **Exclusão (A-10 resolvido):** novas views `excluir_pedido`/`excluir_moldagem` (POST + `next`)
+  + botão `.danger-button` com `data-confirm-danger` nas listagens. Ao excluir um pedido vindo
+  de moldagem, o vínculo é desfeito (SET_NULL) e a moldagem volta a "não convertida" — avisado
+  na confirmação.
+- **Sincronização nas listagens (A-11 resolvido):** o botão já existia (`partials/sync_dental.html`
+  em `alunos.html` e `pacientes.html`, trazido pelo refactor); o que faltava era o
+  `sincronizar_dental` **sempre redirecionar para pacientes** — agora honra `next` e volta para
+  a listagem de origem. Loading já coberto pela 2.1 (`.sync-form`).
+- Arquivos: `gestao_lab/{views,urls,tests}.py`, `form_pedido.html`, `form_moldagem.html`,
+  `acompanhamento_pedidos.html`, `moldagens.html`, `partials/{_ac_field,_ac_results,sync_dental}.html`,
+  `static/js/app.js`. **8 testes novos** (suíte `gestao_lab` 114/114 verde).
+- Verificação ao vivo: busca de paciente/aluno, seleção nos dois campos, "Trocar", criação de
+  pedido pelos pks do autocomplete, exclusão de pedido e de moldagem.
+
+### A-17 · Atributo `hidden` era anulado pelo CSS — **moderado** (encontrado e corrigido aqui)
+Descoberto por inspeção visual durante a 3.3: o chip "Trocar" aparecia mesmo sem nada
+selecionado. Causa: não havia regra `[hidden]` no CSS do projeto, então
+`.selected-chip{display:flex}` e `.field{display:grid}` **venciam** o `[hidden]{display:none}`
+do navegador — qualquer elemento com o atributo `hidden` continuava visível. Afetava os chips
+da 3.2 (`registrar_entrada`) e da 3.3. **Corrigido** com `[hidden]{display:none !important}` em
+`static/css/base.css` (regra global de reset). Verificado no navegador (chips voltam a
+`display:none`). Lição: a verificação por propriedade do DOM (`el.hidden === true`) não pega
+esse caso — só o estilo computado/screenshot pega.
