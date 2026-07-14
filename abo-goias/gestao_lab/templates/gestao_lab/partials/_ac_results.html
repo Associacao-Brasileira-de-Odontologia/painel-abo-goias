@@ -1,8 +1,23 @@
 {% comment %}
-Resultados de um campo de busca com seleção (autocomplete). Recebe `itens`
-(pacientes ou alunos) e `busca`. Cada item vira um botão .ac-result, tratado
-pelo handler genérico [data-ac] em static/js/app.js.
+Resultados de um campo de busca com seleção (autocomplete).
+Contexto: itens, total, busca, url_dental, importados, erro_dental, veio_do_dental.
+
+A base local costuma ter só uma fatia dos registros do Dental Office, então
+sempre que houver um termo digitado oferecemos a busca direta na API — que
+importa os registros encontrados e devolve este mesmo fragmento, agora com pks
+locais utilizáveis no formulário.
 {% endcomment %}
+
+{% if erro_dental %}
+    <p class="ac-aviso ac-aviso--erro">{{ erro_dental }}</p>
+{% elif veio_do_dental %}
+    {% if importados %}
+        <p class="ac-aviso ac-aviso--ok">{{ importados }} registro{{ importados|pluralize }} encontrado{{ importados|pluralize }} no Dental Office.</p>
+    {% else %}
+        <p class="ac-aviso">Nada encontrado no Dental Office para &ldquo;{{ busca }}&rdquo;.</p>
+    {% endif %}
+{% endif %}
+
 {% if itens %}
     <ul class="search-results" role="listbox" aria-label="Resultados da busca">
         {% for item in itens %}
@@ -19,13 +34,22 @@ pelo handler genérico [data-ac] em static/js/app.js.
             </li>
         {% endfor %}
     </ul>
-{% else %}
+    {% if total > itens|length %}
+        <p class="help-text">Mostrando {{ itens|length }} de {{ total }} — refine a busca.</p>
+    {% endif %}
+{% elif busca %}
     <p class="help-text search-results-empty">
-        {% if busca %}
-            Nenhum resultado para &ldquo;{{ busca }}&rdquo;. Use a busca no Dental Office
-            (painel lateral) para importar.
-        {% else %}
-            Digite o nome para buscar.
-        {% endif %}
+        Nenhum registro já sincronizado corresponde a &ldquo;{{ busca }}&rdquo;.
     </p>
+{% else %}
+    <p class="help-text search-results-empty">Digite o nome para buscar.</p>
+{% endif %}
+
+{% if busca and url_dental %}
+    <button type="button" class="button secondary compact-button ac-dental-btn"
+            hx-get="{{ url_dental }}?q={{ busca|urlencode }}"
+            hx-target="closest .search-results-wrap"
+            hx-swap="innerHTML">
+        {% if itens %}Não encontrou? {% endif %}Buscar &ldquo;{{ busca }}&rdquo; no Dental Office
+    </button>
 {% endif %}

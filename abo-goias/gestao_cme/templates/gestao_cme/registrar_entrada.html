@@ -58,7 +58,9 @@
         <div class="field field-required" id="aluno-busca-wrap"{% if aluno_selecionado %} hidden{% endif %}>
             <label for="aluno-busca">Aluno</label>
             <div class="search-control">
-                <input type="search" id="aluno-busca"
+                {# `name="q"` é obrigatório: o HTMX só envia o valor de um elemento
+                   que tenha name — sem ele a busca vai vazia e a lista não filtra. #}
+                <input type="search" id="aluno-busca" name="q"
                        placeholder="Buscar aluno por nome ou matrícula..."
                        autocomplete="off"
                        hx-get="{% url 'buscar_alunos' %}"

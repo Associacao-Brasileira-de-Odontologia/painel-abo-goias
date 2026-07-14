@@ -671,35 +671,138 @@ def excluir_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-@login_required
-def buscar_pacientes(request: HttpRequest) -> HttpResponse:
-    """Fragmento HTMX com pacientes locais filtrados por nome ou celular."""
-
-    q = request.GET.get("q", "").strip()
+def _pacientes_locais(q: str):
     itens = Paciente.objects.filter(ativo=True).order_by("nome")
     if q:
         itens = itens.filter(Q(nome__icontains=q) | Q(celular__icontains=q))
+    return itens
+
+
+def _alunos_locais(q: str):
+    itens = AlunoLab.objects.filter(ativo=True).order_by("nome")
+    if q:
+        itens = itens.filter(Q(nome__icontains=q) | Q(celular__icontains=q))
+    return itens
+
+
+@login_required
+def buscar_pacientes(request: HttpRequest) -> HttpResponse:
+    """Fragmento HTMX com pacientes ja sincronizados, filtrados por nome/celular.
+
+    A base local costuma ter so uma fatia dos pacientes do Dental Office, entao o
+    fragmento tambem oferece a busca direta na API (``lab_buscar_pacientes_dental``).
+    """
+
+    q = request.GET.get("q", "").strip()
+    itens = _pacientes_locais(q)
 
     return render(
         request,
         "gestao_lab/partials/_ac_results.html",
-        {"itens": itens[:20], "busca": q},
+        {
+            "itens": itens[:20],
+            "total": itens.count(),
+            "busca": q,
+            "url_dental": reverse("lab_buscar_pacientes_dental"),
+        },
     )
 
 
 @login_required
 def buscar_alunos_lab(request: HttpRequest) -> HttpResponse:
-    """Fragmento HTMX com alunos locais filtrados por nome ou celular."""
+    """Fragmento HTMX com alunos ja sincronizados, filtrados por nome/celular."""
 
     q = request.GET.get("q", "").strip()
-    itens = AlunoLab.objects.filter(ativo=True).order_by("nome")
-    if q:
-        itens = itens.filter(Q(nome__icontains=q) | Q(celular__icontains=q))
+    itens = _alunos_locais(q)
 
     return render(
         request,
         "gestao_lab/partials/_ac_results.html",
-        {"itens": itens[:20], "busca": q},
+        {
+            "itens": itens[:20],
+            "total": itens.count(),
+            "busca": q,
+            "url_dental": reverse("lab_buscar_alunos_lab_dental"),
+        },
+    )
+
+
+@login_required
+def buscar_pacientes_dental(request: HttpRequest) -> HttpResponse:
+    """Busca pacientes direto no Dental Office, importa e devolve o fragmento.
+
+    Necessario porque o pedido referencia um ``Paciente`` local: os registros
+    encontrados na API sao importados para obter um pk utilizavel no formulario.
+    """
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import buscar_e_importar_pacientes
+
+    q = request.GET.get("q", "").strip()
+    erro = ""
+    importados = 0
+
+    if q:
+        clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+        if not clinic_id:
+            erro = "DENTAL_CLINIC_ID não configurado no ambiente."
+        else:
+            try:
+                resultado = buscar_e_importar_pacientes(q=q, clinic_id=clinic_id)
+                importados = resultado["criados"] + resultado["atualizados"]
+            except DentalAPIError as exc:
+                erro = f"Erro na API Dental Office: {exc}"
+
+    itens = _pacientes_locais(q)
+    return render(
+        request,
+        "gestao_lab/partials/_ac_results.html",
+        {
+            "itens": itens[:20],
+            "total": itens.count(),
+            "busca": q,
+            "url_dental": reverse("lab_buscar_pacientes_dental"),
+            "importados": importados,
+            "erro_dental": erro,
+            "veio_do_dental": True,
+        },
+    )
+
+
+@login_required
+def buscar_alunos_lab_dental(request: HttpRequest) -> HttpResponse:
+    """Busca alunos direto no Dental Office, importa e devolve o fragmento."""
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import buscar_e_importar_alunos
+
+    q = request.GET.get("q", "").strip()
+    erro = ""
+    importados = 0
+
+    if q:
+        user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+        try:
+            resultado = buscar_e_importar_alunos(q=q, user_group=user_group)
+            importados = resultado["criados"] + resultado["atualizados"]
+        except DentalAPIError as exc:
+            erro = f"Erro na API Dental Office: {exc}"
+
+    itens = _alunos_locais(q)
+    return render(
+        request,
+        "gestao_lab/partials/_ac_results.html",
+        {
+            "itens": itens[:20],
+            "total": itens.count(),
+            "busca": q,
+            "url_dental": reverse("lab_buscar_alunos_lab_dental"),
+            "importados": importados,
+            "erro_dental": erro,
+            "veio_do_dental": True,
+        },
     )
 
 

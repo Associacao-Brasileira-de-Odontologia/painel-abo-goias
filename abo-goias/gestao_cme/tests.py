@@ -961,6 +961,22 @@ class MateriaisFase32Tests(TestCase):
         self.assertContains(response, "Carlos Andrade")
         self.assertNotContains(response, "Outro Nome")
 
+    def test_campo_de_busca_de_aluno_envia_o_termo(self) -> None:
+        """Regressão: sem `name` no input, o HTMX não envia `q` e a listagem
+        devolve sempre todos os alunos — a busca parece 'não atualizar'."""
+
+        import re
+
+        for rota in ("registrar_entrada", "registrar_saida"):
+            with self.subTest(rota=rota):
+                conteudo = self.client.get(reverse(rota)).content.decode()
+                campos = re.findall(r"<input[^>]*type=\"search\"[^>]*>", conteudo)
+
+                self.assertTrue(campos, "esperado um campo de busca de aluno")
+                for campo in campos:
+                    self.assertIn('name="q"', campo)
+                    self.assertIn("hx-get=", campo)
+
     def test_buscar_alunos_pendencias_so_alunos_com_pacotes(self) -> None:
         vazio = self.client.get(reverse("buscar_alunos"), {"pendencias": "1"})
         self.assertNotContains(vazio, "Carlos Andrade")

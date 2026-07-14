@@ -131,6 +131,30 @@ importação bate na API do Dental). Verificado no navegador.
 - Verificação ao vivo: busca de paciente/aluno, seleção nos dois campos, "Trocar", criação de
   pedido pelos pks do autocomplete, exclusão de pedido e de moldagem.
 
+### A-18 · Busca do autocomplete não filtrava — **crítico** (reportado pelo usuário, corrigido)
+Sintoma relatado: ao pesquisar "Gustavo" a listagem **não era atualizada**, tornando o
+mecanismo inútil para selecionar o paciente. Duas causas somadas:
+
+1. **O termo nunca era enviado.** Os inputs de busca do autocomplete não tinham o atributo
+   `name`. O HTMX só envia o valor de um elemento que tenha `name` — sem ele, a view recebia
+   `q=""` e devolvia **sempre a lista inteira, sem filtrar**, independentemente do que fosse
+   digitado. Afetava `registrar_entrada`/`registrar_saida` (3.2) e `form_pedido`/`form_moldagem`
+   (3.3). **Corrigido** com `name="q"` nos campos.
+2. **A busca só olhava a base local.** O brief pede seleção "a partir dos resultados retornados
+   pela API correspondente"; a base local tinha 2 pacientes, enquanto o Dental Office retorna
+   **149** para "Gustavo". **Corrigido**: os resultados agora oferecem a ação **"Buscar no
+   Dental Office"** (novas views `buscar_pacientes_dental`/`buscar_alunos_lab_dental`), que
+   consulta a API, importa os registros (necessário: o pedido referencia um `Paciente` local
+   com pk) e devolve o fragmento já selecionável. Mantida como ação **explícita** — cada busca
+   na API importa todos os matches e leva ~9s, então dispará-la a cada tecla poluiria a base e
+   travaria a digitação. A busca local segue instantânea.
+
+> **Por que os testes não pegaram:** havia teste dos *endpoints* (passando `?q=` direto), mas
+> nenhum da *ligação do template*. Pior: os testes interativos passaram por coincidência — o
+> primeiro item da lista não-filtrada por acaso batia com o termo buscado (ADRYELLE, Joao).
+> Adicionados testes de regressão que verificam `name="q"` + `hx-get` nos campos — validados
+> reintroduzindo o bug (falham) e corrigindo (passam).
+
 ### A-17 · Atributo `hidden` era anulado pelo CSS — **moderado** (encontrado e corrigido aqui)
 Descoberto por inspeção visual durante a 3.3: o chip "Trocar" aparecia mesmo sem nada
 selecionado. Causa: não havia regra `[hidden]` no CSS do projeto, então

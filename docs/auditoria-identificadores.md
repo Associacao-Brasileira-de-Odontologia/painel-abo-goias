@@ -39,14 +39,18 @@ fluxo de geração só é exercível após uma sincronização real com o Eduq.
 
 ## 3. Bugs / inconsistências encontrados
 
-### A-01 · Suíte de testes quebra sem `collectstatic` — **moderado** (afeta todos os apps)
-`manage.py test` (sem `collectstatic` prévio) falha com
+### A-01 · ~~Suíte de testes quebra sem `collectstatic`~~ — **CORRIGIDO**
+`manage.py test` (sem `collectstatic` prévio) falhava com
 `ValueError: Missing staticfiles manifest entry for '.../...css'` em todos os testes que
-renderizam templates com `{% static %}`. Causa: `settings.py` ativa
+renderizam templates com `{% static %}`. Causa: `settings.py` ativava
 `whitenoise.storage.CompressedManifestStaticFilesStorage` **também no ambiente de teste**.
-**Pós-pull, com `collectstatic --noinput` antes, a suíte completa passa: 541 testes, verde.**
-O README indica `manage.py test` como passo de validação sem mencionar essa dependência.
-→ Ver "Necessidades de alteração" / backlog B-01.
+
+**Correção:** o storage com manifesto passou a ser aplicado apenas fora dos testes
+(`TESTANDO = "test" in sys.argv[1:2]`, em `abo_goias/settings.py`). Produção e dev seguem com
+o manifesto e a **checagem estrita** (erro alto se faltar arquivo); a suíte deixa de depender
+de `collectstatic`. **Verificado apagando o diretório `staticfiles/` por completo: 561 testes,
+verde.** O passo de validação do README (`manage.py test`) agora funciona num checkout limpo.
+Resolve também o backlog B-01/B-18.
 
 ### A-02 · Índice não distinguia turma ativa de finalizada — **moderado** (CORRIGIDO na 3.1)
 > Correção do achado: uma leitura mais atenta de `eduq.py` mostrou que os dados **já vêm**

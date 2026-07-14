@@ -268,7 +268,15 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_ROOT = Path(_env("DJANGO_MEDIA_ROOT", str(BASE_DIR)))
 MEDIA_URL = "/media/"
 
-if importlib.util.find_spec("whitenoise"):
+# O storage com manifesto (hash no nome do arquivo) exige que `collectstatic`
+# tenha rodado: sem o manifesto, qualquer {% static %} quebra. Isso e o que
+# queremos em producao (erro alto se faltar arquivo), mas na suite de testes
+# obrigaria um `collectstatic` previo so para renderizar templates. Por isso o
+# manifesto fica desligado ao rodar os testes, mantendo a checagem estrita no
+# resto dos ambientes.
+TESTANDO = "test" in sys.argv[1:2]
+
+if importlib.util.find_spec("whitenoise") and not TESTANDO:
     STORAGES = {
         "default": {
             "BACKEND": "django.core.files.storage.FileSystemStorage",

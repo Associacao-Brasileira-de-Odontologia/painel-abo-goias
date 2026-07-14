@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
@@ -1387,6 +1388,56 @@ class BuscaSelecaoLabTests(TestCase):
 
         self.assertIn('data-ac-hidden', conteudo)
         self.assertNotIn('<select id="id_paciente"', conteudo)
+
+    def test_campos_de_busca_enviam_o_termo(self) -> None:
+        """Regressão: sem `name` no input, o HTMX não envia `q` e a lista nunca
+        filtra — a busca parece 'não atualizar'."""
+
+        for rota in ("lab_criar_pedido", "lab_criar_moldagem"):
+            with self.subTest(rota=rota):
+                conteudo = self.client.get(reverse(rota)).content.decode()
+                # Só os campos do autocomplete (a sidebar de importação do
+                # Dental Office também tem campos de busca, mas sem HTMX).
+                campos = re.findall(
+                    r"<input[^>]*id=\"ac-busca-[^\"]+\"[^>]*>", conteudo
+                )
+
+                self.assertEqual(len(campos), 2, "esperados 2 campos de autocomplete")
+                for campo in campos:
+                    self.assertIn('name="q"', campo)
+                    self.assertIn("hx-get=", campo)
+
+    def test_busca_local_oferece_consulta_ao_dental(self) -> None:
+        response = self.client.get(reverse("lab_buscar_pacientes"), {"q": "Gustavo"})
+
+        self.assertContains(response, "ac-dental-btn")
+        self.assertContains(response, reverse("lab_buscar_pacientes_dental"))
+
+    @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
+    def test_busca_no_dental_importa_e_lista(self, mock_buscar) -> None:
+        def _importa(q, clinic_id):
+            _paciente(nome="Gustavo Vindo do Dental", id_dental="D1")
+            return {"criados": 1, "atualizados": 0}
+
+        mock_buscar.side_effect = _importa
+
+        response = self.client.get(
+            reverse("lab_buscar_pacientes_dental"), {"q": "Gustavo"}
+        )
+
+        self.assertTrue(mock_buscar.called)
+        self.assertContains(response, "Gustavo Vindo do Dental")
+        self.assertContains(response, "encontrado")
+
+    @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
+    def test_busca_no_dental_mostra_erro_da_api(self, mock_buscar) -> None:
+        mock_buscar.side_effect = DentalAPIError("indisponível")
+
+        response = self.client.get(
+            reverse("lab_buscar_pacientes_dental"), {"q": "Gustavo"}
+        )
+
+        self.assertContains(response, "Erro na API Dental Office")
 
     def test_pedido_aceita_pk_vindo_do_campo_oculto(self) -> None:
         equipe = _equipe()

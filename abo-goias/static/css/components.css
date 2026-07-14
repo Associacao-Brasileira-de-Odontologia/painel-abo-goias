@@ -362,6 +362,45 @@ select option {
     overflow-wrap: anywhere;
 }
 
+/* Busca direta no Dental Office a partir do autocomplete */
+
+.ac-dental-btn {
+    margin-top: 8px;
+    width: 100%;
+}
+
+/* O HTMX marca o elemento que disparou a requisição com .htmx-request. */
+.ac-dental-btn.htmx-request {
+    pointer-events: none;
+    opacity: 0.75;
+}
+
+.ac-dental-btn.htmx-request::after {
+    content: " — buscando…";
+}
+
+.ac-aviso {
+    margin: 0 0 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: rgba(2, 11, 30, 0.44);
+    color: var(--muted-strong);
+    font-size: 0.84rem;
+}
+
+.ac-aviso--ok {
+    border-color: var(--success-border);
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.ac-aviso--erro {
+    border-color: var(--danger-border);
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
 /* ── Botões ─────────────────────────────────────────────────────── */
 
 .button {
