@@ -1,8 +1,21 @@
+{% comment %}
+Resultados do autocomplete de aluno. Contexto: alunos, busca, ha_mais.
+
+Segue o mesmo contrato do autocomplete da Gestão de Laboratório
+(gestao_lab/partials/_ac_results.html): itens são botões .ac-result com
+data-id/data-nome, consumidos pelo handler genérico [data-ac] em
+static/js/app.js.
+
+Aqui todo resultado sempre tem `data-id` (pk), porque a busca é só na base
+local — o Eduq não oferece consulta de aluno por nome, então não existe o
+caso "veio da API e precisa ser gravado no clique" que o laboratório tem.
+{% endcomment %}
+
 {% if alunos %}
     <ul class="search-results" role="listbox" aria-label="Resultados da busca de alunos">
         {% for aluno in alunos %}
             <li>
-                <button type="button" class="search-result aluno-result"
+                <button type="button" class="search-result ac-result"
                         data-id="{{ aluno.pk }}" data-nome="{{ aluno.nome }}">
                     <span class="search-result-main">
                         <strong>{{ aluno.nome }}</strong>
@@ -14,12 +27,15 @@
             </li>
         {% endfor %}
     </ul>
+    {% if ha_mais %}
+        <p class="help-text">Há mais resultados — refine a busca pelo nome completo ou pela matrícula.</p>
+    {% endif %}
+{% elif busca %}
+    <p class="help-text search-results-empty">
+        Nenhum aluno encontrado para &ldquo;{{ busca }}&rdquo;.
+    </p>
 {% else %}
     <p class="help-text search-results-empty">
-        {% if busca %}
-            Nenhum aluno encontrado para &ldquo;{{ busca }}&rdquo;.
-        {% else %}
-            Digite o nome ou a matrícula para buscar um aluno.
-        {% endif %}
+        Digite o nome ou a matrícula para buscar um aluno.
     </p>
 {% endif %}

@@ -223,6 +223,71 @@ evita-se migration e mudança em `_marcar_erro`.
   leitura best-effort de CPF/nascimento é defensiva (`.get`), sem quebrar quando os
   campos não vêm. O envio (`enviar_contrato_ao_dental`) não foi alterado.
 
+---
+
+## Padronização da busca de aluno (CME ↔ Laboratório)
+
+### Como a busca funciona no Laboratório (mapeamento)
+
+| Peça | Arquivo | Papel |
+|---|---|---|
+| Campo | `gestao_lab/partials/_ac_field.html` | Monta o bloco `[data-ac]`: input HTMX, spinner, chip do selecionado, `<input type=hidden>` com o pk |
+| Resultados | `gestao_lab/partials/_ac_results.html` | Fragmento com botões `.ac-result` (`data-id`, `data-id-dental`, `data-nome`) |
+| View de busca | `gestao_lab/views.py::_buscar_unificado` | Junta base local + Dental Office; avisos `parcial` / `ha_mais` |
+| Junção | `gestao_lab/views.py::_unificar` | Dedup por `id_dental`; locais nunca perdem vaga para remotos; limite 20 |
+| Gravação | `gestao_lab/views.py::materializar` | POST que grava o item remoto escolhido e devolve `{pk, nome}` |
+| Comportamento | `static/js/app.js` (handler `[data-ac]`) | Clique → preenche o hidden e mostra o chip; sem pk → materializa antes; "Trocar" desfaz |
+
+Fluxo: digita → HTMX (300 ms) → lista única (local + API, sem dizer a origem) →
+clique → se o item não tem pk, é gravado na hora (um write, só do escolhido) →
+pk vai para o campo oculto do formulário.
+
+### O que foi reproduzido no CME
+
+- **Componente compartilhado**: `_ac_field.html` promovido para
+  `templates/partials/_ac_field.html`, usado agora pelas **duas** apps. O
+  `data-ac-materializar` deixou de ser fixo no `lab_materializar` e passou a ser
+  o parâmetro opcional `ac_materializar_url`. Novos parâmetros: `ac_placeholder`,
+  `ac_hint`, `ac_autofocus`, `ac_vals` e `ac_navegar`.
+- **Contrato de resultados**: `gestao_cme/partials/_aluno_results.html` agora usa
+  `.ac-result` + `data-id`/`data-nome` (antes `.aluno-result`), com os mesmos
+  estados vazios e o aviso **"Há mais resultados"**.
+- **View**: `buscar_alunos` ganhou o limite compartilhado
+  (`LIMITE_RESULTADOS_BUSCA = 20`, igual ao `_LIMITE_RESULTADOS` do lab) e a flag
+  `ha_mais` (busca `limite+1` para detectar corte sem `count()`).
+- **JS unificado**: as três telas do CME (`registrar_entrada`, `criar_emprestimo`,
+  `registrar_saida`) tinham **JS inline duplicado** para selecionar/trocar aluno.
+  Todo esse código foi **removido** — passam a usar o handler genérico `[data-ac]`
+  de `static/js/app.js`, o mesmo do laboratório.
+- **`data-ac-navegar`** (novo, em `app.js`): `registrar_saida` precisa recarregar
+  a tela ao escolher o aluno (para listar os pacotes pendentes) em vez de
+  preencher um formulário. Virou uma opção do componente genérico, em vez de um
+  script próprio da tela.
+
+### Diferença deliberada: no CME a busca é só local
+
+O ponto central do autocomplete do laboratório — **misturar base local com uma
+busca ao vivo na API** e gravar o escolhido no clique (`materializar`) — **não
+tem equivalente possível no CME hoje**:
+
+- Os alunos do CME vêm do **Eduq**, e o cliente do Eduq (`integrations/eduq.py`)
+  expõe apenas `listar_turmas()` e `listar_alunos(codigo_turma)` — **não existe
+  busca de aluno por nome**. Não há endpoint para consultar ao vivo, e portanto
+  nada a materializar.
+- O laboratório consulta o **Dental Office**, que tem busca por nome
+  (`procurar_pacientes` / `procurar_alunos`).
+
+Logo, no CME a lista continua vindo da base local, alimentada pela sincronização
+do Eduq (rotina diária às 04:00 + botão "Atualizar lista de alunos"). Foi
+reproduzido **tudo o que não depende desse endpoint**: componente, contrato,
+comportamento, limite, avisos e acessibilidade. A limitação já constava da
+auditoria do CME e está registrada no docstring de `buscar_alunos`.
+
+**Pendência (negócio/técnica):** se for necessário encontrar no CME um aluno que
+ainda não foi sincronizado, as opções são (a) sincronizar a turma sob demanda
+antes de buscar, ou (b) verificar com o fornecedor do Eduq se existe/pode existir
+um endpoint de busca de aluno por nome. Hoje nenhuma das duas está implementada.
+
 ## Pendências consolidadas para o time de negócio
 
 1. **CME-1:** cadastro de kit pela interface deve permitir quantidade por material?
@@ -231,3 +296,5 @@ evita-se migration e mudança em `_marcar_erro`.
 4. **Contratos-3:** identificador preferido (CPF vs nascimento)? Se CPF for
    obrigatório para pacientes não importados, aceitar o custo de detalhe por linha?
 5. **Contratos-5:** padronizar tipografia também nas telas públicas de assinatura?
+6. **Busca CME:** como encontrar aluno ainda não sincronizado do Eduq — sincronizar
+   a turma sob demanda, ou solicitar ao fornecedor um endpoint de busca por nome?

@@ -47,6 +47,10 @@ from .utils import normalizar_texto
 
 REGISTROS_POR_PAGINA = 10
 
+# Teto de itens exibidos no autocomplete de aluno — mesmo valor do
+# equivalente na Gestao de Laboratorio (_LIMITE_RESULTADOS).
+LIMITE_RESULTADOS_BUSCA = 20
+
 
 def _gerar_row_hash() -> str:
     """Gera um hash unico para movimentacoes criadas manualmente pelo painel."""
@@ -867,6 +871,8 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
             Aluno.objects.select_related("turma", "abrigo").filter(pk=aluno_pk).first()
         )
 
+    confirmacao = request.session.pop("cme_entrada_confirmada", None)
+
     return render(
         request,
         "gestao_cme/registrar_entrada.html",
@@ -874,7 +880,10 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
             "usuario_logado": request.user,
             "form": form,
             "aluno_selecionado": aluno_selecionado,
-            "confirmacao": request.session.pop("cme_entrada_confirmada", None),
+            "confirmacao": confirmacao,
+            # Com a confirmação na tela, o foco não deve pular direto para a
+            # busca — o operador precisa ler os códigos gerados primeiro.
+            "autofocus_busca": not confirmacao,
         },
     )
 
@@ -967,6 +976,8 @@ def registrar_saida(request: HttpRequest) -> HttpResponse:
             "aluno": aluno,
             "aluno_id": aluno_id or "",
             "pacotes_pendentes": pacotes_pendentes,
+            # Com um aluno já escolhido, o foco fica nos pacotes (passo 2).
+            "sem_aluno": aluno is None,
         },
     )
 
@@ -1321,8 +1332,20 @@ def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
 def buscar_alunos(request: HttpRequest) -> HttpResponse:
     """Fragmento HTMX com alunos filtrados por nome ou matricula (autocomplete).
 
-    Usado nos registros de entrada e retirada. Com ``pendencias=1`` restringe aos
-    alunos que possuem pacotes de entrada aguardando retirada (fluxo de saida).
+    Espelha o autocomplete da Gestao de Laboratorio (ver
+    ``gestao_lab.views._buscar_unificado``): mesmo componente ``[data-ac]``, mesmo
+    contrato de resultados e o mesmo aviso de "ha mais resultados" quando a busca
+    e ampla demais para o limite exibido.
+
+    Diferenca deliberada: no laboratorio a lista mistura a base local com a busca
+    do Dental Office; aqui a busca e **so local**, porque o Eduq nao oferece
+    consulta de aluno por nome (so ``listar_alunos`` por turma) — nao ha o que
+    consultar ao vivo nem o que materializar no clique. A base local e alimentada
+    pela sincronizacao do Eduq (rotina diaria + botao "Atualizar lista de alunos").
+
+    Usado nos registros de entrada, retirada e emprestimo. Com ``pendencias=1``
+    restringe aos alunos que possuem pacotes de entrada aguardando retirada
+    (fluxo de saida).
     """
 
     q = request.GET.get("q", "").strip()
@@ -1338,12 +1361,19 @@ def buscar_alunos(request: HttpRequest) -> HttpResponse:
             Q(nome_normalizado__icontains=normalizar_texto(q))
             | Q(matricula__icontains=q)
         )
-    alunos = alunos[:20]
+
+    # Busca um a mais que o limite para saber se houve corte, sem um count().
+    encontrados = list(alunos[: LIMITE_RESULTADOS_BUSCA + 1])
+    ha_mais = len(encontrados) > LIMITE_RESULTADOS_BUSCA
 
     return render(
         request,
         "gestao_cme/partials/_aluno_results.html",
-        {"alunos": alunos, "busca": q},
+        {
+            "alunos": encontrados[:LIMITE_RESULTADOS_BUSCA],
+            "busca": q,
+            "ha_mais": ha_mais,
+        },
     )
 
 

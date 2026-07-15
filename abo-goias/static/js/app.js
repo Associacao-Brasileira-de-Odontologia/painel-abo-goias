@@ -86,6 +86,12 @@
     // partials/_ac_field.html. Ao clicar num resultado, preenche o campo oculto
     // do formulário e troca a busca por um "chip" do item escolhido; "Trocar"
     // desfaz a seleção. Genérico: funciona para vários campos na mesma tela.
+    //
+    // Dois comportamentos opcionais, por bloco:
+    //   data-ac-materializar — a busca mistura base local e API externa; itens
+    //                          sem pk são gravados no clique (ver materializar).
+    //   data-ac-navegar      — escolher o item recarrega a tela (navega para
+    //                          "<valor><pk>") em vez de preencher o formulário.
     function bloco(el) {
         return el.closest("[data-ac]");
     }
@@ -131,10 +137,21 @@
             var b = bloco(resultado);
             if (!b) return;
 
+            // Fluxos em que escolher o aluno recarrega a tela (ex.: registrar
+            // saída, que precisa listar os pacotes pendentes dele).
+            if (b.dataset.acNavegar && resultado.dataset.id) {
+                window.location = b.dataset.acNavegar + encodeURIComponent(resultado.dataset.id);
+                return;
+            }
+
             if (resultado.dataset.id) {
                 confirmar(b, resultado.dataset.id, resultado.dataset.nome);
                 return;
             }
+
+            // Item sem pk só pode ser gravado se o bloco souber para onde
+            // mandar; sem isso a busca é apenas local e não deveria chegar aqui.
+            if (!b.dataset.acMaterializar) return;
 
             resultado.disabled = true;
             resultado.classList.add("is-materializando");

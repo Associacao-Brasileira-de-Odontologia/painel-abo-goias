@@ -1,0 +1,61 @@
+{% comment %}
+Campo de busca com seleção (autocomplete). Substitui um <select> longo.
+Componente compartilhado por todas as apps — o comportamento de clique/troca
+é do handler genérico [data-ac] em static/js/app.js.
+
+Parâmetros do include:
+  ac_name        — nome do campo no formulário (ex.: "paciente", "aluno")
+  ac_label       — rótulo exibido
+  ac_url         — endpoint HTMX que devolve os resultados
+  ac_id          — pk já selecionado (preserva a escolha quando o form volta com erro)
+  ac_nome        — nome do registro já selecionado
+  ac_errors      — erros do campo
+  ac_placeholder — texto do campo de busca (padrão: "Buscar {label} por nome...")
+  ac_hint        — dica exibida abaixo do campo (opcional)
+  ac_autofocus   — foca o campo de busca ao abrir a tela (opcional)
+  ac_vals        — JSON extra para o hx-vals (ex.: '{"pendencias": "1"}')
+
+  ac_materializar_url — endpoint POST que grava um resultado ainda inexistente
+                        no banco e devolve {pk, nome}. Só é necessário quando a
+                        busca mistura registros locais com uma API externa
+                        (resultados sem pk). Omitido = busca só local.
+  ac_navegar          — quando definido, clicar num resultado NAVEGA para
+                        "{{ ac_navegar }}<pk>" em vez de preencher o campo
+                        oculto (fluxos em que escolher o item recarrega a tela).
+{% endcomment %}
+<div class="field field-required"
+     data-ac
+     {% if ac_materializar_url %}data-ac-materializar="{{ ac_materializar_url }}"{% endif %}
+     {% if ac_navegar %}data-ac-navegar="{{ ac_navegar }}"{% endif %}>
+    <label for="ac-busca-{{ ac_name }}">{{ ac_label }}</label>
+
+    <div data-ac-busca{% if ac_id %} hidden{% endif %}>
+        <div class="search-control">
+            <input type="search" id="ac-busca-{{ ac_name }}" name="q" autocomplete="off"
+                   placeholder="{% if ac_placeholder %}{{ ac_placeholder }}{% else %}Buscar {{ ac_label|lower }} por nome...{% endif %}"
+                   hx-get="{{ ac_url }}"
+                   hx-trigger="keyup changed delay:300ms"
+                   {% if ac_vals %}hx-vals='{{ ac_vals }}'{% endif %}
+                   hx-target="#ac-results-{{ ac_name }}"
+                   hx-swap="innerHTML"
+                   hx-indicator="#ac-spin-{{ ac_name }}"
+                   {% if ac_autofocus %}autofocus{% endif %}>
+        </div>
+        <span id="ac-spin-{{ ac_name }}" class="htmx-indicator field-hint">Buscando…</span>
+        <div id="ac-results-{{ ac_name }}" class="search-results-wrap"></div>
+        {% if ac_hint %}<span class="field-hint">{{ ac_hint }}</span>{% endif %}
+    </div>
+
+    {% if not ac_navegar %}
+        <div class="selected-chip" data-ac-selecionado{% if not ac_id %} hidden{% endif %}>
+            <strong data-ac-nome>{{ ac_nome|default:"" }}</strong>
+            <button type="button" class="button secondary compact-button" data-ac-trocar>Trocar</button>
+        </div>
+
+        <input type="hidden" name="{{ ac_name }}" value="{{ ac_id|default:'' }}" data-ac-hidden>
+    {% endif %}
+
+    {% if ac_errors %}
+        <span class="field-error">{{ ac_errors|join:", " }}</span>
+    {% endif %}
+</div>

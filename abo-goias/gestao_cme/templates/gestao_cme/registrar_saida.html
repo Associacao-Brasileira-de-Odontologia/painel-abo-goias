@@ -27,24 +27,12 @@
     {# ── Passo 1: Selecionar aluno ─────────────────────────── #}
     <div class="kpi-section">
         <p class="section-label">Passo 1 — Selecionar aluno</p>
-        <div class="field field-required">
-            <label for="aluno-busca">Aluno</label>
-            <div class="search-control">
-                <input type="search" id="aluno-busca" name="q"
-                       placeholder="Buscar aluno com pacotes pendentes..."
-                       autocomplete="off"
-                       hx-get="{% url 'buscar_alunos' %}"
-                       hx-trigger="keyup changed delay:300ms"
-                       hx-vals='{"pendencias": "1"}'
-                       hx-target="#aluno-results"
-                       hx-swap="innerHTML"
-                       hx-indicator="#aluno-busca-spin"
-                       {% if not aluno %}autofocus{% endif %}>
-            </div>
-            <span id="aluno-busca-spin" class="htmx-indicator field-hint">Buscando…</span>
-            <div id="aluno-results" class="search-results-wrap"></div>
-            <span class="field-hint">Apenas alunos com pacotes aguardando retirada aparecem na busca.</span>
-        </div>
+        {% comment %}
+        Mesmo componente [data-ac] das demais telas; aqui escolher o aluno
+        recarrega a tela (ac_navegar) para listar os pacotes pendentes dele.
+        {% endcomment %}
+        {% url 'buscar_alunos' as url_busca_alunos %}
+        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_busca_alunos ac_vals='{"pendencias": "1"}' ac_navegar="?aluno_id=" ac_placeholder="Buscar aluno com pacotes pendentes..." ac_hint="Apenas alunos com pacotes aguardando retirada aparecem na busca." ac_autofocus=sem_aluno %}
     </div>
 
     {# ── Passo 2: Confirmar pacotes ────────────────────────── #}
@@ -128,11 +116,8 @@
 
 {% block extra_js %}
     <script src="{% static 'js/htmx.min.js' %}"></script>
-    <script>
-        document.body.addEventListener("click", function (event) {
-            const item = event.target.closest(".aluno-result");
-            if (!item) return;
-            window.location = "?aluno_id=" + encodeURIComponent(item.dataset.id);
-        });
-    </script>
+    {% comment %}
+    A navegação ao escolher o aluno é do handler [data-ac] em static/js/app.js
+    (data-ac-navegar), montado por partials/_ac_field.html.
+    {% endcomment %}
 {% endblock %}

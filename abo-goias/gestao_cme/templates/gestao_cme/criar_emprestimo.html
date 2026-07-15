@@ -15,33 +15,12 @@
     <form class="form-stack form-stack-wide" method="post">
         {% csrf_token %}
 
-        {# Seleção de aluno por busca (mesmo componente do registro de entrada) #}
-        <div class="field field-required" id="aluno-busca-wrap"{% if aluno_selecionado %} hidden{% endif %}>
-            <label for="aluno-busca">Aluno</label>
-            <div class="search-control">
-                <input type="search" id="aluno-busca" name="q"
-                       placeholder="Buscar aluno por nome ou matrícula..."
-                       autocomplete="off"
-                       hx-get="{% url 'buscar_alunos' %}"
-                       hx-trigger="keyup changed delay:300ms"
-                       hx-target="#aluno-results"
-                       hx-swap="innerHTML"
-                       hx-indicator="#aluno-busca-spin"
-                       autofocus>
-            </div>
-            <span id="aluno-busca-spin" class="htmx-indicator field-hint">Buscando…</span>
-            <div id="aluno-results" class="search-results-wrap"></div>
-        </div>
-
-        <div class="field field-required aluno-selecionado" id="aluno-selecionado"{% if not aluno_selecionado %} hidden{% endif %}>
-            <label>Aluno</label>
-            <div class="selected-chip">
-                <strong data-nome>{% if aluno_selecionado %}{{ aluno_selecionado.nome }}{% endif %}</strong>
-                <button type="button" class="button secondary compact-button" data-trocar-aluno>Trocar</button>
-            </div>
-        </div>
-
-        <input type="hidden" name="aluno" id="aluno-hidden" value="{{ form.aluno.value|default:'' }}">
+        {% comment %}
+        Seleção de aluno por busca — mesmo componente do registro de entrada
+        e da Gestão de Laboratório (handler [data-ac] em static/js/app.js).
+        {% endcomment %}
+        {% url 'buscar_alunos' as url_busca_alunos %}
+        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_busca_alunos ac_id=form.aluno.value ac_nome=aluno_selecionado.nome ac_errors=form.aluno.errors ac_placeholder="Buscar aluno por nome ou matrícula..." ac_autofocus=True %}
 
         <div class="field">
             <label for="kit">Kit <span class="field-optional">(opcional — os itens do kit serão adicionados automaticamente)</span></label>
@@ -84,39 +63,5 @@
 
 {% block extra_js %}
     <script src="{% static 'js/htmx.min.js' %}"></script>
-    <script>
-        (function () {
-            const hidden = document.getElementById("aluno-hidden");
-            const buscaWrap = document.getElementById("aluno-busca-wrap");
-            const selecionado = document.getElementById("aluno-selecionado");
-            const resultados = document.getElementById("aluno-results");
-            if (!hidden) return;
-
-            document.body.addEventListener("click", function (event) {
-                const item = event.target.closest(".aluno-result");
-                if (item) {
-                    hidden.value = item.dataset.id;
-                    selecionado.querySelector("[data-nome]").textContent = item.dataset.nome;
-                    selecionado.hidden = false;
-                    buscaWrap.hidden = true;
-                    resultados.innerHTML = "";
-                    return;
-                }
-                if (event.target.closest("[data-trocar-aluno]")) {
-                    hidden.value = "";
-                    selecionado.hidden = true;
-                    buscaWrap.hidden = false;
-                    const campo = document.getElementById("aluno-busca");
-                    if (campo) { campo.value = ""; campo.focus(); }
-                }
-            });
-
-            // Enter no campo de busca não deve submeter o formulário.
-            document.addEventListener("keydown", function (event) {
-                if (event.key === "Enter" && event.target === document.getElementById("aluno-busca")) {
-                    event.preventDefault();
-                }
-            });
-        })();
-    </script>
+    {# A seleção de aluno é do handler genérico [data-ac] em static/js/app.js. #}
 {% endblock %}
