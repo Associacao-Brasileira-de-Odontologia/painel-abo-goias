@@ -3,8 +3,8 @@
 > Data: 2026-07-15 · Branch: `31-melhorias-visuais-e-funcionalidades`
 > Escopo: dois conjuntos de melhorias (CME e Contratos), a partir das listas
 > registradas em `auditoria-gestao-cme.md` e `auditoria-gestao-contratos.md`.
-> Ambiente validado: `manage.py check` sem erros; suíte `gestao_cme` +
-> `gestao_contratos` executada após `collectstatic`.
+> Ambiente validado: `manage.py check` sem erros; suíte completa (581 testes) verde,
+> sem passo manual de `collectstatic` (ver A-01 em `auditoria-identificadores.md`).
 
 ---
 
@@ -210,6 +210,47 @@ as telas públicas de assinatura (fluxo do paciente), que hoje seguem a identida
 **Decisão:** não foi criado um novo campo no modelo para a mensagem de erro — ela é
 lida do `EventoContrato` mais recente (uma consulta agregada, sem N+1). Assim
 evita-se migration e mudança em `_marcar_erro`.
+
+---
+
+## Backlog implementado
+
+### B-14 — Carimbo de tempo antes do envio automático — **implementado**
+
+**O problema:** `processar_assinatura` disparava as três tarefas Celery em paralelo
+(`enviar_dental_task`, `enviar_whatsapp_task`, `solicitar_carimbo_tempo_task`). Como o
+carimbo **reescreve** o PDF assinado para embutir o token TSR
+(`carimbo_tempo._embutir_carimbo_no_pdf_assinado`), os envios quase sempre liam o arquivo
+antes dessa reescrita — as cópias no prontuário e no WhatsApp do paciente saíam **sem** a
+prova de data/hora, enquanto só a cópia guardada no sistema a tinha.
+
+**Alterado:**
+- `services/assinatura.py`: o disparo de Dental + WhatsApp virou o helper
+  `agendar_envios_automaticos(contrato)` (mesmas condições de antes: `id_dental` presente,
+  Z-API configurada + celular; falha de `.delay` vira evento e não propaga).
+  `processar_assinatura` agora **encadeia**: com TSA configurada agenda **só** o carimbo;
+  sem TSA, mantém o comportamento antigo (envios direto).
+- `tasks.py::solicitar_carimbo_tempo_task`: ao concluir, chama
+  `agendar_envios_automaticos` — depois de o token estar embutido.
+
+**Decisão (a que importa):** se a TSA falhar, os envios acontecem **assim mesmo**, após as
+tentativas se esgotarem. Reter um documento assinado é pior que entregá-lo sem carimbo — a
+mesma lógica que já rege o resto do fluxo ("uma falha temporária de rede não perde o
+documento assinado"). O atraso máximo é o do backoff (~30s de espera + timeouts da TSA),
+não os 15 min de `retry_backoff_max`, porque são só 5 tentativas a partir de 1s.
+
+**Fallback:** se o próprio enfileiramento do carimbo falhar (broker/Redis fora do ar),
+ninguém encadearia os envios — nesse caso `processar_assinatura` os dispara ela mesma.
+
+**Sem efeito prático hoje:** `CARIMBO_TEMPO_TSA_URL` não está configurada, então o caminho
+novo só entra em ação quando a TSA for ligada em produção. Até lá o fluxo é bit a bit o
+anterior.
+
+**Testes:** 5 novos (`CarimboAntesDoEnvioTests` + 2 em `ProcessarAssinaturaCarimboTempoTests`),
+sendo o principal um ponta a ponta que captura os bytes entregues ao `DentalClient` e afirma
+que o PDF carrega o anexo `carimbo_tempo.tsr`. **Confirmado que ele falha no código
+anterior** (`'carimbo_tempo.tsr' not found`) e passa com a correção. Suíte completa: 581
+testes verdes.
 
 ---
 

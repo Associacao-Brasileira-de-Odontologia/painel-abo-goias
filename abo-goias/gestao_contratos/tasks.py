@@ -90,9 +90,17 @@ def solicitar_carimbo_tempo_task(self, contrato_pk: int) -> None:
     apenas quando uma TSA está configurada — sem CARIMBO_TEMPO_TSA_URL, esta
     tarefa nunca é agendada e o contrato segue sem carimbo de tempo, sem
     nenhuma mudança de comportamento.
+
+    Ao terminar, encadeia os envios automáticos (Dental Office + WhatsApp):
+    o carimbo reescreve o PDF assinado para embutir o token, então as cópias
+    só podem sair depois dele — caso contrário seguem sem a prova de
+    data/hora. Se a TSA esgotar as tentativas, os envios são disparados assim
+    mesmo: um documento assinado sem carimbo ainda precisa chegar ao paciente
+    e ao prontuário, e reter a entrega seria pior que a ausência do carimbo.
     """
 
     from .models import ContratoGerado
+    from .services.assinatura import agendar_envios_automaticos
     from .services.carimbo_tempo import solicitar_carimbo
 
     try:
@@ -104,8 +112,20 @@ def solicitar_carimbo_tempo_task(self, contrato_pk: int) -> None:
         return
 
     ok, erro = solicitar_carimbo(contrato)
-    if not ok:
+    if ok:
+        agendar_envios_automaticos(contrato)
+        return
+
+    if self.request.retries < self.max_retries:
         raise RuntimeError(erro)
+
+    logger.error(
+        "solicitar_carimbo_tempo_task: tentativas esgotadas (contrato=%s, erro=%s) "
+        "— envios automáticos seguem sem o carimbo de tempo",
+        contrato.pk,
+        erro,
+    )
+    agendar_envios_automaticos(contrato)
 
 
 @shared_task
