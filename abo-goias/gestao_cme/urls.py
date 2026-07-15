@@ -27,13 +27,19 @@ urlpatterns = [
     path("abrigos/", views.armarios, name="abrigos"),
     path("abrigos/novo/", views.cadastrar_abrigo, name="cadastrar_abrigo"),
     path("abrigos/<int:pk>/editar/", views.editar_abrigo, name="editar_abrigo"),
+    path("abrigos/<int:pk>/excluir/", views.excluir_abrigo, name="excluir_abrigo"),
     path("materiais/", views.materiais, name="materiais"),
     path("materiais/novo/", views.cadastrar_material, name="cadastrar_material"),
     path("materiais/<int:pk>/editar/", views.editar_material, name="editar_material"),
-    path("materiais/<int:pk>/excluir/", views.excluir_material, name="excluir_material"),
+    path(
+        "materiais/<int:pk>/excluir/", views.excluir_material, name="excluir_material"
+    ),
     path("kits/", views.kits, name="kits"),
+    path("kits/novo/", views.cadastrar_kit, name="cadastrar_kit"),
     path("alunos/buscar/", views.buscar_alunos, name="buscar_alunos"),
-    path("alunos/atualizar/", views.atualizar_alunos_eduq, name="atualizar_alunos_eduq"),
+    path(
+        "alunos/atualizar/", views.atualizar_alunos_eduq, name="atualizar_alunos_eduq"
+    ),
     path("gestao-cme/nova-saida/", views.registrar_saida, name="registrar_saida"),
     path("gestao-cme/nova-entrada/", views.registrar_entrada, name="registrar_entrada"),
     path(

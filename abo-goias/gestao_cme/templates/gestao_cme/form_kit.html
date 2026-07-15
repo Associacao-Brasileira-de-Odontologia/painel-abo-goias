@@ -1,0 +1,89 @@
+{% extends "layouts/painel.html" %}
+
+{% block title %}Gestão de CME | {{ titulo }}{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}{{ titulo }}{% endblock %}
+
+{% block sidebar_copy %}
+    Cadastre um kit de materiais. O código deve ser único em todo o sistema.
+    Os materiais selecionados são adicionados ao kit com quantidade 1 — ajuste
+    quantidades específicas pelo painel administrativo, se necessário.
+{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
+
+{% block panel_label %}<p class="section-label">Catálogo</p>{% endblock %}
+{% block panel_title %}{{ titulo }}{% endblock %}
+{% block panel %}
+    {% include "partials/form_errors.html" %}
+
+    <form class="form-stack form-stack-wide" method="post">
+        {% csrf_token %}
+
+        <div class="field field-required">
+            <label for="nome">Nome</label>
+            <input
+                id="nome"
+                type="text"
+                name="nome"
+                value="{{ form.nome.value|default:'' }}"
+                placeholder="Ex.: Kit de exame clínico"
+                required
+                maxlength="120"
+            >
+        </div>
+
+        <div class="field field-required">
+            <label for="codigo">Código</label>
+            <input
+                id="codigo"
+                type="text"
+                name="codigo"
+                value="{{ form.codigo.value|default:'' }}"
+                placeholder="Ex.: KIT-001"
+                required
+                maxlength="40"
+            >
+        </div>
+
+        <div class="field">
+            <label for="quantidade">Quantidade disponível</label>
+            <input
+                id="quantidade"
+                type="number"
+                name="quantidade"
+                value="{{ form.quantidade.value|default:'0' }}"
+                min="0"
+            >
+        </div>
+
+        <div class="field">
+            <label for="descricao">Descrição <span class="field-optional">(opcional)</span></label>
+            <textarea
+                id="descricao"
+                name="descricao"
+                rows="3"
+                placeholder="Descrição do kit e sua finalidade..."
+            >{{ form.descricao.value|default:'' }}</textarea>
+        </div>
+
+        <div class="field">
+            <label>Materiais do kit <span class="field-optional">(opcional)</span></label>
+            <span class="field-hint">Cada material selecionado é adicionado ao kit com quantidade 1.</span>
+            <div class="checkbox-list">
+                {% for checkbox in form.materiais %}
+                    <label class="checkbox-list-item">
+                        {{ checkbox.tag }}
+                        <span>{{ checkbox.choice_label }}</span>
+                    </label>
+                {% empty %}
+                    <p class="help-text">Nenhum material ativo disponível para vincular.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit">Cadastrar kit</button>
+            <a class="button secondary" href="{% url 'kits' %}">Cancelar</a>
+        </div>
+    </form>
+{% endblock %}

@@ -64,6 +64,11 @@ urlpatterns = [
     ),
     path("", views.contratos, name="contratos"),
     path(
+        "envios-dental/",
+        views.envios_dental_pendentes_view,
+        name="contrato_envios_dental",
+    ),
+    path(
         "paciente/<int:paciente_pk>/confirmar-dados/",
         views.confirmar_dados_view,
         name="contrato_confirmar_dados",

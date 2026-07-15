@@ -25,6 +25,7 @@ from .forms import (
     EditarMovimentacaoForm,
     EmprestimoForm,
     EntradaForm,
+    KitForm,
     MaterialEditForm,
     MaterialForm,
     MovimentacaoForm,
@@ -128,6 +129,13 @@ def portal(request: HttpRequest) -> HttpResponse:
         ativo=True, pedido_material=None
     ).count()
     contratos_gerados = ContratoGerado.objects.count()
+    # Documentos assinados que não chegaram ao Dental Office (falha ou pendente)
+    # — precisam de atenção para não se perderem por falha de integração.
+    contratos_envio_dental_pendente = (
+        ContratoGerado.objects.filter(status="assinado")
+        .filter(Q(status_envio_dental="erro") | Q(status_envio_dental="nao_enviado"))
+        .count()
+    )
 
     resumo = {
         "pacotes_pendentes": pacotes_pendentes,
@@ -169,6 +177,17 @@ def portal(request: HttpRequest) -> HttpResponse:
                 ),
                 "url_name": "lab_moldagens",
                 "urgente": False,
+            }
+        )
+    if contratos_envio_dental_pendente:
+        tarefas_pendentes.append(
+            {
+                "texto": (
+                    f"{contratos_envio_dental_pendente} contrato(s) assinado(s)"
+                    " sem envio ao Dental Office"
+                ),
+                "url_name": "contrato_envios_dental",
+                "urgente": True,
             }
         )
 
@@ -258,12 +277,24 @@ def home(request: HttpRequest) -> HttpResponse:
     busca = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
     movimentacao = request.GET.get("movimentacao", "").strip()
+    aluno_id = request.GET.get("aluno", "").strip()
 
     movimentacoes = (
         Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
         .select_related("aluno", "turma", "material")
         .order_by("-data_hora", "-id")
     )
+
+    # Filtro por aluno específico — usado ao clicar no total de movimentações
+    # de um aluno na tela de alunos por turma. Precede a busca textual porque é
+    # um vínculo exato (FK), não um termo aproximado.
+    aluno_filtrado = None
+    if aluno_id.isdigit():
+        aluno_filtrado = (
+            Aluno.objects.select_related("turma").filter(pk=aluno_id).first()
+        )
+        if aluno_filtrado:
+            movimentacoes = movimentacoes.filter(aluno=aluno_filtrado)
 
     if status == "retirado":
         movimentacoes = movimentacoes.filter(retirado=True)
@@ -328,6 +359,7 @@ def home(request: HttpRequest) -> HttpResponse:
             "movimentacao_atual": movimentacao,
             "movimentacao_label": movimentacao_label,
             "movimentacao_opcoes": Movimentacao.Tipo.choices,
+            "aluno_filtrado": aluno_filtrado,
             "movimentacoes": page_obj.object_list,
             "metricas": metricas,
             "page_obj": page_obj,
@@ -442,15 +474,37 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _sincronizar_ocupacao_abrigo(abrigo: Abrigo | None) -> None:
+    """Recalcula o campo ``ocupado`` de um abrigo a partir dos alunos vinculados.
+
+    Um abrigo é considerado ocupado quando há ao menos um aluno ativo com
+    ``aluno.abrigo`` apontando para ele. Mantém a coluna OCUPAÇÃO da tabela de
+    abrigos coerente com as atribuições feitas na tela de alunos por turma.
+    """
+
+    if abrigo is None:
+        return
+    ocupado_atual = abrigo.alunos.filter(ativo=True).exists()
+    if abrigo.ocupado != ocupado_atual:
+        abrigo.ocupado = ocupado_atual
+        abrigo.save(update_fields=["ocupado", "atualizado_em"])
+
+
 @login_required
 @require_POST
 def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
-    """Atribui ou remove o abrigo de um aluno diretamente na listagem."""
+    """Atribui ou remove o abrigo de um aluno diretamente na listagem.
+
+    Além de gravar o vínculo no aluno, sincroniza a ocupação dos abrigos
+    envolvidos (o novo e o anterior), para que a coluna OCUPAÇÃO da tabela de
+    abrigos reflita automaticamente o novo status.
+    """
 
     aluno = get_object_or_404(
         Aluno.objects.exclude(origem=OrigemDados.EXEMPLO), pk=aluno_id
     )
     abrigo_id = request.POST.get("abrigo_id", "").strip()
+    abrigo_anterior = aluno.abrigo
 
     if abrigo_id:
         abrigo = get_object_or_404(Abrigo, pk=abrigo_id, ativo=True)
@@ -462,7 +516,12 @@ def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
         aluno.abrigo = None
         messages.success(request, f"Abrigo removido de {aluno.nome}.")
 
-    aluno.save(update_fields=["abrigo"])
+    with transaction.atomic():
+        aluno.save(update_fields=["abrigo"])
+        # O anterior pode ter ficado livre; o novo passa a ocupado.
+        _sincronizar_ocupacao_abrigo(abrigo_anterior)
+        _sincronizar_ocupacao_abrigo(aluno.abrigo)
+
     next_url = request.POST.get("next") or reverse("alunos_por_turma")
     return redirect(next_url)
 
@@ -657,6 +716,37 @@ def kits(request: HttpRequest) -> HttpResponse:
             "kits": page_obj.object_list,
             "page_obj": page_obj,
             "query_string": query_string,
+        },
+    )
+
+
+@login_required
+def cadastrar_kit(request: HttpRequest) -> HttpResponse:
+    """Cria um novo kit manualmente, com composição opcional de materiais.
+
+    Habilita o cadastro de kits pela própria tela de kits (antes só era
+    possível pelo Django Admin). A seleção de materiais gera os itens do kit
+    com quantidade 1; ajustes de quantidade por material seguem no Admin.
+    """
+
+    form = KitForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        kit = form.save(commit=False)
+        kit.origem = OrigemDados.MANUAL
+        with transaction.atomic():
+            kit.save()
+            form._salvar_materiais(kit)
+        messages.success(request, f"Kit {kit.nome} cadastrado com sucesso.")
+        return redirect("kits")
+
+    return render(
+        request,
+        "gestao_cme/form_kit.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": "Cadastrar kit",
+            "is_edit": False,
+            "form": form,
         },
     )
 
@@ -1111,16 +1201,28 @@ def cadastrar_abrigo(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
-    """Atualiza os dados de um abrigo existente."""
+    """Atualiza os dados de um abrigo existente.
+
+    A tela exibe um resumo dos alunos atualmente vinculados ao abrigo, usado
+    para montar a confirmação obrigatória antes de salvar (dupla checagem):
+    quem ocupa o abrigo hoje fica explícito para quem está alterando.
+    """
 
     abrigo = get_object_or_404(Abrigo, pk=pk)
     form = AbrigoEditForm(request.POST or None, instance=abrigo)
     if request.method == "POST" and form.is_valid():
         form.save()
+        # Se a edição desmarcou "ocupado" mas ainda há alunos vinculados (ou
+        # vice-versa), a origem da verdade continua sendo o vínculo dos alunos.
+        _sincronizar_ocupacao_abrigo(abrigo)
         messages.success(
             request, f"Abrigo {abrigo.identificador} atualizado com sucesso."
         )
         return redirect("abrigos")
+
+    alunos_associados = list(
+        abrigo.alunos.filter(ativo=True).select_related("turma").order_by("nome")
+    )
 
     return render(
         request,
@@ -1131,8 +1233,26 @@ def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
             "is_edit": True,
             "objeto": abrigo,
             "form": form,
+            "alunos_associados": alunos_associados,
         },
     )
+
+
+@login_required
+@require_POST
+def excluir_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exclui um abrigo permanentemente.
+
+    Os alunos vinculados têm ``abrigo`` definido como nulo automaticamente
+    (FK com ``on_delete=SET_NULL``), então nenhum cadastro de aluno é perdido —
+    apenas deixam de apontar para o abrigo excluído.
+    """
+
+    abrigo = get_object_or_404(Abrigo, pk=pk)
+    identificador = abrigo.identificador
+    abrigo.delete()
+    messages.warning(request, f"Abrigo {identificador} excluído permanentemente.")
+    return redirect("abrigos")
 
 
 @login_required
@@ -1377,15 +1497,24 @@ def criar_emprestimo(request: HttpRequest) -> HttpResponse:
         )
         return redirect("emprestimos")
 
+    # Preserva o aluno escolhido no autocomplete quando o form volta com erro
+    # (mesmo padrão de registrar_entrada — ver melhoria de padronização).
+    aluno_selecionado = None
+    aluno_pk = form["aluno"].value()
+    if aluno_pk:
+        aluno_selecionado = (
+            Aluno.objects.select_related("turma", "abrigo").filter(pk=aluno_pk).first()
+        )
+
     return render(
         request,
         "gestao_cme/criar_emprestimo.html",
         {
             "usuario_logado": request.user,
             "titulo": "Novo empréstimo",
-            "alunos": form.fields["aluno"].queryset,
             "kits": form.fields["kit"].queryset,
             "form": form,
+            "aluno_selecionado": aluno_selecionado,
         },
     )
 

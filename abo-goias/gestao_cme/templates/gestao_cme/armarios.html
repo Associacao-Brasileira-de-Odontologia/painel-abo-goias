@@ -47,7 +47,7 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="chips-clear" href="{% url 'abrigos' %}">Limpar tudo</a>
+            <a class="button secondary compact-button" href="{% url 'abrigos' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
@@ -88,7 +88,10 @@
                             {% endif %}
                         </td>
                         <td class="actions-cell">
-                            <a class="button compact-button secondary" href="{% url 'editar_abrigo' abrigo.pk %}">Editar</a>
+                            <a class="icon-action" href="{% url 'editar_abrigo' abrigo.pk %}"
+                               title="Editar" aria-label="Editar abrigo">
+                                <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
+                            </a>
                         </td>
                     </tr>
                 {% empty %}

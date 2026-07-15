@@ -57,11 +57,65 @@
             </div>
         {% endif %}
 
+        {% if is_edit %}
+            {% comment %}
+            Contexto de ocupação exibido antes de salvar — parte da dupla
+            checagem obrigatória (a confirmação usa o mesmo texto).
+            {% endcomment %}
+            <div class="field">
+                <p class="section-label">Situação atual do abrigo</p>
+                {% if alunos_associados %}
+                    <p class="help-text">
+                        Este abrigo está associado a
+                        <strong>{{ alunos_associados|length }}</strong>
+                        aluno{{ alunos_associados|length|pluralize }}:
+                    </p>
+                    <ul class="help-text">
+                        {% for aluno in alunos_associados %}
+                            <li>{{ aluno.nome }} — {{ aluno.matricula }}{% if aluno.turma %} ({{ aluno.turma.codigo }}){% endif %}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="help-text">Nenhum aluno está vinculado a este abrigo no momento.</p>
+                {% endif %}
+            </div>
+        {% endif %}
+
         <div class="form-actions">
-            <button class="button primary" type="submit">
-                {% if is_edit %}Salvar alterações{% else %}Cadastrar abrigo{% endif %}
-            </button>
+            {% if is_edit %}
+                <button class="button primary" type="submit"
+                        data-confirm="Confirmar alteração do abrigo {{ objeto.identificador }}? {% if alunos_associados %}Este abrigo está associado a {{ alunos_associados|length }} aluno(s): {% for aluno in alunos_associados %}{{ aluno.nome }} ({{ aluno.matricula }}){% if not forloop.last %}, {% endif %}{% endfor %}. {% else %}Nenhum aluno está vinculado a ele no momento. {% endif %}Revise antes de prosseguir."
+                        data-confirm-title="Confirmar alteração do abrigo"
+                        data-confirm-label="Salvar alterações">
+                    Salvar alterações
+                </button>
+            {% else %}
+                <button class="button primary" type="submit">Cadastrar abrigo</button>
+            {% endif %}
             <a class="button secondary" href="{% url 'abrigos' %}">Cancelar</a>
         </div>
     </form>
+
+    {% if is_edit %}
+        <div class="kpi-section">
+            <p class="section-label">Excluir abrigo</p>
+            <p class="help-text">
+                Esta ação é permanente e não pode ser desfeita.
+                {% if alunos_associados %}
+                    Atenção: <strong>{{ alunos_associados|length }} aluno(s)</strong>
+                    vinculado(s) a este abrigo ficarão sem abrigo definido.
+                {% endif %}
+            </p>
+            <form method="post" action="{% url 'excluir_abrigo' objeto.pk %}">
+                {% csrf_token %}
+                <button class="button danger-button" type="submit"
+                        data-confirm="Excluir o abrigo {{ objeto.identificador }}? {% if alunos_associados %}{{ alunos_associados|length }} aluno(s) vinculado(s) ficarão sem abrigo. {% endif %}Esta ação é irreversível e não pode ser desfeita."
+                        data-confirm-title="Excluir abrigo"
+                        data-confirm-label="Excluir abrigo"
+                        data-confirm-danger="true">
+                    Excluir abrigo
+                </button>
+            </form>
+        </div>
+    {% endif %}
 {% endblock %}

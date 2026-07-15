@@ -21,14 +21,19 @@ body.gestao-contratos {
     --gc-ink-line: rgba(39, 186, 255, 0.4);
     --accent: var(--blue); /* alias local: --accent não existe nos tokens globais */
 
-    /* fontes desta camada — DM Sans (tokens globais) permanece no corpo de texto */
-    --gc-serif: "Fraunces", "Syne", Georgia, serif;
-    --gc-mono: "IBM Plex Mono", "Courier New", monospace;
+    /* Tipografia padronizada com o design system do ecossistema: títulos usam
+       a fonte de display global (Syne) e rótulos/dados usam a fonte de corpo
+       global (DM Sans). Antes esta camada carregava Fraunces/IBM Plex Mono
+       ("Termo & Selo"); a padronização mantém a estrutura visual e apenas
+       alinha as famílias tipográficas às demais aplicações. */
+    --gc-serif: var(--font-display);
+    --gc-mono: var(--font-body);
 }
 
-/* ══ Fontes — carregadas só quando esta classe está presente ═══════ */
-/* (o <link> do Google Fonts fica no template, via extra_css; aqui só
-   as regras de uso, para o arquivo continuar autocontido em intenção) */
+/* ══ Fontes — padronizadas com o design system global ═════════════ */
+/* As famílias vêm dos tokens globais (--font-display / --font-body) via
+   os aliases --gc-serif / --gc-mono acima; nenhuma fonte externa é
+   carregada nesta camada. */
 
 body.gestao-contratos h1,
 body.gestao-contratos h2,

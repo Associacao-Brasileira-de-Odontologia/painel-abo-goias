@@ -81,7 +81,7 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="chips-clear" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
+            <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
@@ -103,7 +103,16 @@
                     <th>Aluno</th>
                     <th>Abrigo</th>
                     <th>Movimentações</th>
-                    <th>Status</th>
+                    <th>
+                        <span class="th-with-hint">
+                            Status
+                            <span class="th-hint" tabindex="0" role="img"
+                                  aria-label="O que significa o campo Status"
+                                  title="Situação de matrícula do aluno no sistema (Ativo ou Inativo). Não representa o vínculo do aluno com turmas ativas.">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alerta"></use></svg>
+                            </span>
+                        </span>
+                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -145,11 +154,14 @@
                             </form>
                         </td>
 
-                        {# Movimentações #}
+                        {# Movimentações — número clicável abre o histórico do aluno #}
                         <td>
                             {% if aluno.total_movimentacoes %}
-                                <strong>{{ aluno.total_movimentacoes }}</strong>
-                                <span class="cell-muted">registro(s)</span>
+                                <a class="mov-link" href="{% url 'cme_home' %}?aluno={{ aluno.pk }}"
+                                   title="Ver todas as movimentações de {{ aluno.nome }}">
+                                    <strong>{{ aluno.total_movimentacoes }}</strong>
+                                    <span class="cell-muted">registro(s)</span>
+                                </a>
                             {% else %}
                                 <span class="cell-muted">—</span>
                             {% endif %}

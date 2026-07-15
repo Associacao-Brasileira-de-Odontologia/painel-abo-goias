@@ -535,6 +535,76 @@ select option {
     fill: none;
 }
 
+/* Cabeçalho de coluna com ícone de ajuda (tooltip) — ex.: coluna Status */
+.th-with-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.th-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+    cursor: help;
+}
+
+.th-hint svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+.th-hint:hover,
+.th-hint:focus-visible {
+    color: var(--info-text);
+    outline: none;
+}
+
+/* Número de movimentações clicável na listagem de alunos por turma */
+.mov-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.mov-link:hover strong {
+    text-decoration: underline;
+    color: var(--info-text);
+}
+
+/* Lista de checkboxes (ex.: seleção de materiais ao cadastrar um kit) */
+.checkbox-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+}
+
+.checkbox-list-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.checkbox-list-item input {
+    width: auto;
+    margin: 0;
+}
+
 /* ── Cartões de métrica e KPIs ──────────────────────────────────── */
 
 .metric-grid {

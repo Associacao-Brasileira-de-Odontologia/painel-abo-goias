@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "abo-goias",
-      "runtimeExecutable": "C:/Users/Gustavo/Desktop/abo/painel-abo-goias/.venv/Scripts/python.exe",
+      "runtimeExecutable": "python",
       "runtimeArgs": [
-        "C:/Users/Gustavo/Desktop/abo/painel-abo-goias/abo-goias/manage.py",
+        "abo-goias/manage.py",
         "runserver",
         "8000"
       ],
