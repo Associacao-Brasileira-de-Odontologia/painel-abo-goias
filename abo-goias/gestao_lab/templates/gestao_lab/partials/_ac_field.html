@@ -7,9 +7,13 @@ Parâmetros do include:
   ac_id     — pk já selecionado (preserva a escolha quando o form volta com erro)
   ac_nome   — nome do registro já selecionado
   ac_errors — erros do campo
+  ac_tipo   — "paciente" ou "aluno", usado ao gravar o escolhido
 O comportamento de clique/troca é do handler genérico [data-ac] em app.js.
 {% endcomment %}
-<div class="field field-required" data-ac>
+<div class="field field-required"
+     data-ac
+     data-ac-tipo="{{ ac_tipo }}"
+     data-ac-materializar="{% url 'lab_materializar' ac_tipo %}">
     <label for="ac-busca-{{ ac_name }}">{{ ac_label }}</label>
 
     <div data-ac-busca{% if ac_id %} hidden{% endif %}>

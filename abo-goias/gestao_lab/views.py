@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets as _secrets
 from datetime import date as date_type
 
@@ -41,6 +42,8 @@ from .models import (
     PedidoMaterial,
     RegistroSync,
 )
+
+logger = logging.getLogger(__name__)
 
 REGISTROS_POR_PAGINA = 10
 
@@ -694,125 +697,171 @@ def _alunos_locais(q: str):
     return itens
 
 
-@login_required
-def buscar_pacientes(request: HttpRequest) -> HttpResponse:
-    """Fragmento HTMX com pacientes ja sincronizados, filtrados por nome/celular.
+_LIMITE_RESULTADOS = 20
 
-    A base local costuma ter so uma fatia dos pacientes do Dental Office, entao o
-    fragmento tambem oferece a busca direta na API (``lab_buscar_pacientes_dental``).
+
+def _unificar(locais, remotos, limite: int = 20) -> list[dict]:
+    """Junta o que ja esta no banco com o que a API devolveu, sem duplicar.
+
+    A lista sai ordenada por nome, mas o corte pelo ``limite`` nunca descarta um
+    registro local em favor de um remoto: uma pagina cheia da API tem nomes que
+    vem antes no alfabeto e escondia quem ja estava cadastrado. Os remotos so
+    preenchem as vagas que sobram, e vao sem ``pk`` — sinal de que precisam ser
+    gravados no clique.
     """
 
+    vistos = {str(obj.id_dental) for obj in locais}
+
+    itens_locais = [
+        {
+            "pk": obj.pk,
+            "id_dental": obj.id_dental,
+            "nome": obj.nome,
+            "celular": obj.celular,
+        }
+        for obj in locais
+    ]
+
+    itens_remotos = []
+    for remoto in remotos:
+        id_dental = str(remoto.id)
+        if id_dental in vistos:
+            continue
+        vistos.add(id_dental)
+        itens_remotos.append(
+            {
+                "pk": None,
+                "id_dental": id_dental,
+                "nome": remoto.nome,
+                "celular": remoto.celular,
+            }
+        )
+
+    vagas = max(0, limite - len(itens_locais))
+    itens = itens_locais[:limite] + itens_remotos[:vagas]
+    itens.sort(key=lambda item: item["nome"])
+    return itens
+
+
+def _buscar_unificado(request: HttpRequest, tipo: str) -> HttpResponse:
+    """Fragmento HTMX do autocomplete de paciente/aluno.
+
+    Mostra numa lista so o que ja esta no banco e o que a busca no Dental Office
+    devolve (primeira pagina, sem gravar) — o operador nao precisa saber de onde
+    veio cada resultado. Se a API falhar, os resultados locais continuam
+    aparecendo com um aviso de que a lista pode estar incompleta.
+    """
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import procurar_alunos, procurar_pacientes
+
     q = request.GET.get("q", "").strip()
-    itens = _pacientes_locais(q)
+    if not q:
+        return render(request, "gestao_lab/partials/_ac_results.html", {"busca": ""})
+
+    e_paciente = tipo == "paciente"
+    locais = list(
+        (_pacientes_locais(q) if e_paciente else _alunos_locais(q))[
+            :_LIMITE_RESULTADOS
+        ]
+    )
+
+    remotos: list = []
+    parcial = False
+    ha_mais = False
+
+    try:
+        if e_paciente:
+            clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+            if not clinic_id:
+                raise DentalAPIError("clinic_id não configurado")
+            remotos, total_paginas = procurar_pacientes(q=q, clinic_id=clinic_id)
+        else:
+            user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+            remotos, total_paginas = procurar_alunos(q=q, user_group=user_group)
+        ha_mais = total_paginas > 1
+    except DentalAPIError as exc:
+        # Degradacao suave: sem a API a busca ainda vale para quem ja esta no banco.
+        logger.warning("autocomplete %s: busca externa indisponivel (%s)", tipo, exc)
+        parcial = True
+
+    itens = _unificar(locais, remotos, limite=_LIMITE_RESULTADOS)
+    truncou = len(locais) + len(remotos) > len(itens)
 
     return render(
         request,
         "gestao_lab/partials/_ac_results.html",
         {
-            "itens": itens[:20],
-            "total": itens.count(),
+            "itens": itens,
             "busca": q,
-            "url_dental": reverse("lab_buscar_pacientes_dental"),
+            "ha_mais": bool(itens) and (ha_mais or truncou),
+            "parcial": parcial,
         },
     )
+
+
+@login_required
+def buscar_pacientes(request: HttpRequest) -> HttpResponse:
+    """Autocomplete de paciente (base local + Dental Office, sem gravar)."""
+
+    return _buscar_unificado(request, "paciente")
 
 
 @login_required
 def buscar_alunos_lab(request: HttpRequest) -> HttpResponse:
-    """Fragmento HTMX com alunos ja sincronizados, filtrados por nome/celular."""
+    """Autocomplete de aluno (base local + Dental Office, sem gravar)."""
 
-    q = request.GET.get("q", "").strip()
-    itens = _alunos_locais(q)
-
-    return render(
-        request,
-        "gestao_lab/partials/_ac_results.html",
-        {
-            "itens": itens[:20],
-            "total": itens.count(),
-            "busca": q,
-            "url_dental": reverse("lab_buscar_alunos_lab_dental"),
-        },
-    )
+    return _buscar_unificado(request, "aluno")
 
 
 @login_required
-def buscar_pacientes_dental(request: HttpRequest) -> HttpResponse:
-    """Busca pacientes direto no Dental Office, importa e devolve o fragmento.
+@require_POST
+def materializar(request: HttpRequest, tipo: str) -> JsonResponse:
+    """Grava o registro escolhido no autocomplete e devolve o pk para o formulario.
 
-    Necessario porque o pedido referencia um ``Paciente`` local: os registros
-    encontrados na API sao importados para obter um pk utilizavel no formulario.
+    E aqui — e so aqui — que um resultado vindo da API vira registro local: um
+    write, do item que o operador realmente escolheu, em vez de importar a busca
+    inteira. Para itens que ja existiam, resolve direto no banco.
     """
 
     from django.conf import settings
     from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import buscar_e_importar_pacientes
+    from gestao_lab.services.dental_sync import (
+        materializar_aluno,
+        materializar_paciente,
+    )
 
-    q = request.GET.get("q", "").strip()
-    erro = ""
-    importados = 0
+    id_dental = request.POST.get("id_dental", "").strip()
+    nome_hint = request.POST.get("nome", "").strip()
+    if tipo not in {"paciente", "aluno"} or not id_dental:
+        return JsonResponse({"erro": "Requisição inválida."}, status=400)
 
-    if q:
-        clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
-        if not clinic_id:
-            erro = "A busca não está configurada. Avise o suporte técnico."
+    try:
+        if tipo == "paciente":
+            clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+            if not clinic_id:
+                return JsonResponse(
+                    {"erro": "A busca não está configurada. Avise o suporte técnico."},
+                    status=503,
+                )
+            obj = materializar_paciente(id_dental=id_dental, clinic_id=clinic_id)
         else:
-            try:
-                resultado = buscar_e_importar_pacientes(q=q, clinic_id=clinic_id)
-                importados = resultado["criados"] + resultado["atualizados"]
-            except DentalAPIError as exc:
-                erro = f"Não foi possível buscar agora: {exc}"
+            user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+            obj = materializar_aluno(
+                id_dental=id_dental, nome_hint=nome_hint, user_group=user_group
+            )
+    except DentalAPIError as exc:
+        logger.warning("materializar %s %s: %s", tipo, id_dental, exc)
+        return JsonResponse(
+            {"erro": "Não foi possível concluir a seleção agora. Tente de novo."},
+            status=502,
+        )
 
-    itens = _pacientes_locais(q)
-    return render(
-        request,
-        "gestao_lab/partials/_ac_results.html",
-        {
-            "itens": itens[:20],
-            "total": itens.count(),
-            "busca": q,
-            "url_dental": reverse("lab_buscar_pacientes_dental"),
-            "importados": importados,
-            "erro_dental": erro,
-            "veio_do_dental": True,
-        },
-    )
+    if obj is None:
+        return JsonResponse({"erro": "Registro não encontrado."}, status=404)
 
-
-@login_required
-def buscar_alunos_lab_dental(request: HttpRequest) -> HttpResponse:
-    """Busca alunos direto no Dental Office, importa e devolve o fragmento."""
-
-    from django.conf import settings
-    from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import buscar_e_importar_alunos
-
-    q = request.GET.get("q", "").strip()
-    erro = ""
-    importados = 0
-
-    if q:
-        user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
-        try:
-            resultado = buscar_e_importar_alunos(q=q, user_group=user_group)
-            importados = resultado["criados"] + resultado["atualizados"]
-        except DentalAPIError as exc:
-            erro = f"Não foi possível buscar agora: {exc}"
-
-    itens = _alunos_locais(q)
-    return render(
-        request,
-        "gestao_lab/partials/_ac_results.html",
-        {
-            "itens": itens[:20],
-            "total": itens.count(),
-            "busca": q,
-            "url_dental": reverse("lab_buscar_alunos_lab_dental"),
-            "importados": importados,
-            "erro_dental": erro,
-            "veio_do_dental": True,
-        },
-    )
+    return JsonResponse({"pk": obj.pk, "nome": obj.nome})
 
 
 # ---------------------------------------------------------------------------

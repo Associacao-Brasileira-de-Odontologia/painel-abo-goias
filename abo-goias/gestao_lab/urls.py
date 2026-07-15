@@ -79,14 +79,9 @@ urlpatterns = [
     path("buscar-pacientes/", views.buscar_pacientes, name="lab_buscar_pacientes"),
     path("buscar-alunos-lab/", views.buscar_alunos_lab, name="lab_buscar_alunos_lab"),
     path(
-        "buscar-pacientes/dental/",
-        views.buscar_pacientes_dental,
-        name="lab_buscar_pacientes_dental",
-    ),
-    path(
-        "buscar-alunos-lab/dental/",
-        views.buscar_alunos_lab_dental,
-        name="lab_buscar_alunos_lab_dental",
+        "selecionar/<str:tipo>/",
+        views.materializar,
+        name="lab_materializar",
     ),
     path("sincronizar/", views.sincronizar_dental, name="lab_sincronizar"),
     # Busca direcionada Dental Office (importação pontual)

@@ -934,6 +934,37 @@ class PaginasDeErroTests(TestCase):
         self.assertIn(b"Erro interno", response.content)
 
 
+class SincronizacaoAgendadaEduqTests(TestCase):
+    """A rotina em segundo plano que mantem a base de alunos completa."""
+
+    @patch("gestao_cme.services.eduq_sync.sincronizar_eduq")
+    def test_task_sincroniza_turmas_e_alunos_e_resume(self, mock_sync) -> None:
+        from gestao_cme.tasks import sincronizar_eduq_task
+
+        mock_sync.return_value = SimpleNamespace(
+            turmas=SimpleNamespace(criados=2, atualizados=41, erros=[]),
+            alunos=SimpleNamespace(criados=5, atualizados=370, erros=["x"]),
+        )
+
+        resumo = sincronizar_eduq_task()
+
+        mock_sync.assert_called_once_with(
+            sincronizar_turmas=True, sincronizar_alunos=True
+        )
+        self.assertEqual(resumo["turmas_criadas"], 2)
+        self.assertEqual(resumo["alunos_criados"], 5)
+        self.assertEqual(resumo["erros"], 1)
+
+    def test_task_esta_agendada_no_beat(self) -> None:
+        """Sem entrada no Beat a rotina nunca roda — e a base fica parada."""
+
+        agendamentos = settings.CELERY_BEAT_SCHEDULE.values()
+        tarefas = {item["task"] for item in agendamentos}
+
+        self.assertIn("gestao_cme.tasks.sincronizar_eduq_task", tarefas)
+        self.assertIn("gestao_lab.tasks.sincronizar_dental_task", tarefas)
+
+
 @override_settings(ALLOWED_HOSTS=["testserver"])
 class MateriaisFase32Tests(TestCase):
     """Autocomplete de aluno, atualizacao via Eduq e exclusao de material (Fase 3.2)."""

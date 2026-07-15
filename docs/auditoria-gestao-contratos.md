@@ -13,7 +13,7 @@
 ## 1. Visão geral
 
 Gera termos de consentimento (DOCX + PDF, 100% em código via `python-docx`/`reportlab`),
-conduz **assinatura remota** (QR Code no celular do paciente **ou** terminal dedicado/tablet),
+conduz **assinatura remota** (QR Code no celular do paciente **ou** terminal dedicado),
 com verificação de identidade (data de nascimento do paciente ou CPF do responsável legal),
 confirmação presencial do colaborador, **carimbo de tempo RFC 3161** e envio assíncrono
 (Celery) ao Dental Office e por WhatsApp (via `mensageria`/Z-API pós-pull; o antigo
@@ -76,3 +76,13 @@ devem ser tratadas com cuidado.
 ## 6. Implementado nesta rodada (Fases 2 e 3)
 
 _A preencher ao concluir a Fase 2 (apenas ajustes visuais, se aplicáveis)._
+
+**Correções a serem aplicadas**
+- Corrija os textos com nomenclatura dos sistemas "Dental Office" e "EDUQ". 
+- Na tela principal onde o usuário realiza a busca pelo paciente, temos duas listagens porém quero apenas uma com as informações necessárias. 
+- Na lisatagem de pacientes retirar o campo de 'ORIGEM' e deixar por outra informação do próprio paciente, assim, facilitar o usuário identificar o paciente por outra informação adicional;
+- Quando o usuário clica no campo de 'Validar documento' é necessário que o sistema abra uma nova guia para essa aba;
+- Para validar o usuário tem que realizar 
+- Avaliar as fontes que foram utilizadas no sistema e padronizar com as outras aplicações;
+- Quando o sistema não conseguir realizar o envio do documento ao Dental Office, o usuário deve ser notificado com alguma pop-up ou essas informações devem estar possíveis de visualização. Assim, será possível que o usuário não perca um documento assinado porém não encaminhado ao Dental Office;
+- 

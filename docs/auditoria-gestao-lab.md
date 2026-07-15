@@ -131,6 +131,59 @@ importação bate na API do Dental). Verificado no navegador.
 - Verificação ao vivo: busca de paciente/aluno, seleção nos dois campos, "Trocar", criação de
   pedido pelos pks do autocomplete, exclusão de pedido e de moldagem.
 
+### Sincronização em segundo plano (item 4) — implementada
+`gestao_lab/tasks.py::sincronizar_dental_task`, agendada no Celery Beat às **04:30**
+(escalonada em relação à do Eduq, às 04:00 — são rotinas longas e não convém bater nas duas
+APIs ao mesmo tempo). Reusa `executar_sync_e_registrar`, então as execuções automáticas
+alimentam o mesmo `RegistroSync` exibido em "Histórico de atualizações". Retry com backoff
+(até 3) porque a janela é diária. Sem `DENTAL_CLINIC_ID`, não faz nada e loga um aviso —
+mesmo padrão das demais integrações opcionais.
+
+Com a busca unificada (item 3) consultando a API ao vivo, esta rotina serve às **telas de
+consulta** (listagens de pacientes/alunos) e ao trabalho sobre a base local — não é mais o que
+sustenta a busca dos formulários.
+
+> **Atenção operacional:** se houver um cron externo chamando
+> `/laboratorio/sincronizar-agendado/`, desative-o — o Beat agora cobre isso e os dois juntos
+> sincronizam em duplicidade.
+>
+> **Não executado contra a API real:** diferente da task do Eduq, esta percorre *todos* os
+> pacientes da clínica; rodá-la aqui encheria a base de desenvolvimento com milhares de
+> registros para provar um caminho (`executar_sync_e_registrar`) que já existia e já era
+> exercitado pelo endpoint de cron. A task em si é um invólucro fino, coberto por testes com
+> mock (sucesso, histórico e ausência de configuração).
+
+### Busca unificada (item 3) — implementada
+Fecha o que a correção do A-18 tinha deixado como paliativo (o botão "Procurar em todos os
+cadastros", que levava ~9s e importava todos os resultados).
+
+**Como ficou:** um campo só. Ao digitar, a view consulta **a base local e a API em conjunto**
+e devolve **uma lista única, sem dizer de onde veio cada resultado** — o operador não precisa
+saber que existe um Dental Office atrás. O registro só é gravado **quando ele escolhe**.
+
+| | Antes (A-18) | Agora |
+|---|---|---|
+| Ação | botão "Procurar em todos os cadastros" | automático ao digitar |
+| Tempo | ~9s | **~1,4s** |
+| Gravações por busca | **149** | **0** |
+| Gravações por escolha | 0 (já tinha importado tudo) | **1** (~0,7s) |
+
+**Peças:** `procurar_pacientes`/`procurar_alunos` (leem só a 1ª página, sem gravar) e
+`materializar_paciente`/`materializar_aluno` (gravam o escolhido). Os dados gravados vêm
+sempre da API — o navegador só informa **qual id** foi escolhido, nunca o conteúdo do
+registro. Paciente usa `GET /customers/{id}` (e já aproveita para trazer CPF/endereço, úteis
+em contratos); aluno refaz a busca e casa pelo id, porque a API não expõe `GET /users/{id}`.
+Endpoint `POST /laboratorio/selecionar/<tipo>/` devolve o pk em JSON; itens que já existem
+no banco resolvem direto, sem ida à API.
+
+**Degradação suave:** se a API cair, os resultados locais continuam aparecendo com o aviso
+"alguns cadastros podem não aparecer agora" — a tela não quebra.
+
+**Bug encontrado ao testar:** com o corte em 20 itens, uma página cheia da API (nomes que vêm
+antes no alfabeto) **empurrava para fora** registros que já estavam no banco — buscar "Maria"
+escondia a paciente local. Corrigido: os locais nunca são descartados na truncagem; os remotos
+só preenchem as vagas restantes. Coberto por teste.
+
 ### A-18 · Busca do autocomplete não filtrava — **crítico** (reportado pelo usuário, corrigido)
 Sintoma relatado: ao pesquisar "Gustavo" a listagem **não era atualizada**, tornando o
 mecanismo inútil para selecionar o paciente. Duas causas somadas:

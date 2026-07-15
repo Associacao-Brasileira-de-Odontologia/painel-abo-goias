@@ -11,7 +11,61 @@ import logging
 
 from celery import shared_task
 
+from .integrations.dental import DentalAPIError
+
 logger = logging.getLogger(__name__)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(DentalAPIError,),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+    max_retries=3,
+)
+def sincronizar_dental_task(self) -> dict[str, int] | None:
+    """Atualiza pacientes e alunos a partir do Dental Office, em segundo plano.
+
+    Agendada via Celery Beat. Mantém as listagens de pacientes/alunos em dia sem
+    ninguém precisar apertar "Atualizar lista" — a busca dos formulários já
+    consulta a API ao vivo (ver ``buscar_pacientes``), então esta rotina serve às
+    telas de consulta e ao trabalho offline sobre a base local.
+
+    Reaproveita ``executar_sync_e_registrar``, que grava o resultado em
+    ``RegistroSync`` — o mesmo histórico exibido na interface, agora também
+    alimentado pelas execuções automáticas.
+
+    Substitui o cron externo apontando para ``/laboratorio/sincronizar-agendado/``:
+    se aquele endpoint continuar sendo chamado por um agendador de fora, a base
+    sincroniza duas vezes (sem estragar nada, mas sem necessidade).
+    """
+
+    from django.conf import settings
+
+    from .models import RegistroSync
+    from .services.dental_sync import executar_sync_e_registrar
+
+    clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+    if not clinic_id:
+        logger.warning("sincronizar_dental_task: DENTAL_CLINIC_ID nao configurado")
+        return None
+
+    registro = executar_sync_e_registrar(
+        clinic_id=clinic_id,
+        user_group=getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8),
+        disparado_por="agendamento",
+        tipo=RegistroSync.Tipo.AGENDADA,
+    )
+
+    resumo = {
+        "pacientes_criados": registro.pacientes_criados,
+        "pacientes_atualizados": registro.pacientes_atualizados,
+        "alunos_criados": registro.alunos_criados,
+        "alunos_atualizados": registro.alunos_atualizados,
+    }
+    logger.info("sincronizar_dental_task: %s", resumo)
+    return resumo
 
 
 @shared_task

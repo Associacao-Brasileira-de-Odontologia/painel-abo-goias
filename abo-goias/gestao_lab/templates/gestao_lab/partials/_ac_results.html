@@ -1,21 +1,15 @@
 {% comment %}
-Resultados de um campo de busca com seleção (autocomplete).
-Contexto: itens, total, busca, url_dental, importados, erro_dental, veio_do_dental.
+Resultados do autocomplete. Contexto: itens (dicts com pk/id_dental/nome/celular),
+busca, ha_mais, parcial.
 
-A base local costuma ter só uma fatia dos registros do Dental Office, então
-sempre que houver um termo digitado oferecemos a busca direta na API — que
-importa os registros encontrados e devolve este mesmo fragmento, agora com pks
-locais utilizáveis no formulário.
+A lista é única de propósito: mistura quem já está no banco com quem veio da
+busca no Dental Office, sem dizer de onde veio cada um — o operador só quer
+escolher a pessoa. Itens sem `pk` ainda não existem por aqui e são gravados no
+clique (ver o handler [data-ac] em static/js/app.js).
 {% endcomment %}
 
-{% if erro_dental %}
-    <p class="ac-aviso ac-aviso--erro">{{ erro_dental }}</p>
-{% elif veio_do_dental %}
-    {% if importados %}
-        <p class="ac-aviso ac-aviso--ok">{{ importados }} registro{{ importados|pluralize }} encontrado{{ importados|pluralize }}.</p>
-    {% else %}
-        <p class="ac-aviso">Nada encontrado para &ldquo;{{ busca }}&rdquo;.</p>
-    {% endif %}
+{% if parcial %}
+    <p class="ac-aviso">Alguns cadastros podem não aparecer agora. Mostrando o que foi possível carregar.</p>
 {% endif %}
 
 {% if itens %}
@@ -23,7 +17,9 @@ locais utilizáveis no formulário.
         {% for item in itens %}
             <li>
                 <button type="button" class="search-result ac-result"
-                        data-id="{{ item.pk }}" data-nome="{{ item.nome }}">
+                        data-id="{{ item.pk|default_if_none:'' }}"
+                        data-id-dental="{{ item.id_dental }}"
+                        data-nome="{{ item.nome }}">
                     <span class="search-result-main">
                         <strong>{{ item.nome }}</strong>
                         {% if item.celular %}
@@ -34,22 +30,13 @@ locais utilizáveis no formulário.
             </li>
         {% endfor %}
     </ul>
-    {% if total > itens|length %}
-        <p class="help-text">Mostrando {{ itens|length }} de {{ total }} — refine a busca.</p>
+    {% if ha_mais %}
+        <p class="help-text">Há mais resultados — refine a busca pelo nome completo.</p>
     {% endif %}
 {% elif busca %}
     <p class="help-text search-results-empty">
-        Nenhum resultado na lista para &ldquo;{{ busca }}&rdquo;.
+        Nenhum resultado para &ldquo;{{ busca }}&rdquo;.
     </p>
 {% else %}
     <p class="help-text search-results-empty">Digite o nome para buscar.</p>
-{% endif %}
-
-{% if busca and url_dental %}
-    <button type="button" class="button secondary compact-button ac-dental-btn"
-            hx-get="{{ url_dental }}?q={{ busca|urlencode }}"
-            hx-target="closest .search-results-wrap"
-            hx-swap="innerHTML">
-        {% if itens %}Não encontrou? {% endif %}Procurar &ldquo;{{ busca }}&rdquo; em todos os cadastros
-    </button>
 {% endif %}

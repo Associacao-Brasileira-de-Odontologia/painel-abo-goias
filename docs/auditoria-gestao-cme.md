@@ -106,6 +106,28 @@ estão em empréstimo.
   `registrar_entrada`, `editar_movimentacao` — mantido o "Cancelar" na barra de ações.
   (`registrar_saida` mantém o "Voltar" do topo por não ter Cancelar no rodapé.)
 - Verificado no navegador (`cadastrar_turma`) — alinha com o mockup aprovado.
+### Sincronização em segundo plano (item 4) — implementada
+O Eduq **não oferece busca de aluno por nome** (só `listar_alunos` por turma), então as telas
+do CME pesquisam apenas o que já está no banco. Sem uma rotina automática, a completude
+dependia de alguém apertar "Atualizar lista de alunos" — o operador tendo que saber que existe
+uma sincronização.
+
+**Implementado:** `gestao_cme/tasks.py::sincronizar_eduq_task`, agendada no Celery Beat
+(`CELERY_BEAT_SCHEDULE`) às **04:00** — fora do horário de atendimento, porque percorre todas
+as turmas. Retry com backoff (até 3): a janela é diária, então sem retry uma falha pontual de
+rede deixaria a base parada por 24h. Par no lab: `sincronizar_dental_task` às **04:30**
+(escalonada para não bater nas duas APIs ao mesmo tempo), reusando `executar_sync_e_registrar`
+— as execuções automáticas alimentam o mesmo `RegistroSync` já exibido na interface.
+
+> **O botão manual continua.** O brief da Fase 3.2 pede explicitamente "um botão/ação para
+> atualizar a listagem de alunos" nas telas de entrada/saída, e ele resolve o caso real de um
+> aluno matriculado hoje que não pode esperar até as 04:00. Com o agendamento, deixou de ser
+> o caminho normal e virou exceção.
+>
+> **Se houver um cron externo** chamando `/laboratorio/sincronizar-agendado/`, desative-o: o
+> Beat agora cobre isso e os dois juntos sincronizam em duplicidade (sem estragar nada, mas
+> sem necessidade).
+
 ### A-19 · Busca era sensível a acento — **crítico** (encontrado na investigação, CORRIGIDO)
 Os cadastros chegam do Eduq/Dental com grafia mista e o operador digita sem acento — mas a
 busca era acento-sensível (`nome__icontains`). Medido nos 378 alunos reais:
@@ -149,4 +171,17 @@ igual no SQLite de dev/testes.
 - Verificação ao vivo: busca+seleção de aluno, POST de entrada, filtro de pendências na saída,
   exclusão de material livre (OK) e bloqueio de material em empréstimo (ProtectedError).
 - Backlog (novo): a "Atualizar alunos" roda o sync do Eduq **síncrono** no request (pode ser
-  lento com muitas turmas) → mover para rotina assíncrona (Celery) — mesmo ponto do A-03.
+  lento com muitas turmas) → mover para rotina assíncrona (Celery) — mesmo ponto do A-03.**
+
+
+**Novas inconsistências auditadas no sistema**
+
+- Adicionar na tela de listagem de kits de materiais um botão para cadastro dos kits (primeiro validar a real necessidade do botão e documentar)
+- Adicionar pop-up de confirmação 'obrigando' o usuário a fazer dupla checagem no momento de alterar as informações do abrigo. Para o pop-up adicionar uma mensagem com informações relevantes como, abrigo ocupado por material de 'fulano', abrigo já cadastrado para 'ciclano' e etc.
+- Acrescentar uma mensagem informativa ao campo 'STATUS' na tabela de listagem de alunos. Como o campo status tem ambiguidade, pois, trata-se da situação do aluno cadastradado ou não em turmas ativas, é necessário adicionar uma mensagem informativa quando o usuário passar o mouse por cima do campo. Adicionar também um ícone de atenção (!) indicando a mensagem.
+-  Atualize o estilo aplicado ao botão 'Limpar tudo' para o design pré-definido no plano
+- Corrija a correspondência entre as chaves da tabela de abrigos e a listagem de alunos por turma. Quando o usuário realiza a atualização do abrigo na tabela de alunos, automaticamente, os campos de 'OCUPACAO' da tabela abrigos deve ser atualizado com a informação de ocupado. 
+- Na tabela de listagem de alunos por turma, na coluna 'MOVIMENTACAO' o usuário deve ter a opção de clicar sobre o número de movimentação(ões) e, consequentemente, o sistema deve retornar a listagem de todas as movimentações daquele aluno.
+- Para o formulário de cadastro de empréstimos, corrija a implementação do campo de seleção de alunos para a mesma do formulário de cadastro de entrada.
+- Verifique todos os templates que possuem a opção de 'Editar' dentro de alguma listagem. Troque os textos dos botões por um ícone que corresponda a ação de editar.
+- Para o formulário de edição de abrigo, adicione o botão de exclusão do item e pop-up de confirmação.

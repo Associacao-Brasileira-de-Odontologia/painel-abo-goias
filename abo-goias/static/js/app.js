@@ -90,17 +90,71 @@
         return el.closest("[data-ac]");
     }
 
+    function csrf() {
+        var campo = document.querySelector("[name=csrfmiddlewaretoken]");
+        return campo ? campo.value : "";
+    }
+
+    function confirmar(b, pk, nome) {
+        b.querySelector("[data-ac-hidden]").value = pk;
+        b.querySelector("[data-ac-nome]").textContent = nome;
+        b.querySelector("[data-ac-selecionado]").hidden = false;
+        b.querySelector("[data-ac-busca]").hidden = true;
+        var lista = b.querySelector(".search-results-wrap");
+        if (lista) lista.innerHTML = "";
+    }
+
+    // A busca mostra numa lista só quem já está no banco e quem veio da API.
+    // Os que já existem têm data-id e são escolhidos na hora; os que vieram da
+    // API ainda não têm pk — só então o registro é gravado, um por clique.
+    async function materializar(b, resultado) {
+        var url = b.dataset.acMaterializar;
+        var corpo = new URLSearchParams({
+            id_dental: resultado.dataset.idDental,
+            nome: resultado.dataset.nome,
+        });
+        var resposta = await fetch(url, {
+            method: "POST",
+            headers: { "X-CSRFToken": csrf() },
+            body: corpo,
+        });
+        if (!resposta.ok) {
+            var erro = await resposta.json().catch(function () { return {}; });
+            throw new Error(erro.erro || "Não foi possível concluir a seleção agora.");
+        }
+        return resposta.json();
+    }
+
     document.addEventListener("click", function (event) {
         var resultado = event.target.closest(".ac-result");
         if (resultado) {
             var b = bloco(resultado);
             if (!b) return;
-            b.querySelector("[data-ac-hidden]").value = resultado.dataset.id;
-            b.querySelector("[data-ac-nome]").textContent = resultado.dataset.nome;
-            b.querySelector("[data-ac-selecionado]").hidden = false;
-            b.querySelector("[data-ac-busca]").hidden = true;
-            var lista = b.querySelector(".search-results-wrap");
-            if (lista) lista.innerHTML = "";
+
+            if (resultado.dataset.id) {
+                confirmar(b, resultado.dataset.id, resultado.dataset.nome);
+                return;
+            }
+
+            resultado.disabled = true;
+            resultado.classList.add("is-materializando");
+            materializar(b, resultado)
+                .then(function (dados) {
+                    confirmar(b, dados.pk, dados.nome);
+                })
+                .catch(function (erro) {
+                    var lista = b.querySelector(".search-results-wrap");
+                    if (lista) {
+                        var aviso = document.createElement("p");
+                        aviso.className = "ac-aviso ac-aviso--erro";
+                        aviso.textContent = erro.message;
+                        lista.prepend(aviso);
+                    }
+                })
+                .finally(function () {
+                    resultado.disabled = false;
+                    resultado.classList.remove("is-materializando");
+                });
             return;
         }
 

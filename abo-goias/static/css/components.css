@@ -362,21 +362,18 @@ select option {
     overflow-wrap: anywhere;
 }
 
-/* Busca direta no Dental Office a partir do autocomplete */
+/* Item do autocomplete sendo gravado após a escolha (ver app.js) */
 
-.ac-dental-btn {
-    margin-top: 8px;
-    width: 100%;
-}
-
-/* O HTMX marca o elemento que disparou a requisição com .htmx-request. */
-.ac-dental-btn.htmx-request {
+.search-result.is-materializando {
     pointer-events: none;
-    opacity: 0.75;
+    opacity: 0.7;
 }
 
-.ac-dental-btn.htmx-request::after {
-    content: " — buscando…";
+.search-result.is-materializando::after {
+    content: "salvando…";
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.78rem;
 }
 
 .ac-aviso {
