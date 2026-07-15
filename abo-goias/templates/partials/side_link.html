@@ -16,10 +16,13 @@ Parâmetros:
   current      — quando verdadeiro, marca .active e renderiza href="#" em vez de
                  resolver a rota — usado no passo atual de um fluxo em etapas
                  (ex.: assistente de contrato), onde não há link real para "aqui"
+  new_tab      — quando verdadeiro, abre o link em uma nova guia (target=_blank
+                 com rel de segurança) — usado para telas que não devem
+                 substituir o contexto atual (ex.: validação de documento)
 {% endcomment %}
 {% nav_ativo url_name match as nav_active %}
 <a class="side-link{% if current or nav_active %} active{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
-   href="{% if current %}#{% elif url_arg %}{% url url_name url_arg %}{% else %}{% url url_name %}{% endif %}">
+   href="{% if current %}#{% elif url_arg %}{% url url_name url_arg %}{% else %}{% url url_name %}{% endif %}"{% if new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>
     <span class="side-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>
     </span>

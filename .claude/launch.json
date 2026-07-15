@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "abo-goias",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "abo-goias/manage.py",
+        "runserver",
+        "8000"
+      ],
+      "port": 8000
+    }
+  ]
+}

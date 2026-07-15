@@ -15,10 +15,6 @@
 
 {% block panel_label %}<p class="section-label">Laboratórios</p>{% endblock %}
 {% block panel_title %}{% if editando %}{{ laboratorio.nome }}{% else %}Novo laboratório{% endif %}{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'lab_laboratorios' %}">Voltar</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" with com_rotulo=True %}
 

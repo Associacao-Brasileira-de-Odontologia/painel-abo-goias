@@ -1,4 +1,5 @@
 ﻿{% extends "layouts/painel.html" %}
+{% load static %}
 
 {% block title %}Gestão de CME | Registrar saída{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
@@ -12,37 +13,26 @@
 
 {% block panel_title %}Registrar retirada de materiais{% endblock %}
 {% block panel_actions %}
-    <a class="button secondary" href="{% url 'cme_home' %}">Voltar ao histórico</a>
+    <div class="topbar-actions">
+        <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'registrar_saida' %}">
+            <button class="button secondary compact-button" type="submit">Atualizar lista de alunos</button>
+        </form>
+        <a class="button secondary compact-button" href="{% url 'cme_home' %}">Voltar ao histórico</a>
+    </div>
 {% endblock %}
 
 {% block panel %}
     {# ── Passo 1: Selecionar aluno ─────────────────────────── #}
     <div class="kpi-section">
         <p class="section-label">Passo 1 — Selecionar aluno</p>
-        <form class="form-stack form-stack-wide" method="get">
-            <div class="field field-required">
-                <label for="id_aluno_sel">Aluno</label>
-                <select id="id_aluno_sel" name="aluno_id" required {% if not aluno %}autofocus{% endif %}>
-                    <option value="">Selecione um aluno...</option>
-                    {% for a in alunos_com_pendencias %}
-                        <option value="{{ a.pk }}" {% if aluno_id == a.pk|stringformat:"s" %}selected{% endif %}>
-                            {{ a.nome }}{% if a.turma %} — {{ a.turma.codigo }}{% endif %}
-                        </option>
-                    {% empty %}
-                        <option disabled>Nenhum aluno com pacotes pendentes</option>
-                    {% endfor %}
-                </select>
-                {% if not alunos_com_pendencias %}
-                    <span class="field-hint">Não há pacotes aguardando retirada no momento.</span>
-                {% endif %}
-            </div>
-            <div class="form-actions">
-                <button class="button primary" type="submit"
-                        {% if not alunos_com_pendencias %}disabled{% endif %}>
-                    Buscar pacotes
-                </button>
-            </div>
-        </form>
+        {% comment %}
+        Mesmo componente [data-ac] das demais telas; aqui escolher o aluno
+        recarrega a tela (ac_navegar) para listar os pacotes pendentes dele.
+        {% endcomment %}
+        {% url 'buscar_alunos' as url_busca_alunos %}
+        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_busca_alunos ac_vals='{"pendencias": "1"}' ac_navegar="?aluno_id=" ac_placeholder="Buscar aluno com pacotes pendentes..." ac_hint="Apenas alunos com pacotes aguardando retirada aparecem na busca." ac_autofocus=sem_aluno %}
     </div>
 
     {# ── Passo 2: Confirmar pacotes ────────────────────────── #}
@@ -122,4 +112,12 @@
             {% endif %}
         </div>
     {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/htmx.min.js' %}"></script>
+    {% comment %}
+    A navegação ao escolher o aluno é do handler [data-ac] em static/js/app.js
+    (data-ac-navegar), montado por partials/_ac_field.html.
+    {% endcomment %}
 {% endblock %}

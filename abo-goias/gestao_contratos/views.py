@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -26,6 +27,7 @@ from .models import (
     TERMINAL_ATIVO_TTL_HORAS,
     TIPOS_CONTRATO,
     ContratoGerado,
+    EventoContrato,
     TerminalAssinatura,
     expirar_terminais_vencidos,
 )
@@ -84,6 +86,10 @@ def contratos(request: HttpRequest) -> HttpResponse:
                                 "id_dental": str(pac.id),
                                 "nome": pac.nome,
                                 "celular": pac.celular,
+                                # CPF/nascimento só vêm no endpoint de detalhe;
+                                # aproveitamos se a listagem já os trouxer.
+                                "cpf": _cpf_do_item_lista(item),
+                                "nascimento": _nascimento_do_item_lista(item),
                                 "ja_existe": str(pac.id) in ids_locais,
                             }
                         )
@@ -99,6 +105,43 @@ def contratos(request: HttpRequest) -> HttpResponse:
     paginator = Paginator(pacientes_qs, _PACIENTES_POR_PAGINA)
     page_obj = paginator.get_page(request.GET.get("page"))
 
+    # ── Listagem unificada ────────────────────────────────────────────
+    # Uma única lista para a tela, em vez de duas tabelas separadas
+    # (local + Dental Office). Cada linha carrega os dados mínimos para
+    # localizar o paciente e a ação correta (gerar direto ou importar).
+    pacientes_unificados: list[dict] = []
+    for pac in page_obj.object_list:
+        pacientes_unificados.append(
+            {
+                "nome": pac.nome,
+                "nascimento": pac.data_nascimento,
+                "cpf": pac.cpf,
+                "celular": pac.celular,
+                "no_sistema": True,
+                "dados_completos": pac.dados_contrato_completos,
+                "acao_url": reverse("contrato_gerar", args=[pac.pk]),
+                "acao_label": "Gerar contrato",
+            }
+        )
+    # Só na primeira página anexamos os do Dental Office ainda não importados
+    # (os "já no sistema" já aparecem acima como registros locais).
+    for pac in pacientes_api:
+        if pac["ja_existe"]:
+            continue
+        pacientes_unificados.append(
+            {
+                "nome": pac["nome"],
+                "nascimento": pac["nascimento"],
+                "cpf": pac["cpf"],
+                "celular": pac["celular"],
+                "id_dental": pac["id_dental"],
+                "no_sistema": False,
+                "dados_completos": None,
+                "acao_url": reverse("contrato_importar", args=[pac["id_dental"]]),
+                "acao_label": "Importar e gerar",
+            }
+        )
+
     return render(
         request,
         "gestao_contratos/contratos.html",
@@ -107,12 +150,30 @@ def contratos(request: HttpRequest) -> HttpResponse:
             "page_obj": page_obj,
             "query_string": params.urlencode(),
             "pacientes_api": pacientes_api,
+            "pacientes_unificados": pacientes_unificados,
             "busca": busca,
             "total": total,
             "erro_api": erro_api,
             "dental_pesquisado": dental_pesquisado,
         },
     )
+
+
+def _cpf_do_item_lista(item: dict) -> str:
+    """Extrai o CPF de um item da listagem do Dental Office, se presente.
+
+    A listagem costuma ser enxuta (sem documento); retorna string vazia
+    quando o campo não vem, sem custo de chamada extra à API.
+    """
+
+    doc = item.get("document_attributes") or {}
+    return (doc.get("cpf") or "").strip()
+
+
+def _nascimento_do_item_lista(item: dict) -> str:
+    """Extrai a data de nascimento (ISO) de um item da listagem, se presente."""
+
+    return (item.get("birth_date") or "").strip()
 
 
 @login_required
@@ -594,7 +655,69 @@ def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpRespons
             f"Falha ao enviar o contrato ao Dental Office: {erro}",
         )
 
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return redirect(next_url)
     return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+
+
+def _contratos_envio_dental_pendentes() -> "list[ContratoGerado]":
+    """Contratos assinados cujo envio ao Dental Office falhou ou está pendente.
+
+    Cobre dois riscos de "documento assinado perdido por falha de integração":
+      * ``erro``      — o envio (manual ou automático via Celery) falhou;
+      * ``nao_enviado`` de um contrato já ``assinado`` — nunca chegou ao Dental.
+
+    Cada item recebe ``ultimo_erro`` com a mensagem do evento de falha mais
+    recente, para exibição direta no painel sem consulta extra por linha.
+    """
+
+    contratos = list(
+        ContratoGerado.objects.filter(status="assinado")
+        .filter(Q(status_envio_dental="erro") | Q(status_envio_dental="nao_enviado"))
+        .select_related("paciente")
+        .order_by("-atualizado_em")
+    )
+
+    ids = [c.pk for c in contratos]
+    ultimo_erro: dict[int, str] = {}
+    if ids:
+        # Última mensagem de erro por contrato, em uma única consulta.
+        eventos = EventoContrato.objects.filter(
+            contrato_id__in=ids, tipo="envio_dental_erro"
+        ).order_by("contrato_id", "-criado_em", "-pk")
+        for evento in eventos:
+            ultimo_erro.setdefault(evento.contrato_id, evento.payload.get("erro", ""))
+
+    for contrato in contratos:
+        contrato.ultimo_erro = ultimo_erro.get(contrato.pk, "")
+
+    return contratos
+
+
+@login_required
+def envios_dental_pendentes_view(request: HttpRequest) -> HttpResponse:
+    """Painel de envios ao Dental Office com falha ou pendentes.
+
+    Torna visíveis os documentos assinados que não chegaram ao Dental Office,
+    para que nenhum se perca silenciosamente por falha de integração. Permite
+    reenviar cada um (mesma ação da tela de pós-geração).
+    """
+
+    contratos = _contratos_envio_dental_pendentes()
+
+    return render(
+        request,
+        "gestao_contratos/envios_dental.html",
+        {
+            "contratos": contratos,
+            "total": len(contratos),
+            "breadcrumbs": [
+                {"label": "Contratos", "url": reverse("contratos")},
+                {"label": "Envios ao Dental Office", "url": None},
+            ],
+        },
+    )
 
 
 @login_required

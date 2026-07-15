@@ -29,6 +29,18 @@
         <button class="button primary" type="submit">Buscar</button>
     </form>
 
+    {% if aluno_filtrado %}
+        <div class="selection-summary">
+            <a class="info-chip info-chip--removable" href="{% url 'cme_home' %}"
+               title="Remover filtro de aluno">
+                <span>Aluno</span>
+                <strong>{{ aluno_filtrado.nome }}{% if aluno_filtrado.matricula %} — {{ aluno_filtrado.matricula }}{% endif %}</strong>
+                <span class="chip-x" aria-hidden="true">×</span>
+            </a>
+            <a class="button secondary compact-button" href="{% url 'cme_home' %}">Ver todas</a>
+        </div>
+    {% endif %}
+
     {% if busca or status_atual or movimentacao_atual %}
         <div class="selection-summary">
             {% if busca %}
@@ -58,7 +70,7 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="chips-clear" href="{% url 'cme_home' %}">Limpar tudo</a>
+            <a class="button secondary compact-button" href="{% url 'cme_home' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
@@ -103,9 +115,10 @@
                             </span>
                         </td>
                         <td class="actions-cell">
-                            <a class="button compact-button secondary"
-                               href="{% url 'editar_movimentacao' registro.pk %}">
-                                Editar
+                            <a class="icon-action"
+                               href="{% url 'editar_movimentacao' registro.pk %}"
+                               title="Editar" aria-label="Editar movimentação">
+                                <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
                             </a>
                         </td>
                     </tr>

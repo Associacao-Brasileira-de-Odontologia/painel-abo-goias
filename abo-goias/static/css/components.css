@@ -230,6 +230,174 @@ select option {
     padding-top: 8px;
 }
 
+/*
+ * Barra de ações padronizada (Fase 2.2). Escopada aos formulários reais
+ * (form-stack / form-stack-wide) para não afetar fragmentos HTMX nem o modal
+ * de confirmação, que também usam .form-actions. Alinhada à direita, com
+ * separador acima; e corrige o "vazamento" das regras de .form-stack que
+ * deixavam o primário full-width e o secundário como link de texto apagado.
+ */
+.form-stack .form-actions,
+.form-stack-wide .form-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+    margin-top: 4px;
+}
+
+.form-stack .form-actions .button {
+    width: auto;
+}
+
+.form-stack .form-actions .secondary {
+    min-height: 50px;
+    justify-content: center;
+    border: 1px solid rgba(29, 110, 238, 0.4);
+    padding: 0 18px;
+    background: var(--blue-soft);
+    color: var(--accent-strong);
+    font-size: 15px;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+.form-stack .form-actions .secondary:hover {
+    background: rgba(29, 110, 238, 0.24);
+    color: var(--accent-strong);
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+/*
+ * Botões de ação da busca lateral (ex.: "Importar" do Dental Office): botão
+ * real, não o link-fraco herdado de .form-stack .secondary. Ficam full-width
+ * na sidebar, o que é adequado ao espaço estreito.
+ */
+.sidebar-section .form-stack .secondary {
+    min-height: 46px;
+    justify-content: center;
+    border: 1px solid rgba(29, 110, 238, 0.4);
+    padding: 0 16px;
+    background: var(--blue-soft);
+    color: var(--accent-strong);
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+.sidebar-section .form-stack .secondary:hover {
+    background: rgba(29, 110, 238, 0.24);
+    color: var(--accent-strong);
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+/* ── Autocomplete (resultados de busca clicáveis) ───────────────── */
+
+.search-results-wrap {
+    margin-top: 8px;
+}
+
+.search-results {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.search-result {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 50px;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: rgba(2, 11, 30, 0.44);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.search-result:hover {
+    border-color: rgba(29, 110, 238, 0.46);
+    background: var(--blue-soft);
+}
+
+.search-result-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.search-result-main strong {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.search-results-empty {
+    margin-top: 8px;
+}
+
+.selected-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 50px;
+    padding: 8px 16px;
+    border: 1px solid var(--accent-focus);
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+}
+
+.selected-chip strong {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+/* Item do autocomplete sendo gravado após a escolha (ver app.js) */
+
+.search-result.is-materializando {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.search-result.is-materializando::after {
+    content: "salvando…";
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.ac-aviso {
+    margin: 0 0 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: rgba(2, 11, 30, 0.44);
+    color: var(--muted-strong);
+    font-size: 0.84rem;
+}
+
+.ac-aviso--ok {
+    border-color: var(--success-border);
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.ac-aviso--erro {
+    border-color: var(--danger-border);
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
 /* ── Botões ─────────────────────────────────────────────────────── */
 
 .button {
@@ -365,6 +533,76 @@ select option {
 .icon-action svg {
     display: block;
     fill: none;
+}
+
+/* Cabeçalho de coluna com ícone de ajuda (tooltip) — ex.: coluna Status */
+.th-with-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.th-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+    cursor: help;
+}
+
+.th-hint svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+.th-hint:hover,
+.th-hint:focus-visible {
+    color: var(--info-text);
+    outline: none;
+}
+
+/* Número de movimentações clicável na listagem de alunos por turma */
+.mov-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.mov-link:hover strong {
+    text-decoration: underline;
+    color: var(--info-text);
+}
+
+/* Lista de checkboxes (ex.: seleção de materiais ao cadastrar um kit) */
+.checkbox-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+}
+
+.checkbox-list-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.checkbox-list-item input {
+    width: auto;
+    margin: 0;
 }
 
 /* ── Cartões de métrica e KPIs ──────────────────────────────────── */

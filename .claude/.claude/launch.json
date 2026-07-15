@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "abo-goias",
+      "runtimeExecutable": "C:/Users/Gustavo/Desktop/abo/painel-abo-goias/.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "C:/Users/Gustavo/Desktop/abo/painel-abo-goias/abo-goias/manage.py",
+        "runserver",
+        "8000"
+      ],
+      "port": 8000
+    }
+  ]
+}

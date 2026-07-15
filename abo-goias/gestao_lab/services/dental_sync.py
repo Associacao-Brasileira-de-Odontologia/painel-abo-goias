@@ -8,10 +8,13 @@ from typing import Any, Callable
 
 from django.utils import timezone
 from gestao_lab.integrations.dental import (
+    AlunoLabDental,
     DentalAPIError,
     DentalClient,
+    PacienteDental,
     normalizar_aluno_lab,
     normalizar_paciente,
+    normalizar_paciente_detalhado,
 )
 from gestao_lab.models import AlunoLab, OrigemDados, Paciente
 
@@ -213,6 +216,121 @@ def sincronizar_alunos(user_group: int) -> ResultadoSync:
             atualizados += 1
 
     return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados}
+
+
+# ---------------------------------------------------------------------------
+# Busca para o autocomplete: leitura sem gravar + gravacao so do escolhido
+# ---------------------------------------------------------------------------
+#
+# O autocomplete do formulario nao pode usar `buscar_e_importar_*`: aquelas
+# funcoes percorrem TODAS as paginas e gravam TODOS os resultados (uma busca por
+# "Gustavo" chegou a importar 149 pacientes e levar ~9s). Aqui a busca le apenas
+# a primeira pagina e nao grava nada; o registro so vai para o banco quando o
+# operador escolhe um resultado (`materializar_*`) — um write, no clique.
+
+
+def procurar_pacientes(
+    q: str, clinic_id: int, page: int = 1
+) -> tuple[list[PacienteDental], int]:
+    """Procura pacientes no Dental Office sem gravar nada.
+
+    Retorna os itens da pagina pedida e o total de paginas informado pela API
+    (usado para avisar que ha mais resultados do que os exibidos).
+    """
+
+    client = DentalClient()
+    resposta = client.listar_pacientes(clinic_id=clinic_id, page=page, q=q)
+    itens = [
+        paciente
+        for paciente in (
+            normalizar_paciente(item) for item in (resposta.get("results") or [])
+        )
+        if paciente
+    ]
+    return itens, int(resposta.get("total_pages") or 1)
+
+
+def procurar_alunos(
+    q: str, user_group: int, page: int = 1
+) -> tuple[list[AlunoLabDental], int]:
+    """Procura alunos no Dental Office sem gravar nada."""
+
+    client = DentalClient()
+    resposta = client.listar_usuarios(user_group=user_group, page=page, q=q)
+    itens = [
+        aluno
+        for aluno in (
+            normalizar_aluno_lab(item) for item in (resposta.get("results") or [])
+        )
+        if aluno
+    ]
+    return itens, int(resposta.get("total_pages") or 1)
+
+
+def materializar_paciente(id_dental: str, clinic_id: int) -> Paciente | None:
+    """Garante um Paciente local para o id informado, criando se ainda nao existe.
+
+    Chamada quando o operador escolhe um resultado da busca. Os dados vem do
+    proprio Dental Office (GET /customers/{id}), nunca do cliente — o navegador
+    so informa qual id foi escolhido. Aproveita a chamada para ja trazer os
+    campos enriquecidos (CPF, endereco...) usados na geracao de contratos.
+    """
+
+    existente = Paciente.objects.filter(id_dental=str(id_dental)).first()
+    if existente:
+        return existente
+
+    dados = DentalClient().buscar_detalhes_paciente(id_dental)
+    paciente = normalizar_paciente(dados)
+    if not paciente:
+        return None
+
+    defaults: dict[str, Any] = {
+        "nome": paciente.nome,
+        "celular": paciente.celular,
+        "processo_aberto": paciente.ativo,
+        "ativo": paciente.ativo,
+        "origem": OrigemDados.DENTAL,
+        "ultima_sincronizacao": timezone.now(),
+    }
+    defaults.update(normalizar_paciente_detalhado(dados))
+
+    obj, _ = Paciente.objects.update_or_create(
+        id_dental=str(paciente.id), defaults=defaults
+    )
+    return obj
+
+
+def materializar_aluno(
+    id_dental: str, nome_hint: str, user_group: int
+) -> AlunoLab | None:
+    """Garante um AlunoLab local para o id informado, criando se ainda nao existe.
+
+    A API nao expoe um GET /users/{id}, entao a busca por nome e refeita e o
+    registro e localizado pelo id — ``nome_hint`` serve apenas como filtro da
+    consulta; os dados gravados vem sempre da resposta da API.
+    """
+
+    existente = AlunoLab.objects.filter(id_dental=str(id_dental)).first()
+    if existente:
+        return existente
+
+    itens, _ = procurar_alunos(q=nome_hint, user_group=user_group)
+    alvo = next((aluno for aluno in itens if str(aluno.id) == str(id_dental)), None)
+    if not alvo:
+        return None
+
+    obj, _ = AlunoLab.objects.update_or_create(
+        id_dental=str(alvo.id),
+        defaults={
+            "nome": alvo.nome,
+            "celular": alvo.celular,
+            "ativo": alvo.ativo,
+            "origem": OrigemDados.DENTAL,
+            "ultima_sincronizacao": timezone.now(),
+        },
+    )
+    return obj
 
 
 def buscar_e_importar_pacientes(q: str, clinic_id: int) -> ResultadoSync:

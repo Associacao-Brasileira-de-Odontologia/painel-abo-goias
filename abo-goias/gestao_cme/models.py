@@ -12,6 +12,36 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .utils import normalizar_texto
+
+
+class NomeNormalizadoMixin(models.Model):
+    """Mantem uma copia do nome sem acento e em caixa alta, para busca.
+
+    O campo e derivado: nunca e editado a mao, so recalculado a partir de
+    ``nome`` a cada save. As buscas por nome usam este campo para que "Honorio"
+    e "Honorio" (com acento) sejam encontrados pelo mesmo termo digitado.
+    """
+
+    nome_normalizado = models.CharField(
+        max_length=200,
+        blank=True,
+        db_index=True,
+        editable=False,
+    )
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        self.nome_normalizado = normalizar_texto(self.nome)
+        # Quando o chamador restringe os campos gravados (ex.: update_or_create
+        # da sincronizacao), o derivado precisa acompanhar o campo de origem.
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "nome" in update_fields:
+            kwargs["update_fields"] = [*update_fields, "nome_normalizado"]
+        super().save(*args, **kwargs)
+
 
 class ModeloBase(models.Model):
     """Base abstrata com campos comuns de auditoria e ativacao.
@@ -43,7 +73,7 @@ class OrigemDados(models.TextChoices):
     EXEMPLO = "EXEMPLO", "Exemplo"
 
 
-class Turma(ModeloBase):
+class Turma(NomeNormalizadoMixin, ModeloBase):
     """Turma academica disponivel para consulta e geracao de identificadores.
 
     Reune codigo externo, nome, curso, periodo e informacoes de sincronizacao.
@@ -75,7 +105,7 @@ class Turma(ModeloBase):
         return f"{self.codigo} - {self.nome}"
 
 
-class Aluno(ModeloBase):
+class Aluno(NomeNormalizadoMixin, ModeloBase):
     """Aluno vinculado a uma turma e aos fluxos de retirada de materiais.
 
     Guarda dados academicos, contato, localizacao e origem da informacao. O

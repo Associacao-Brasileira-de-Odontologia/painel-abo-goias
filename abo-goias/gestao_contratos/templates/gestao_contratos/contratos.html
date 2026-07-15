@@ -79,48 +79,46 @@
         </div>
     {% endif %}
 
-    {# ── Tabela de resultados locais (DB) ────────────────────── #}
-    {% if pacientes %}
-        {% if busca %}
-            <p class="section-label gc-mt-sm">Encontrado no sistema</p>
-        {% endif %}
+    {# ── Listagem unificada de pacientes ─────────────────────── #}
+    {% if pacientes_unificados %}
         <div class="table-wrap data-table-wrap">
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>Paciente</th>
+                        <th>Nascimento</th>
                         <th>Celular</th>
-                        <th>Dados para contrato</th>
                         <th>Ação</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for paciente in pacientes %}
+                    {% for pac in pacientes_unificados %}
                         <tr>
                             <td>
-                                <strong>{{ paciente.nome }}</strong>
-                                {% if paciente.data_nascimento %}
-                                    <span class="cell-muted">Nasc: {{ paciente.data_nascimento|date:"d/m/Y" }}</span>
+                                <strong>{{ pac.nome }}</strong>
+                                {% if pac.cpf %}
+                                    <span class="cell-muted">CPF {{ pac.cpf }}</span>
+                                {% elif not pac.no_sistema %}
+                                    <span class="cell-muted">Dental Office · ID #{{ pac.id_dental }}</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if paciente.celular %}
-                                    {{ paciente.celular }}
+                                {% if pac.nascimento %}
+                                    {{ pac.nascimento|date:"d/m/Y" }}
                                 {% else %}
                                     <span class="cell-muted">—</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if paciente.dados_contrato_completos %}
-                                    <span class="badge badge-devolvido">Completo</span>
+                                {% if pac.celular %}
+                                    {{ pac.celular }}
                                 {% else %}
-                                    <span class="badge badge-atrasado">Busca automática</span>
+                                    <span class="cell-muted">—</span>
                                 {% endif %}
                             </td>
                             <td class="actions-cell">
-                                <a class="button compact-button primary"
-                                   href="{% url 'contrato_gerar' paciente.pk %}">
-                                    Gerar contrato
+                                <a class="button compact-button primary" href="{{ pac.acao_url }}">
+                                    {{ pac.acao_label }}
                                 </a>
                             </td>
                         </tr>
@@ -130,71 +128,13 @@
         </div>
     {% endif %}
 
-    {# ── Resultados da API do Dental Office ──────────────────── #}
-    {% if pacientes_api %}
-        <div class="kpi-section {% if pacientes %}gc-mt-lg{% endif %}">
-            <div class="gc-row-tight gc-mt-sm">
-                <p class="section-label gc-m-0">Encontrado no Dental Office</p>
-                <span class="badge gc-selo gc-badge-sm">
-                    Não importado
-                </span>
-            </div>
-            <p class="panel-copy gc-mt-sm gc-text-sm">
-                Ao clicar em <strong>Importar e gerar</strong>, os dados são trazidos do
-                Dental Office automaticamente e o paciente fica disponível no sistema.
-            </p>
-            <div class="table-wrap data-table-wrap gc-mt-md">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Paciente</th>
-                            <th>Celular</th>
-                            <th>Origem</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for pac in pacientes_api %}
-                            <tr>
-                                <td>
-                                    <strong>{{ pac.nome }}</strong>
-                                    <span class="cell-muted">ID #{{ pac.id_dental }}</span>
-                                </td>
-                                <td>
-                                    {% if pac.celular %}
-                                        {{ pac.celular }}
-                                    {% else %}
-                                        <span class="cell-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if pac.ja_existe %}
-                                        <span class="badge badge-devolvido">Já no sistema</span>
-                                    {% else %}
-                                        <span class="badge gc-selo">Dental Office</span>
-                                    {% endif %}
-                                </td>
-                                <td class="actions-cell">
-                                    <a class="button compact-button primary"
-                                       href="{% url 'contrato_importar' pac.id_dental %}">
-                                        {% if pac.ja_existe %}Atualizar e gerar{% else %}Importar e gerar{% endif %}
-                                    </a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    {% endif %}
-
     {# Paginação da lista local #}
     {% if pacientes %}
         {% include "partials/paginacao.html" %}
     {% endif %}
 
     {# ── Estado vazio ────────────────────────────────────────── #}
-    {% if not pacientes and not pacientes_api %}
+    {% if not pacientes_unificados %}
         <div class="kpi-section">
             <div class="empty-state">
                 {% if erro_api %}

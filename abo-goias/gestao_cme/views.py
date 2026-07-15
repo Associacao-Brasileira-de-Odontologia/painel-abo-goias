@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db import transaction
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, ProtectedError, Q, Sum
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -25,6 +25,7 @@ from .forms import (
     EditarMovimentacaoForm,
     EmprestimoForm,
     EntradaForm,
+    KitForm,
     MaterialEditForm,
     MaterialForm,
     MovimentacaoForm,
@@ -42,8 +43,13 @@ from .models import (
     Turma,
 )
 from .services.eduq_sync import sincronizar_eduq
+from .utils import normalizar_texto
 
 REGISTROS_POR_PAGINA = 10
+
+# Teto de itens exibidos no autocomplete de aluno — mesmo valor do
+# equivalente na Gestao de Laboratorio (_LIMITE_RESULTADOS).
+LIMITE_RESULTADOS_BUSCA = 20
 
 
 def _gerar_row_hash() -> str:
@@ -127,6 +133,13 @@ def portal(request: HttpRequest) -> HttpResponse:
         ativo=True, pedido_material=None
     ).count()
     contratos_gerados = ContratoGerado.objects.count()
+    # Documentos assinados que não chegaram ao Dental Office (falha ou pendente)
+    # — precisam de atenção para não se perderem por falha de integração.
+    contratos_envio_dental_pendente = (
+        ContratoGerado.objects.filter(status="assinado")
+        .filter(Q(status_envio_dental="erro") | Q(status_envio_dental="nao_enviado"))
+        .count()
+    )
 
     resumo = {
         "pacotes_pendentes": pacotes_pendentes,
@@ -168,6 +181,17 @@ def portal(request: HttpRequest) -> HttpResponse:
                 ),
                 "url_name": "lab_moldagens",
                 "urgente": False,
+            }
+        )
+    if contratos_envio_dental_pendente:
+        tarefas_pendentes.append(
+            {
+                "texto": (
+                    f"{contratos_envio_dental_pendente} contrato(s) assinado(s)"
+                    " sem envio ao Dental Office"
+                ),
+                "url_name": "contrato_envios_dental",
+                "urgente": True,
             }
         )
 
@@ -257,12 +281,24 @@ def home(request: HttpRequest) -> HttpResponse:
     busca = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
     movimentacao = request.GET.get("movimentacao", "").strip()
+    aluno_id = request.GET.get("aluno", "").strip()
 
     movimentacoes = (
         Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
         .select_related("aluno", "turma", "material")
         .order_by("-data_hora", "-id")
     )
+
+    # Filtro por aluno específico — usado ao clicar no total de movimentações
+    # de um aluno na tela de alunos por turma. Precede a busca textual porque é
+    # um vínculo exato (FK), não um termo aproximado.
+    aluno_filtrado = None
+    if aluno_id.isdigit():
+        aluno_filtrado = (
+            Aluno.objects.select_related("turma").filter(pk=aluno_id).first()
+        )
+        if aluno_filtrado:
+            movimentacoes = movimentacoes.filter(aluno=aluno_filtrado)
 
     if status == "retirado":
         movimentacoes = movimentacoes.filter(retirado=True)
@@ -276,7 +312,11 @@ def home(request: HttpRequest) -> HttpResponse:
 
     if busca:
         movimentacoes = movimentacoes.filter(
+            # `aluno_nome`/`turma_nome` sao copias textuais do momento do
+            # registro (podem existir sem FK, ex.: dados legados); o campo
+            # normalizado do aluno cobre a busca sem acento quando ha vinculo.
             Q(aluno_nome__icontains=busca)
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(aluno_codigo_externo__icontains=busca)
             | Q(turma_nome__icontains=busca)
             | Q(pacote_codigo__icontains=busca)
@@ -323,6 +363,7 @@ def home(request: HttpRequest) -> HttpResponse:
             "movimentacao_atual": movimentacao,
             "movimentacao_label": movimentacao_label,
             "movimentacao_opcoes": Movimentacao.Tipo.choices,
+            "aluno_filtrado": aluno_filtrado,
             "movimentacoes": page_obj.object_list,
             "metricas": metricas,
             "page_obj": page_obj,
@@ -365,10 +406,10 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         alunos = alunos.filter(turma_id=turma_id)
     if busca:
         alunos = alunos.filter(
-            Q(nome__icontains=busca)
+            Q(nome_normalizado__icontains=normalizar_texto(busca))
             | Q(matricula__icontains=busca)
             | Q(email__icontains=busca)
-            | Q(turma__nome__icontains=busca)
+            | Q(turma__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(turma__codigo__icontains=busca)
         )
 
@@ -437,15 +478,37 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _sincronizar_ocupacao_abrigo(abrigo: Abrigo | None) -> None:
+    """Recalcula o campo ``ocupado`` de um abrigo a partir dos alunos vinculados.
+
+    Um abrigo é considerado ocupado quando há ao menos um aluno ativo com
+    ``aluno.abrigo`` apontando para ele. Mantém a coluna OCUPAÇÃO da tabela de
+    abrigos coerente com as atribuições feitas na tela de alunos por turma.
+    """
+
+    if abrigo is None:
+        return
+    ocupado_atual = abrigo.alunos.filter(ativo=True).exists()
+    if abrigo.ocupado != ocupado_atual:
+        abrigo.ocupado = ocupado_atual
+        abrigo.save(update_fields=["ocupado", "atualizado_em"])
+
+
 @login_required
 @require_POST
 def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
-    """Atribui ou remove o abrigo de um aluno diretamente na listagem."""
+    """Atribui ou remove o abrigo de um aluno diretamente na listagem.
+
+    Além de gravar o vínculo no aluno, sincroniza a ocupação dos abrigos
+    envolvidos (o novo e o anterior), para que a coluna OCUPAÇÃO da tabela de
+    abrigos reflita automaticamente o novo status.
+    """
 
     aluno = get_object_or_404(
         Aluno.objects.exclude(origem=OrigemDados.EXEMPLO), pk=aluno_id
     )
     abrigo_id = request.POST.get("abrigo_id", "").strip()
+    abrigo_anterior = aluno.abrigo
 
     if abrigo_id:
         abrigo = get_object_or_404(Abrigo, pk=abrigo_id, ativo=True)
@@ -457,7 +520,12 @@ def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
         aluno.abrigo = None
         messages.success(request, f"Abrigo removido de {aluno.nome}.")
 
-    aluno.save(update_fields=["abrigo"])
+    with transaction.atomic():
+        aluno.save(update_fields=["abrigo"])
+        # O anterior pode ter ficado livre; o novo passa a ocupado.
+        _sincronizar_ocupacao_abrigo(abrigo_anterior)
+        _sincronizar_ocupacao_abrigo(aluno.abrigo)
+
     next_url = request.POST.get("next") or reverse("alunos_por_turma")
     return redirect(next_url)
 
@@ -656,6 +724,37 @@ def kits(request: HttpRequest) -> HttpResponse:
     )
 
 
+@login_required
+def cadastrar_kit(request: HttpRequest) -> HttpResponse:
+    """Cria um novo kit manualmente, com composição opcional de materiais.
+
+    Habilita o cadastro de kits pela própria tela de kits (antes só era
+    possível pelo Django Admin). A seleção de materiais gera os itens do kit
+    com quantidade 1; ajustes de quantidade por material seguem no Admin.
+    """
+
+    form = KitForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        kit = form.save(commit=False)
+        kit.origem = OrigemDados.MANUAL
+        with transaction.atomic():
+            kit.save()
+            form._salvar_materiais(kit)
+        messages.success(request, f"Kit {kit.nome} cadastrado com sucesso.")
+        return redirect("kits")
+
+    return render(
+        request,
+        "gestao_cme/form_kit.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": "Cadastrar kit",
+            "is_edit": False,
+            "form": form,
+        },
+    )
+
+
 def _contexto_movimentacao(
     request: HttpRequest,
     tipo: str,
@@ -764,20 +863,27 @@ def registrar_entrada(request: HttpRequest) -> HttpResponse:
         }
         return redirect("registrar_entrada")
 
-    alunos = (
-        Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .filter(ativo=True)
-        .select_related("turma", "abrigo")
-        .order_by("turma__nome", "nome")
-    )
+    # Preserva o aluno escolhido no autocomplete quando o formulario volta com erro.
+    aluno_selecionado = None
+    aluno_pk = form["aluno"].value()
+    if aluno_pk:
+        aluno_selecionado = (
+            Aluno.objects.select_related("turma", "abrigo").filter(pk=aluno_pk).first()
+        )
+
+    confirmacao = request.session.pop("cme_entrada_confirmada", None)
+
     return render(
         request,
         "gestao_cme/registrar_entrada.html",
         {
             "usuario_logado": request.user,
             "form": form,
-            "alunos": alunos,
-            "confirmacao": request.session.pop("cme_entrada_confirmada", None),
+            "aluno_selecionado": aluno_selecionado,
+            "confirmacao": confirmacao,
+            # Com a confirmação na tela, o foco não deve pular direto para a
+            # busca — o operador precisa ler os códigos gerados primeiro.
+            "autofocus_busca": not confirmacao,
         },
     )
 
@@ -870,6 +976,8 @@ def registrar_saida(request: HttpRequest) -> HttpResponse:
             "aluno": aluno,
             "aluno_id": aluno_id or "",
             "pacotes_pendentes": pacotes_pendentes,
+            # Com um aluno já escolhido, o foco fica nos pacotes (passo 2).
+            "sem_aluno": aluno is None,
         },
     )
 
@@ -1104,16 +1212,28 @@ def cadastrar_abrigo(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
-    """Atualiza os dados de um abrigo existente."""
+    """Atualiza os dados de um abrigo existente.
+
+    A tela exibe um resumo dos alunos atualmente vinculados ao abrigo, usado
+    para montar a confirmação obrigatória antes de salvar (dupla checagem):
+    quem ocupa o abrigo hoje fica explícito para quem está alterando.
+    """
 
     abrigo = get_object_or_404(Abrigo, pk=pk)
     form = AbrigoEditForm(request.POST or None, instance=abrigo)
     if request.method == "POST" and form.is_valid():
         form.save()
+        # Se a edição desmarcou "ocupado" mas ainda há alunos vinculados (ou
+        # vice-versa), a origem da verdade continua sendo o vínculo dos alunos.
+        _sincronizar_ocupacao_abrigo(abrigo)
         messages.success(
             request, f"Abrigo {abrigo.identificador} atualizado com sucesso."
         )
         return redirect("abrigos")
+
+    alunos_associados = list(
+        abrigo.alunos.filter(ativo=True).select_related("turma").order_by("nome")
+    )
 
     return render(
         request,
@@ -1124,8 +1244,26 @@ def editar_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
             "is_edit": True,
             "objeto": abrigo,
             "form": form,
+            "alunos_associados": alunos_associados,
         },
     )
+
+
+@login_required
+@require_POST
+def excluir_abrigo(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exclui um abrigo permanentemente.
+
+    Os alunos vinculados têm ``abrigo`` definido como nulo automaticamente
+    (FK com ``on_delete=SET_NULL``), então nenhum cadastro de aluno é perdido —
+    apenas deixam de apontar para o abrigo excluído.
+    """
+
+    abrigo = get_object_or_404(Abrigo, pk=pk)
+    identificador = abrigo.identificador
+    abrigo.delete()
+    messages.warning(request, f"Abrigo {identificador} excluído permanentemente.")
+    return redirect("abrigos")
 
 
 @login_required
@@ -1163,6 +1301,19 @@ def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"Material {material.nome} atualizado com sucesso.")
         return redirect("materiais")
 
+    # Unidades deste material atualmente em emprestimo (emprestado ou atrasado),
+    # usado para avisar antes da exclusao irreversivel.
+    em_emprestimo = (
+        ItemEmprestimo.objects.filter(
+            material=material,
+            emprestimo__status__in=[
+                Emprestimo.Status.EMPRESTADO,
+                Emprestimo.Status.ATRASADO,
+            ],
+        ).aggregate(total=Sum("quantidade"))["total"]
+        or 0
+    )
+
     return render(
         request,
         "gestao_cme/form_material.html",
@@ -1172,8 +1323,112 @@ def editar_material(request: HttpRequest, pk: int) -> HttpResponse:
             "is_edit": True,
             "objeto": material,
             "form": form,
+            "em_emprestimo": em_emprestimo,
         },
     )
+
+
+@login_required
+def buscar_alunos(request: HttpRequest) -> HttpResponse:
+    """Fragmento HTMX com alunos filtrados por nome ou matricula (autocomplete).
+
+    Espelha o autocomplete da Gestao de Laboratorio (ver
+    ``gestao_lab.views._buscar_unificado``): mesmo componente ``[data-ac]``, mesmo
+    contrato de resultados e o mesmo aviso de "ha mais resultados" quando a busca
+    e ampla demais para o limite exibido.
+
+    Diferenca deliberada: no laboratorio a lista mistura a base local com a busca
+    do Dental Office; aqui a busca e **so local**, porque o Eduq nao oferece
+    consulta de aluno por nome (so ``listar_alunos`` por turma) — nao ha o que
+    consultar ao vivo nem o que materializar no clique. A base local e alimentada
+    pela sincronizacao do Eduq (rotina diaria + botao "Atualizar lista de alunos").
+
+    Usado nos registros de entrada, retirada e emprestimo. Com ``pendencias=1``
+    restringe aos alunos que possuem pacotes de entrada aguardando retirada
+    (fluxo de saida).
+    """
+
+    q = request.GET.get("q", "").strip()
+    alunos = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO).filter(ativo=True)
+    if request.GET.get("pendencias") == "1":
+        alunos = alunos.filter(
+            movimentacoes__tipo=Movimentacao.Tipo.ENTRADA,
+            movimentacoes__retirado=False,
+        ).distinct()
+    alunos = alunos.select_related("turma", "abrigo").order_by("nome")
+    if q:
+        alunos = alunos.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(matricula__icontains=q)
+        )
+
+    # Busca um a mais que o limite para saber se houve corte, sem um count().
+    encontrados = list(alunos[: LIMITE_RESULTADOS_BUSCA + 1])
+    ha_mais = len(encontrados) > LIMITE_RESULTADOS_BUSCA
+
+    return render(
+        request,
+        "gestao_cme/partials/_aluno_results.html",
+        {
+            "alunos": encontrados[:LIMITE_RESULTADOS_BUSCA],
+            "busca": q,
+            "ha_mais": ha_mais,
+        },
+    )
+
+
+@login_required
+@require_POST
+def atualizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
+    """Sincroniza turmas e alunos com o Eduq e volta para a tela de origem."""
+
+    try:
+        resultado = sincronizar_eduq(
+            sincronizar_turmas=True,
+            sincronizar_alunos=True,
+        )
+    except EduqAPIError as exc:
+        messages.error(request, f"Não foi possível atualizar os alunos: {exc}")
+    else:
+        messages.success(
+            request,
+            "Lista de alunos atualizada: "
+            f"{resultado.alunos.criados} novo(s), "
+            f"{resultado.alunos.atualizados} atualizado(s).",
+        )
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("registrar_entrada")
+
+
+@login_required
+@require_POST
+def excluir_material(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exclui um material do catalogo permanentemente.
+
+    Quando o material tem vinculos protegidos (emprestimos, kits ou estoques), a
+    exclusao e bloqueada e a view orienta a inativar o material em vez de excluir.
+    """
+
+    material = get_object_or_404(Material, pk=pk)
+    nome = material.nome
+    try:
+        material.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            (
+                f"Não foi possível excluir o material {nome}: há empréstimos, kits "
+                "ou estoques vinculados. Marque-o como indisponível/inativo em vez "
+                "de excluir."
+            ),
+        )
+        return redirect("editar_material", pk=pk)
+
+    messages.success(request, f"Material {nome} excluído permanentemente.")
+    return redirect("materiais")
 
 
 # ── Fase 3: fluxo de empréstimos ─────────────────────────────────────────────
@@ -1203,7 +1458,7 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
 
     if busca:
         queryset = queryset.filter(
-            Q(aluno__nome__icontains=busca)
+            Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(aluno__matricula__icontains=busca)
             | Q(kit__nome__icontains=busca)
             | Q(kit__codigo__icontains=busca)
@@ -1272,15 +1527,24 @@ def criar_emprestimo(request: HttpRequest) -> HttpResponse:
         )
         return redirect("emprestimos")
 
+    # Preserva o aluno escolhido no autocomplete quando o form volta com erro
+    # (mesmo padrão de registrar_entrada — ver melhoria de padronização).
+    aluno_selecionado = None
+    aluno_pk = form["aluno"].value()
+    if aluno_pk:
+        aluno_selecionado = (
+            Aluno.objects.select_related("turma", "abrigo").filter(pk=aluno_pk).first()
+        )
+
     return render(
         request,
         "gestao_cme/criar_emprestimo.html",
         {
             "usuario_logado": request.user,
             "titulo": "Novo empréstimo",
-            "alunos": form.fields["aluno"].queryset,
             "kits": form.fields["kit"].queryset,
             "form": form,
+            "aluno_selecionado": aluno_selecionado,
         },
     )
 

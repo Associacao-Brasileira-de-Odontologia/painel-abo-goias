@@ -1,4 +1,5 @@
-﻿{% extends "layouts/painel.html" %}
+{% extends "layouts/painel.html" %}
+{% load static %}
 
 {% block title %}Gestão de CME | Novo empréstimo{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
@@ -8,32 +9,18 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Registrar empréstimo{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'emprestimos' %}">Voltar à listagem</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" %}
 
     <form class="form-stack form-stack-wide" method="post">
         {% csrf_token %}
 
-        <div class="field field-required">
-            <label for="aluno">Aluno</label>
-            {% regroup alunos by turma as alunos_por_turma %}
-            <select id="aluno" name="aluno" required>
-                <option value="">— Selecione o aluno —</option>
-                {% for grupo in alunos_por_turma %}
-                    <optgroup label="{{ grupo.grouper.nome|default:'Sem turma' }} ({{ grupo.grouper.codigo|default:'—' }})">
-                        {% for aluno in grupo.list %}
-                            <option value="{{ aluno.pk }}" {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ aluno.nome }}{% if aluno.matricula %} — {{ aluno.matricula }}{% endif %}
-                            </option>
-                        {% endfor %}
-                    </optgroup>
-                {% endfor %}
-            </select>
-        </div>
+        {% comment %}
+        Seleção de aluno por busca — mesmo componente do registro de entrada
+        e da Gestão de Laboratório (handler [data-ac] em static/js/app.js).
+        {% endcomment %}
+        {% url 'buscar_alunos' as url_busca_alunos %}
+        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_busca_alunos ac_id=form.aluno.value ac_nome=aluno_selecionado.nome ac_errors=form.aluno.errors ac_placeholder="Buscar aluno por nome ou matrícula..." ac_autofocus=True %}
 
         <div class="field">
             <label for="kit">Kit <span class="field-optional">(opcional — os itens do kit serão adicionados automaticamente)</span></label>
@@ -72,4 +59,9 @@
             <a class="button secondary" href="{% url 'emprestimos' %}">Cancelar</a>
         </div>
     </form>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/htmx.min.js' %}"></script>
+    {# A seleção de aluno é do handler genérico [data-ac] em static/js/app.js. #}
 {% endblock %}

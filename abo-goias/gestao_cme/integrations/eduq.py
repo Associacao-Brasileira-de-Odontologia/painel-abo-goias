@@ -469,7 +469,7 @@ def _observacoes_turma(periodo: str, matriculas_ativas: str) -> str:
     if periodo:
         partes.append(f"Periodo: {periodo}")
     if matriculas_ativas:
-        partes.append(f"Matriculas ativas no Eduq: {matriculas_ativas}")
+        partes.append(f"Matriculas ativas: {matriculas_ativas}")
     return " | ".join(partes)
 
 

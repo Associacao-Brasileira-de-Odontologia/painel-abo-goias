@@ -1,4 +1,5 @@
 ﻿{% extends "layouts/painel.html" %}
+{% load static %}
 
 {% block title %}Gestão de CME | Registrar entrada{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
@@ -13,9 +14,12 @@
 
 {% block panel_title %}Registrar entrada de materiais{% endblock %}
 {% block panel_actions %}
-    <a class="button secondary" href="{% url 'cme_home' %}">Voltar ao histórico</a>
+    <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'registrar_entrada' %}">
+        <button class="button secondary compact-button" type="submit">Atualizar lista de alunos</button>
+    </form>
 {% endblock %}
-
 {% block panel %}
     {% if confirmacao %}
         <div class="entrada-confirmada" role="status">
@@ -51,24 +55,8 @@
     <form class="form-stack form-stack-wide" method="post">
         {% csrf_token %}
 
-        <div class="field field-required">
-            <label for="id_aluno">Aluno</label>
-            <select id="id_aluno" name="aluno" required {% if not confirmacao %}autofocus{% endif %}>
-                <option value="">Selecione um aluno...</option>
-                {% regroup alunos by turma as alunos_por_turma %}
-                {% for grupo in alunos_por_turma %}
-                    <optgroup label="{{ grupo.grouper|default:'Sem turma' }}">
-                        {% for aluno in grupo.list %}
-                            <option value="{{ aluno.pk }}"
-                                {% if form.aluno.value == aluno.pk|stringformat:"s" %}selected{% endif %}>
-                                {{ aluno.nome }}{% if aluno.matricula %} — {{ aluno.matricula }}{% endif %}
-                                {% if aluno.abrigo %} · Abrigo {{ aluno.abrigo.identificador }}{% else %} · Sem abrigo{% endif %}
-                            </option>
-                        {% endfor %}
-                    </optgroup>
-                {% endfor %}
-            </select>
-        </div>
+        {% url 'buscar_alunos' as url_busca_alunos %}
+        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_busca_alunos ac_id=form.aluno.value ac_nome=aluno_selecionado.nome ac_errors=form.aluno.errors ac_placeholder="Buscar aluno por nome ou matrícula..." ac_autofocus=autofocus_busca %}
 
         <div class="field field-required">
             <label for="id_quantidade">Quantidade de pacotes</label>
@@ -118,6 +106,8 @@
 {% endblock %}
 
 {% block extra_js %}
+    <script src="{% static 'js/htmx.min.js' %}"></script>
+    {# A seleção de aluno é do handler genérico [data-ac] em static/js/app.js. #}
     <script>
         document.querySelectorAll("[data-copiar-codigos]").forEach(function (botao) {
             botao.addEventListener("click", function () {

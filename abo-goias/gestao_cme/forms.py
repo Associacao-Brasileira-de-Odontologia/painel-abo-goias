@@ -7,6 +7,7 @@ from .models import (
     Abrigo,
     Aluno,
     Kit,
+    KitMaterial,
     Material,
     Movimentacao,
     OrigemDados,
@@ -154,6 +155,64 @@ class AbrigoEditForm(AbrigoForm):
 
     class Meta(AbrigoForm.Meta):
         fields = [*AbrigoForm.Meta.fields, "ativo"]
+
+
+class KitForm(forms.ModelForm):
+    """Valida o cadastro manual de um kit e sua composição de materiais.
+
+    O painel só permitia criar kits pelo Django Admin; este form habilita o
+    cadastro pela própria tela de kits. Os materiais escolhidos são gravados
+    como itens do kit (KitMaterial) com quantidade 1 — o ajuste fino de
+    quantidade por material continua no Admin (ver documentação da melhoria).
+    """
+
+    materiais = forms.ModelMultipleChoiceField(
+        queryset=Material.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Materiais do kit",
+    )
+
+    class Meta:
+        model = Kit
+        fields = ["nome", "codigo", "descricao", "quantidade"]
+        error_messages = {
+            "nome": {"required": "Nome é obrigatório."},
+            "codigo": {"required": "Código é obrigatório."},
+        }
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["materiais"].queryset = (
+            Material.objects.exclude(origem=OrigemDados.EXEMPLO)
+            .filter(ativo=True)
+            .order_by("nome")
+        )
+
+    def clean_codigo(self) -> str:
+        codigo = self.cleaned_data.get("codigo", "")
+        qs = Kit.objects.filter(codigo=codigo)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("Já existe um kit com esse código.")
+        return codigo
+
+    def save(self, commit: bool = True) -> Kit:
+        kit = super().save(commit=commit)
+        if commit:
+            self._salvar_materiais(kit)
+        return kit
+
+    def _salvar_materiais(self, kit: Kit) -> None:
+        """Cria os itens do kit para os materiais selecionados (quantidade 1)."""
+
+        for material in self.cleaned_data.get("materiais", []):
+            KitMaterial.objects.get_or_create(
+                kit=kit,
+                material=material,
+                defaults={"quantidade": 1},
+            )
 
 
 class MaterialForm(forms.ModelForm):

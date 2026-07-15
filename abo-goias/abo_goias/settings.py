@@ -268,7 +268,15 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_ROOT = Path(_env("DJANGO_MEDIA_ROOT", str(BASE_DIR)))
 MEDIA_URL = "/media/"
 
-if importlib.util.find_spec("whitenoise"):
+# O storage com manifesto (hash no nome do arquivo) exige que `collectstatic`
+# tenha rodado: sem o manifesto, qualquer {% static %} quebra. Isso e o que
+# queremos em producao (erro alto se faltar arquivo), mas na suite de testes
+# obrigaria um `collectstatic` previo so para renderizar templates. Por isso o
+# manifesto fica desligado ao rodar os testes, mantendo a checagem estrita no
+# resto dos ambientes.
+TESTANDO = "test" in sys.argv[1:2]
+
+if importlib.util.find_spec("whitenoise") and not TESTANDO:
     STORAGES = {
         "default": {
             "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -461,5 +469,17 @@ CELERY_BEAT_SCHEDULE = {
     "cobrar-pedidos-de-material-atrasados": {
         "task": "gestao_lab.tasks.cobrar_pedidos_atrasados_task",
         "schedule": crontab(hour=9, minute=0),  # uma vez por dia, as 9h
+    },
+    # Mantem a base local em dia sem ninguem precisar sincronizar na mao.
+    # De madrugada (fora do horario de atendimento) e escalonadas: sao rotinas
+    # longas, que percorrem todas as turmas do Eduq e todas as paginas do Dental
+    # Office — nao convem dispara-las juntas.
+    "atualizar-turmas-e-alunos-eduq": {
+        "task": "gestao_cme.tasks.sincronizar_eduq_task",
+        "schedule": crontab(hour=4, minute=0),
+    },
+    "atualizar-pacientes-e-alunos-dental": {
+        "task": "gestao_lab.tasks.sincronizar_dental_task",
+        "schedule": crontab(hour=4, minute=30),
     },
 }

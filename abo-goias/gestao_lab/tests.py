@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
@@ -34,6 +35,7 @@ from gestao_lab.integrations.dental import (
     DentalRateLimitError,
     DentalServerError,
     DentalTimeoutError,
+    PacienteDental,
     carregar_config_dental,
 )
 from gestao_lab.models import (
@@ -52,7 +54,7 @@ from gestao_lab.services.dental_sync import (
     buscar_e_importar_pacientes,
     listar_todas_paginas,
 )
-from gestao_lab.tasks import cobrar_pedidos_atrasados_task
+from gestao_lab.tasks import cobrar_pedidos_atrasados_task, sincronizar_dental_task
 from mensageria import MessagingResult
 
 User = get_user_model()
@@ -656,7 +658,10 @@ class SincronizarDentalViewTests(TestCase):
         response = self.client.post(reverse("lab_sincronizar"), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "DENTAL_CLINIC_ID")
+        # A mensagem e para o operador: diz o que fazer, sem citar a variavel de
+        # ambiente nem o sistema de origem.
+        self.assertContains(response, "não está configurada")
+        self.assertContains(response, "suporte técnico")
 
     @override_settings(DENTAL_CLINIC_ID="clinic-test")
     @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
@@ -1348,3 +1353,271 @@ class BuscarEImportarMultiplasPaginasTests(TestCase):
         self.assertEqual(resultado["criados"], 61)
         self.assertEqual(AlunoLab.objects.count(), 61)
         self.assertEqual(mock_client.listar_usuarios.call_count, 2)
+
+
+# ---------------------------------------------------------------------------
+# Fase 3.3 — busca com seleção e exclusão de pedidos/moldagens
+# ---------------------------------------------------------------------------
+
+
+class SincronizacaoAgendadaDentalTests(TestCase):
+    """A rotina em segundo plano que mantem as listagens do lab em dia."""
+
+    @override_settings(DENTAL_CLINIC_ID=7, DENTAL_USER_GROUP_ALUNO=8)
+    @patch("gestao_lab.services.dental_sync.sincronizar_alunos")
+    @patch("gestao_lab.services.dental_sync.sincronizar_pacientes")
+    def test_task_sincroniza_e_registra_no_historico(self, mock_pac, mock_alu) -> None:
+        mock_pac.return_value = {"criados": 3, "atualizados": 10, "ignorados": 0}
+        mock_alu.return_value = {"criados": 1, "atualizados": 4, "ignorados": 0}
+
+        resumo = sincronizar_dental_task()
+
+        self.assertEqual(resumo["pacientes_criados"], 3)
+        self.assertEqual(resumo["alunos_atualizados"], 4)
+
+        # a execucao automatica alimenta o mesmo historico exibido na interface
+        registro = RegistroSync.objects.latest("criado_em")
+        self.assertEqual(registro.tipo, RegistroSync.Tipo.AGENDADA)
+        self.assertEqual(registro.disparado_por, "agendamento")
+        self.assertTrue(registro.sucesso)
+
+    @override_settings(DENTAL_CLINIC_ID=None)
+    @patch("gestao_lab.services.dental_sync.sincronizar_pacientes")
+    def test_task_nao_faz_nada_sem_configuracao(self, mock_pac) -> None:
+        self.assertIsNone(sincronizar_dental_task())
+        mock_pac.assert_not_called()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class BuscaSelecaoLabTests(TestCase):
+    """Autocomplete de paciente e aluno nos formulários de pedido/moldagem."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="lab-3-3", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.pac = _paciente(nome="Maria Aparecida", id_dental="P1")
+        _paciente(nome="Outro Paciente", id_dental="P2")
+        self.aluno = _aluno(nome="Joao Pedro", id_dental="A1", celular="62999")
+        _aluno(nome="Outro Aluno", id_dental="A2")
+
+    @patch("gestao_lab.services.dental_sync.procurar_pacientes")
+    def test_buscar_pacientes_filtra_por_nome(self, mock_procurar) -> None:
+        mock_procurar.return_value = ([], 1)
+        response = self.client.get(reverse("lab_buscar_pacientes"), {"q": "Maria"})
+
+        self.assertContains(response, "Maria Aparecida")
+        self.assertNotContains(response, "Outro Paciente")
+
+    @patch("gestao_lab.services.dental_sync.procurar_alunos")
+    def test_buscar_alunos_lab_filtra_por_nome(self, mock_procurar) -> None:
+        mock_procurar.return_value = ([], 1)
+        response = self.client.get(reverse("lab_buscar_alunos_lab"), {"q": "Joao"})
+
+        self.assertContains(response, "Joao Pedro")
+        self.assertNotContains(response, "Outro Aluno")
+
+    def test_form_pedido_usa_autocomplete_e_nao_select(self) -> None:
+        response = self.client.get(reverse("lab_criar_pedido"))
+        conteudo = response.content.decode()
+
+        self.assertIn('data-ac-hidden', conteudo)
+        self.assertNotIn('<select id="id_paciente"', conteudo)
+
+    def test_campos_de_busca_enviam_o_termo(self) -> None:
+        """Regressão: sem `name` no input, o HTMX não envia `q` e a lista nunca
+        filtra — a busca parece 'não atualizar'."""
+
+        for rota in ("lab_criar_pedido", "lab_criar_moldagem"):
+            with self.subTest(rota=rota):
+                conteudo = self.client.get(reverse(rota)).content.decode()
+                # Só os campos do autocomplete (a sidebar de importação do
+                # Dental Office também tem campos de busca, mas sem HTMX).
+                campos = re.findall(
+                    r"<input[^>]*id=\"ac-busca-[^\"]+\"[^>]*>", conteudo
+                )
+
+                self.assertEqual(len(campos), 2, "esperados 2 campos de autocomplete")
+                for campo in campos:
+                    self.assertIn('name="q"', campo)
+                    self.assertIn("hx-get=", campo)
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.procurar_pacientes")
+    def test_busca_junta_base_local_e_api_sem_gravar(self, mock_procurar) -> None:
+        """A lista e unica: o operador nao distingue quem ja estava no banco de
+        quem veio da API — e a busca em si nao grava nada."""
+
+        mock_procurar.return_value = (
+            [PacienteDental(id=999, nome="Gustavo Só na API", celular="", ativo=True)],
+            1,
+        )
+        antes = Paciente.objects.count()
+
+        response = self.client.get(reverse("lab_buscar_pacientes"), {"q": "a"})
+        conteudo = response.content.decode()
+
+        self.assertContains(response, "Gustavo Só na API")  # veio da API
+        self.assertContains(response, "Maria Aparecida")  # ja estava no banco
+        self.assertIn('data-id-dental="999"', conteudo)
+        # o item que ainda nao existe por aqui vai sem pk (grava so no clique)
+        self.assertIn('data-id="" data-id-dental="999"', " ".join(conteudo.split()))
+        self.assertEqual(Paciente.objects.count(), antes, "a busca nao pode gravar")
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.procurar_pacientes")
+    def test_busca_avisa_quando_ha_mais_paginas(self, mock_procurar) -> None:
+        mock_procurar.return_value = (
+            [PacienteDental(id=1, nome="Silva Um", celular="", ativo=True)],
+            4,
+        )
+
+        response = self.client.get(reverse("lab_buscar_pacientes"), {"q": "silva"})
+
+        self.assertContains(response, "Há mais resultados")
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.procurar_pacientes")
+    def test_busca_degrada_para_a_base_local_se_a_api_falhar(
+        self, mock_procurar
+    ) -> None:
+        """Sem a API, quem ja esta no banco continua encontravel — com aviso."""
+
+        mock_procurar.side_effect = DentalAPIError("indisponível")
+
+        response = self.client.get(reverse("lab_buscar_pacientes"), {"q": "Maria"})
+
+        self.assertContains(response, "Maria Aparecida")
+        self.assertContains(response, "podem não aparecer")
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.DentalClient")
+    def test_selecionar_grava_apenas_o_escolhido(self, mock_client) -> None:
+        """O registro so vai para o banco quando o operador escolhe — um write."""
+
+        mock_client.return_value.buscar_detalhes_paciente.return_value = {
+            "id": 999,
+            "name": "Gustavo Escolhido",
+            "active": True,
+        }
+        antes = Paciente.objects.count()
+
+        response = self.client.post(
+            reverse("lab_materializar", args=["paciente"]),
+            {"id_dental": "999", "nome": "Gustavo Escolhido"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Paciente.objects.count(), antes + 1)
+        criado = Paciente.objects.get(id_dental="999")
+        self.assertEqual(response.json()["pk"], criado.pk)
+        self.assertEqual(criado.nome, "Gustavo Escolhido")
+        # dados vem da API, nunca do que o navegador mandou
+        mock_client.return_value.buscar_detalhes_paciente.assert_called_once_with("999")
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.DentalClient")
+    def test_selecionar_registro_ja_existente_nao_chama_a_api(
+        self, mock_client
+    ) -> None:
+        antes = Paciente.objects.count()
+
+        response = self.client.post(
+            reverse("lab_materializar", args=["paciente"]),
+            {"id_dental": self.pac.id_dental, "nome": self.pac.nome},
+        )
+
+        self.assertEqual(response.json()["pk"], self.pac.pk)
+        self.assertEqual(Paciente.objects.count(), antes)
+        mock_client.return_value.buscar_detalhes_paciente.assert_not_called()
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.DentalClient")
+    def test_selecionar_devolve_erro_tratado_se_a_api_falhar(
+        self, mock_client
+    ) -> None:
+        mock_client.return_value.buscar_detalhes_paciente.side_effect = DentalAPIError(
+            "fora do ar"
+        )
+
+        response = self.client.post(
+            reverse("lab_materializar", args=["paciente"]),
+            {"id_dental": "999", "nome": "Alguém"},
+        )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("Não foi possível", response.json()["erro"])
+
+    def test_pedido_aceita_pk_vindo_do_campo_oculto(self) -> None:
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        response = self.client.post(
+            reverse("lab_criar_pedido"),
+            {
+                "paciente": self.pac.pk,
+                "aluno": self.aluno.pk,
+                "laboratorio": lab.pk,
+                "equipe": equipe.pk,
+                "previsao_entrega": (date.today() + timedelta(days=5)).isoformat(),
+                "descricao_servico": "Serviço de teste",
+            },
+        )
+
+        self.assertRedirects(response, reverse("lab_pedidos"))
+        self.assertEqual(PedidoMaterial.objects.count(), 1)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class ExclusaoLabTests(TestCase):
+    """Exclusão de pedidos e moldagens a partir das listagens."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="lab-excluir", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.pac = _paciente(id_dental="P9")
+        self.aluno = _aluno(id_dental="A9")
+        self.equipe = _equipe()
+        self.lab = _laboratorio(equipe=self.equipe)
+
+    def test_excluir_pedido_remove_registro(self) -> None:
+        pedido = _pedido(self.pac, self.aluno, self.lab, self.equipe)
+
+        response = self.client.post(reverse("lab_excluir_pedido", args=[pedido.pk]))
+
+        self.assertRedirects(response, reverse("lab_pedidos"))
+        self.assertFalse(PedidoMaterial.objects.filter(pk=pedido.pk).exists())
+
+    def test_excluir_pedido_devolve_moldagem_para_nao_convertida(self) -> None:
+        pedido = _pedido(self.pac, self.aluno, self.lab, self.equipe)
+        moldagem = Moldagem.objects.create(
+            paciente=self.pac, aluno=self.aluno, pedido_material=pedido
+        )
+
+        self.client.post(reverse("lab_excluir_pedido", args=[pedido.pk]))
+
+        moldagem.refresh_from_db()
+        self.assertIsNone(moldagem.pedido_material)
+        self.assertFalse(moldagem.convertida)
+
+    def test_excluir_moldagem_remove_registro(self) -> None:
+        moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+
+        response = self.client.post(
+            reverse("lab_excluir_moldagem", args=[moldagem.pk])
+        )
+
+        self.assertRedirects(response, reverse("lab_moldagens"))
+        self.assertFalse(Moldagem.objects.filter(pk=moldagem.pk).exists())
+
+    def test_exclusao_respeita_next(self) -> None:
+        moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+        destino = reverse("lab_moldagens") + "?filtro=nao_convertida"
+
+        response = self.client.post(
+            reverse("lab_excluir_moldagem", args=[moldagem.pk]), {"next": destino}
+        )
+
+        self.assertRedirects(response, destino)

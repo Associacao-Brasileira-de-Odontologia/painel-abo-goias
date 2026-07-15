@@ -28,7 +28,7 @@
                         </div>
                         {% if contrato.status_envio_dental == "enviado" %}
                             <span class="badge badge-devolvido gc-badge-sm">
-                                Enviado ao Dental — {{ contrato.enviado_dental_em|date:"d/m H:i" }}
+                                Enviado ao Dental Office — {{ contrato.enviado_dental_em|date:"d/m H:i" }}
                             </span>
                         {% elif contrato.status == "assinado" %}
                             <form method="post"
@@ -144,7 +144,7 @@
             {% endif %}
 
             <div class="info-chip">
-                <span>Registro Dental</span>
+                <span>Registro Dental Office</span>
                 <strong>#{{ paciente.id_dental }}</strong>
             </div>
 

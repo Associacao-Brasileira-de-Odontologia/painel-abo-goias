@@ -1,0 +1,42 @@
+{% comment %}
+Resultados do autocomplete. Contexto: itens (dicts com pk/id_dental/nome/celular),
+busca, ha_mais, parcial.
+
+A lista é única de propósito: mistura quem já está no banco com quem veio da
+busca no Dental Office, sem dizer de onde veio cada um — o operador só quer
+escolher a pessoa. Itens sem `pk` ainda não existem por aqui e são gravados no
+clique (ver o handler [data-ac] em static/js/app.js).
+{% endcomment %}
+
+{% if parcial %}
+    <p class="ac-aviso">Alguns cadastros podem não aparecer agora. Mostrando o que foi possível carregar.</p>
+{% endif %}
+
+{% if itens %}
+    <ul class="search-results" role="listbox" aria-label="Resultados da busca">
+        {% for item in itens %}
+            <li>
+                <button type="button" class="search-result ac-result"
+                        data-id="{{ item.pk|default_if_none:'' }}"
+                        data-id-dental="{{ item.id_dental }}"
+                        data-nome="{{ item.nome }}">
+                    <span class="search-result-main">
+                        <strong>{{ item.nome }}</strong>
+                        {% if item.celular %}
+                            <span class="cell-muted">{{ item.celular }}</span>
+                        {% endif %}
+                    </span>
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+    {% if ha_mais %}
+        <p class="help-text">Há mais resultados — refine a busca pelo nome completo.</p>
+    {% endif %}
+{% elif busca %}
+    <p class="help-text search-results-empty">
+        Nenhum resultado para &ldquo;{{ busca }}&rdquo;.
+    </p>
+{% else %}
+    <p class="help-text search-results-empty">Digite o nome para buscar.</p>
+{% endif %}

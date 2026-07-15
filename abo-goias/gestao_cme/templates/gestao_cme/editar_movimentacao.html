@@ -10,10 +10,6 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Editar registro — pacote {{ mov.pacote_codigo }}{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'cme_home' %}">Voltar ao histórico</a>
-{% endblock %}
-
 {% block panel %}
     {# Resumo do registro #}
     <div class="kpi-section">

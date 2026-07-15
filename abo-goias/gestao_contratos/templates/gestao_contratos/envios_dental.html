@@ -1,0 +1,87 @@
+{% extends "gestao_contratos/base.html" %}
+
+{% block title %}Envios ao Dental Office{% endblock %}
+
+{% block breadcrumb %}{% include "partials/breadcrumb.html" %}{% endblock %}
+
+{% block sidebar_copy %}
+    Documentos assinados que ainda não chegaram à ficha do paciente no
+    Dental Office — por falha de integração ou por ainda não terem sido
+    enviados. Reenvie a partir daqui para não perder nenhum documento.
+{% endblock %}
+
+{% block sidebar_extra %}
+    <div class="metric-grid gc-mt-lg">
+        <div class="metric-card">
+            <span class="metric-label">Pendentes / com falha</span>
+            <strong>{{ total }}</strong>
+        </div>
+    </div>
+{% endblock %}
+
+{% block panel_title %}Envios ao Dental Office{% endblock %}
+
+{% block panel %}
+    {% if contratos %}
+        <div class="table-wrap data-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Paciente</th>
+                        <th>Contrato</th>
+                        <th>Situação</th>
+                        <th>Detalhe</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for contrato in contratos %}
+                        <tr>
+                            <td>
+                                <strong>{{ contrato.paciente.nome }}</strong>
+                                <span class="cell-muted">Dental Office · ID #{{ contrato.paciente.id_dental }}</span>
+                            </td>
+                            <td>
+                                <strong>{{ contrato.get_tipo_display }}</strong>
+                                <span class="cell-muted">{{ contrato.criado_em|date:"d/m/Y H:i" }}</span>
+                            </td>
+                            <td>
+                                {% if contrato.status_envio_dental == "erro" %}
+                                    <span class="badge badge-atrasado">Falha no envio</span>
+                                {% else %}
+                                    <span class="badge badge-emprestado">Não enviado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if contrato.ultimo_erro %}
+                                    <span class="cell-muted">{{ contrato.ultimo_erro }}</span>
+                                {% else %}
+                                    <span class="cell-muted">Assinado, aguardando envio ao Dental Office.</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions-cell">
+                                <form method="post" action="{% url 'contrato_enviar_dental' contrato.pk %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{% url 'contrato_envios_dental' %}">
+                                    <button class="button compact-button primary" type="submit">
+                                        {% if contrato.status_envio_dental == "erro" %}Reenviar{% else %}Enviar{% endif %}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="kpi-section">
+            <div class="empty-state">
+                <strong>Nenhum envio pendente</strong>
+                <p>
+                    Todos os documentos assinados foram enviados com sucesso ao
+                    Dental Office.
+                </p>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

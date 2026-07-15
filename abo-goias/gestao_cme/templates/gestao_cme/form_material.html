@@ -15,10 +15,6 @@
 
 {% block panel_label %}<p class="section-label">Catálogo</p>{% endblock %}
 {% block panel_title %}{{ titulo }}{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'materiais' %}">Voltar à listagem</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" %}
 
@@ -136,4 +132,27 @@
             <a class="button secondary" href="{% url 'materiais' %}">Cancelar</a>
         </div>
     </form>
+
+    {% if is_edit %}
+        <div class="kpi-section">
+            <p class="section-label">Excluir material</p>
+            <p class="help-text">
+                Esta ação é permanente e não pode ser desfeita.
+                {% if em_emprestimo %}
+                    Atenção: <strong>{{ em_emprestimo }} unidade(s)</strong> deste material
+                    {{ em_emprestimo|pluralize:"está,estão" }} em empréstimo no momento.
+                {% endif %}
+            </p>
+            <form method="post" action="{% url 'excluir_material' objeto.pk %}">
+                {% csrf_token %}
+                <button class="button danger-button" type="submit"
+                        data-confirm="Excluir o material {{ objeto.nome }}? {% if em_emprestimo %}{{ em_emprestimo }} unidade(s) deste material estão em empréstimo agora. {% endif %}Esta ação é irreversível e não pode ser desfeita."
+                        data-confirm-title="Excluir material"
+                        data-confirm-label="Excluir material"
+                        data-confirm-danger="true">
+                    Excluir material
+                </button>
+            </form>
+        </div>
+    {% endif %}
 {% endblock %}

@@ -11,6 +11,15 @@
     box-sizing: border-box;
 }
 
+/*
+ * O atributo `hidden` precisa vencer o display dos componentes. Sem isto,
+ * regras como .field{display:grid} ou .selected-chip{display:flex} anulam o
+ * `[hidden]{display:none}` do navegador e o elemento continua visível.
+ */
+[hidden] {
+    display: none !important;
+}
+
 body {
     min-height: 100vh;
     margin: 0;

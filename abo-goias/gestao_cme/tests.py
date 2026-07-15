@@ -25,6 +25,7 @@ from gestao_cme.models import (
     Aluno,
     Armario,
     Emprestimo,
+    ItemEmprestimo,
     Kit,
     KitMaterial,
     Material,
@@ -434,7 +435,7 @@ class EduqSyncTests(TestCase):
         self.assertEqual(turma.curso, "Especializacao em Endodontia")
         self.assertEqual(turma.data_inicio.isoformat(), "2026-03-06")
         self.assertEqual(turma.data_fim.isoformat(), "2027-11-27")
-        self.assertEqual(turma.observacoes, "Matriculas ativas no Eduq: 11")
+        self.assertEqual(turma.observacoes, "Matriculas ativas: 11")
         self.assertEqual(turma.origem, OrigemDados.EDUQ)
         self.assertIsNotNone(turma.ultima_sincronizacao)
         aluno = Aluno.objects.select_related("turma").get(matricula="A-20260001")
@@ -931,3 +932,163 @@ class PaginasDeErroTests(TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertIn(b"Erro interno", response.content)
+
+
+class SincronizacaoAgendadaEduqTests(TestCase):
+    """A rotina em segundo plano que mantem a base de alunos completa."""
+
+    @patch("gestao_cme.services.eduq_sync.sincronizar_eduq")
+    def test_task_sincroniza_turmas_e_alunos_e_resume(self, mock_sync) -> None:
+        from gestao_cme.tasks import sincronizar_eduq_task
+
+        mock_sync.return_value = SimpleNamespace(
+            turmas=SimpleNamespace(criados=2, atualizados=41, erros=[]),
+            alunos=SimpleNamespace(criados=5, atualizados=370, erros=["x"]),
+        )
+
+        resumo = sincronizar_eduq_task()
+
+        mock_sync.assert_called_once_with(
+            sincronizar_turmas=True, sincronizar_alunos=True
+        )
+        self.assertEqual(resumo["turmas_criadas"], 2)
+        self.assertEqual(resumo["alunos_criados"], 5)
+        self.assertEqual(resumo["erros"], 1)
+
+    def test_task_esta_agendada_no_beat(self) -> None:
+        """Sem entrada no Beat a rotina nunca roda — e a base fica parada."""
+
+        agendamentos = settings.CELERY_BEAT_SCHEDULE.values()
+        tarefas = {item["task"] for item in agendamentos}
+
+        self.assertIn("gestao_cme.tasks.sincronizar_eduq_task", tarefas)
+        self.assertIn("gestao_lab.tasks.sincronizar_dental_task", tarefas)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class MateriaisFase32Tests(TestCase):
+    """Autocomplete de aluno, atualizacao via Eduq e exclusao de material (Fase 3.2)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-3-2", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma X", codigo="TX", origem=OrigemDados.EDUQ
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Carlos Andrade", matricula="MAT-1", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+        Aluno.objects.create(
+            nome="Outro Nome", matricula="MAT-2", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+
+    def test_buscar_alunos_filtra_por_nome(self) -> None:
+        response = self.client.get(reverse("buscar_alunos"), {"q": "Carlos"})
+
+        self.assertContains(response, "Carlos Andrade")
+        self.assertNotContains(response, "Outro Nome")
+
+    def test_buscar_alunos_ignora_acento(self) -> None:
+        """Os cadastros vem do Eduq com grafia mista e o operador digita sem
+        acento — as duas formas precisam encontrar o mesmo conjunto."""
+
+        Aluno.objects.create(
+            nome="Ana Júlia Gonçalves", matricula="MAT-9", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+
+        for termo in ("Goncalves", "Gonçalves", "JULIA", "júlia"):
+            with self.subTest(termo=termo):
+                response = self.client.get(reverse("buscar_alunos"), {"q": termo})
+                self.assertContains(response, "Ana Júlia Gonçalves")
+
+    def test_nome_normalizado_e_derivado_do_nome(self) -> None:
+        aluno = Aluno.objects.create(
+            nome="José da Silva Araújo", matricula="MAT-10", turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+        self.assertEqual(aluno.nome_normalizado, "JOSE DA SILVA ARAUJO")
+
+        # o derivado acompanha a renomeacao, inclusive com update_fields
+        aluno.nome = "João Pereira"
+        aluno.save(update_fields=["nome"])
+        aluno.refresh_from_db()
+        self.assertEqual(aluno.nome_normalizado, "JOAO PEREIRA")
+
+    def test_campo_de_busca_de_aluno_envia_o_termo(self) -> None:
+        """Regressão: sem `name` no input, o HTMX não envia `q` e a listagem
+        devolve sempre todos os alunos — a busca parece 'não atualizar'."""
+
+        import re
+
+        for rota in ("registrar_entrada", "registrar_saida"):
+            with self.subTest(rota=rota):
+                conteudo = self.client.get(reverse(rota)).content.decode()
+                campos = re.findall(r"<input[^>]*type=\"search\"[^>]*>", conteudo)
+
+                self.assertTrue(campos, "esperado um campo de busca de aluno")
+                for campo in campos:
+                    self.assertIn('name="q"', campo)
+                    self.assertIn("hx-get=", campo)
+
+    def test_buscar_alunos_pendencias_so_alunos_com_pacotes(self) -> None:
+        vazio = self.client.get(reverse("buscar_alunos"), {"pendencias": "1"})
+        self.assertNotContains(vazio, "Carlos Andrade")
+
+        Movimentacao.objects.create(
+            data_hora=timezone.now(), tipo=Movimentacao.Tipo.ENTRADA, aluno=self.aluno,
+            aluno_nome=self.aluno.nome, pacote_codigo="1", retirado=False,
+            arquivo_origem="painel", row_hash="h1", origem=OrigemDados.MANUAL,
+        )
+        com = self.client.get(reverse("buscar_alunos"), {"pendencias": "1"})
+        self.assertContains(com, "Carlos Andrade")
+
+    def test_excluir_material_sem_vinculos(self) -> None:
+        material = Material.objects.create(
+            nome="Livre", codigo="C-LIVRE", origem=OrigemDados.MANUAL
+        )
+        response = self.client.post(reverse("excluir_material", args=[material.pk]))
+
+        self.assertRedirects(response, reverse("materiais"))
+        self.assertFalse(Material.objects.filter(pk=material.pk).exists())
+
+    def test_excluir_material_com_emprestimo_e_bloqueado(self) -> None:
+        material = Material.objects.create(
+            nome="Vinculado", codigo="C-VINC", origem=OrigemDados.MANUAL
+        )
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno, status=Emprestimo.Status.EMPRESTADO
+        )
+        ItemEmprestimo.objects.create(emprestimo=emp, material=material, quantidade=3)
+
+        response = self.client.post(reverse("excluir_material", args=[material.pk]))
+
+        self.assertRedirects(response, reverse("editar_material", args=[material.pk]))
+        self.assertTrue(Material.objects.filter(pk=material.pk).exists())
+
+    def test_editar_material_expoe_unidades_em_emprestimo(self) -> None:
+        material = Material.objects.create(
+            nome="Vinculado2", codigo="C-VINC2", origem=OrigemDados.MANUAL
+        )
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno, status=Emprestimo.Status.ATRASADO
+        )
+        ItemEmprestimo.objects.create(emprestimo=emp, material=material, quantidade=5)
+
+        response = self.client.get(reverse("editar_material", args=[material.pk]))
+
+        self.assertEqual(response.context["em_emprestimo"], 5)
+
+    @patch("gestao_cme.views.sincronizar_eduq")
+    def test_atualizar_alunos_eduq_dispara_sync_e_redireciona(self, mock_sync) -> None:
+        mock_sync.return_value = SimpleNamespace(
+            alunos=SimpleNamespace(criados=2, atualizados=1),
+        )
+        response = self.client.post(reverse("atualizar_alunos_eduq"))
+
+        self.assertTrue(mock_sync.called)
+        self.assertEqual(response.status_code, 302)

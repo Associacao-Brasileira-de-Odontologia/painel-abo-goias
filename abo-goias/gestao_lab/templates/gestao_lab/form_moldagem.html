@@ -1,4 +1,5 @@
 ﻿{% extends "gestao_lab/base.html" %}
+{% load static %}
 
 {% block title %}Gestão de Laboratório | Nova moldagem{% endblock %}
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
@@ -13,31 +14,20 @@
 
 {% block panel_label %}<p class="section-label">Fluxo de moldagens</p>{% endblock %}
 {% block panel_title %}Registrar moldagem{% endblock %}
-{% block panel_actions %}
-    <a class="button secondary" href="{% url 'lab_moldagens' %}">Voltar à listagem</a>
-{% endblock %}
-
 {% block panel %}
     {% include "partials/form_errors.html" with com_rotulo=True %}
 
     <form class="form-stack form-stack-wide" method="post">
         {% csrf_token %}
 
-        <div class="field field-required">
-            <label for="id_paciente">Paciente</label>
-            {{ form.paciente }}
-            {% if form.paciente.errors %}
-                <span class="field-error">{{ form.paciente.errors|join:", " }}</span>
-            {% endif %}
-        </div>
+        {% url 'lab_buscar_pacientes' as url_pac %}
+        {% url 'lab_buscar_alunos_lab' as url_alu %}
+        {% url 'lab_materializar' 'paciente' as url_mat_pac %}
+        {% url 'lab_materializar' 'aluno' as url_mat_alu %}
 
-        <div class="field field-required">
-            <label for="id_aluno">Aluno</label>
-            {{ form.aluno }}
-            {% if form.aluno.errors %}
-                <span class="field-error">{{ form.aluno.errors|join:", " }}</span>
-            {% endif %}
-        </div>
+        {% include "partials/_ac_field.html" with ac_name="paciente" ac_label="Paciente" ac_url=url_pac ac_materializar_url=url_mat_pac ac_id=paciente_sel.pk ac_nome=paciente_sel.nome ac_errors=form.paciente.errors %}
+
+        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_alu ac_materializar_url=url_mat_alu ac_id=aluno_sel.pk ac_nome=aluno_sel.nome ac_errors=form.aluno.errors %}
 
         <div class="field field-checkbox">
             <label>
@@ -60,4 +50,8 @@
             <a class="button secondary" href="{% url 'lab_moldagens' %}">Cancelar</a>
         </div>
     </form>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/htmx.min.js' %}"></script>
 {% endblock %}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets as _secrets
 from datetime import date as date_type
 
@@ -10,7 +11,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db.models import Q
 from django.db.models.query import QuerySet
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
@@ -25,6 +31,8 @@ from .forms import (
     PedidoFaturamentoForm,
     PedidoMaterialForm,
 )
+from gestao_cme.utils import normalizar_texto
+
 from .models import (
     AlunoLab,
     Equipe,
@@ -35,6 +43,8 @@ from .models import (
     RegistroSync,
 )
 
+logger = logging.getLogger(__name__)
+
 REGISTROS_POR_PAGINA = 10
 
 STATUS_OPCOES = [
@@ -44,6 +54,21 @@ STATUS_OPCOES = [
 ]
 
 STATUS_LABELS = {v: l for v, l in STATUS_OPCOES}
+
+
+def _selecionado(form, campo: str, model):
+    """Objeto escolhido num campo de autocomplete, para exibir o "chip".
+
+    Aceita tanto o valor cru enviado no POST (pk) quanto o objeto vindo de
+    ``initial`` (ex.: pedido pre-preenchido a partir de uma moldagem).
+    """
+
+    valor = form[campo].value()
+    if not valor:
+        return None
+    if isinstance(valor, model):
+        return valor
+    return model.objects.filter(pk=valor).first()
 
 
 def _paginar(request: HttpRequest, queryset: QuerySet) -> tuple[Page, str]:
@@ -120,8 +145,8 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
 
     if busca:
         qs = qs.filter(
-            Q(paciente__nome__icontains=busca)
-            | Q(aluno__nome__icontains=busca)
+            Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(laboratorio__nome__icontains=busca)
             | Q(descricao_servico__icontains=busca)
         )
@@ -204,6 +229,8 @@ def criar_pedido(request: HttpRequest) -> HttpResponse:
         {
             "form": form,
             "moldagem_origem": moldagem_origem,
+            "paciente_sel": _selecionado(form, "paciente", Paciente),
+            "aluno_sel": _selecionado(form, "aluno", AlunoLab),
         },
     )
 
@@ -301,6 +328,33 @@ def alternar_faturado_lab(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect(next_url)
 
 
+@login_required
+@require_POST
+def excluir_pedido(request: HttpRequest, pk: int) -> HttpResponse:
+    """Remove permanentemente um pedido de material.
+
+    Se o pedido tiver vindo de uma moldagem, o vinculo e desfeito (SET_NULL) e a
+    moldagem volta a figurar como nao convertida.
+    """
+
+    pedido = get_object_or_404(
+        PedidoMaterial.objects.select_related("paciente"), pk=pk
+    )
+    identificacao = f"#{pedido.pk} — {pedido.paciente.nome}"
+    tinha_moldagem = Moldagem.objects.filter(pedido_material=pedido).exists()
+    pedido.delete()
+
+    msg = f"Pedido {identificacao} excluído permanentemente."
+    if tinha_moldagem:
+        msg += " A moldagem de origem voltou para 'não convertida'."
+    messages.success(request, msg)
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("lab_pedidos")
+
+
 # ---------------------------------------------------------------------------
 # Pedidos — faturamento
 # ---------------------------------------------------------------------------
@@ -318,8 +372,8 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
     busca = request.GET.get("q", "").strip()
     if busca:
         qs = qs.filter(
-            Q(paciente__nome__icontains=busca)
-            | Q(aluno__nome__icontains=busca)
+            Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
             | Q(laboratorio__nome__icontains=busca)
         )
 
@@ -366,7 +420,8 @@ def moldagens(request: HttpRequest) -> HttpResponse:
 
     if busca:
         qs = qs.filter(
-            Q(paciente__nome__icontains=busca) | Q(aluno__nome__icontains=busca)
+            Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
         )
 
     if filtro == "faturado":
@@ -423,7 +478,15 @@ def criar_moldagem(request: HttpRequest) -> HttpResponse:
     else:
         form = MoldagemForm()
 
-    return render(request, "gestao_lab/form_moldagem.html", {"form": form})
+    return render(
+        request,
+        "gestao_lab/form_moldagem.html",
+        {
+            "form": form,
+            "paciente_sel": _selecionado(form, "paciente", Paciente),
+            "aluno_sel": _selecionado(form, "aluno", AlunoLab),
+        },
+    )
 
 
 @login_required
@@ -590,6 +653,217 @@ def editar_equipe(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
+@login_required
+@require_POST
+def excluir_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
+    """Remove permanentemente uma moldagem.
+
+    Nao afeta o pedido de material gerado a partir dela, quando existir.
+    """
+
+    moldagem = get_object_or_404(Moldagem.objects.select_related("paciente"), pk=pk)
+    identificacao = f"#{moldagem.pk} — {moldagem.paciente.nome}"
+    moldagem.delete()
+    messages.success(request, f"Moldagem {identificacao} excluída permanentemente.")
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("lab_moldagens")
+
+
+# ---------------------------------------------------------------------------
+# Busca com selecao (autocomplete) de paciente e aluno
+# ---------------------------------------------------------------------------
+
+
+def _pacientes_locais(q: str):
+    itens = Paciente.objects.filter(ativo=True).order_by("nome")
+    if q:
+        itens = itens.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(celular__icontains=q)
+        )
+    return itens
+
+
+def _alunos_locais(q: str):
+    itens = AlunoLab.objects.filter(ativo=True).order_by("nome")
+    if q:
+        itens = itens.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(celular__icontains=q)
+        )
+    return itens
+
+
+_LIMITE_RESULTADOS = 20
+
+
+def _unificar(locais, remotos, limite: int = 20) -> list[dict]:
+    """Junta o que ja esta no banco com o que a API devolveu, sem duplicar.
+
+    A lista sai ordenada por nome, mas o corte pelo ``limite`` nunca descarta um
+    registro local em favor de um remoto: uma pagina cheia da API tem nomes que
+    vem antes no alfabeto e escondia quem ja estava cadastrado. Os remotos so
+    preenchem as vagas que sobram, e vao sem ``pk`` — sinal de que precisam ser
+    gravados no clique.
+    """
+
+    vistos = {str(obj.id_dental) for obj in locais}
+
+    itens_locais = [
+        {
+            "pk": obj.pk,
+            "id_dental": obj.id_dental,
+            "nome": obj.nome,
+            "celular": obj.celular,
+        }
+        for obj in locais
+    ]
+
+    itens_remotos = []
+    for remoto in remotos:
+        id_dental = str(remoto.id)
+        if id_dental in vistos:
+            continue
+        vistos.add(id_dental)
+        itens_remotos.append(
+            {
+                "pk": None,
+                "id_dental": id_dental,
+                "nome": remoto.nome,
+                "celular": remoto.celular,
+            }
+        )
+
+    vagas = max(0, limite - len(itens_locais))
+    itens = itens_locais[:limite] + itens_remotos[:vagas]
+    itens.sort(key=lambda item: item["nome"])
+    return itens
+
+
+def _buscar_unificado(request: HttpRequest, tipo: str) -> HttpResponse:
+    """Fragmento HTMX do autocomplete de paciente/aluno.
+
+    Mostra numa lista so o que ja esta no banco e o que a busca no Dental Office
+    devolve (primeira pagina, sem gravar) — o operador nao precisa saber de onde
+    veio cada resultado. Se a API falhar, os resultados locais continuam
+    aparecendo com um aviso de que a lista pode estar incompleta.
+    """
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import procurar_alunos, procurar_pacientes
+
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return render(request, "gestao_lab/partials/_ac_results.html", {"busca": ""})
+
+    e_paciente = tipo == "paciente"
+    locais = list(
+        (_pacientes_locais(q) if e_paciente else _alunos_locais(q))[
+            :_LIMITE_RESULTADOS
+        ]
+    )
+
+    remotos: list = []
+    parcial = False
+    ha_mais = False
+
+    try:
+        if e_paciente:
+            clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+            if not clinic_id:
+                raise DentalAPIError("clinic_id não configurado")
+            remotos, total_paginas = procurar_pacientes(q=q, clinic_id=clinic_id)
+        else:
+            user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+            remotos, total_paginas = procurar_alunos(q=q, user_group=user_group)
+        ha_mais = total_paginas > 1
+    except DentalAPIError as exc:
+        # Degradacao suave: sem a API a busca ainda vale para quem ja esta no banco.
+        logger.warning("autocomplete %s: busca externa indisponivel (%s)", tipo, exc)
+        parcial = True
+
+    itens = _unificar(locais, remotos, limite=_LIMITE_RESULTADOS)
+    truncou = len(locais) + len(remotos) > len(itens)
+
+    return render(
+        request,
+        "gestao_lab/partials/_ac_results.html",
+        {
+            "itens": itens,
+            "busca": q,
+            "ha_mais": bool(itens) and (ha_mais or truncou),
+            "parcial": parcial,
+        },
+    )
+
+
+@login_required
+def buscar_pacientes(request: HttpRequest) -> HttpResponse:
+    """Autocomplete de paciente (base local + Dental Office, sem gravar)."""
+
+    return _buscar_unificado(request, "paciente")
+
+
+@login_required
+def buscar_alunos_lab(request: HttpRequest) -> HttpResponse:
+    """Autocomplete de aluno (base local + Dental Office, sem gravar)."""
+
+    return _buscar_unificado(request, "aluno")
+
+
+@login_required
+@require_POST
+def materializar(request: HttpRequest, tipo: str) -> JsonResponse:
+    """Grava o registro escolhido no autocomplete e devolve o pk para o formulario.
+
+    E aqui — e so aqui — que um resultado vindo da API vira registro local: um
+    write, do item que o operador realmente escolheu, em vez de importar a busca
+    inteira. Para itens que ja existiam, resolve direto no banco.
+    """
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import (
+        materializar_aluno,
+        materializar_paciente,
+    )
+
+    id_dental = request.POST.get("id_dental", "").strip()
+    nome_hint = request.POST.get("nome", "").strip()
+    if tipo not in {"paciente", "aluno"} or not id_dental:
+        return JsonResponse({"erro": "Requisição inválida."}, status=400)
+
+    try:
+        if tipo == "paciente":
+            clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+            if not clinic_id:
+                return JsonResponse(
+                    {"erro": "A busca não está configurada. Avise o suporte técnico."},
+                    status=503,
+                )
+            obj = materializar_paciente(id_dental=id_dental, clinic_id=clinic_id)
+        else:
+            user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+            obj = materializar_aluno(
+                id_dental=id_dental, nome_hint=nome_hint, user_group=user_group
+            )
+    except DentalAPIError as exc:
+        logger.warning("materializar %s %s: %s", tipo, id_dental, exc)
+        return JsonResponse(
+            {"erro": "Não foi possível concluir a seleção agora. Tente de novo."},
+            status=502,
+        )
+
+    if obj is None:
+        return JsonResponse({"erro": "Registro não encontrado."}, status=404)
+
+    return JsonResponse({"pk": obj.pk, "nome": obj.nome})
+
+
 # ---------------------------------------------------------------------------
 # Alunos e pacientes (Dental Office)
 # ---------------------------------------------------------------------------
@@ -602,7 +876,10 @@ def alunos_lab(request: HttpRequest) -> HttpResponse:
     qs = AlunoLab.objects.filter(ativo=True).order_by("nome")
     busca = request.GET.get("q", "").strip()
     if busca:
-        qs = qs.filter(Q(nome__icontains=busca) | Q(celular__icontains=busca))
+        qs = qs.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(celular__icontains=busca)
+        )
 
     total = AlunoLab.objects.filter(ativo=True).count()
     ultima_sync = AlunoLab.objects.aggregate(s=Max("ultima_sincronizacao"))["s"]
@@ -632,7 +909,10 @@ def pacientes(request: HttpRequest) -> HttpResponse:
     busca = request.GET.get("q", "").strip()
     processo = request.GET.get("processo", "").strip()
     if busca:
-        qs = qs.filter(Q(nome__icontains=busca) | Q(celular__icontains=busca))
+        qs = qs.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(celular__icontains=busca)
+        )
     if processo == "aberto":
         qs = qs.filter(processo_aberto=True)
 
@@ -675,9 +955,17 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
     user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
 
+    # Volta para a listagem de origem (alunos ou pacientes), quando informada.
+    next_url = request.POST.get("next", "")
+    destino = (
+        HttpResponseRedirect(next_url)
+        if next_url.startswith("/")
+        else redirect("lab_pacientes")
+    )
+
     if not clinic_id:
-        messages.error(request, "DENTAL_CLINIC_ID não configurado no ambiente.")
-        return redirect("lab_pacientes")
+        messages.error(request, "A atualização da lista não está configurada. Avise o suporte técnico.")
+        return destino
 
     try:
         registro = executar_sync_e_registrar(
@@ -695,9 +983,9 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
             f"{registro.alunos_atualizados} atualizado(s).",
         )
     except DentalAPIError as exc:
-        messages.error(request, f"Erro na API Dental Office: {exc}")
+        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
 
-    return redirect("lab_pacientes")
+    return destino
 
 
 # ---------------------------------------------------------------------------
@@ -726,7 +1014,7 @@ def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
     if not clinic_id:
-        messages.error(request, "DENTAL_CLINIC_ID não configurado no ambiente.")
+        messages.error(request, "A atualização da lista não está configurada. Avise o suporte técnico.")
         return redirect(next_name)
 
     try:
@@ -744,7 +1032,7 @@ def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
                 "Selecione o paciente na lista abaixo.",
             )
     except DentalAPIError as exc:
-        messages.error(request, f"Erro na API Dental Office: {exc}")
+        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
 
     return redirect(next_name)
 
@@ -781,7 +1069,7 @@ def buscar_aluno_dental(request: HttpRequest) -> HttpResponse:
                 "Selecione o aluno na lista abaixo.",
             )
     except DentalAPIError as exc:
-        messages.error(request, f"Erro na API Dental Office: {exc}")
+        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
 
     return redirect(next_name)
 
