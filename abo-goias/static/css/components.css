@@ -769,21 +769,6 @@ a.metric-card:hover {
     color: var(--danger-text);
 }
 
-.chips-clear {
-    display: inline-flex;
-    align-items: center;
-    padding: 0 4px;
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.chips-clear:hover {
-    color: var(--muted-strong);
-    text-decoration: underline;
-}
-
 .info-chip--warn {
     border-color: var(--danger-border);
 }
