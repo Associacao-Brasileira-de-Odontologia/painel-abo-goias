@@ -34,16 +34,19 @@ Principais telas (rotas em `gestao_cme/urls.py`):
 | Registrar saída (2 passos) | `registrar_saida` | ✅ lista pendentes por aluno e baixa `retirado=True` |
 | Empréstimos (criar/devolver/atrasar) | views + `EmprestimoForm` | ✅ cria itens a partir do kit |
 | Busca/paginação nas listagens | `materiais`, `kits`, `emprestimos`, `alunos_por_turma` | ✅ busca por múltiplos campos + paginação 10/pág |
-| Suíte automatizada (projeto todo) | `manage.py test` (após `collectstatic`) | ✅ **541 testes, todos passam**. Sem `collectstatic`: erros por **A-01** |
+| Suíte automatizada (projeto todo) | `manage.py test` | ✅ **581 testes, todos passam** — sem passo manual (ver **A-01**) |
 
 ## 3. Bugs / inconsistências encontrados
 
-### A-01 · Suíte de testes quebra sem `collectstatic` — **moderado** (global)
-Ver detalhamento em `auditoria-identificadores.md#a-01`. **Pós-pull:** a suíte completa tem
-**541 testes** e fica **100% verde após `manage.py collectstatic --noinput`**. Sem
-`collectstatic`, os testes que renderizam `{% static %}` quebram com
-`Missing staticfiles manifest entry` (manifest storage do whitenoise ativo em teste). Ou
-seja: não é bug de produto, é uma pegadinha de fluxo de validação.
+### A-01 · ~~Suíte de testes quebra sem `collectstatic`~~ — **CORRIGIDO**
+Ver detalhamento em `auditoria-identificadores.md#a-01`, onde a correção está registrada: o
+storage com manifesto do whitenoise passou a ser aplicado apenas fora dos testes
+(`TESTANDO` em `abo_goias/settings.py`), então os templates com `{% static %}` não dependem
+mais de um `collectstatic` prévio.
+
+**Reverificado em 2026-07-15:** `staticfiles/` removido por completo e `manage.py test`
+executado — **581 testes, verde**. Esta seção estava desatualizada (descrevia o bug como
+aberto) até esta data.
 
 ### A-05 · Seleção de aluno por `<select>` massivo em entrada/saída/empréstimo — **leve** (escopo 3.2)
 `registrar_entrada.html`, `registrar_saida` e `criar_emprestimo.html` renderizam **todos**
@@ -82,7 +85,8 @@ estão em empréstimo.
   contagem de unidades em empréstimo = `Σ ItemEmprestimo.quantidade` com
   `Emprestimo.status ∈ {EMPRESTADO, ATRASADO}`).
 - **Fase 2**: spinner de busca (A-06) e padronização de botões (A-07).
-- **A-01**: tornar a suíte verde sem passo manual (backlog B-01, ver Identificadores).
+- ~~**A-01**: tornar a suíte verde sem passo manual (backlog B-01, ver Identificadores).~~
+  **Já corrigido** — ver A-01 acima.
 
 ## 5. Backlog de melhorias futuras (não prioritário)
 

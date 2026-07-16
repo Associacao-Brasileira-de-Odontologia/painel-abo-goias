@@ -32,7 +32,7 @@ A app reaproveita o design system compartilhado (`{% extends "layouts/painel.htm
 | `manage.py check` | system check | ✅ 0 issues |
 | Sincronização Eduq (turmas) | `sincronizar_eduq --somente-turmas --dry-run` | ✅ 43 turmas retornadas pela API (0 no banco local hoje) |
 | Seleção turma+modelo → geração PPTX | leitura de código + testes da app | ✅ lógica coberta por `identificadores/tests.py` |
-| Suíte automatizada | `manage.py test` (após `collectstatic`) | ✅ projeto todo **541 testes, verde**; sem `collectstatic` falha por **A-01** |
+| Suíte automatizada | `manage.py test` | ✅ projeto todo **581 testes, verde**; sem passo prévio (**A-01** corrigido) |
 
 Observação factual: o banco local está **vazio de turmas/alunos** (0 registros), então o
 fluxo de geração só é exercível após uma sincronização real com o Eduq.
@@ -88,9 +88,10 @@ tela (só usados internamente na geração).
 
 ## 5. Backlog de melhorias futuras (não prioritário)
 
-- **B-01**: em `settings.py`, usar storage de estáticos **sem manifesto** quando
+- ~~**B-01**: em `settings.py`, usar storage de estáticos **sem manifesto** quando
   `DEBUG`/testes (ou `StaticLiveServerTestCase`), evitando a dependência de `collectstatic`
-  para rodar a suíte. Alternativa: um `settings` de teste dedicado.
+  para rodar a suíte. Alternativa: um `settings` de teste dedicado.~~ **Implementado** —
+  ver A-01 acima.
 - **B-02**: mover a sincronização de localização para rotina assíncrona (Celery, já
   presente no projeto para `gestao_contratos`) — desacoplar do request de geração (A-03).
 - **B-03**: cache/lista paginada de turmas quando o volume crescer (hoje 43, tende a subir).

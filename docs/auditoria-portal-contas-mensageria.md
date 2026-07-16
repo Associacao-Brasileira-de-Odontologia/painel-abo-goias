@@ -38,7 +38,7 @@
 | Solicitação de acesso + e-mails | `contas/views.py` + `emails.py` + `SolicitacaoCadastro` | ✅ fluxo presente (cobrir com teste manual de envio) |
 | Portal `/` | `views.portal` + `portal.html` | ✅ renderiza sob a nova base |
 | Modal de confirmação global | `partials/confirm_dialog.html` + `app.js` (`data-confirm`) | ✅ padrão reutilizável ativo |
-| Suíte automatizada (projeto todo) | `manage.py test` (após `collectstatic`) | ✅ **541 testes, todos passam** |
+| Suíte automatizada (projeto todo) | `manage.py test` | ✅ **581 testes, todos passam** |
 
 ## 3. Bugs / inconsistências encontrados
 
@@ -55,10 +55,11 @@ commits. Achado encerrado.
 `.gitignore` ignora `.env`/`.env.*` e o `git ls-files` confirma que **não está versionado**.
 Sem vazamento. Mantido como confirmação positiva.
 
-### A-01 · Suíte depende de `collectstatic` — **moderado** (global)
-`ManifestStaticFilesStorage` (whitenoise) ativo em teste (`settings.py`), sem manifesto sem
-`collectstatic` → `{% static %}` quebra. Afeta toda a suíte. Detalhe em
-`auditoria-identificadores.md#a-01`.
+### A-01 · ~~Suíte depende de `collectstatic`~~ — **CORRIGIDO**
+O `ManifestStaticFilesStorage` (whitenoise) deixou de ser ativado em teste (`settings.py`),
+então `{% static %}` não depende mais do manifesto. Detalhe da correção em
+`auditoria-identificadores.md#a-01`. **Reverificado em 2026-07-15** com `staticfiles/`
+removido: 581 testes, verde.
 
 ## 4. Necessidades de alteração (identificadas nesta auditoria)
 

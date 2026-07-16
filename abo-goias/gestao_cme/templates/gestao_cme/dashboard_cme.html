@@ -27,7 +27,8 @@
         </div>
         <button class="button primary" type="submit">Aplicar</button>
         {% if filtro_ativo %}
-            <a class="button secondary" href="{% url 'cme_dashboard' %}">Mês atual</a>
+            {# O padrão passou a ser "todo o histórico" (1º registro → hoje). #}
+            <a class="button secondary" href="{% url 'cme_dashboard' %}">Todo o período</a>
         {% endif %}
     </form>
 {% endblock %}
@@ -50,33 +51,39 @@
         {% endif %}
         <div class="info-chip">
             <span>Total no período</span>
-            <strong>{{ metricas_mov.total }} registro(s)</strong>
+            <strong>{{ metricas_mov.total }} pacote{{ metricas_mov.total|pluralize }}</strong>
         </div>
     </div>
 
     <div class="kpi-section">
-        <p class="section-label">Movimentações</p>
+        <p class="section-label">Pacotes no período</p>
+        {% comment %}
+        Cada card abre a listagem com o mesmo recorte que usou para contar
+        (período + status), então o número do card é exatamente o número de
+        linhas da tela que ele abre — ver views.linhas_de_pacote().
+        Total = Retirados + Aguardando + Sem status.
+        {% endcomment %}
         <div class="kpi-grid">
-            <div class="metric-card">
+            <a class="metric-card metric-card--link" href="{% url 'cme_home' %}?{{ filtro_datas_qs }}">
                 <span class="metric-label">Total</span>
                 <strong>{{ metricas_mov.total }}</strong>
-                <span class="metric-secondary">registros</span>
-            </div>
-            <div class="metric-card">
-                <span class="metric-label">Entradas</span>
-                <strong>{{ metricas_mov.entradas }}</strong>
-                <span class="metric-secondary">para esterilização</span>
-            </div>
-            <div class="metric-card">
-                <span class="metric-label">Retiradas</span>
-                <strong>{{ metricas_mov.saidas }}</strong>
+                <span class="metric-secondary">pacotes registrados</span>
+            </a>
+            <a class="metric-card metric-card--link" href="{% url 'cme_home' %}?status=retirado{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
+                <span class="metric-label">Retirados</span>
+                <strong>{{ metricas_mov.retirados }}</strong>
                 <span class="metric-secondary">materiais retirados</span>
-            </div>
-            <div class="metric-card danger-metric">
+            </a>
+            <a class="metric-card metric-card--link danger-metric" href="{% url 'cme_home' %}?status=pendente{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
                 <span class="metric-label">Aguardando</span>
                 <strong>{{ metricas_mov.pendentes }}</strong>
                 <span class="metric-secondary">pacotes não retirados</span>
-            </div>
+            </a>
+            <a class="metric-card metric-card--link" href="{% url 'cme_home' %}?status=sem_status{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
+                <span class="metric-label">Sem status</span>
+                <strong>{{ metricas_mov.sem_status }}</strong>
+                <span class="metric-secondary">registros antigos</span>
+            </a>
         </div>
     </div>
 

@@ -30,14 +30,14 @@ detalhe e cita 100% de cobertura na lógica de negócio).
 | Fluxo | Método | Resultado |
 |---|---|---|
 | `manage.py check` | system check | ✅ 0 issues |
-| Suíte automatizada (projeto todo) | `manage.py test` (após `collectstatic`) | ✅ **541 testes, todos passam** (inclui os novos de validação QR / Z-API) |
+| Suíte automatizada (projeto todo) | `manage.py test` | ✅ **581 testes, todos passam** (inclui os novos de validação QR / Z-API) |
 | Verificação de identidade (paciente/menor) | testes `VerificarIdentidade*Tests` | ✅ bloqueio após 5 tentativas; papel do responsável registrado |
 | Validação da imagem de assinatura | `ValidarPngEdgeCasesTests` | ✅ rejeita não-PNG, muito pequena, acima do limite, base64 inválido |
 | Terminal dedicado (polling/redirect) | `TerminalStatusFragmentViewTests` | ✅ fragmento de espera + 404 em token inválido |
 
-> A suíte completa do projeto sofre do achado global **A-01** (manifest de estáticos sem
-> `collectstatic`); `gestao_contratos` isolado passa quando executado de dentro de
-> `abo-goias/` com os estáticos coletados.
+> O achado global **A-01** (manifest de estáticos sem `collectstatic`) está **corrigido** —
+> a suíte roda num checkout limpo, sem passo prévio. Basta executá-la de dentro de
+> `abo-goias/`.
 
 ## 3. Bugs / inconsistências encontrados
 
@@ -45,8 +45,9 @@ Nenhum bug funcional novo identificado nesta auditoria — a app está madura e 
 Os pontos abaixo são **pendências já conhecidas** (documentadas no README) e uma observação
 de consistência visual:
 
-### A-01 · Suíte global depende de `collectstatic` — **moderado** (global)
-Idem demais apps. Ver `auditoria-identificadores.md#a-01`.
+### A-01 · ~~Suíte global depende de `collectstatic`~~ — **CORRIGIDO**
+Idem demais apps. Ver `auditoria-identificadores.md#a-01`. **Reverificado em 2026-07-15**
+com `staticfiles/` removido: 581 testes, verde, sem passo manual.
 
 ### A-07 · Padronização visual de botões — **leve** (escopo 2.2)
 `gestao_contratos` tem CSS próprio (`css/contratos.css`, `css/assinatura.css`). Ao aplicar a
@@ -69,8 +70,9 @@ devem ser tratadas com cuidado.
 - **B-13 (jurídico)**: definir prazo de retenção da auditoria; preencher contato do
   encarregado de dados (DPO) na política de privacidade; avaliar migrar para TSA credenciada
   pela ICP-Brasil (hoje `freetsa.org`, não credenciada). — todos já listados no README.
-- **B-14**: embutir o carimbo de tempo **antes** do envio automático ao Dental/WhatsApp
-  (hoje as cópias automáticas costumam sair sem o carimbo por ordenação assíncrona).
+- ~~**B-14**: embutir o carimbo de tempo **antes** do envio automático ao Dental/WhatsApp
+  (hoje as cópias automáticas costumam sair sem o carimbo por ordenação assíncrona).~~
+  **Implementado em 2026-07-15** — ver `melhorias-cme-contratos-2026-07.md`.
 - **B-15**: cobrir curatela de maiores incapazes no checklist de responsável legal.
 
 ## 6. Implementado nesta rodada (Fases 2 e 3)

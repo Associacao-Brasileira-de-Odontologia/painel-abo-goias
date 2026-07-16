@@ -9,6 +9,13 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Registrar empréstimo{% endblock %}
+{% block panel_actions %}
+    <form class="sync-form" method="post" action="{% url 'atualizar_turmas_eduq' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'criar_emprestimo' %}">
+        <button class="button secondary compact-button" type="submit">Atualizar turmas</button>
+    </form>
+{% endblock %}
 {% block panel %}
     {% include "partials/form_errors.html" %}
 

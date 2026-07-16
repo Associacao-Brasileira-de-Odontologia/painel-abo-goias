@@ -495,16 +495,58 @@ def processar_assinatura(
         hash_assinado=contrato.hash_sha256,
     )
 
-    # Dispara o upload ao Dental Office em segundo plano (Celery), com
-    # retry automático — o paciente não espera por isso, e uma falha
-    # temporária de rede não perde o documento assinado.
-    #
-    # O enfileiramento em si (.delay) roda de forma síncrona nesta mesma
-    # requisição e pode falhar se o broker/Redis estiver indisponível —
-    # isso NUNCA pode derrubar a confirmação de assinatura do paciente,
-    # que já foi salva com sucesso acima. Em caso de falha, registra o
-    # evento e segue: o envio manual ("Enviar para o Dental Office")
-    # continua disponível para o staff.
+    # Encadeia carimbo de tempo → envios automáticos. O carimbo reescreve o
+    # PDF assinado para embutir o token (ver carimbo_tempo._embutir_carimbo_
+    # no_pdf_assinado), então disparar os envios em paralelo com ele fazia as
+    # cópias automáticas saírem sem a prova de data/hora. Quando há TSA
+    # configurada, apenas o carimbo é agendado aqui e ele encadeia os envios
+    # ao terminar — inclusive quando desiste, para nunca reter o documento.
+    from .carimbo_tempo import carimbo_tempo_configurado
+
+    if not carimbo_tempo_configurado():
+        agendar_envios_automaticos(contrato)
+        return contrato
+
+    try:
+        from gestao_contratos.tasks import solicitar_carimbo_tempo_task
+
+        solicitar_carimbo_tempo_task.delay(contrato.pk)
+    except Exception as exc:
+        # O enfileiramento em si (.delay) roda de forma síncrona nesta mesma
+        # requisição e pode falhar se o broker/Redis estiver indisponível —
+        # isso NUNCA pode derrubar a confirmação de assinatura do paciente,
+        # que já foi salva com sucesso acima.
+        logger.exception(
+            "processar_assinatura: falha ao agendar carimbo de tempo (contrato=%s)",
+            contrato.pk,
+        )
+        registrar_evento(
+            contrato,
+            "carimbo_tempo_erro",
+            erro=f"Falha ao agendar solicitação automática: {exc}",
+        )
+        # Sem o carimbo agendado ninguém encadearia os envios — dispara aqui
+        # para que a falha no carimbo não vire também uma falha de entrega.
+        agendar_envios_automaticos(contrato)
+
+    return contrato
+
+
+def agendar_envios_automaticos(contrato: "ContratoGerado") -> None:
+    """Enfileira as cópias automáticas do contrato assinado (Dental + WhatsApp).
+
+    Chamada quando o PDF assinado já está na sua forma final: logo após a
+    assinatura quando não há TSA configurada, ou pela solicitar_carimbo_tempo_
+    task quando há — nesse caso só depois de o carimbo ser embutido (ou de a
+    TSA ter esgotado as tentativas), para que as cópias levem a prova de
+    data/hora.
+
+    Cada canal é independente: o paciente deve receber sua via mesmo que a
+    integração com o Dental Office falhe. Uma falha no enfileiramento (.delay
+    com broker/Redis fora do ar) é registrada como evento e não propaga — o
+    envio manual pelo staff continua disponível.
+    """
+
     if contrato.paciente.id_dental:
         try:
             from gestao_contratos.tasks import enviar_dental_task
@@ -512,7 +554,7 @@ def processar_assinatura(
             enviar_dental_task.delay(contrato.pk)
         except Exception as exc:
             logger.exception(
-                "processar_assinatura: falha ao agendar envio ao Dental "
+                "agendar_envios_automaticos: falha ao agendar envio ao Dental "
                 "Office (contrato=%s)",
                 contrato.pk,
             )
@@ -523,17 +565,14 @@ def processar_assinatura(
             )
     else:
         logger.info(
-            "processar_assinatura: paciente sem id_dental — upload ao "
+            "agendar_envios_automaticos: paciente sem id_dental — upload ao "
             "Dental Office não agendado (contrato=%s)",
             contrato.pk,
         )
 
-    # Dispara o envio por WhatsApp em segundo plano, independente do envio
-    # ao Dental Office — o paciente deve receber sua cópia mesmo que a
-    # integração com o Dental falhe. Só é agendado quando a Z-API está
-    # configurada (sem credenciais, o fluxo manual — link wa.me na tela de
-    # pós-geração — continua sendo o único caminho) e o paciente tem
-    # celular cadastrado.
+    # Só é agendado quando a Z-API está configurada (sem credenciais, o fluxo
+    # manual — link wa.me na tela de pós-geração — continua sendo o único
+    # caminho) e o paciente tem celular cadastrado.
     from .whatsapp import whatsapp_configurado
 
     if whatsapp_configurado() and contrato.paciente.celular:
@@ -543,8 +582,8 @@ def processar_assinatura(
             enviar_whatsapp_task.delay(contrato.pk)
         except Exception as exc:
             logger.exception(
-                "processar_assinatura: falha ao agendar envio por WhatsApp "
-                "(contrato=%s)",
+                "agendar_envios_automaticos: falha ao agendar envio por "
+                "WhatsApp (contrato=%s)",
                 contrato.pk,
             )
             registrar_evento(
@@ -552,32 +591,6 @@ def processar_assinatura(
                 "whatsapp_erro",
                 erro=f"Falha ao agendar envio automático: {exc}",
             )
-
-    # Dispara a solicitação do carimbo de tempo (RFC 3161) em segundo
-    # plano, independente dos demais canais — reforça a validade jurídica
-    # da assinatura com uma evidência de data/hora de terceiros, mas nunca
-    # bloqueia nem afeta a confirmação já dada ao paciente. Só é agendada
-    # quando uma TSA está configurada (ver services/carimbo_tempo.py).
-    from .carimbo_tempo import carimbo_tempo_configurado
-
-    if carimbo_tempo_configurado():
-        try:
-            from gestao_contratos.tasks import solicitar_carimbo_tempo_task
-
-            solicitar_carimbo_tempo_task.delay(contrato.pk)
-        except Exception as exc:
-            logger.exception(
-                "processar_assinatura: falha ao agendar carimbo de tempo "
-                "(contrato=%s)",
-                contrato.pk,
-            )
-            registrar_evento(
-                contrato,
-                "carimbo_tempo_erro",
-                erro=f"Falha ao agendar solicitação automática: {exc}",
-            )
-
-    return contrato
 
 
 def _obter_pdf_original(contrato: "ContratoGerado") -> bytes:

@@ -530,9 +530,18 @@ select option {
     color: var(--info-text);
 }
 
+/* Os símbolos de partials/icons.html são só traço e não carregam stroke
+   próprio — herdam do pai. Sem `stroke` aqui o ícone não desenha nada
+   (mesmo contrato de .side-icon svg). */
 .icon-action svg {
+    width: 16px;
+    height: 16px;
     display: block;
     fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 /* Cabeçalho de coluna com ícone de ajuda (tooltip) — ex.: coluna Status */
@@ -638,6 +647,21 @@ select option {
     font-family: var(--font-display);
     font-size: 2.35rem;
     line-height: 1;
+}
+
+/* KPI clicável: abre a listagem com o mesmo recorte que o card contou. */
+.metric-card--link {
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease,
+        transform 0.15s ease;
+}
+
+.metric-card--link:hover,
+.metric-card--link:focus-visible {
+    border-color: rgba(29, 110, 238, 0.55);
+    background: rgba(29, 110, 238, 0.08);
+    transform: translateY(-1px);
 }
 
 .danger-metric {
@@ -767,21 +791,6 @@ a.metric-card:hover {
 
 .info-chip--removable:hover .chip-x {
     color: var(--danger-text);
-}
-
-.chips-clear {
-    display: inline-flex;
-    align-items: center;
-    padding: 0 4px;
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.chips-clear:hover {
-    color: var(--muted-strong);
-    text-decoration: underline;
 }
 
 .info-chip--warn {
@@ -1249,6 +1258,13 @@ tbody tr.row-a-confirmar > td:first-child {
     min-height: 42px;
     border-radius: var(--radius-control);
     font-size: 14px;
+}
+
+/* Resultados ao vivo do Dental Office abaixo da listagem local (pacientes). */
+.dental-results {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
 }
 
 .sidebar-section {

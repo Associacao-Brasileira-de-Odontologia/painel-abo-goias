@@ -3613,6 +3613,113 @@ class SolicitarCarimboTempoTaskTests(TestCase):
             mock_solicitar.assert_not_called()
 
 
+class CarimboAntesDoEnvioTests(TestCase):
+    """B-14: as cópias automáticas devem sair só depois do carimbo embutido.
+
+    Antes, a tarefa do carimbo e as dos envios eram disparadas em paralelo
+    pela assinatura — como o carimbo reescreve o PDF assinado para embutir o
+    token, as cópias costumavam sair sem a prova de data/hora.
+    """
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        override = override_settings(MEDIA_ROOT=media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.pac = _paciente_completo(id_dental="703")
+        self.contrato = gerar_e_salvar_contrato(
+            paciente=self.pac, tipo="modelo_1", gerado_por=self.usuario
+        )
+
+    @patch("gestao_contratos.services.assinatura.agendar_envios_automaticos")
+    @patch("gestao_contratos.services.carimbo_tempo.solicitar_carimbo")
+    def test_envios_sao_agendados_depois_do_carimbo(
+        self, mock_solicitar: MagicMock, mock_agendar: MagicMock
+    ) -> None:
+        mock_solicitar.return_value = (True, "")
+        ordem = MagicMock()
+        ordem.attach_mock(mock_solicitar, "solicitar")
+        ordem.attach_mock(mock_agendar, "agendar")
+
+        solicitar_carimbo_tempo_task.delay(self.contrato.pk)
+
+        self.assertEqual(
+            [chamada[0] for chamada in ordem.mock_calls], ["solicitar", "agendar"]
+        )
+
+    @patch("gestao_contratos.services.assinatura.agendar_envios_automaticos")
+    @patch("gestao_contratos.services.carimbo_tempo.solicitar_carimbo")
+    def test_falha_temporaria_agenda_envios_uma_vez_apos_o_sucesso(
+        self, mock_solicitar: MagicMock, mock_agendar: MagicMock
+    ) -> None:
+        """Um retry não pode duplicar as cópias enviadas ao paciente."""
+        mock_solicitar.side_effect = [(False, "timeout"), (True, "")]
+
+        solicitar_carimbo_tempo_task.delay(self.contrato.pk)
+
+        self.assertEqual(mock_agendar.call_count, 1)
+
+    @patch("gestao_contratos.services.assinatura.agendar_envios_automaticos")
+    @patch("gestao_contratos.services.carimbo_tempo.solicitar_carimbo")
+    def test_tsa_fora_do_ar_ainda_agenda_os_envios(
+        self, mock_solicitar: MagicMock, mock_agendar: MagicMock
+    ) -> None:
+        """Reter o documento seria pior que a ausência do carimbo."""
+        mock_solicitar.return_value = (False, "TSA fora do ar")
+
+        solicitar_carimbo_tempo_task.delay(self.contrato.pk)
+
+        self.assertEqual(mock_solicitar.call_count, 6)
+        self.assertEqual(mock_agendar.call_count, 1)
+
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
+    def test_pdf_enviado_ao_dental_carrega_o_carimbo(self) -> None:
+        """Ponta a ponta: o arquivo que chega ao Dental Office leva o token.
+
+        É a regressão que dá nome ao B-14 — com as tarefas em paralelo, este
+        PDF saía sem o anexo do carimbo.
+        """
+        from pypdf import PdfReader
+
+        token = b"token-tsr-de-teste"
+        enviados: list[bytes] = []
+
+        def _capturar(**kwargs) -> dict:
+            enviados.append(kwargs["arquivo_bytes"])
+            return {"id": "1"}
+
+        timestamper = MagicMock()
+        timestamper.timestamp.return_value = token
+        client = MagicMock()
+        client.enviar_documento_paciente.side_effect = _capturar
+
+        with (
+            patch("rfc3161ng.RemoteTimestamper", return_value=timestamper),
+            patch(
+                "rfc3161ng.get_timestamp",
+                return_value=timezone.now().replace(tzinfo=None),
+            ),
+            patch(
+                "gestao_contratos.services.envio_dental.DentalClient",
+                return_value=client,
+            ),
+        ):
+            sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+            processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.assertEqual(len(enviados), 1)
+        anexos = PdfReader(io.BytesIO(enviados[0])).attachments
+        self.assertIn("carimbo_tempo.tsr", anexos)
+        self.assertEqual(anexos["carimbo_tempo.tsr"][0], token)
+
+
 class ProcessarAssinaturaCarimboTempoTests(AssinaturaBaseTests):
     @override_settings(
         CARIMBO_TEMPO_TSA_URL=_TSA_URL,
@@ -3638,6 +3745,43 @@ class ProcessarAssinaturaCarimboTempoTests(AssinaturaBaseTests):
             processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
 
         mock_delay.assert_not_called()
+
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
+    def test_com_tsa_os_envios_ficam_por_conta_do_carimbo(self) -> None:
+        """B-14: com TSA configurada, a assinatura não dispara mais os envios
+        direto — quem os encadeia é a tarefa do carimbo, depois de embutir o
+        token no PDF. Disparar aqui faria as cópias saírem sem o carimbo."""
+        with patch("gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay"):
+            sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+            processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.mock_enviar_dental_delay.assert_not_called()
+        self.mock_enviar_whatsapp_delay.assert_not_called()
+
+    @override_settings(
+        CARIMBO_TEMPO_TSA_URL=_TSA_URL,
+        CARIMBO_TEMPO_TSA_USERNAME="",
+        CARIMBO_TEMPO_TSA_PASSWORD="",
+        CARIMBO_TEMPO_TIMEOUT=30,
+    )
+    def test_falha_ao_enfileirar_o_carimbo_nao_perde_os_envios(self) -> None:
+        """Com o broker fora do ar ninguém encadearia as cópias — a assinatura
+        precisa disparar os envios ela mesma nesse caso."""
+        with patch(
+            "gestao_contratos.tasks.solicitar_carimbo_tempo_task.delay",
+            side_effect=RuntimeError("Redis indisponível"),
+        ):
+            sessao = criar_sessao(self.contrato, criado_por=self.usuario)
+            processar_assinatura(sessao, _assinatura_data_url(), ip=None, user_agent="")
+
+        self.mock_enviar_dental_delay.assert_called_once_with(self.contrato.pk)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.status, "assinado")
 
 
 class CarimboTempoViewsTests(AssinaturaBaseTests):

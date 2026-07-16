@@ -221,6 +221,15 @@ class PedidoMaterial(ModeloBase):
 
     faturado_paciente = models.BooleanField(default=False)
     faturado_lab = models.BooleanField(default=False)
+    data_faturamento = models.DateField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "Data em que o faturamento foi concluido (paciente E laboratorio). "
+            "Derivado no save() a partir das duas flags — nao editar a mao."
+        ),
+    )
     numero_nota_fiscal = models.CharField(max_length=30, blank=True)
     data_vencimento = models.DateField(null=True, blank=True)
 
@@ -261,6 +270,13 @@ class PedidoMaterial(ModeloBase):
     def save(self, *args, **kwargs):
         if self.previsao_entrega:
             self.status = self.calcular_status()
+        # Data de faturamento derivada das flags: registra quando as duas viram
+        # verdadeiras e limpa se o faturamento for desfeito.
+        if self.faturado_paciente and self.faturado_lab:
+            if self.data_faturamento is None:
+                self.data_faturamento = date.today()
+        else:
+            self.data_faturamento = None
         super().save(*args, **kwargs)
 
 

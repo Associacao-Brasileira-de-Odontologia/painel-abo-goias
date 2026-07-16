@@ -9,7 +9,8 @@
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% block sidebar_extra %}
-    {% include "gestao_lab/partials/busca_dental.html" with busca_next="lab_criar_pedido" %}
+    {% url 'lab_criar_pedido' as sync_next %}
+    {% include "gestao_lab/partials/atualizar_alunos.html" with sync_next=sync_next %}
 {% endblock %}
 
 {% block panel_label %}<p class="section-label">Pedidos de material</p>{% endblock %}

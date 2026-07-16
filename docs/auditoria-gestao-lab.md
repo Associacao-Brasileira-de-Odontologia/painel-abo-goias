@@ -29,7 +29,7 @@ alunos · pacientes · `sincronizar/` (Dental) · `buscar-paciente/` e `buscar-a
 |---|---|---|
 | `manage.py check` | system check | ✅ 0 issues |
 | Autenticação Dental Office | `testar_envio_dental --apenas-auth` | ✅ token JWT obtido |
-| Suíte automatizada (projeto todo) | `manage.py test` (após `collectstatic`) | ✅ **541 testes, todos passam** (inclui os novos de `gestao_lab`) |
+| Suíte automatizada (projeto todo) | `manage.py test` | ✅ **581 testes, todos passam** (inclui os novos de `gestao_lab`) |
 | Criar pedido (paciente/aluno/lab/equipe) | `PedidoMaterialForm` + `criar_pedido` | ✅ status calculado no `save()` |
 | Converter moldagem → pedido | `converter_moldagem` | ✅ pré-preenche paciente/aluno via `?moldagem=` |
 | Busca direcionada Dental (importar) | `buscar_paciente_dental`/`buscar_aluno_dental` | ✅ valida `next` contra allowlist; importa e redireciona |

@@ -3,8 +3,8 @@
 > Data: 2026-07-15 · Branch: `31-melhorias-visuais-e-funcionalidades`
 > Escopo: dois conjuntos de melhorias (CME e Contratos), a partir das listas
 > registradas em `auditoria-gestao-cme.md` e `auditoria-gestao-contratos.md`.
-> Ambiente validado: `manage.py check` sem erros; suíte `gestao_cme` +
-> `gestao_contratos` executada após `collectstatic`.
+> Ambiente validado: `manage.py check` sem erros; suíte completa (581 testes) verde,
+> sem passo manual de `collectstatic` (ver A-01 em `auditoria-identificadores.md`).
 
 ---
 
@@ -213,6 +213,47 @@ evita-se migration e mudança em `_marcar_erro`.
 
 ---
 
+## Backlog implementado
+
+### B-14 — Carimbo de tempo antes do envio automático — **implementado**
+
+**O problema:** `processar_assinatura` disparava as três tarefas Celery em paralelo
+(`enviar_dental_task`, `enviar_whatsapp_task`, `solicitar_carimbo_tempo_task`). Como o
+carimbo **reescreve** o PDF assinado para embutir o token TSR
+(`carimbo_tempo._embutir_carimbo_no_pdf_assinado`), os envios quase sempre liam o arquivo
+antes dessa reescrita — as cópias no prontuário e no WhatsApp do paciente saíam **sem** a
+prova de data/hora, enquanto só a cópia guardada no sistema a tinha.
+
+**Alterado:**
+- `services/assinatura.py`: o disparo de Dental + WhatsApp virou o helper
+  `agendar_envios_automaticos(contrato)` (mesmas condições de antes: `id_dental` presente,
+  Z-API configurada + celular; falha de `.delay` vira evento e não propaga).
+  `processar_assinatura` agora **encadeia**: com TSA configurada agenda **só** o carimbo;
+  sem TSA, mantém o comportamento antigo (envios direto).
+- `tasks.py::solicitar_carimbo_tempo_task`: ao concluir, chama
+  `agendar_envios_automaticos` — depois de o token estar embutido.
+
+**Decisão (a que importa):** se a TSA falhar, os envios acontecem **assim mesmo**, após as
+tentativas se esgotarem. Reter um documento assinado é pior que entregá-lo sem carimbo — a
+mesma lógica que já rege o resto do fluxo ("uma falha temporária de rede não perde o
+documento assinado"). O atraso máximo é o do backoff (~30s de espera + timeouts da TSA),
+não os 15 min de `retry_backoff_max`, porque são só 5 tentativas a partir de 1s.
+
+**Fallback:** se o próprio enfileiramento do carimbo falhar (broker/Redis fora do ar),
+ninguém encadearia os envios — nesse caso `processar_assinatura` os dispara ela mesma.
+
+**Sem efeito prático hoje:** `CARIMBO_TEMPO_TSA_URL` não está configurada, então o caminho
+novo só entra em ação quando a TSA for ligada em produção. Até lá o fluxo é bit a bit o
+anterior.
+
+**Testes:** 5 novos (`CarimboAntesDoEnvioTests` + 2 em `ProcessarAssinaturaCarimboTempoTests`),
+sendo o principal um ponta a ponta que captura os bytes entregues ao `DentalClient` e afirma
+que o PDF carrega o anexo `carimbo_tempo.tsr`. **Confirmado que ele falha no código
+anterior** (`'carimbo_tempo.tsr' not found`) e passa com a correção. Suíte completa: 581
+testes verdes.
+
+---
+
 ## Integrações (verificação pós-alteração)
 
 - **Eduq (CME):** nenhuma alteração tocou o cliente/serviço do Eduq
@@ -287,6 +328,177 @@ auditoria do CME e está registrada no docstring de `buscar_alunos`.
 ainda não foi sincronizado, as opções são (a) sincronizar a turma sob demanda
 antes de buscar, ou (b) verificar com o fornecedor do Eduq se existe/pode existir
 um endpoint de busca de aluno por nome. Hoje nenhuma das duas está implementada.
+
+---
+
+## Rodada 2 — listagem por pacote e atualização de turmas
+
+### 10. Listagem de movimentações: uma linha por pacote — **implementado**
+
+**Antes:** cada pacote gerava **duas linhas** na listagem (a ENTRADA e, depois da
+retirada, a SAIDA). **Agora:** uma linha por pacote, com as colunas **Entrada**
+(sempre presente) e **Saída** (preenchida na retirada).
+
+**O problema que precisou ser resolvido primeiro.** O vínculo entrada↔saída era
+apenas **implícito**: a SAIDA copiava o `pacote_codigo` da ENTRADA, e o par só
+podia ser reconstruído por coincidência de string. Isso não é confiável:
+
+- `pacote_codigo` **não tem constraint de unicidade**, e a geração usa
+  `max(códigos numéricos)+n` **sem lock** (B-07 da auditoria) → duas entradas
+  concorrentes podem repetir o código;
+- nos dados **LEGADO**, `pacote_codigo` é o **código do material**, não do pacote
+  — `migracao_legado.py` faz `materiais_por_codigo.get(pacote_codigo)`. O mesmo
+  código se repete entre alunos e datas. **Parear por ele cruzaria registros de
+  pessoas diferentes.**
+
+**Decisão:** tornar o vínculo explícito. `registrar_saida` **já conhecia** o
+objeto exato da entrada e o descartava; agora grava em `Movimentacao.entrada_origem`
+(self-FK, nulo, só em SAIDA). Alternativa rejeitada: parear por string no view —
+construiria a feature sobre o mesmo dado frágil.
+
+**Alterado:**
+- `models.py`: campo `entrada_origem` (self-FK, `SET_NULL`, `related_name="saidas"`)
+  + docstring explicando por que o pareamento por `pacote_codigo` não serve.
+- `migrations/0013`: adiciona o campo.
+- `migrations/0014`: backfill dos dados já existentes — **só `origem=MANUAL`**, e
+  **pula códigos ambíguos** (>1 entrada com mesmo código/aluno). Reversível.
+- `views.py::registrar_saida`: grava `entrada_origem=entrada`.
+- `views.py::home`: linhas = ENTRADAs + SAIDAs sem vínculo; `prefetch_related("saidas")`
+  evita N+1; novo helper `_preparar_datas_do_pacote`.
+- `templates/gestao_cme/home.html`: colunas **Entrada** e **Saída**.
+
+**Decisão — legado não é pareado, mas também não some.** Sem vínculo real no dado,
+uma SAIDA legada aparece como linha própria com entrada **"Não registrada"**, e uma
+ENTRADA legada marcada como retirada mostra **"Retirado — sem data"**. Preferimos
+mostrar a lacuna a inventar um par (que cruzaria alunos).
+
+**Decisão — filtro "Movimentação" removido.** Filtrar por Entrada/Saída deixou de
+selecionar linhas distintas (cada linha tem as duas datas). O filtro de **Status**
+(Retirado / Não retirado) cobre a mesma intenção. Busca, filtro por aluno e
+paginação seguem iguais.
+
+**Verificado** (testes temporários, depois removidos):
+- fluxo real do painel: 2 entradas + 1 saída → **3 registros viram 2 linhas**; a
+  retirada com as duas datas, a pendente só com entrada;
+- legado com `pacote_codigo="CX-01"` em **alunos diferentes**: os 2 registros
+  continuam visíveis e **não são pareados** entre si;
+- backfill: pareia o par MANUAL simples, **ignora** o legado e **recusa** o código
+  ambíguo;
+- na tela (dados semeados): 4 registros → 3 linhas, exatamente como projetado.
+
+**Pendência (negócio):** confirmar o tratamento do legado. Se o time souber que,
+nas planilhas antigas, entrada e saída de um mesmo material para o mesmo aluno
+sempre se sucedem em ordem, dá para parear por proximidade cronológica — mas isso
+é uma **inferência**, não um dado, e não fizemos por conta própria.
+
+### 11. Botão "Atualizar turmas" no formulário de empréstimos — **implementado**
+
+- `views.py`: nova view `atualizar_turmas_eduq` (POST) — chama
+  `sincronizar_eduq(sincronizar_turmas=True, sincronizar_alunos=False)`.
+- `urls.py`: rota `turmas/atualizar/`.
+- `templates/gestao_cme/criar_emprestimo.html`: bloco `panel_actions` com o botão.
+
+**Decisão:** view **dedicada** a turmas em vez de reusar `atualizar_alunos_eduq`.
+Esta já sincroniza turmas **e** alunos (apesar do rótulo "Atualizar lista de
+alunos"), e é bem mais lenta — varre os alunos de cada turma. O pedido era turmas,
+então a ação nova faz só isso.
+
+**Verificado:** clicado na tela, contra o **Eduq real** → *"Turmas atualizadas: 0
+nova(s), 43 atualizada(s)"*, com retorno ao formulário via `next`.
+
+**Observação (fora do escopo, não alterado):** o rótulo "Atualizar lista de alunos"
+das telas de entrada/retirada é impreciso — aquela ação também atualiza turmas.
+Vale renomear para "Atualizar alunos e turmas" numa próxima rodada.
+
+---
+
+## Rodada 3 — KPIs clicáveis, período padrão e ícone de editar
+
+### 12. Ícone do botão "Editar" invisível — **corrigido (bug meu)**
+
+**Diagnóstico.** O botão existia, o `<svg>` estava no DOM e o símbolo `#i-editar`
+existia no sprite — mas nada aparecia. A causa está no contrato do sprite,
+declarado no topo de `partials/icons.html`: *"Os símbolos não carregam fill/stroke
+próprios: herdam do elemento pai"*. Os símbolos são desenhados **só com traço**.
+
+`.icon-action svg` tinha `fill: none` e **nenhum `stroke`** → sem preenchimento e
+sem traço, não se desenha nada. Também faltava `width`/`height`. Comparado ao
+`.side-icon svg`, que funciona:
+
+| | `.side-icon svg` (ok) | `.icon-action svg` (antes) |
+|---|---|---|
+| `fill` | `none` | `none` |
+| `stroke` | `currentColor` | **ausente** |
+| `width/height` | `16px` | **ausente** |
+
+Foi introduzido por mim na rodada 1 (item 8, "Ícones no lugar de texto"). O
+`.th-hint svg` (tooltip do STATUS, mesma rodada) foi escrito **com** o stroke —
+a inconsistência ficou só no `.icon-action`.
+
+**Alterado:** `static/css/components.css` — `.icon-action svg` ganhou
+`stroke: currentColor`, `stroke-width: 2`, `linecap/linejoin` e `16px`.
+
+**Verificado no navegador (computed style):** `stroke: rgb(139, 167, 204)`,
+`stroke-width: 2px`, `16×16px`. Varredura confirmou que `.icon-action` era o
+**único** consumidor do sprite sem stroke.
+
+### 13. KPIs da Visão Geral viraram links — **implementado**
+
+Cada card abre a listagem **com o mesmo recorte que usou para contar**.
+
+**Dois problemas que precisaram ser resolvidos antes.**
+
+1. **A listagem não tinha filtro de data.** Os KPIs são recortados por período;
+   sem o mesmo recorte no destino, clicar num card abriria outro conjunto e o
+   número não bateria. Então `home` passou a aceitar `data_inicio`/`data_fim`
+   (preservados em hidden no form e com chip removível).
+2. **Os KPIs contavam registros; a listagem agora conta pacotes** (rodada 2). Um
+   card "Total: 100 registros" abriria uma tela com ~60 linhas. Essa
+   inconsistência **já existia** desde a rodada 2 — tornar os KPIs clicáveis
+   apenas a expôs.
+
+**Decisão:** alinhar os KPIs à listagem (passaram a ser por pacote), com uma
+**fonte única da verdade**: o novo helper `views.linhas_de_pacote()`, usado pela
+listagem **e** pelos KPIs — assim os dois não podem divergir.
+
+| Antes (registros) | Agora (pacotes) | Link |
+|---|---|---|
+| Total / registros | **Total** / pacotes | `?<datas>` |
+| Entradas | *(absorvido em Total — todo pacote é uma entrada)* | — |
+| Retiradas | **Retirados** | `?status=retirado&<datas>` |
+| Aguardando | **Aguardando** | `?status=pendente&<datas>` |
+| — | **Sem status** (novo) | `?status=sem_status&<datas>` |
+
+Os quatro são disjuntos e exaustivos: **Total = Retirados + Aguardando + Sem
+status**. "Sem status" cobre os registros legados sem `retirado` definido.
+
+**Alterado:** `views.py` (`linhas_de_pacote`, `_parse_data_br`,
+`_filtrar_por_intervalo`, `home`, `cme_dashboard`), `dashboard_cme.html`,
+`home.html`, `components.css` (`.metric-card--link`).
+
+**Correção de rota:** a "atividade recente" passou a usar uma base própria (todos
+os registros), não a de pacotes — é um feed de **eventos**. Com a base de pacotes,
+as saídas sumiriam e a retirada apareceria datada pela data de **entrada**.
+
+### 14. Período padrão da Visão Geral — **implementado**
+
+Era **mês atual → hoje**; agora é **data do primeiro registro → hoje**, abrindo
+com todo o histórico em vez de esconder o passado sem o usuário pedir.
+
+- `views.py::cme_dashboard`: `linhas_de_pacote().aggregate(Min("data_hora"))`,
+  convertido com `timezone.localtime()`. Banco vazio: cai para hoje→hoje.
+- `dashboard_cme.html`: o botão de reset virou **"Todo o período"** (era "Mês
+  atual", que deixou de descrever o padrão).
+
+**Verificado na tela** (dados semeados, depois removidos): padrão veio
+`11/06/2025 → 16/07/2026` (1º registro → hoje); cards `12 / 6 / 5 / 1` somando 12;
+clicar em **Aguardando (5)** abriu a listagem com **exatamente 5 linhas**, com o
+período preservado; **Total (12)** → "12 registros".
+
+**Pendência (negócio):** com o histórico inteiro como padrão, a Visão Geral passa
+a varrer toda a tabela a cada carga. Hoje o volume é pequeno, mas se o histórico
+crescer muito vale um índice em `data_hora` (relacionado ao B-07 da auditoria) ou
+voltar a um padrão mais curto.
 
 ## Pendências consolidadas para o time de negócio
 
