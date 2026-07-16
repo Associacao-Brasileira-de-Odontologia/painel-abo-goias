@@ -452,6 +452,23 @@ class Movimentacao(ModeloBase):
     Mantem a data, tipo de movimentacao, aluno, turma, material, codigo do
     pacote e arquivo de origem. Tambem preserva campos textuais do legado para
     consultas mesmo quando a vinculacao com cadastros normalizados nao existe.
+
+    Um pacote registrado pelo painel gera DOIS registros ao longo da vida: a
+    ENTRADA (material entregue para esterilizacao) e, quando o aluno retira, a
+    SAIDA. ``entrada_origem`` liga a SAIDA a sua ENTRADA, permitindo exibir o
+    ciclo completo em uma unica linha (ver ``views.home``).
+
+    Esse vinculo e explicito de proposito. Parear pelo ``pacote_codigo`` nao e
+    confiavel:
+      - o campo NAO tem constraint de unicidade e a geracao usa
+        ``max(codigos numericos)+n`` sem lock (ver B-07 na auditoria), entao
+        duas entradas concorrentes podem repetir o codigo;
+      - nos dados LEGADO o ``pacote_codigo`` e o **codigo do material** (ver
+        services/migracao_legado.py, que faz
+        ``materiais_por_codigo.get(pacote_codigo)``), repetido em varios alunos
+        e datas — parear por ele cruzaria registros de pessoas diferentes.
+    Por isso o legado permanece com ``entrada_origem`` nulo: sem um vinculo real
+    no dado, a listagem mostra esses registros soltos em vez de inventar um par.
     """
 
     class Tipo(models.TextChoices):
@@ -488,6 +505,18 @@ class Movimentacao(ModeloBase):
     turma_nome = models.CharField(max_length=150, blank=True)
     pacote_codigo = models.CharField(max_length=40)
     retirado = models.BooleanField(null=True, blank=True)
+    entrada_origem = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="saidas",
+        null=True,
+        blank=True,
+        limit_choices_to={"tipo": "ENTRADA"},
+        help_text=(
+            "Preenchido apenas em movimentacoes de SAIDA: aponta para a ENTRADA "
+            "cujo pacote foi retirado."
+        ),
+    )
     arquivo_origem = models.CharField(max_length=80)
     row_hash = models.CharField(max_length=64, unique=True)
     origem = models.CharField(

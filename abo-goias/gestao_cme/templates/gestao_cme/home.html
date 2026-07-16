@@ -11,6 +11,14 @@
 
 {% block panel %}
     <form class="filter-bar" method="get">
+        {% comment %}
+        O intervalo de datas chega pela URL (ex.: vindo de um KPI da Visão
+        Geral). Sem estes hidden, buscar ou trocar o status descartaria o
+        recorte e a tela passaria a mostrar outro conjunto.
+        {% endcomment %}
+        {% if data_inicio_str %}<input type="hidden" name="data_inicio" value="{{ data_inicio_str }}">{% endif %}
+        {% if data_fim_str %}<input type="hidden" name="data_fim" value="{{ data_fim_str }}">{% endif %}
+        {% if aluno_filtrado %}<input type="hidden" name="aluno" value="{{ aluno_filtrado.pk }}">{% endif %}
         <div class="search-control">
             <input id="results-q-movimentacoes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem..." aria-label="Buscar na listagem">
         </div>
@@ -20,12 +28,12 @@
                 <option value="{{ valor }}" {% if status_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
             {% endfor %}
         </select>
-        <select name="movimentacao" aria-label="Filtrar por movimentação" onchange="this.form.submit()">
-            <option value="">Movimentação — todas</option>
-            {% for valor, rotulo in movimentacao_opcoes %}
-                <option value="{{ valor }}" {% if movimentacao_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
-            {% endfor %}
-        </select>
+        {% comment %}
+        O filtro "Movimentação — Entrada/Saída" foi removido: cada linha agora é
+        um pacote com as duas datas, então filtrar por tipo não seleciona mais
+        linhas distintas. O filtro de status (Retirado / Não retirado) cobre a
+        mesma intenção sobre a nova linha.
+        {% endcomment %}
         <button class="button primary" type="submit">Buscar</button>
     </form>
 
@@ -41,11 +49,15 @@
         </div>
     {% endif %}
 
-    {% if busca or status_atual or movimentacao_atual %}
+    {% if busca or status_atual or data_inicio_str or data_fim_str %}
+        {% comment %}
+        Cada chip remove só o próprio filtro e preserva os demais — por isso os
+        hrefs repetem os outros parâmetros em vez de irem para "?".
+        {% endcomment %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if status_atual %}status={{ status_atual }}&{% endif %}{% if movimentacao_atual %}movimentacao={{ movimentacao_atual }}{% endif %}"
+                   href="?{% if status_atual %}status={{ status_atual }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
@@ -54,19 +66,19 @@
             {% endif %}
             {% if status_atual %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if movimentacao_atual %}movimentacao={{ movimentacao_atual }}{% endif %}"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover filtro de status">
                     <span>Status</span>
                     <strong>{{ status_label }}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            {% if movimentacao_atual %}
+            {% if data_inicio_str or data_fim_str %}
                 <a class="info-chip info-chip--removable"
                    href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_atual %}status={{ status_atual }}{% endif %}"
-                   title="Remover filtro de movimentação">
-                    <span>Movimentação</span>
-                    <strong>{{ movimentacao_label }}</strong>
+                   title="Remover filtro de período">
+                    <span>Período</span>
+                    <strong>{% if data_inicio_str %}{{ data_inicio_str }}{% else %}início{% endif %} → {% if data_fim_str %}{{ data_fim_str }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
@@ -85,10 +97,10 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Data</th>
+                    <th>Entrada</th>
+                    <th>Saída</th>
                     <th>Aluno</th>
                     <th>Turma</th>
-                    <th>Movimentação</th>
                     <th>Pacote</th>
                     <th>Status</th>
                     <th></th>
@@ -98,16 +110,28 @@
                 {% for registro in movimentacoes %}
                     <tr>
                         <td>
-                            <strong>{{ registro.data_hora|date:"d/m/Y" }}</strong>
-                            <span class="cell-muted">{{ registro.data_hora|date:"H:i" }}</span>
+                            {% if registro.data_entrada %}
+                                <strong>{{ registro.data_entrada|date:"d/m/Y" }}</strong>
+                                <span class="cell-muted">{{ registro.data_entrada|date:"H:i" }}</span>
+                            {% else %}
+                                {# Saída legada sem entrada vinculada — ver views._preparar_datas_do_pacote. #}
+                                <span class="cell-muted" title="Registro antigo: a entrada correspondente não pôde ser identificada.">Não registrada</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if registro.data_saida %}
+                                <strong>{{ registro.data_saida|date:"d/m/Y" }}</strong>
+                                <span class="cell-muted">{{ registro.data_saida|date:"H:i" }}</span>
+                            {% elif registro.saida_sem_registro %}
+                                <span class="cell-muted" title="Marcado como retirado, mas sem data de saída registrada.">Retirado — sem data</span>
+                            {% else %}
+                                <span class="cell-muted">—</span>
+                            {% endif %}
                         </td>
                         <td>
                             <strong>{{ registro.aluno_nome }}</strong>
                         </td>
                         <td>{{ registro.turma_nome|default:"-" }}</td>
-                        <td>
-                            <strong>{{ registro.get_tipo_display }}</strong>
-                        </td>
                         <td>{{ registro.pacote_codigo }}</td>
                         <td>
                             <span class="badge badge-{{ registro.status_classe }}">

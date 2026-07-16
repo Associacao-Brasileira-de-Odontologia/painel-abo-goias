@@ -4,12 +4,13 @@ import hashlib
 import uuid
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db import transaction
-from django.db.models import Count, Max, ProtectedError, Q, Sum
+from django.db.models import Count, Max, Min, ProtectedError, Q, Sum
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -269,25 +270,129 @@ def portal(request: HttpRequest) -> HttpResponse:
     )
 
 
+def linhas_de_pacote() -> QuerySet[Movimentacao]:
+    """Queryset base da listagem de movimentacoes: uma linha por pacote.
+
+    Fonte unica da verdade compartilhada entre a listagem (``home``) e os KPIs da
+    visao geral (``cme_dashboard``) — os KPIs sao links para esta listagem, entao
+    os dois PRECISAM contar exatamente o mesmo conjunto. Calcular em cada lugar
+    faria o numero do card divergir da tela que ele abre.
+
+    Exclui as SAIDAs ja vinculadas a uma ENTRADA: elas nao sao linha, sao a
+    coluna "Saida" da linha da entrada (ver ``_preparar_datas_do_pacote``).
+    """
+
+    return Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO).exclude(
+        tipo=Movimentacao.Tipo.SAIDA, entrada_origem__isnull=False
+    )
+
+
+def _parse_data_br(valor: str, fim_do_dia: bool = False) -> datetime | None:
+    """Converte "dd/mm/aaaa" em datetime aware, ou None se invalido."""
+
+    if not valor:
+        return None
+    try:
+        dt = datetime.strptime(valor, "%d/%m/%Y")
+    except ValueError:
+        return None
+    if fim_do_dia:
+        dt = dt.replace(hour=23, minute=59, second=59)
+    return timezone.make_aware(dt)
+
+
+def _filtrar_por_intervalo(
+    queryset: QuerySet[Movimentacao],
+    data_inicio: datetime | None,
+    data_fim: datetime | None,
+) -> QuerySet[Movimentacao]:
+    """Recorta um queryset de movimentacoes pelo intervalo de datas."""
+
+    if data_inicio:
+        queryset = queryset.filter(data_hora__gte=data_inicio)
+    if data_fim:
+        queryset = queryset.filter(data_hora__lte=data_fim)
+    return queryset
+
+
+def _preparar_datas_do_pacote(registro: Movimentacao) -> None:
+    """Define, para uma linha da listagem, as datas de entrada e de saida.
+
+    Anota no proprio objeto (usado so na renderizacao):
+      ``data_entrada``      — data da ENTRADA, ou None numa saida legada solta.
+      ``data_saida``        — data da retirada, quando conhecida.
+      ``saida_sem_registro``— True quando a entrada esta marcada como retirada
+                              mas nao existe SAIDA vinculada. Acontece em dados
+                              LEGADO (onde o par nao e reconstituivel) e em
+                              entradas marcadas manualmente pela edicao. A
+                              retirada aconteceu; a data e que nao foi guardada —
+                              a tabela mostra isso em vez de fingir uma data.
+      ``entrada_sem_registro`` — True numa SAIDA legada sem entrada vinculada.
+    """
+
+    registro.saida_sem_registro = False
+    registro.entrada_sem_registro = False
+
+    if registro.tipo == Movimentacao.Tipo.SAIDA:
+        # Só chega aqui a saída sem vínculo (as vinculadas viram coluna da
+        # entrada). Sem entrada conhecida, a linha carrega apenas a saída.
+        registro.data_entrada = None
+        registro.data_saida = registro.data_hora
+        registro.entrada_sem_registro = True
+        return
+
+    registro.data_entrada = registro.data_hora
+    # `saidas` vem do prefetch; ordena em Python para nao disparar nova query.
+    saidas = sorted(registro.saidas.all(), key=lambda s: s.data_hora)
+    if saidas:
+        registro.data_saida = saidas[0].data_hora
+    else:
+        registro.data_saida = None
+        registro.saida_sem_registro = registro.retirado is True
+
+
 @login_required
 def home(request: HttpRequest) -> HttpResponse:
-    """Lista movimentacoes de materiais com busca, filtros e metricas.
+    """Lista o ciclo de vida dos pacotes: uma linha por pacote, com entrada e saida.
 
-    Permite filtrar por status de retirada, tipo de movimentacao e texto livre
-    em campos de aluno, turma, pacote, arquivo e material. Tambem prepara
-    labels de status usados na tabela renderizada.
+    Cada linha e uma ENTRADA (data de entrada, sempre presente) e traz a data da
+    SAIDA vinculada quando o aluno ja retirou o material. As SAIDAs ligadas a
+    uma entrada nao viram linha propria — sao a coluna "Saida" da linha dela.
+
+    Registros LEGADO ficam de fora desse pareamento por limitacao do dado de
+    origem (ver docstring de Movimentacao): la o ``pacote_codigo`` e o codigo do
+    material, entao nao ha como saber qual saida corresponde a qual entrada. Uma
+    SAIDA legada sem vinculo continua aparecendo como linha propria — sem data de
+    entrada — em vez de sumir da listagem.
+
+    Permite filtrar por status de retirada e texto livre em campos de aluno,
+    turma, pacote, arquivo e material.
     """
 
     busca = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
-    movimentacao = request.GET.get("movimentacao", "").strip()
     aluno_id = request.GET.get("aluno", "").strip()
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
 
+    # Linhas = ENTRADAs + SAIDAs sem vinculo (legado). As SAIDAs vinculadas sao
+    # absorvidas pela linha da sua entrada, via prefetch de `saidas`.
     movimentacoes = (
-        Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
+        linhas_de_pacote()
         .select_related("aluno", "turma", "material")
+        .prefetch_related("saidas")
         .order_by("-data_hora", "-id")
     )
+
+    # Intervalo de datas — os KPIs da visao geral linkam para ca com o mesmo
+    # recorte que usaram para contar; sem isso o link abriria outro conjunto.
+    data_inicio = _parse_data_br(data_inicio_str)
+    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
+    movimentacoes = _filtrar_por_intervalo(movimentacoes, data_inicio, data_fim)
 
     # Filtro por aluno específico — usado ao clicar no total de movimentações
     # de um aluno na tela de alunos por turma. Precede a busca textual porque é
@@ -307,9 +412,6 @@ def home(request: HttpRequest) -> HttpResponse:
     elif status == "sem_status":
         movimentacoes = movimentacoes.filter(retirado__isnull=True)
 
-    if movimentacao in Movimentacao.Tipo.values:
-        movimentacoes = movimentacoes.filter(tipo=movimentacao)
-
     if busca:
         movimentacoes = movimentacoes.filter(
             # `aluno_nome`/`turma_nome` sao copias textuais do momento do
@@ -328,7 +430,6 @@ def home(request: HttpRequest) -> HttpResponse:
 
     page_obj, query_string = paginar_queryset(request, movimentacoes)
     status_label = dict(STATUS_MOVIMENTACAO_OPCOES).get(status, "Todos")
-    movimentacao_label = dict(Movimentacao.Tipo.choices).get(movimentacao, "Todas")
 
     for registro in page_obj.object_list:
         if registro.retirado is True:
@@ -343,11 +444,14 @@ def home(request: HttpRequest) -> HttpResponse:
         registro.material_resumo = (
             registro.material.nome if registro.material else "Pacote"
         )
+        _preparar_datas_do_pacote(registro)
 
-    metricas = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO).aggregate(
+    # Atalho "N aguardando retirada" — segue o mesmo recorte de datas da
+    # listagem para nao contradizer o que esta na tela.
+    metricas = _filtrar_por_intervalo(
+        linhas_de_pacote(), data_inicio, data_fim
+    ).aggregate(
         total=Count("id"),
-        saidas=Count("id", filter=Q(tipo=Movimentacao.Tipo.SAIDA)),
-        entradas=Count("id", filter=Q(tipo=Movimentacao.Tipo.ENTRADA)),
         pendentes=Count("id", filter=Q(retirado=False)),
     )
 
@@ -360,9 +464,10 @@ def home(request: HttpRequest) -> HttpResponse:
             "status_atual": status,
             "status_label": status_label,
             "status_opcoes": STATUS_MOVIMENTACAO_OPCOES,
-            "movimentacao_atual": movimentacao,
-            "movimentacao_label": movimentacao_label,
-            "movimentacao_opcoes": Movimentacao.Tipo.choices,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
             "aluno_filtrado": aluno_filtrado,
             "movimentacoes": page_obj.object_list,
             "metricas": metricas,
@@ -945,6 +1050,10 @@ def registrar_saida(request: HttpRequest) -> HttpResponse:
                         arquivo_origem="painel",
                         row_hash=_gerar_row_hash(),
                         origem=OrigemDados.MANUAL,
+                        # Grava o vinculo exato — a listagem usa isso para exibir
+                        # entrada e saida do pacote na mesma linha, sem depender
+                        # de coincidencia de pacote_codigo.
+                        entrada_origem=entrada,
                     )
                     entrada.retirado = True
                     entrada.save(update_fields=["retirado"])
@@ -1405,6 +1514,37 @@ def atualizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+def atualizar_turmas_eduq(request: HttpRequest) -> HttpResponse:
+    """Sincroniza somente as turmas com o Eduq e volta para a tela de origem.
+
+    Complementa ``atualizar_alunos_eduq`` (que traz turmas e alunos, e e mais
+    demorado): aqui o alvo e so o cadastro de turmas, usado quando uma turma nova
+    ainda nao aparece na tela.
+    """
+
+    try:
+        resultado = sincronizar_eduq(
+            sincronizar_turmas=True,
+            sincronizar_alunos=False,
+        )
+    except EduqAPIError as exc:
+        messages.error(request, f"Não foi possível atualizar as turmas: {exc}")
+    else:
+        messages.success(
+            request,
+            "Turmas atualizadas: "
+            f"{resultado.turmas.criados} nova(s), "
+            f"{resultado.turmas.atualizados} atualizada(s).",
+        )
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return HttpResponseRedirect(next_url)
+    return redirect("criar_emprestimo")
+
+
+@login_required
+@require_POST
 def excluir_material(request: HttpRequest, pk: int) -> HttpResponse:
     """Exclui um material do catalogo permanentemente.
 
@@ -1617,46 +1757,44 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
     data_inicio_str = request.GET.get("data_inicio", "").strip()
     data_fim_str = request.GET.get("data_fim", "").strip()
 
-    # Padrão: mês atual quando nenhum filtro é informado
+    # Padrão: do primeiro registro do banco até hoje — abre mostrando todo o
+    # histórico, em vez de recortar no mês atual (que escondia o passado sem o
+    # usuário pedir). Banco vazio: cai para hoje→hoje.
     if not data_inicio_str and not data_fim_str:
-        data_inicio_str = hoje.replace(day=1).strftime("%d/%m/%Y")
+        primeiro = linhas_de_pacote().aggregate(Min("data_hora"))["data_hora__min"]
+        inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
+        data_inicio_str = inicio_padrao.strftime("%d/%m/%Y")
         data_fim_str = hoje.strftime("%d/%m/%Y")
 
-    data_inicio = None
-    data_fim = None
+    data_inicio = _parse_data_br(data_inicio_str)
+    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
 
-    if data_inicio_str:
-        try:
-            data_inicio = timezone.make_aware(
-                datetime.strptime(data_inicio_str, "%d/%m/%Y")
+    # Mesma base da listagem (uma linha por pacote) para que cada KPI abra
+    # exatamente os registros que contou — ver linhas_de_pacote().
+    mov_base = _filtrar_por_intervalo(linhas_de_pacote(), data_inicio, data_fim)
+
+    metricas_mov = mov_base.aggregate(
+        total=Count("id"),
+        retirados=Count("id", filter=Q(retirado=True)),
+        pendentes=Count("id", filter=Q(retirado=False)),
+        sem_status=Count("id", filter=Q(retirado__isnull=True)),
+    )
+
+    # Query string do período, reaproveitada nos links dos KPIs.
+    filtro_datas_qs = urlencode(
+        {
+            chave: valor
+            for chave, valor in (
+                ("data_inicio", data_inicio_str),
+                ("data_fim", data_fim_str),
             )
-        except ValueError:
-            data_inicio_str = ""
-
-    if data_fim_str:
-        try:
-            dt_fim = datetime.strptime(data_fim_str, "%d/%m/%Y").replace(
-                hour=23, minute=59, second=59
-            )
-            data_fim = timezone.make_aware(dt_fim)
-        except ValueError:
-            data_fim_str = ""
-
-    mov_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
-
-    if data_inicio:
-        mov_base = mov_base.filter(data_hora__gte=data_inicio)
-    if data_fim:
-        mov_base = mov_base.filter(data_hora__lte=data_fim)
-
-    metricas_mov = {
-        "total": mov_base.count(),
-        "saidas": mov_base.filter(tipo=Movimentacao.Tipo.SAIDA).count(),
-        "entradas": mov_base.filter(tipo=Movimentacao.Tipo.ENTRADA).count(),
-        "pendentes": mov_base.filter(
-            tipo=Movimentacao.Tipo.ENTRADA, retirado=False
-        ).count(),
-    }
+            if valor
+        }
+    )
 
     pacotes_aguardando = list(
         mov_base.filter(
@@ -1667,8 +1805,19 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
         .order_by("data_hora")[:10]
     )
 
+    # A atividade recente e um feed de EVENTOS, nao de pacotes: usa todos os
+    # registros (inclusive as SAIDAs que a listagem absorve na linha da
+    # entrada), senao a retirada apareceria datada pela data de entrada.
+    eventos_base = _filtrar_por_intervalo(
+        Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO),
+        data_inicio,
+        data_fim,
+    )
+
     atividade_recente: list[dict] = []
-    for mov in mov_base.select_related("material").order_by("-data_hora", "-id")[:12]:
+    for mov in eventos_base.select_related("material").order_by("-data_hora", "-id")[
+        :12
+    ]:
         material = mov.material.nome if mov.material else f"pacote {mov.pacote_codigo}"
         aluno = mov.aluno_nome or "Aluno não informado"
         if mov.tipo == Movimentacao.Tipo.ENTRADA and mov.retirado is False:
@@ -1709,6 +1858,7 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
             "filtro_ativo": bool(
                 request.GET.get("data_inicio") or request.GET.get("data_fim")
             ),
+            "filtro_datas_qs": filtro_datas_qs,
             "metricas_mov": metricas_mov,
             "pacotes_aguardando": pacotes_aguardando,
             "atividade_recente": atividade_recente,

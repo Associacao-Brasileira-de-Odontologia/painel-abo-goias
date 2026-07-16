@@ -530,9 +530,18 @@ select option {
     color: var(--info-text);
 }
 
+/* Os símbolos de partials/icons.html são só traço e não carregam stroke
+   próprio — herdam do pai. Sem `stroke` aqui o ícone não desenha nada
+   (mesmo contrato de .side-icon svg). */
 .icon-action svg {
+    width: 16px;
+    height: 16px;
     display: block;
     fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 /* Cabeçalho de coluna com ícone de ajuda (tooltip) — ex.: coluna Status */
@@ -638,6 +647,21 @@ select option {
     font-family: var(--font-display);
     font-size: 2.35rem;
     line-height: 1;
+}
+
+/* KPI clicável: abre a listagem com o mesmo recorte que o card contou. */
+.metric-card--link {
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease,
+        transform 0.15s ease;
+}
+
+.metric-card--link:hover,
+.metric-card--link:focus-visible {
+    border-color: rgba(29, 110, 238, 0.55);
+    background: rgba(29, 110, 238, 0.08);
+    transform: translateY(-1px);
 }
 
 .danger-metric {
