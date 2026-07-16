@@ -8,12 +8,11 @@
 {% block sidebar_copy %}Métricas consolidadas de pedidos de material e laboratórios em andamento.{% endblock %}
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
-{% block sidebar_extra %}
-    <div class="panel-quick-actions">
-        <a class="button primary" href="{% url 'lab_criar_pedido' %}">Novo pedido</a>
-        <a class="button secondary" href="{% url 'lab_pedidos' %}">Acompanhamento</a>
-    </div>
-{% endblock %}
+{% comment %}
+Sem sidebar_extra aqui de propósito: "Registrar pedido" e "Acompanhamento" já
+estão no menu lateral (Ações rápidas / navegação principal) — este bloco
+duplicava os mesmos dois botões logo abaixo.
+{% endcomment %}
 
 {% block panel_title %}Visão geral do laboratório{% endblock %}
 

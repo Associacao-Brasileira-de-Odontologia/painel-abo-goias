@@ -9,11 +9,11 @@
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Acompanhamento de pedidos{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'lab_criar_pedido' %}">Novo pedido</a>
-    </div>
-{% endblock %}
+{% comment %}
+Sem panel_actions aqui de propósito: "Registrar pedido" já está nas Ações
+rápidas do menu lateral (partials/menu.html) — duplicar o botão aqui era
+redundante.
+{% endcomment %}
 
 {% block panel %}
     <nav class="status-seg" aria-label="Filtrar por status">
@@ -46,18 +46,39 @@
         <div class="search-control">
             <input id="results-q-pedidos" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por paciente, aluno, laboratório ou descrição..." aria-label="Buscar na listagem">
         </div>
+        {% comment %}
+        Filtro de período (mesmo comportamento do CME) — recorta pela data de
+        registro do pedido. Default preenchido pela view: 1º registro → hoje.
+        {% endcomment %}
+        <input type="text" name="data_inicio" value="{{ data_inicio_str }}"
+               placeholder="dd/mm/aaaa" maxlength="10" pattern="\d{2}/\d{2}/\d{4}"
+               aria-label="Data inicial (registro do pedido)">
+        <input type="text" name="data_fim" value="{{ data_fim_str }}"
+               placeholder="dd/mm/aaaa" maxlength="10" pattern="\d{2}/\d{2}/\d{4}"
+               aria-label="Data final (registro do pedido)">
         <button class="button primary" type="submit">Buscar</button>
     </form>
 
-    {% if busca %}
+    {% if busca or data_inicio_str or data_fim_str %}
         <div class="selection-summary">
-            <a class="info-chip info-chip--removable"
-               href="?{% if status_filtro %}status={{ status_filtro }}{% endif %}"
-               title="Remover busca">
-                <span>Busca</span>
-                <strong>{{ busca }}</strong>
-                <span class="chip-x" aria-hidden="true">×</span>
-            </a>
+            {% if busca %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if status_filtro %}status={{ status_filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
+                   title="Remover busca">
+                    <span>Busca</span>
+                    <strong>{{ busca }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if data_inicio_str or data_fim_str %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_filtro %}status={{ status_filtro }}{% endif %}"
+                   title="Remover filtro de período">
+                    <span>Período (registro)</span>
+                    <strong>{% if data_inicio_str %}{{ data_inicio_str }}{% else %}início{% endif %} → {% if data_fim_str %}{{ data_fim_str }}{% else %}hoje{% endif %}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
             <a class="button secondary compact-button" href="{% url 'lab_pedidos' %}">Limpar tudo</a>
         </div>
     {% endif %}
@@ -74,7 +95,10 @@
                     <th>Paciente</th>
                     <th>Aluno</th>
                     <th>Laboratório</th>
+                    <th>Registro</th>
                     <th>Previsão</th>
+                    <th>Entregue</th>
+                    <th>Faturado</th>
                     <th>Status</th>
                     <th>Ações</th>
                 </tr>
@@ -95,12 +119,34 @@
                             {% endif %}
                         </td>
                         <td>
+                            <strong class="mono">{{ pedido.criado_em|date:"d/m/Y" }}</strong>
+                            <span class="cell-muted">{{ pedido.criado_em|date:"H:i" }}</span>
+                        </td>
+                        <td>
                             <strong class="mono{% if pedido.previsao_entrega < hoje and not pedido.entregue %} date-overdue{% endif %}">
                                 {{ pedido.previsao_entrega|date:"d/m/Y" }}
                             </strong>
                             <span class="cell-muted{% if pedido.previsao_entrega < hoje and not pedido.entregue %} date-overdue{% endif %}">{{ pedido.previsao_entrega|dias_relativos }}</span>
                             {% if pedido.data_envio %}
                                 <span class="cell-muted mono">Env: {{ pedido.data_envio|date:"d/m/Y" }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if pedido.data_entrega %}
+                                <strong class="mono">{{ pedido.data_entrega|date:"d/m/Y" }}</strong>
+                            {% elif pedido.entregue %}
+                                <span class="cell-muted" title="Entregue, sem data registrada.">Entregue — sem data</span>
+                            {% else %}
+                                <span class="cell-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if pedido.data_faturamento %}
+                                <strong class="mono">{{ pedido.data_faturamento|date:"d/m/Y" }}</strong>
+                            {% else %}
+                                <span class="cell-muted" title="Faturamento — paciente: {% if pedido.faturado_paciente %}sim{% else %}não{% endif %}; laboratório: {% if pedido.faturado_lab %}sim{% else %}não{% endif %}.">
+                                    {% if pedido.faturado_paciente or pedido.faturado_lab %}Parcial{% else %}—{% endif %}
+                                </span>
                             {% endif %}
                         </td>
                         <td>
@@ -150,7 +196,7 @@
                     </tr>
                 {% empty %}
                     <tr class="empty-row">
-                        <td colspan="7">
+                        <td colspan="10">
                             <div class="empty-state">
                                 <strong>Nenhum pedido em andamento.</strong>
                                 <p>Revise os filtros ou <a href="{% url 'lab_criar_pedido' %}">registre um novo pedido</a>.</p>

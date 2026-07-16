@@ -7,9 +7,13 @@ incluir este partial sem parâmetros.
     <p class="side-nav-label">Operação</p>
     {% include "partials/side_link.html" with url_name="lab_dashboard" icon="dashboard" label="Visão Geral" %}
     {% include "partials/side_link.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" match="lab_detalhe_pedido" %}
-    {% include "partials/side_link.html" with url_name="lab_criar_pedido" icon="novo" label="Novo pedido" %}
     {% include "partials/side_link.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" match="lab_criar_moldagem" %}
     {% include "partials/side_link.html" with url_name="lab_pedidos_faturamento" icon="emprestimo" label="Faturamento" %}
+
+    <div class="side-quick-actions">
+        <p class="section-label">Ações rápidas</p>
+        <a class="button primary" href="{% url 'lab_criar_pedido' %}">Registrar pedido</a>
+    </div>
 
     <p class="side-nav-label">Cadastros</p>
     {% include "partials/side_link.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" match="lab_criar_laboratorio lab_editar_laboratorio" %}

@@ -15,12 +15,15 @@
             <strong>{{ total }}</strong>
         </div>
         <div class="metric-card metric-blue">
-            <span class="metric-label">Processos abertos</span>
+            <span class="metric-label">Com pedido aberto</span>
             <strong>{{ total_abertos }}</strong>
         </div>
     </div>
-
-    {% include "gestao_lab/partials/sync_dental.html" %}
+    {% comment %}
+    O botão "Atualizar lista" foi removido: sincronizar tudo pode demorar muito.
+    Em vez disso, a busca já consulta o Dental Office ao vivo (ver a view e a
+    seção de resultados no corpo) — mesmo padrão da app de contratos.
+    {% endcomment %}
 {% endblock %}
 
 {% block panel_title %}Pacientes cadastrados{% endblock %}
@@ -30,30 +33,30 @@
         <div class="search-control">
             <input id="results-q-pacientes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome ou celular..." aria-label="Buscar na listagem">
         </div>
-        <select name="processo" aria-label="Filtrar por processo" onchange="this.form.submit()">
-            <option value="">Processo — todos</option>
-            <option value="aberto" {% if processo_filtro == "aberto" %}selected{% endif %}>Com processo aberto</option>
+        <select name="pedido" aria-label="Filtrar por pedido" onchange="this.form.submit()">
+            <option value="">Pedido — todos</option>
+            <option value="aberto" {% if pedido_filtro == "aberto" %}selected{% endif %}>Com pedido aberto</option>
         </select>
         <button class="button primary" type="submit">Buscar</button>
     </form>
 
-    {% if busca or processo_filtro %}
+    {% if busca or pedido_filtro %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if processo_filtro %}processo={{ processo_filtro }}{% endif %}"
+                   href="?{% if pedido_filtro %}pedido={{ pedido_filtro }}{% endif %}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            {% if processo_filtro %}
+            {% if pedido_filtro %}
                 <a class="info-chip info-chip--removable"
                    href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
-                   title="Remover filtro de processo">
-                    <span>Processo</span>
-                    <strong>Com processo aberto</strong>
+                   title="Remover filtro de pedido">
+                    <span>Pedido</span>
+                    <strong>Com pedido aberto</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
@@ -62,9 +65,9 @@
     {% endif %}
 
     <div class="results-meta">
-        <span><strong>{{ page_obj.paginator.count }}</strong> paciente{{ page_obj.paginator.count|pluralize }}</span>
+        <span><strong>{{ page_obj.paginator.count }}</strong> paciente{{ page_obj.paginator.count|pluralize }} no sistema</span>
         {% if total_abertos %}
-            <a href="?processo=aberto" title="Filtrar processos abertos"><strong>{{ total_abertos }}</strong> com processo aberto</a>
+            <a href="?pedido=aberto" title="Filtrar pacientes com pedido aberto"><strong>{{ total_abertos }}</strong> com pedido aberto</a>
         {% endif %}
     </div>
 
@@ -74,7 +77,7 @@
                 <tr>
                     <th>Paciente</th>
                     <th>Celular</th>
-                    <th>Processo</th>
+                    <th>Pedido</th>
                     <th>Previsão de retorno</th>
                     <th>Atualização</th>
                 </tr>
@@ -93,10 +96,10 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if paciente.processo_aberto %}
-                                <span class="badge badge-info">Aberto</span>
+                            {% if paciente.tem_pedido_aberto %}
+                                <span class="badge badge-info">Pedido em aberto</span>
                             {% else %}
-                                <span class="badge badge-neutro">Concluído</span>
+                                <span class="badge badge-neutro">Sem pedido</span>
                             {% endif %}
                         </td>
                         <td>
@@ -121,14 +124,15 @@
                     <tr class="empty-row">
                         <td colspan="5">
                             <div class="empty-state">
-                                <strong>Nenhum paciente encontrado.</strong>
+                                <strong>Nenhum paciente no sistema para esta busca.</strong>
                                 <p>
-                                    {% if busca or processo_filtro %}
+                                    {% if busca or pedido_filtro %}
                                         Revise os filtros ou
                                         <a href="{% url 'lab_pacientes' %}">limpe a busca</a>.
+                                        {% if busca %}Veja abaixo se há resultados no Dental Office.{% endif %}
                                     {% else %}
-                                        Nenhum paciente na lista ainda. Use o botão
-                                        <strong>Atualizar lista</strong> no painel lateral.
+                                        Busque pelo nome do paciente — a consulta inclui a base
+                                        do sistema e o Dental Office.
                                     {% endif %}
                                 </p>
                             </div>
@@ -140,4 +144,42 @@
     </div>
 
     {% include "partials/paginacao.html" %}
+
+    {% comment %}
+    Resultados ao vivo do Dental Office (só quem ainda não está na base local).
+    Mesmo conceito da app de contratos: busca sem sincronizar tudo, com aviso
+    para refinar quando há mais páginas do que as exibidas.
+    {% endcomment %}
+    {% if busca %}
+        <div class="dental-results">
+            <p class="section-label">Encontrados no Dental Office</p>
+            {% if erro_dental %}
+                <p class="help-text">Não foi possível consultar o Dental Office agora: {{ erro_dental }}</p>
+            {% elif pacientes_dental %}
+                {% if dental_ha_mais %}
+                    <p class="help-text">Muitos resultados no Dental Office — refine a busca pelo nome completo para ver os demais.</p>
+                {% endif %}
+                <div class="table-wrap data-table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Paciente (Dental Office)</th>
+                                <th>Celular</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pac in pacientes_dental %}
+                                <tr>
+                                    <td><strong>{{ pac.nome }}</strong></td>
+                                    <td>{{ pac.celular|default:"—" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="help-text">Nenhum resultado adicional no Dental Office para &ldquo;{{ busca }}&rdquo;.</p>
+            {% endif %}
+        </div>
+    {% endif %}
 {% endblock %}

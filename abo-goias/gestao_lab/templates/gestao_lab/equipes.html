@@ -69,7 +69,10 @@
                             {% else %}—{% endif %}
                         </td>
                         <td class="actions-cell">
-                            <a class="button compact-button secondary" href="{% url 'lab_editar_equipe' equipe.pk %}">Editar</a>
+                            <a class="icon-action" href="{% url 'lab_editar_equipe' equipe.pk %}"
+                               title="Editar" aria-label="Editar equipe">
+                                <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
+                            </a>
                         </td>
                     </tr>
                 {% empty %}

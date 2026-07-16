@@ -587,12 +587,29 @@ class PacientesViewTests(TestCase):
         self.assertContains(response, "Joao Ativo")
         self.assertNotContains(response, "Maria Inativa")
 
-    def test_filtra_pacientes_com_processo_aberto(self) -> None:
-        _paciente(nome="Com Processo", id_dental="302", processo_aberto=True)
-        _paciente(nome="Sem Processo", id_dental="303", processo_aberto=False)
-        response = self.client.get(reverse("lab_pacientes"), {"processo": "aberto"})
-        self.assertContains(response, "Com Processo")
-        self.assertNotContains(response, "Sem Processo")
+    def test_filtra_pacientes_com_pedido_aberto(self) -> None:
+        # "Pedido em aberto" passou a significar ter um PedidoMaterial não
+        # concluído (antes era o flag processo_aberto vindo do Dental Office).
+        com = _paciente(nome="Com Pedido", id_dental="302")
+        sem = _paciente(nome="Sem Pedido", id_dental="303")
+        aluno = _aluno()
+        equipe = _equipe()
+        lab = _laboratorio()
+        # 'com' tem um pedido em aberto; 'sem' tem só um pedido já concluído.
+        _pedido(com, aluno, lab, equipe)
+        _pedido(
+            sem,
+            aluno,
+            lab,
+            equipe,
+            entregue=True,
+            data_entrega=date.today(),
+            faturado_paciente=True,
+            faturado_lab=True,
+        )
+        response = self.client.get(reverse("lab_pacientes"), {"pedido": "aberto"})
+        self.assertContains(response, "Com Pedido")
+        self.assertNotContains(response, "Sem Pedido")
 
 
 class AlunosLabViewTests(TestCase):
@@ -938,8 +955,8 @@ class CobrarLaboratoriosAtrasadosTests(TestCase):
     def test_falha_no_envio_nao_marca_pedido_como_cobrado(
         self, mock_configurado: MagicMock, mock_get_service: MagicMock
     ) -> None:
-        mock_get_service.return_value.enviar_texto.return_value = (
-            MessagingResult.falha("instância desconectada")
+        mock_get_service.return_value.enviar_texto.return_value = MessagingResult.falha(
+            "instância desconectada"
         )
         lab = _laboratorio(equipe=self.equipe, whatsapp="62999998888")
         pedido = _pedido(
@@ -1133,7 +1150,9 @@ def _fake_response(corpo: dict, status: int = 200) -> MagicMock:
 
 def _fake_http_error(status: int, corpo: str = "{}") -> HTTPError:
     fp = io.BytesIO(corpo.encode("utf-8"))
-    return HTTPError(url="https://dental.example/teste", code=status, msg="erro", hdrs=None, fp=fp)
+    return HTTPError(
+        url="https://dental.example/teste", code=status, msg="erro", hdrs=None, fp=fp
+    )
 
 
 class DentalClientHttpTests(TestCase):
@@ -1230,7 +1249,9 @@ class DentalClientHttpTests(TestCase):
         self.assertEqual(resposta["total_pages"], 1)
 
     @patch("gestao_lab.integrations.dental.urlopen")
-    def test_timeout_levanta_dental_timeout_error(self, mock_urlopen: MagicMock) -> None:
+    def test_timeout_levanta_dental_timeout_error(
+        self, mock_urlopen: MagicMock
+    ) -> None:
         mock_urlopen.side_effect = [
             _fake_response({"token": "tok-1"}),
             TimeoutError("tempo esgotado"),
@@ -1422,7 +1443,7 @@ class BuscaSelecaoLabTests(TestCase):
         response = self.client.get(reverse("lab_criar_pedido"))
         conteudo = response.content.decode()
 
-        self.assertIn('data-ac-hidden', conteudo)
+        self.assertIn("data-ac-hidden", conteudo)
         self.assertNotIn('<select id="id_paciente"', conteudo)
 
     def test_campos_de_busca_enviam_o_termo(self) -> None:
@@ -1534,9 +1555,7 @@ class BuscaSelecaoLabTests(TestCase):
 
     @override_settings(DENTAL_CLINIC_ID=1)
     @patch("gestao_lab.services.dental_sync.DentalClient")
-    def test_selecionar_devolve_erro_tratado_se_a_api_falhar(
-        self, mock_client
-    ) -> None:
+    def test_selecionar_devolve_erro_tratado_se_a_api_falhar(self, mock_client) -> None:
         mock_client.return_value.buscar_detalhes_paciente.side_effect = DentalAPIError(
             "fora do ar"
         )
@@ -1605,9 +1624,7 @@ class ExclusaoLabTests(TestCase):
     def test_excluir_moldagem_remove_registro(self) -> None:
         moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
 
-        response = self.client.post(
-            reverse("lab_excluir_moldagem", args=[moldagem.pk])
-        )
+        response = self.client.post(reverse("lab_excluir_moldagem", args=[moldagem.pk]))
 
         self.assertRedirects(response, reverse("lab_moldagens"))
         self.assertFalse(Moldagem.objects.filter(pk=moldagem.pk).exists())

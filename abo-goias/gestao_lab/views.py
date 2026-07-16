@@ -5,11 +5,12 @@ from __future__ import annotations
 import logging
 import secrets as _secrets
 from datetime import date as date_type
+from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
-from django.db.models import Q
+from django.db.models import Min, Q
 from django.db.models.query import QuerySet
 from django.http import (
     HttpRequest,
@@ -19,8 +20,11 @@ from django.http import (
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+
+from gestao_cme.utils import normalizar_texto
 
 from .forms import (
     EquipeForm,
@@ -31,8 +35,6 @@ from .forms import (
     PedidoFaturamentoForm,
     PedidoMaterialForm,
 )
-from gestao_cme.utils import normalizar_texto
-
 from .models import (
     AlunoLab,
     Equipe,
@@ -76,6 +78,24 @@ def _paginar(request: HttpRequest, queryset: QuerySet) -> tuple[Page, str]:
     params.pop("page", None)
     paginator = Paginator(queryset, REGISTROS_POR_PAGINA)
     return paginator.get_page(request.GET.get("page")), params.urlencode()
+
+
+def _parse_data_br(valor: str, fim_do_dia: bool = False) -> datetime | None:
+    """Converte "dd/mm/aaaa" em datetime aware, ou None se invalido.
+
+    Mesmo contrato do helper homonimo em gestao_cme.views — o filtro de periodo
+    do acompanhamento espelha o comportamento do CME.
+    """
+
+    if not valor:
+        return None
+    try:
+        dt = datetime.strptime(valor, "%d/%m/%Y")
+    except ValueError:
+        return None
+    if fim_do_dia:
+        dt = dt.replace(hour=23, minute=59, second=59)
+    return timezone.make_aware(dt)
 
 
 # ---------------------------------------------------------------------------
@@ -128,20 +148,18 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 @login_required
 def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
     hoje = date_type.today()
-    qs = (
-        PedidoMaterial.objects.filter(
-            status__in=[
-                PedidoMaterial.Status.EM_DIA,
-                PedidoMaterial.Status.A_CONFIRMAR,
-                PedidoMaterial.Status.ATRASADO,
-            ]
-        )
-        .select_related("paciente", "aluno", "laboratorio", "equipe")
-        .order_by("previsao_entrega")
-    )
+
+    # Antes só os pedidos em aberto apareciam. Agora os concluídos também entram
+    # (default → todos), senão as novas colunas de entrega/faturamento nunca
+    # teriam conteúdo: o pedido some da tela no instante em que é faturado.
+    qs = PedidoMaterial.objects.select_related(
+        "paciente", "aluno", "laboratorio", "equipe"
+    ).order_by("-criado_em")
 
     busca = request.GET.get("q", "").strip()
     status_filtro = request.GET.get("status", "").strip()
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
 
     if busca:
         qs = qs.filter(
@@ -153,6 +171,25 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
 
     if status_filtro:
         qs = qs.filter(status=status_filtro)
+
+    # Filtro de período (mesmo comportamento do CME) — recorta pela data de
+    # registro do pedido. Default: 1º registro → hoje (todo o histórico).
+    if not data_inicio_str and not data_fim_str:
+        primeiro = PedidoMaterial.objects.aggregate(Min("criado_em"))["criado_em__min"]
+        inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
+        data_inicio_str = inicio_padrao.strftime("%d/%m/%Y")
+        data_fim_str = hoje.strftime("%d/%m/%Y")
+
+    data_inicio = _parse_data_br(data_inicio_str)
+    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
+    if data_inicio:
+        qs = qs.filter(criado_em__gte=data_inicio)
+    if data_fim:
+        qs = qs.filter(criado_em__lte=data_fim)
 
     metricas = {
         "em_dia": PedidoMaterial.objects.filter(
@@ -182,6 +219,8 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
             "busca": busca,
             "status_filtro": status_filtro,
             "status_label": status_label,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
             "metricas": metricas,
             "hoje": hoje,
         },
@@ -313,7 +352,14 @@ def atualizar_faturamento(request: HttpRequest, pk: int) -> HttpResponse:
 def alternar_faturado_paciente(request: HttpRequest, pk: int) -> HttpResponse:
     pedido = get_object_or_404(PedidoMaterial, pk=pk)
     pedido.faturado_paciente = not pedido.faturado_paciente
-    pedido.save(update_fields=["faturado_paciente", "status", "atualizado_em"])
+    pedido.save(
+        update_fields=[
+            "faturado_paciente",
+            "data_faturamento",
+            "status",
+            "atualizado_em",
+        ]
+    )
     next_url = request.POST.get("next") or "lab_pedidos_faturamento"
     return redirect(next_url)
 
@@ -323,7 +369,14 @@ def alternar_faturado_paciente(request: HttpRequest, pk: int) -> HttpResponse:
 def alternar_faturado_lab(request: HttpRequest, pk: int) -> HttpResponse:
     pedido = get_object_or_404(PedidoMaterial, pk=pk)
     pedido.faturado_lab = not pedido.faturado_lab
-    pedido.save(update_fields=["faturado_lab", "status", "atualizado_em"])
+    pedido.save(
+        update_fields=[
+            "faturado_lab",
+            "data_faturamento",
+            "status",
+            "atualizado_em",
+        ]
+    )
     next_url = request.POST.get("next") or "lab_pedidos_faturamento"
     return redirect(next_url)
 
@@ -337,9 +390,7 @@ def excluir_pedido(request: HttpRequest, pk: int) -> HttpResponse:
     moldagem volta a figurar como nao convertida.
     """
 
-    pedido = get_object_or_404(
-        PedidoMaterial.objects.select_related("paciente"), pk=pk
-    )
+    pedido = get_object_or_404(PedidoMaterial.objects.select_related("paciente"), pk=pk)
     identificacao = f"#{pedido.pk} — {pedido.paciente.nome}"
     tinha_moldagem = Moldagem.objects.filter(pedido_material=pedido).exists()
     pedido.delete()
@@ -681,8 +732,7 @@ def _pacientes_locais(q: str):
     itens = Paciente.objects.filter(ativo=True).order_by("nome")
     if q:
         itens = itens.filter(
-            Q(nome_normalizado__icontains=normalizar_texto(q))
-            | Q(celular__icontains=q)
+            Q(nome_normalizado__icontains=normalizar_texto(q)) | Q(celular__icontains=q)
         )
     return itens
 
@@ -691,8 +741,7 @@ def _alunos_locais(q: str):
     itens = AlunoLab.objects.filter(ativo=True).order_by("nome")
     if q:
         itens = itens.filter(
-            Q(nome_normalizado__icontains=normalizar_texto(q))
-            | Q(celular__icontains=q)
+            Q(nome_normalizado__icontains=normalizar_texto(q)) | Q(celular__icontains=q)
         )
     return itens
 
@@ -762,9 +811,7 @@ def _buscar_unificado(request: HttpRequest, tipo: str) -> HttpResponse:
 
     e_paciente = tipo == "paciente"
     locais = list(
-        (_pacientes_locais(q) if e_paciente else _alunos_locais(q))[
-            :_LIMITE_RESULTADOS
-        ]
+        (_pacientes_locais(q) if e_paciente else _alunos_locais(q))[:_LIMITE_RESULTADOS]
     )
 
     remotos: list = []
@@ -903,25 +950,82 @@ def alunos_lab(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def pacientes(request: HttpRequest) -> HttpResponse:
-    from django.db.models import Max
+    """Lista pacientes com busca unificada (base local + Dental Office ao vivo).
+
+    Segue o mesmo padrão da app de contratos: em vez de um botão de "Atualizar
+    lista" (que sincroniza tudo e pode demorar muito), a busca consulta a base
+    local e, havendo termo, também o Dental Office ao vivo — avisando quando há
+    mais resultados do que os exibidos, para o usuário refinar a busca.
+
+    A coluna de "processo em aberto" foi trocada por "pedido em aberto": se o
+    paciente tem algum PedidoMaterial ainda não concluído (ver
+    PedidoMaterial.Status).
+    """
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import procurar_pacientes
+
+    busca = request.GET.get("q", "").strip()
+    pedido_filtro = request.GET.get("pedido", "").strip()
 
     qs = Paciente.objects.filter(ativo=True).order_by("nome")
-    busca = request.GET.get("q", "").strip()
-    processo = request.GET.get("processo", "").strip()
     if busca:
         qs = qs.filter(
             Q(nome_normalizado__icontains=normalizar_texto(busca))
             | Q(celular__icontains=busca)
         )
-    if processo == "aberto":
-        qs = qs.filter(processo_aberto=True)
+
+    # "Pedido em aberto" = existe pedido do paciente que não está concluído.
+    pacientes_com_pedido_aberto = set(
+        PedidoMaterial.objects.exclude(
+            status=PedidoMaterial.Status.CONCLUIDO
+        ).values_list("paciente_id", flat=True)
+    )
+    if pedido_filtro == "aberto":
+        qs = qs.filter(pk__in=pacientes_com_pedido_aberto)
 
     total = Paciente.objects.filter(ativo=True).count()
-    total_abertos = Paciente.objects.filter(ativo=True, processo_aberto=True).count()
-    ultima_sync = Paciente.objects.aggregate(s=Max("ultima_sincronizacao"))["s"]
-    historico_sync = RegistroSync.objects.all()[:5]
+    total_abertos = len(pacientes_com_pedido_aberto)
 
     page_obj, query_string = _paginar(request, qs)
+    for paciente in page_obj.object_list:
+        paciente.tem_pedido_aberto = paciente.pk in pacientes_com_pedido_aberto
+
+    # Busca ao vivo no Dental Office (só na 1ª página, só com termo) — traz quem
+    # ainda não está na base local, sem gravar nada. Ver contratos.views.
+    pacientes_dental: list[dict] = []
+    erro_dental = ""
+    dental_ha_mais = False
+    primeira_pagina = request.GET.get("page") in (None, "", "1")
+    if busca and primeira_pagina:
+        clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+        if clinic_id:
+            try:
+                remotos, total_paginas = procurar_pacientes(
+                    q=busca, clinic_id=clinic_id
+                )
+                dental_ha_mais = total_paginas > 1
+                ids_locais = set(
+                    Paciente.objects.filter(ativo=True).values_list(
+                        "id_dental", flat=True
+                    )
+                )
+                for pac in remotos:
+                    if str(pac.id) in ids_locais:
+                        continue
+                    pacientes_dental.append(
+                        {
+                            "id_dental": str(pac.id),
+                            "nome": pac.nome,
+                            "celular": pac.celular,
+                        }
+                    )
+            except DentalAPIError as exc:
+                erro_dental = str(exc)
+        else:
+            erro_dental = "A busca no Dental Office não está configurada."
+
     return render(
         request,
         "gestao_lab/pacientes.html",
@@ -930,12 +1034,13 @@ def pacientes(request: HttpRequest) -> HttpResponse:
             "page_obj": page_obj,
             "query_string": query_string,
             "busca": busca,
-            "processo_filtro": processo,
+            "pedido_filtro": pedido_filtro,
             "hoje": date_type.today(),
             "total": total,
             "total_abertos": total_abertos,
-            "ultima_sync": ultima_sync,
-            "historico_sync": historico_sync,
+            "pacientes_dental": pacientes_dental,
+            "erro_dental": erro_dental,
+            "dental_ha_mais": dental_ha_mais,
         },
     )
 
@@ -964,7 +1069,10 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
     )
 
     if not clinic_id:
-        messages.error(request, "A atualização da lista não está configurada. Avise o suporte técnico.")
+        messages.error(
+            request,
+            "A atualização da lista não está configurada. Avise o suporte técnico.",
+        )
         return destino
 
     try:
@@ -984,6 +1092,46 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
         )
     except DentalAPIError as exc:
         messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
+
+    return destino
+
+
+@login_required
+@require_POST
+def sincronizar_alunos_dental(request: HttpRequest) -> HttpResponse:
+    """Atualiza somente a lista de alunos com o Dental Office.
+
+    Usada pelos formulários de pedido e moldagem: um botão explícito de
+    "Atualizar alunos", em vez dos antigos campos de busca na sidebar. É mais
+    leve que ``sincronizar_dental`` (que também varre os pacientes), então serve
+    bem ao caso em que o operador só precisa que um aluno recém-cadastrado
+    apareça no seletor.
+    """
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import sincronizar_alunos
+
+    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+
+    next_url = request.POST.get("next", "")
+    destino = (
+        HttpResponseRedirect(next_url)
+        if next_url.startswith("/")
+        else redirect("lab_criar_pedido")
+    )
+
+    try:
+        resultado = sincronizar_alunos(user_group=user_group)
+    except DentalAPIError as exc:
+        messages.error(request, f"Não foi possível atualizar os alunos agora: {exc}")
+    else:
+        messages.success(
+            request,
+            "Lista de alunos atualizada: "
+            f"{resultado['criados']} novo(s), "
+            f"{resultado['atualizados']} atualizado(s).",
+        )
 
     return destino
 
@@ -1014,7 +1162,10 @@ def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
     if not clinic_id:
-        messages.error(request, "A atualização da lista não está configurada. Avise o suporte técnico.")
+        messages.error(
+            request,
+            "A atualização da lista não está configurada. Avise o suporte técnico.",
+        )
         return redirect(next_name)
 
     try:

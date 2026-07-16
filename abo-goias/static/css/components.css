@@ -1260,6 +1260,13 @@ tbody tr.row-a-confirmar > td:first-child {
     font-size: 14px;
 }
 
+/* Resultados ao vivo do Dental Office abaixo da listagem local (pacientes). */
+.dental-results {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
 .sidebar-section {
     margin-top: 20px;
     padding-top: 18px;
