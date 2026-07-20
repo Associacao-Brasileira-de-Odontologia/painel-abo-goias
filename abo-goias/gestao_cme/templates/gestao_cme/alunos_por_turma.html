@@ -8,10 +8,12 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Alunos por turma{% endblock %}
+{% comment %}
+"Cadastrar aluno" e "Cadastrar turma" foram movidos para o mini-menu do item
+"Alunos por turma" na navegação lateral (ver partials/side_link_group.html).
+{% endcomment %}
 {% block panel_actions %}
     <div class="topbar-actions">
-        <a class="button primary" href="{% url 'cadastrar_aluno' %}">Cadastrar aluno</a>
-        <a class="button secondary" href="{% url 'cadastrar_turma' %}">Cadastrar turma</a>
         {% if sync_alunos_url %}
             <form class="sync-form" method="post" action="{{ sync_alunos_url }}">
                 {% csrf_token %}

@@ -1352,6 +1352,43 @@ tbody tr.row-a-confirmar > td:first-child {
     background: rgba(29, 110, 238, 0.12);
 }
 
+.side-link-group {
+    position: relative;
+}
+
+.side-link-group summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.side-link-group summary::marker,
+.side-link-group summary::-webkit-details-marker {
+    display: none;
+    content: "";
+}
+
+.side-link-group summary::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-left: auto;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    opacity: 0.55;
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+}
+
+.side-link-group[open] summary::after {
+    transform: rotate(-135deg);
+}
+
+.side-link-panel {
+    left: 12px;
+    right: 12px;
+    min-width: 0;
+}
+
 .side-quick-actions {
     display: grid;
     gap: 8px;

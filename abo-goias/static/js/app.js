@@ -47,7 +47,7 @@
 
 (function () {
     document.addEventListener("click", function (event) {
-        document.querySelectorAll(".user-menu-dropdown[open]").forEach(function (menu) {
+        document.querySelectorAll(".user-menu-dropdown[open], .side-link-group[open]").forEach(function (menu) {
             if (!menu.contains(event.target)) menu.removeAttribute("open");
         });
     });

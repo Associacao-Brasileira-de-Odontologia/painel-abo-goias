@@ -8,11 +8,10 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Mapa dos abrigos{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'cadastrar_abrigo' %}">Cadastrar abrigo</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Cadastrar abrigo" foi movido para o mini-menu do item "Abrigos" na
+navegação lateral (ver partials/side_link_group.html).
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">

@@ -8,11 +8,10 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Kits cadastrados{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'cadastrar_kit' %}">Cadastrar kit</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Cadastrar kit" foi movido para o mini-menu do item "Kits" na navegação
+lateral (ver partials/side_link_group.html) — não fica mais duplicado aqui.
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">

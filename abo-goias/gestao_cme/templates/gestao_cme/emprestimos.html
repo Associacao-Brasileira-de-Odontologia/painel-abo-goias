@@ -8,11 +8,10 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Empréstimos registrados{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Novo empréstimo" foi movido para o mini-menu do item "Empréstimos" na
+navegação lateral (ver partials/side_link_group.html).
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">

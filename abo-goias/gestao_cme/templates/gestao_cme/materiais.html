@@ -8,11 +8,10 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Materiais cadastrados{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'cadastrar_material' %}">Cadastrar material</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Cadastrar material" foi movido para o mini-menu do item "Materiais" na
+navegação lateral (ver partials/side_link_group.html).
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">

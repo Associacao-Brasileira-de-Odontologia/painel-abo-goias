@@ -6,11 +6,11 @@ partial sem parâmetros.
 <nav class="side-nav" aria-label="Navegação da aplicação">
     {% include "partials/side_link.html" with url_name="cme_dashboard" icon="dashboard" label="Visão Geral" %}
     {% include "partials/side_link.html" with url_name="cme_home" icon="lista" label="Movimentações" match="editar_movimentacao" %}
-    {% include "partials/side_link.html" with url_name="alunos_por_turma" icon="usuarios" label="Alunos por turma" match="cadastrar_turma cadastrar_aluno" %}
-    {% include "partials/side_link.html" with url_name="abrigos" icon="abrigo" label="Abrigos" match="cadastrar_abrigo editar_abrigo" %}
-    {% include "partials/side_link.html" with url_name="materiais" icon="material" label="Materiais" match="cadastrar_material editar_material" %}
-    {% include "partials/side_link.html" with url_name="kits" icon="kit" label="Kits" %}
-    {% include "partials/side_link.html" with url_name="emprestimos" icon="emprestimo" label="Empréstimos" match="criar_emprestimo" %}
+    {% include "partials/side_link_group.html" with url_name="alunos_por_turma" icon="usuarios" label="Alunos por turma" match="cadastrar_turma cadastrar_aluno" action1_label="Cadastrar aluno" action1_url_name="cadastrar_aluno" action2_label="Cadastrar turma" action2_url_name="cadastrar_turma" %}
+    {% include "partials/side_link_group.html" with url_name="abrigos" icon="abrigo" label="Abrigos" match="cadastrar_abrigo editar_abrigo" action1_label="Cadastrar abrigo" action1_url_name="cadastrar_abrigo" %}
+    {% include "partials/side_link_group.html" with url_name="materiais" icon="material" label="Materiais" match="cadastrar_material editar_material" action1_label="Cadastrar material" action1_url_name="cadastrar_material" %}
+    {% include "partials/side_link_group.html" with url_name="kits" icon="kit" label="Kits" action1_label="Cadastrar kit" action1_url_name="cadastrar_kit" %}
+    {% include "partials/side_link_group.html" with url_name="emprestimos" icon="emprestimo" label="Empréstimos" match="criar_emprestimo" action1_label="Novo empréstimo" action1_url_name="criar_emprestimo" %}
 
     <div class="side-quick-actions">
         <p class="section-label">Ações rápidas</p>
