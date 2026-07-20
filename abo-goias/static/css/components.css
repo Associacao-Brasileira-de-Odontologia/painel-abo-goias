@@ -798,8 +798,17 @@ a.metric-card:hover {
 .selection-summary {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
     margin-bottom: 18px;
+}
+
+/* Mesma altura do botão "Buscar"/campo de busca da barra de filtros (ver
+   .filter-bar input, .filter-bar .button) — "Limpar tudo"/"Ver todas"
+   usavam a altura padrão de .compact-button (40px), menor que a da barra
+   de filtros logo acima (46px). */
+.selection-summary .button {
+    min-height: 46px;
 }
 
 .info-chip {
