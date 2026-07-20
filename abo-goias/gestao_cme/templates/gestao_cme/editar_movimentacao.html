@@ -89,6 +89,21 @@
         </form>
     </div>
 
+    {% if historico_auditoria %}
+        <div class="kpi-section">
+            <p class="section-label">Histórico de alterações</p>
+            <ul class="audit-log">
+                {% for evento in historico_auditoria %}
+                    <li>
+                        <strong>{{ evento.get_acao_display }}</strong>
+                        por {{ evento.usuario.get_username|default:"usuário removido" }}
+                        em {{ evento.criado_em|date:"d/m/Y H:i" }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
     {# Zona de exclusão #}
     <div class="kpi-section">
         <p class="section-label">Excluir registro</p>

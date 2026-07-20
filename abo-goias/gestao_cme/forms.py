@@ -161,9 +161,17 @@ class KitForm(forms.ModelForm):
     """Valida o cadastro manual de um kit e sua composição de materiais.
 
     O painel só permitia criar kits pelo Django Admin; este form habilita o
-    cadastro pela própria tela de kits. Os materiais escolhidos são gravados
-    como itens do kit (KitMaterial) com quantidade 1 — o ajuste fino de
-    quantidade por material continua no Admin (ver documentação da melhoria).
+    cadastro pela própria tela de kits. Cada material selecionado tem sua
+    própria quantidade (campo ``quantidade_<pk do material>`` no POST, lido
+    diretamente de ``self.data`` porque não há como declarar um campo por
+    material sem conhecer o catálogo de antemão) — decisão de negócio: o
+    ajuste de quantidade > 1 acontece já na criação, pela própria tela.
+
+    ``Kit.quantidade`` não é mais preenchido manualmente aqui: o valor do
+    campo passa a ser sincronizado automaticamente para refletir quantos
+    materiais do kit estão disponíveis (ver ``_sincronizar_quantidade_kit``
+    em ``views.py``), para não conviver com "Disponíveis" como dois números
+    concorrentes sem relação entre si.
     """
 
     materiais = forms.ModelMultipleChoiceField(
@@ -175,7 +183,7 @@ class KitForm(forms.ModelForm):
 
     class Meta:
         model = Kit
-        fields = ["nome", "codigo", "descricao", "quantidade"]
+        fields = ["nome", "codigo", "descricao"]
         error_messages = {
             "nome": {"required": "Nome é obrigatório."},
             "codigo": {"required": "Código é obrigatório."},
@@ -188,6 +196,9 @@ class KitForm(forms.ModelForm):
             .filter(ativo=True)
             .order_by("nome")
         )
+        # Em edição, pré-marca os materiais já vinculados ao kit.
+        if self.instance.pk:
+            self.fields["materiais"].initial = self.instance.materiais.all()
 
     def clean_codigo(self) -> str:
         codigo = self.cleaned_data.get("codigo", "")
@@ -204,15 +215,46 @@ class KitForm(forms.ModelForm):
             self._salvar_materiais(kit)
         return kit
 
-    def _salvar_materiais(self, kit: Kit) -> None:
-        """Cria os itens do kit para os materiais selecionados (quantidade 1)."""
+    def _quantidade_informada(self, material_pk: int) -> int:
+        """Lê a quantidade digitada para um material, com piso de 1.
 
+        O campo não é declarado no form (não há como saber o catálogo de
+        materiais antes de instanciar), então é lido diretamente do POST
+        bruto pelo nome de convenção ``quantidade_<pk>``.
+        """
+
+        bruto = self.data.get(f"quantidade_{material_pk}", "1")
+        try:
+            valor = int(bruto)
+        except (TypeError, ValueError):
+            return 1
+        return max(1, valor)
+
+    def _salvar_materiais(self, kit: Kit) -> None:
+        """Sincroniza os itens do kit com os materiais e quantidades do form.
+
+        Cria/atualiza um ``KitMaterial`` por material selecionado (com a
+        quantidade informada) e remove os itens de materiais que ficaram
+        desmarcados — necessário para a edição funcionar (não só a criação).
+        """
+
+        selecionados_pks: set[int] = set()
         for material in self.cleaned_data.get("materiais", []):
-            KitMaterial.objects.get_or_create(
+            quantidade = self._quantidade_informada(material.pk)
+            KitMaterial.objects.update_or_create(
                 kit=kit,
                 material=material,
-                defaults={"quantidade": 1},
+                defaults={"quantidade": quantidade},
             )
+            selecionados_pks.add(material.pk)
+        kit.itens.exclude(material_id__in=selecionados_pks).delete()
+
+
+class KitEditForm(KitForm):
+    """Estende KitForm com o campo ativo para edição."""
+
+    class Meta(KitForm.Meta):
+        fields = [*KitForm.Meta.fields, "ativo"]
 
 
 class MaterialForm(forms.ModelForm):

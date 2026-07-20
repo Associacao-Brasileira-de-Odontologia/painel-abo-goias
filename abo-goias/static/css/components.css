@@ -345,6 +345,26 @@ select option {
     margin-top: 8px;
 }
 
+/* Sincronizar turma sob demanda a partir da busca de aluno sem resultado */
+.sync-turma-busca {
+    margin-top: 4px;
+}
+
+.sync-turma-busca .field-hint {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.sync-turma-busca-row {
+    display: flex;
+    gap: 8px;
+}
+
+.sync-turma-busca-row select {
+    flex: 1;
+    min-width: 0;
+}
+
 .selected-chip {
     display: flex;
     align-items: center;
@@ -612,6 +632,18 @@ select option {
 .checkbox-list-item input {
     width: auto;
     margin: 0;
+}
+
+/* Quantidade por material no cadastro/edição de kit — número compacto, à
+   direita do rótulo do material, sem herdar a largura livre do checkbox. */
+.checkbox-list-quantidade .checkbox-list-item span {
+    flex: 1;
+}
+
+.checkbox-list-item input.quantidade-material-input {
+    width: 64px;
+    text-align: center;
+    flex: none;
 }
 
 /* ── Cartões de métrica e KPIs ──────────────────────────────────── */
@@ -1742,6 +1774,24 @@ tbody tr.row-a-confirmar > td:first-child {
     color: var(--muted);
     font-size: 0.88rem;
     margin-bottom: 14px;
+}
+
+/* Trilha de auditoria de edição/exclusão (ex.: editar_movimentacao.html) */
+.audit-log {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.audit-log li {
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.audit-log strong {
+    color: var(--text);
 }
 
 .info-box {

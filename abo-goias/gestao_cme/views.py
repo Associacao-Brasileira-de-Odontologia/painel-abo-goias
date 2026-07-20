@@ -26,6 +26,7 @@ from .forms import (
     EditarMovimentacaoForm,
     EmprestimoForm,
     EntradaForm,
+    KitEditForm,
     KitForm,
     MaterialEditForm,
     MaterialForm,
@@ -41,9 +42,11 @@ from .models import (
     Material,
     Movimentacao,
     OrigemDados,
+    RegistroAuditoriaMovimentacao,
     Turma,
 )
 from .services.eduq_sync import sincronizar_eduq
+from .services.emprestimos import marcar_emprestimos_atrasados
 from .utils import normalizar_texto
 
 REGISTROS_POR_PAGINA = 10
@@ -829,13 +832,31 @@ def kits(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _sincronizar_quantidade_kit(kit: Kit) -> None:
+    """Mantém ``Kit.quantidade`` igual ao número de materiais disponíveis do kit.
+
+    Decisão de negócio: em vez de um número digitado à parte (que não refletia
+    a composição real do kit e convivia mal com a coluna "Disponíveis" na
+    listagem), "Quantidade" passa a ser sempre igual a "Disponíveis" —
+    recalculado a cada criação/edição do kit, no mesmo padrão de
+    ``_sincronizar_ocupacao_abrigo``.
+    """
+
+    disponiveis = kit.itens.filter(material__disponivel=True).count()
+    if kit.quantidade != disponiveis:
+        kit.quantidade = disponiveis
+        kit.save(update_fields=["quantidade"])
+
+
 @login_required
 def cadastrar_kit(request: HttpRequest) -> HttpResponse:
     """Cria um novo kit manualmente, com composição opcional de materiais.
 
     Habilita o cadastro de kits pela própria tela de kits (antes só era
-    possível pelo Django Admin). A seleção de materiais gera os itens do kit
-    com quantidade 1; ajustes de quantidade por material seguem no Admin.
+    possível pelo Django Admin). Cada material selecionado tem sua própria
+    quantidade, informada já nesta tela (ver ``KitForm``); "Quantidade" do
+    kit é sincronizada automaticamente para refletir os materiais
+    disponíveis, em vez de ser digitada à parte.
     """
 
     form = KitForm(request.POST or None)
@@ -845,6 +866,7 @@ def cadastrar_kit(request: HttpRequest) -> HttpResponse:
         with transaction.atomic():
             kit.save()
             form._salvar_materiais(kit)
+            _sincronizar_quantidade_kit(kit)
         messages.success(request, f"Kit {kit.nome} cadastrado com sucesso.")
         return redirect("kits")
 
@@ -858,6 +880,70 @@ def cadastrar_kit(request: HttpRequest) -> HttpResponse:
             "form": form,
         },
     )
+
+
+@login_required
+def editar_kit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Atualiza os dados e a composição de materiais de um kit existente."""
+
+    kit = get_object_or_404(Kit, pk=pk)
+    form = KitEditForm(request.POST or None, instance=kit)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            form.save()
+            _sincronizar_quantidade_kit(kit)
+        messages.success(request, f"Kit {kit.nome} atualizado com sucesso.")
+        return redirect("kits")
+
+    # Empréstimos ativos com este kit — avisa antes da exclusão irreversível,
+    # mesmo padrão de "em_emprestimo" usado em editar_material.
+    em_emprestimo = Emprestimo.objects.filter(
+        kit=kit,
+        status__in=[Emprestimo.Status.EMPRESTADO, Emprestimo.Status.ATRASADO],
+    ).count()
+    quantidades_atuais = {item.material_id: item.quantidade for item in kit.itens.all()}
+
+    return render(
+        request,
+        "gestao_cme/form_kit.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": f"Editar {kit.nome}",
+            "is_edit": True,
+            "objeto": kit,
+            "form": form,
+            "em_emprestimo": em_emprestimo,
+            "quantidades_atuais": quantidades_atuais,
+        },
+    )
+
+
+@login_required
+@require_POST
+def excluir_kit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exclui um kit permanentemente.
+
+    Quando o kit está referenciado por algum empréstimo (``Emprestimo.kit`` é
+    ``PROTECT``), a exclusão é bloqueada e a view orienta a inativar o kit em
+    vez de excluir — mesmo tratamento de ``excluir_material``.
+    """
+
+    kit = get_object_or_404(Kit, pk=pk)
+    nome = kit.nome
+    try:
+        kit.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            (
+                f"Não foi possível excluir o kit {nome}: há empréstimos "
+                "vinculados. Marque-o como inativo em vez de excluir."
+            ),
+        )
+        return redirect("editar_kit", pk=pk)
+
+    messages.success(request, f"Kit {nome} excluído permanentemente.")
+    return redirect("kits")
 
 
 def _contexto_movimentacao(
@@ -1136,6 +1222,17 @@ def excluir_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
     pacote = mov.pacote_codigo
     tipo = mov.tipo
 
+    # Gravado antes do delete(): a FK de auditoria é SET_NULL, então o
+    # registro sobrevive à exclusão da movimentação (com a cópia textual do
+    # pacote/aluno feita acima, já que o vínculo vai desaparecer).
+    RegistroAuditoriaMovimentacao.objects.create(
+        movimentacao=mov,
+        pacote_codigo=pacote,
+        aluno_nome=nome,
+        acao=RegistroAuditoriaMovimentacao.Acao.EXCLUSAO,
+        usuario=request.user,
+    )
+
     if tipo == Movimentacao.Tipo.SAIDA:
         # Restaura entradas correspondentes para "nao retirado"
         restauradas = Movimentacao.objects.filter(
@@ -1171,6 +1268,13 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
         form = EditarMovimentacaoForm(request.POST, instance=mov)
         if form.is_valid():
             form.save()
+            RegistroAuditoriaMovimentacao.objects.create(
+                movimentacao=mov,
+                pacote_codigo=mov.pacote_codigo,
+                aluno_nome=mov.aluno_nome,
+                acao=RegistroAuditoriaMovimentacao.Acao.EDICAO,
+                usuario=request.user,
+            )
             messages.success(
                 request,
                 f"Registro do pacote {mov.pacote_codigo} atualizado.",
@@ -1186,6 +1290,8 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
     else:
         status_label, status_classe = "Sem status", "emprestado"
 
+    historico_auditoria = mov.auditorias.select_related("usuario").all()
+
     return render(
         request,
         "gestao_cme/editar_movimentacao.html",
@@ -1195,6 +1301,7 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
             "mov": mov,
             "status_label": status_label,
             "status_classe": status_classe,
+            "historico_auditoria": historico_auditoria,
             "breadcrumbs": [
                 {"label": "Movimentações", "url": reverse("cme_home")},
                 {"label": "Editar registro", "url": None},
@@ -1206,16 +1313,14 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
 # ── Fase 2: cadastros manuais e sincronização por turma ──────────────────────
 
 
-@login_required
-@require_POST
-def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpResponse:
-    """Sincroniza alunos de uma turma especifica com o Eduq."""
+def _sincronizar_alunos_da_turma(request: HttpRequest, turma: Turma) -> None:
+    """Sincroniza os alunos de uma turma com o Eduq e registra a mensagem do resultado.
 
-    try:
-        turma = Turma.objects.get(pk=turma_id)
-    except Turma.DoesNotExist:
-        messages.error(request, "Turma não encontrada.")
-        return redirect("alunos_por_turma")
+    Compartilhado por ``sincronizar_alunos_turma`` (turma escolhida na tela de
+    Alunos por turma) e ``sincronizar_turma_busca`` (turma escolhida a partir
+    do estado vazio da busca de aluno) — mesma operação, dois pontos de
+    entrada diferentes.
+    """
 
     try:
         resultado = sincronizar_eduq(
@@ -1237,10 +1342,54 @@ def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpRespons
             + (f", {erros} erro(s)." if erros else "."),
         )
 
+
+@login_required
+@require_POST
+def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpResponse:
+    """Sincroniza alunos de uma turma especifica com o Eduq."""
+
+    try:
+        turma = Turma.objects.get(pk=turma_id)
+    except Turma.DoesNotExist:
+        messages.error(request, "Turma não encontrada.")
+        return redirect("alunos_por_turma")
+
+    _sincronizar_alunos_da_turma(request, turma)
+
     next_url = request.POST.get("next", "")
     if next_url.startswith("/"):
         return HttpResponseRedirect(next_url)
     return redirect(f"{reverse('alunos_por_turma')}?turma={turma_id}")
+
+
+@login_required
+@require_POST
+def sincronizar_turma_busca(request: HttpRequest) -> HttpResponse:
+    """Sincroniza a turma escolhida a partir do estado vazio da busca de aluno.
+
+    Decisão de negócio: como o Eduq não oferece busca de aluno por nome (só
+    ``listar_alunos`` por turma — ver docstring de ``buscar_alunos``), quando a
+    busca de autocomplete não encontra ninguém a saída é sincronizar a turma
+    do aluno sob demanda, ali mesmo, em vez de mandar o operador para outra
+    tela para depois voltar e tentar buscar de novo.
+    """
+
+    turma_id = request.POST.get("turma_id", "").strip()
+    next_url = request.POST.get("next", "")
+    destino = next_url if next_url.startswith("/") else reverse("alunos_por_turma")
+
+    if not turma_id.isdigit():
+        messages.error(request, "Selecione uma turma para sincronizar.")
+        return redirect(destino)
+
+    try:
+        turma = Turma.objects.get(pk=turma_id)
+    except Turma.DoesNotExist:
+        messages.error(request, "Turma não encontrada.")
+        return redirect(destino)
+
+    _sincronizar_alunos_da_turma(request, turma)
+    return redirect(destino)
 
 
 @login_required
@@ -1475,6 +1624,15 @@ def buscar_alunos(request: HttpRequest) -> HttpResponse:
     encontrados = list(alunos[: LIMITE_RESULTADOS_BUSCA + 1])
     ha_mais = len(encontrados) > LIMITE_RESULTADOS_BUSCA
 
+    # Busca sem resultado: como o Eduq não tem busca de aluno por nome (só
+    # listagem por turma), a saída oferecida é sincronizar a turma do aluno
+    # sob demanda, ali mesmo — ver sincronizar_turma_busca.
+    turmas_para_sincronizar = None
+    if q and not encontrados:
+        turmas_para_sincronizar = Turma.objects.exclude(
+            origem=OrigemDados.EXEMPLO
+        ).order_by("nome")
+
     return render(
         request,
         "gestao_cme/partials/_aluno_results.html",
@@ -1482,6 +1640,8 @@ def buscar_alunos(request: HttpRequest) -> HttpResponse:
             "alunos": encontrados[:LIMITE_RESULTADOS_BUSCA],
             "busca": q,
             "ha_mais": ha_mais,
+            "turmas_para_sincronizar": turmas_para_sincronizar,
+            "origem_busca": request.headers.get("HX-Current-URL", ""),
         },
     )
 
@@ -1582,7 +1742,14 @@ _STATUS_EMPRESTIMO_OPCOES = (
 
 @login_required
 def emprestimos(request: HttpRequest) -> HttpResponse:
-    """Lista emprestimos com filtros de status e busca."""
+    """Lista emprestimos com filtros de status e busca.
+
+    Antes de montar a listagem, atualiza o status dos empréstimos vencidos
+    para ATRASADO — a tarefa periódica (ver tasks.py) cobre quem não visita a
+    tela, mas a listagem precisa estar correta mesmo entre execuções dela.
+    """
+
+    marcar_emprestimos_atrasados()
 
     busca = request.GET.get("q", "").strip()
     status_filtro = request.GET.get("status", "").strip()

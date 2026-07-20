@@ -535,3 +535,48 @@ class Movimentacao(ModeloBase):
         """Retorna uma descricao resumida do evento de movimentacao."""
 
         return f"{self.get_tipo_display()} - {self.pacote_codigo} - {self.aluno_nome}"
+
+
+class RegistroAuditoriaMovimentacao(models.Model):
+    """Trilha minima de quem editou ou excluiu uma movimentacao, e quando.
+
+    Guarda uma copia textual do pacote e do aluno porque a exclusao apaga a
+    ``Movimentacao`` original — sem essa copia, o registro de auditoria de uma
+    exclusao ficaria sem nenhuma pista de qual pacote foi afetado.
+    """
+
+    class Acao(models.TextChoices):
+        """Tipo de alteracao registrada na trilha de auditoria."""
+
+        EDICAO = "EDICAO", "Edição"
+        EXCLUSAO = "EXCLUSAO", "Exclusão"
+
+    movimentacao = models.ForeignKey(
+        Movimentacao,
+        on_delete=models.SET_NULL,
+        related_name="auditorias",
+        null=True,
+        blank=True,
+    )
+    pacote_codigo = models.CharField(max_length=40)
+    aluno_nome = models.CharField(max_length=150, blank=True)
+    acao = models.CharField(max_length=10, choices=Acao.choices)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="auditorias_movimentacao",
+        null=True,
+        blank=True,
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        verbose_name = "auditoria de movimentação"
+        verbose_name_plural = "auditorias de movimentação"
+
+    def __str__(self) -> str:
+        """Retorna acao, pacote e autor para exibicao administrativa."""
+
+        autor = self.usuario.get_username() if self.usuario else "usuário removido"
+        return f"{self.get_acao_display()} - pacote {self.pacote_codigo} por {autor}"

@@ -1,13 +1,16 @@
 {% extends "layouts/painel.html" %}
+{% load nav_tags %}
 
 {% block title %}Gestão de CME | {{ titulo }}{% endblock %}
 {% block header_eyebrow %}Controle de materiais{% endblock %}
 {% block header_title %}{{ titulo }}{% endblock %}
 
 {% block sidebar_copy %}
-    Cadastre um kit de materiais. O código deve ser único em todo o sistema.
-    Os materiais selecionados são adicionados ao kit com quantidade 1 — ajuste
-    quantidades específicas pelo painel administrativo, se necessário.
+    {% if is_edit %}
+        Altere os dados do kit e a composição de materiais. O código deve ser único em todo o sistema.
+    {% else %}
+        Cadastre um kit de materiais. O código deve ser único em todo o sistema. Informe a quantidade de cada material selecionado.
+    {% endif %}
 {% endblock %}
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
@@ -46,17 +49,6 @@
         </div>
 
         <div class="field">
-            <label for="quantidade">Quantidade disponível</label>
-            <input
-                id="quantidade"
-                type="number"
-                name="quantidade"
-                value="{{ form.quantidade.value|default:'0' }}"
-                min="0"
-            >
-        </div>
-
-        <div class="field">
             <label for="descricao">Descrição <span class="field-optional">(opcional)</span></label>
             <textarea
                 id="descricao"
@@ -66,14 +58,35 @@
             >{{ form.descricao.value|default:'' }}</textarea>
         </div>
 
+        {% if is_edit %}
+            <div class="field field-checkbox">
+                <label>
+                    <input
+                        type="checkbox"
+                        name="ativo"
+                        {% if form.ativo.value %}checked{% endif %}
+                    >
+                    Kit ativo no catálogo
+                </label>
+            </div>
+        {% endif %}
+
         <div class="field">
             <label>Materiais do kit <span class="field-optional">(opcional)</span></label>
-            <span class="field-hint">Cada material selecionado é adicionado ao kit com quantidade 1.</span>
-            <div class="checkbox-list">
+            <span class="field-hint">Marque os materiais do kit e informe a quantidade de cada um.</span>
+            <div class="checkbox-list checkbox-list-quantidade">
                 {% for checkbox in form.materiais %}
                     <label class="checkbox-list-item">
                         {{ checkbox.tag }}
                         <span>{{ checkbox.choice_label }}</span>
+                        <input
+                            type="number"
+                            name="quantidade_{{ checkbox.data.value }}"
+                            value="{{ quantidades_atuais|dict_get:checkbox.data.value|default:'1' }}"
+                            min="1"
+                            class="quantidade-material-input"
+                            aria-label="Quantidade de {{ checkbox.choice_label }} no kit"
+                        >
                     </label>
                 {% empty %}
                     <p class="help-text">Nenhum material ativo disponível para vincular.</p>
@@ -82,8 +95,33 @@
         </div>
 
         <div class="form-actions">
-            <button class="button primary" type="submit">Cadastrar kit</button>
+            <button class="button primary" type="submit">
+                {% if is_edit %}Salvar alterações{% else %}Cadastrar kit{% endif %}
+            </button>
             <a class="button secondary" href="{% url 'kits' %}">Cancelar</a>
         </div>
     </form>
+
+    {% if is_edit %}
+        <div class="kpi-section">
+            <p class="section-label">Excluir kit</p>
+            <p class="help-text">
+                Esta ação é permanente e não pode ser desfeita.
+                {% if em_emprestimo %}
+                    Atenção: <strong>{{ em_emprestimo }} empréstimo(s)</strong>
+                    {{ em_emprestimo|pluralize:"usa,usam" }} este kit no momento.
+                {% endif %}
+            </p>
+            <form method="post" action="{% url 'excluir_kit' objeto.pk %}">
+                {% csrf_token %}
+                <button class="button danger-button" type="submit"
+                        data-confirm="Excluir o kit {{ objeto.nome }}? {% if em_emprestimo %}{{ em_emprestimo }} empréstimo(s) usam este kit agora. {% endif %}Esta ação é irreversível e não pode ser desfeita."
+                        data-confirm-title="Excluir kit"
+                        data-confirm-label="Excluir kit"
+                        data-confirm-danger="true">
+                    Excluir kit
+                </button>
+            </form>
+        </div>
+    {% endif %}
 {% endblock %}

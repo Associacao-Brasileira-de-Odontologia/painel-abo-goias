@@ -36,7 +36,14 @@ urlpatterns = [
     ),
     path("kits/", views.kits, name="kits"),
     path("kits/novo/", views.cadastrar_kit, name="cadastrar_kit"),
+    path("kits/<int:pk>/editar/", views.editar_kit, name="editar_kit"),
+    path("kits/<int:pk>/excluir/", views.excluir_kit, name="excluir_kit"),
     path("alunos/buscar/", views.buscar_alunos, name="buscar_alunos"),
+    path(
+        "alunos/sincronizar-turma-busca/",
+        views.sincronizar_turma_busca,
+        name="sincronizar_turma_busca",
+    ),
     path(
         "alunos/atualizar/", views.atualizar_alunos_eduq, name="atualizar_alunos_eduq"
     ),

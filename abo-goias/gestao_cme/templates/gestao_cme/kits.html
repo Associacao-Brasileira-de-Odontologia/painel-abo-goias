@@ -47,6 +47,7 @@
                     <th>Disponíveis</th>
                     <th>Resumo</th>
                     <th>Status</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -67,10 +68,16 @@
                                 <span class="badge badge-atrasado">Inativo</span>
                             {% endif %}
                         </td>
+                        <td class="actions-cell">
+                            <a class="icon-action" href="{% url 'editar_kit' kit.pk %}"
+                               title="Editar" aria-label="Editar kit">
+                                <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
+                            </a>
+                        </td>
                     </tr>
                 {% empty %}
                     <tr class="empty-row">
-                        <td colspan="6">
+                        <td colspan="7">
                             <div class="empty-state">
                                 <strong>Nenhum kit encontrado.</strong>
                                 <p>Revise o termo pesquisado ou limpe a busca para visualizar todos os kits cadastrados.</p>

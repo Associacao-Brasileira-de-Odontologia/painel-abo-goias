@@ -1,4 +1,5 @@
 ﻿import json
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -31,6 +32,7 @@ from gestao_cme.models import (
     Material,
     Movimentacao,
     OrigemDados,
+    RegistroAuditoriaMovimentacao,
     Turma,
 )
 from gestao_cme.permissoes import GRUPO_GESTAO, GRUPOS_PADRAO, requer_grupo
@@ -978,11 +980,15 @@ class MateriaisFase32Tests(TestCase):
             nome="Turma X", codigo="TX", origem=OrigemDados.EDUQ
         )
         self.aluno = Aluno.objects.create(
-            nome="Carlos Andrade", matricula="MAT-1", turma=self.turma,
+            nome="Carlos Andrade",
+            matricula="MAT-1",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
         Aluno.objects.create(
-            nome="Outro Nome", matricula="MAT-2", turma=self.turma,
+            nome="Outro Nome",
+            matricula="MAT-2",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
 
@@ -997,7 +1003,9 @@ class MateriaisFase32Tests(TestCase):
         acento — as duas formas precisam encontrar o mesmo conjunto."""
 
         Aluno.objects.create(
-            nome="Ana Júlia Gonçalves", matricula="MAT-9", turma=self.turma,
+            nome="Ana Júlia Gonçalves",
+            matricula="MAT-9",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
 
@@ -1008,7 +1016,9 @@ class MateriaisFase32Tests(TestCase):
 
     def test_nome_normalizado_e_derivado_do_nome(self) -> None:
         aluno = Aluno.objects.create(
-            nome="José da Silva Araújo", matricula="MAT-10", turma=self.turma,
+            nome="José da Silva Araújo",
+            matricula="MAT-10",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
         self.assertEqual(aluno.nome_normalizado, "JOSE DA SILVA ARAUJO")
@@ -1040,9 +1050,15 @@ class MateriaisFase32Tests(TestCase):
         self.assertNotContains(vazio, "Carlos Andrade")
 
         Movimentacao.objects.create(
-            data_hora=timezone.now(), tipo=Movimentacao.Tipo.ENTRADA, aluno=self.aluno,
-            aluno_nome=self.aluno.nome, pacote_codigo="1", retirado=False,
-            arquivo_origem="painel", row_hash="h1", origem=OrigemDados.MANUAL,
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=self.aluno,
+            aluno_nome=self.aluno.nome,
+            pacote_codigo="1",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="h1",
+            origem=OrigemDados.MANUAL,
         )
         com = self.client.get(reverse("buscar_alunos"), {"pendencias": "1"})
         self.assertContains(com, "Carlos Andrade")
@@ -1092,3 +1108,380 @@ class MateriaisFase32Tests(TestCase):
 
         self.assertTrue(mock_sync.called)
         self.assertEqual(response.status_code, 302)
+
+
+class KitCrudTests(TestCase):
+    """Cadastro/edição/exclusão de kit pela interface, com quantidade por
+    material e sincronização de Kit.quantidade com os materiais disponíveis
+    (decisões de negócio de 2026-07)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-kits", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.material_disponivel = Material.objects.create(
+            nome="Espelho clínico",
+            codigo="KC-001",
+            disponivel=True,
+            origem=OrigemDados.MANUAL,
+        )
+        self.material_indisponivel = Material.objects.create(
+            nome="Sonda exploradora",
+            codigo="KC-002",
+            disponivel=False,
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_cadastrar_kit_define_quantidade_por_material(self) -> None:
+        response = self.client.post(
+            reverse("cadastrar_kit"),
+            {
+                "nome": "Kit Exame",
+                "codigo": "KIT-EXAME",
+                "descricao": "",
+                "materiais": [self.material_disponivel.pk],
+                f"quantidade_{self.material_disponivel.pk}": "4",
+            },
+        )
+
+        self.assertRedirects(response, reverse("kits"))
+        kit = Kit.objects.get(codigo="KIT-EXAME")
+        item = KitMaterial.objects.get(kit=kit, material=self.material_disponivel)
+        self.assertEqual(item.quantidade, 4)
+
+    def test_cadastrar_kit_sincroniza_quantidade_com_disponiveis(self) -> None:
+        response = self.client.post(
+            reverse("cadastrar_kit"),
+            {
+                "nome": "Kit Misto",
+                "codigo": "KIT-MISTO",
+                "descricao": "",
+                "materiais": [
+                    self.material_disponivel.pk,
+                    self.material_indisponivel.pk,
+                ],
+                f"quantidade_{self.material_disponivel.pk}": "1",
+                f"quantidade_{self.material_indisponivel.pk}": "1",
+            },
+        )
+
+        self.assertRedirects(response, reverse("kits"))
+        kit = Kit.objects.get(codigo="KIT-MISTO")
+        # 2 materiais vinculados, mas só 1 disponível — quantidade acompanha
+        # os disponíveis, não o total de materiais do kit.
+        self.assertEqual(kit.quantidade, 1)
+
+    def test_editar_kit_atualiza_composicao_e_resincroniza_quantidade(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Ajustável",
+            codigo="KIT-AJUST",
+            quantidade=99,
+            origem=OrigemDados.MANUAL,
+        )
+        KitMaterial.objects.create(
+            kit=kit, material=self.material_disponivel, quantidade=1
+        )
+
+        response = self.client.post(
+            reverse("editar_kit", args=[kit.pk]),
+            {
+                "nome": "Kit Ajustável",
+                "codigo": "KIT-AJUST",
+                "descricao": "",
+                "ativo": "on",
+                "materiais": [self.material_indisponivel.pk],
+                f"quantidade_{self.material_indisponivel.pk}": "2",
+            },
+        )
+
+        self.assertRedirects(response, reverse("kits"))
+        kit.refresh_from_db()
+        # material antigo saiu, novo entrou com quantidade 2 — e como o novo
+        # material não está disponível, quantidade do kit cai para 0.
+        self.assertFalse(
+            KitMaterial.objects.filter(
+                kit=kit, material=self.material_disponivel
+            ).exists()
+        )
+        item_novo = KitMaterial.objects.get(
+            kit=kit, material=self.material_indisponivel
+        )
+        self.assertEqual(item_novo.quantidade, 2)
+        self.assertEqual(kit.quantidade, 0)
+
+    def test_excluir_kit_sem_vinculos(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Livre", codigo="KIT-LIVRE", origem=OrigemDados.MANUAL
+        )
+
+        response = self.client.post(reverse("excluir_kit", args=[kit.pk]))
+
+        self.assertRedirects(response, reverse("kits"))
+        self.assertFalse(Kit.objects.filter(pk=kit.pk).exists())
+
+    def test_excluir_kit_com_emprestimo_e_bloqueado(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Vinculado", codigo="KIT-VINC", origem=OrigemDados.MANUAL
+        )
+        turma = Turma.objects.create(
+            nome="Turma K", codigo="TK", origem=OrigemDados.MANUAL
+        )
+        aluno = Aluno.objects.create(
+            nome="Aluno Kit", matricula="MATKIT", turma=turma, origem=OrigemDados.MANUAL
+        )
+        Emprestimo.objects.create(
+            aluno=aluno, kit=kit, status=Emprestimo.Status.EMPRESTADO
+        )
+
+        response = self.client.post(reverse("excluir_kit", args=[kit.pk]))
+
+        self.assertRedirects(response, reverse("editar_kit", args=[kit.pk]))
+        self.assertTrue(Kit.objects.filter(pk=kit.pk).exists())
+
+    def test_editar_kit_expoe_emprestimos_ativos(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Emprestado", codigo="KIT-EMP", origem=OrigemDados.MANUAL
+        )
+        turma = Turma.objects.create(
+            nome="Turma E", codigo="TE", origem=OrigemDados.MANUAL
+        )
+        aluno = Aluno.objects.create(
+            nome="Aluno Emp", matricula="MATEMP", turma=turma, origem=OrigemDados.MANUAL
+        )
+        Emprestimo.objects.create(
+            aluno=aluno, kit=kit, status=Emprestimo.Status.ATRASADO
+        )
+
+        response = self.client.get(reverse("editar_kit", args=[kit.pk]))
+
+        self.assertEqual(response.context["em_emprestimo"], 1)
+
+    def test_kits_listagem_tem_link_de_edicao(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Listado", codigo="KIT-LIST", origem=OrigemDados.MANUAL
+        )
+
+        response = self.client.get(reverse("kits"))
+
+        self.assertContains(response, reverse("editar_kit", args=[kit.pk]))
+
+
+class AuditoriaMovimentacaoTests(TestCase):
+    """Trilha mínima (usuário, ação, quando) para edição/exclusão de
+    movimentação — decisão de negócio de 2026-07."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-auditoria", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.mov = Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Auditado",
+            pacote_codigo="9001",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-auditoria-1",
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_editar_movimentacao_grava_auditoria(self) -> None:
+        response = self.client.post(
+            reverse("editar_movimentacao", args=[self.mov.pk]),
+            {
+                "pacote_codigo": "9001-B",
+                "data_hora": "2026-07-20T10:00",
+                "observacoes": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("cme_home"))
+        registro = RegistroAuditoriaMovimentacao.objects.get(movimentacao=self.mov)
+        self.assertEqual(registro.acao, RegistroAuditoriaMovimentacao.Acao.EDICAO)
+        self.assertEqual(registro.usuario, self.usuario)
+        self.assertEqual(registro.pacote_codigo, "9001-B")
+
+    def test_excluir_movimentacao_grava_auditoria_e_sobrevive_ao_delete(self) -> None:
+        response = self.client.post(reverse("excluir_movimentacao", args=[self.mov.pk]))
+
+        self.assertRedirects(response, reverse("cme_home"))
+        self.assertFalse(Movimentacao.objects.filter(pk=self.mov.pk).exists())
+
+        registro = RegistroAuditoriaMovimentacao.objects.get(pacote_codigo="9001")
+        self.assertEqual(registro.acao, RegistroAuditoriaMovimentacao.Acao.EXCLUSAO)
+        self.assertEqual(registro.usuario, self.usuario)
+        self.assertEqual(registro.aluno_nome, "Aluno Auditado")
+        # A movimentacao original foi apagada; a FK acompanha via SET_NULL.
+        self.assertIsNone(registro.movimentacao)
+
+    def test_editar_movimentacao_exibe_historico_de_alteracoes(self) -> None:
+        RegistroAuditoriaMovimentacao.objects.create(
+            movimentacao=self.mov,
+            pacote_codigo=self.mov.pacote_codigo,
+            aluno_nome=self.mov.aluno_nome,
+            acao=RegistroAuditoriaMovimentacao.Acao.EDICAO,
+            usuario=self.usuario,
+        )
+
+        response = self.client.get(reverse("editar_movimentacao", args=[self.mov.pk]))
+
+        self.assertContains(response, "Histórico de alterações")
+        self.assertContains(response, "cme-auditoria")
+
+
+class SincronizarTurmaBuscaTests(TestCase):
+    """Busca de aluno sem resultado oferece sincronizar a turma sob demanda
+    (decisão de negócio: o Eduq não tem busca de aluno por nome)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-sync-busca", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Sync", codigo="TSYNC", origem=OrigemDados.EDUQ
+        )
+
+    def test_busca_sem_resultado_oferece_turmas_para_sincronizar(self) -> None:
+        response = self.client.get(
+            reverse("buscar_alunos"), {"q": "Alguém Que Não Existe"}
+        )
+
+        self.assertContains(response, "Sincronizar turma")
+        self.assertContains(response, "Turma Sync")
+
+    def test_busca_com_resultado_nao_oferece_sincronizar(self) -> None:
+        Aluno.objects.create(
+            nome="Encontrável",
+            matricula="MAT-ENC",
+            turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+
+        response = self.client.get(reverse("buscar_alunos"), {"q": "Encontrável"})
+
+        self.assertNotContains(response, "Sincronizar turma")
+
+    def test_busca_vazia_nao_oferece_sincronizar(self) -> None:
+        response = self.client.get(reverse("buscar_alunos"))
+
+        self.assertNotContains(response, "Sincronizar turma")
+
+    @patch("gestao_cme.views.sincronizar_eduq")
+    def test_sincronizar_turma_busca_chama_sync_e_redireciona_para_next(
+        self, mock_sync
+    ) -> None:
+        mock_sync.return_value = SimpleNamespace(
+            alunos=SimpleNamespace(criados=1, atualizados=0, erros=[]),
+        )
+
+        response = self.client.post(
+            reverse("sincronizar_turma_busca"),
+            {"turma_id": self.turma.pk, "next": "/gestao-cme/nova-entrada/"},
+        )
+
+        mock_sync.assert_called_once_with(
+            sincronizar_turmas=False,
+            sincronizar_alunos=True,
+            turma_codigos=[self.turma.codigo],
+        )
+        self.assertRedirects(
+            response, "/gestao-cme/nova-entrada/", fetch_redirect_response=False
+        )
+
+    def test_sincronizar_turma_busca_sem_selecao_mostra_erro(self) -> None:
+        response = self.client.post(
+            reverse("sincronizar_turma_busca"), {"turma_id": "", "next": ""}
+        )
+
+        self.assertRedirects(response, reverse("alunos_por_turma"))
+
+
+class EmprestimoAtrasoAutomaticoTests(TestCase):
+    """Empréstimo muda para ATRASADO automaticamente ao vencer o prazo
+    (decisão de negócio de 2026-07)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-atraso", password="senha-segura", is_superuser=True
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Atraso", codigo="TATR", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Atraso",
+            matricula="MATATR",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_listagem_marca_emprestimo_vencido_como_atrasado(self) -> None:
+        ontem = timezone.localdate() - timedelta(days=1)
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=ontem,
+        )
+
+        response = self.client.get(reverse("emprestimos"))
+
+        self.assertEqual(response.status_code, 200)
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.ATRASADO)
+        self.assertContains(response, "Atrasado")
+
+    def test_nao_marca_atrasado_sem_prazo_definido(self) -> None:
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=None,
+        )
+
+        self.client.get(reverse("emprestimos"))
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.EMPRESTADO)
+
+    def test_nao_reverte_emprestimo_ja_devolvido(self) -> None:
+        ontem = timezone.localdate() - timedelta(days=1)
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.DEVOLVIDO,
+            data_prevista_devolucao=ontem,
+            data_devolucao=timezone.now(),
+        )
+
+        self.client.get(reverse("emprestimos"))
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.DEVOLVIDO)
+
+    def test_nao_marca_atrasado_antes_do_prazo(self) -> None:
+        amanha = timezone.localdate() + timedelta(days=1)
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=amanha,
+        )
+
+        self.client.get(reverse("emprestimos"))
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.EMPRESTADO)
+
+    def test_servico_retorna_quantidade_marcada(self) -> None:
+        from gestao_cme.services.emprestimos import marcar_emprestimos_atrasados
+
+        ontem = timezone.localdate() - timedelta(days=1)
+        Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=ontem,
+        )
+
+        total = marcar_emprestimos_atrasados()
+
+        self.assertEqual(total, 1)

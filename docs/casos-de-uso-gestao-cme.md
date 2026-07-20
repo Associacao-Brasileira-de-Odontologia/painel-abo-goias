@@ -6,9 +6,12 @@
 > (`auditoria-gestao-cme.md`, `melhorias-cme-contratos-2026-07.md`).
 > Data: 2026-07-20 · Escopo: aplicação `gestao_cme` (app label legado `core`).
 >
-> Este documento **não implementa mudanças** — é a base de referência para priorizar
-> melhorias de usabilidade e sistêmicas. Pontos que exigem decisão de negócio estão
-> marcados explicitamente na seção 7 e **não devem ser resolvidos por suposição**.
+> Este documento nasceu como referência de priorização, sem implementar mudanças —
+> pontos que exigiam decisão de negócio foram marcados explicitamente na seção 7,
+> sem resolvê-los por suposição. **Atualização de 2026-07-20:** as 7 decisões de §7
+> foram tomadas pelo time de negócio e a maior parte foi implementada nesta mesma
+> data (ver marcações "Atualizado em 2026-07-20" nos casos de uso afetados e o
+> resumo em §7). O restante do backlog de §6 segue como referência de priorização.
 
 ---
 
@@ -224,26 +227,41 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-06 · Editar movimentação
 
+> **Atualizado em 2026-07-20** — implementa a decisão de negócio §7.6.
+
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.editar_movimentacao` → `/gestao-cme/<pk>/editar/`
 - **Fluxo principal:** edita `pacote_codigo`, `data_hora` e `observacoes` de um registro
-  específico (ENTRADA ou SAIDA); aluno/turma/material **não são editáveis** aqui.
+  específico (ENTRADA ou SAIDA); aluno/turma/material **não são editáveis** aqui. Ao
+  salvar, grava um `RegistroAuditoriaMovimentacao(acao=EDICAO)` com usuário, pacote e
+  timestamp.
 - **Pós-condição:** registro atualizado; mensagem de sucesso; volta para UC-05.
-- **Observação:** não há trilha de auditoria (quem editou, valor anterior) — ver U-06.
+- **Trilha de auditoria:** a tela exibe um bloco "Histórico de alterações" com cada
+  edição/exclusão já registrada para aquele pacote (ação, autor, data/hora). Consulta
+  completa também disponível no Django Admin (somente leitura).
 
 ### UC-07 · Excluir movimentação
+
+> **Atualizado em 2026-07-20** — implementa a decisão de negócio §7.6.
 
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.excluir_movimentacao` (POST) → `/gestao-cme/<pk>/excluir/`
 - **Fluxo principal:**
-  1. Se a movimentação é uma **SAIDA**, o sistema restaura a(s) `ENTRADA`
+  1. Grava um `RegistroAuditoriaMovimentacao(acao=EXCLUSAO)` com usuário, pacote e
+     timestamp **antes** de excluir — a cópia textual do pacote/aluno sobrevive à
+     exclusão da movimentação original (a FK usa `SET_NULL`).
+  2. Se a movimentação é uma **SAIDA**, o sistema restaura a(s) `ENTRADA`
      correspondente(s) do mesmo aluno/pacote para `retirado=False` antes de excluir —
      evita que o pacote "suma" do fluxo de pendências.
-  2. Registro é excluído permanentemente (hard delete, sem soft-delete/lixeira).
+  3. Registro é excluído permanentemente (hard delete, sem soft-delete/lixeira).
 - **Regra de negócio:** exclusão de SAIDA é uma operação com efeito colateral em outro
   registro — comportamento correto, mas **irreversível e sem confirmação visível no
   código atual além do `data-confirm` do template** (verificar consistência de modal em
   todas as chamadas — ver U-05).
+- **Trilha de auditoria mínima (usuário, ação, timestamp):** implementada — ver
+  `RegistroAuditoriaMovimentacao` em `models.py` e §7.6. Não inclui, por decisão de
+  escopo ("mínimo"), o valor anterior do campo editado (versionamento completo) — só
+  quem fez o quê e quando.
 
 ### UC-08 · Alternar status de retirada manualmente
 
@@ -367,18 +385,34 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-16 · Gerenciar kits
 
+> **Atualizado em 2026-07-20** — implementa as decisões de negócio §7.1 e §7.2.
+
 - **Ator primário:** Coordenador / Superusuário.
-- **Views/rotas:** `views.kits` (`/kits/`), `cadastrar_kit` (`/kits/novo/`).
-- **Fluxo principal (cadastro):**
-  1. Coordenador informa nome, código único, descrição, quantidade operacional e
-     seleciona materiais (checkbox múltiplo).
-  2. Cada material selecionado vira um `KitMaterial` com **quantidade fixa = 1**.
-- **Limitação conhecida (decisão de negócio pendente):** ajustar a quantidade de um
-  material específico dentro do kit (≠ 1) só é possível pelo **Django Admin** — a
-  interface operacional não oferece essa opção ainda. Ver §7, item 1.
-- **Observação:** não existe fluxo de **edição** ou **exclusão** de kit pela interface
-  operacional (só cadastro) — apenas listagem e criação. Avaliar se isso é lacuna ou
-  decisão deliberada (mesmo padrão do Admin-only para ajuste de quantidade).
+- **Views/rotas:** `views.kits` (`/kits/`), `cadastrar_kit` (`/kits/novo/`),
+  `editar_kit` (`/kits/<pk>/editar/`), `excluir_kit` (POST, `/kits/<pk>/excluir/`).
+- **Fluxo principal (cadastro e edição):**
+  1. Coordenador informa nome, código único e descrição, e seleciona os materiais do
+     kit (checkbox múltiplo) — em edição, os materiais já vinculados vêm pré-marcados.
+  2. **Cada material selecionado tem sua própria quantidade**, digitada ao lado do
+     checkbox (decisão de negócio: quantidade > 1 já na criação, pela própria tela —
+     não depende mais do Django Admin).
+  3. Ao salvar, o sistema sincroniza os itens do kit (`KitMaterial`) com a seleção:
+     cria/atualiza os marcados com a quantidade informada e remove os que foram
+     desmarcados — o mesmo fluxo serve para criar e para editar.
+  4. **`Kit.quantidade` não é mais digitado manualmente.** Decisão de negócio: o valor é
+     recalculado automaticamente a cada criação/edição do kit para ser sempre igual ao
+     número de materiais do kit que estão **disponíveis** (`Material.disponivel=True`)
+     — elimina a divergência entre as colunas "Quantidade" e "Disponíveis" na listagem
+     (`views._sincronizar_quantidade_kit`, mesmo padrão de
+     `_sincronizar_ocupacao_abrigo`).
+- **Fluxo principal (exclusão):** botão "Excluir kit" na tela de edição, com
+  confirmação; se o kit está referenciado por algum `Emprestimo` (`Emprestimo.kit` é
+  `PROTECT`), a exclusão é bloqueada e a tela orienta a marcar o kit como inativo —
+  mesmo tratamento de `excluir_material`. A tela de edição também mostra quantos
+  empréstimos ativos usam o kit, como aviso antes de excluir.
+- **Pós-condição (exclusão):** kit removido; `KitMaterial` associados são apagados em
+  cascata (`on_delete=CASCADE`); empréstimos que já usaram o kit não são afetados
+  (histórico preservado, exclusão só é possível quando não há vínculo ativo).
 
 ### UC-17 · Criar empréstimo de kit/material
 
@@ -410,18 +444,35 @@ associada a ele (referenciando o backlog da seção 6).
 - **Regra de negócio:** a busca usa `emprestimos_visiveis(request)` — coordenador não
   pode devolver empréstimo de outro coordenador (404 implícito via `DoesNotExist`).
 
-### UC-19 · Marcar empréstimo como atrasado
+### UC-19 · Empréstimo atrasado (automático) e marcação manual
 
-- **Ator primário:** Coordenador (dono do empréstimo) / Superusuário.
-- **View/rota:** `views.marcar_emprestimo_atrasado` (POST) →
-  `/emprestimos/<pk>/marcar-atrasado/`
-- **Fluxo principal:** só permitido a partir do status `EMPRESTADO`; muda para
-  `ATRASADO`.
-- **Observação sistêmica:** a marcação de atraso é **manual** — não há job automático
-  que compare `data_prevista_devolucao` com a data atual e marque atrasados sozinho.
-  Ver melhoria U-08 em §6.
+> **Atualizado em 2026-07-20** — implementa a decisão de negócio §7.7.
+
+- **Ator primário:** Sistema (automático); Coordenador (dono do empréstimo) /
+  Superusuário (ação manual, como caso excepcional).
+- **Serviço:** `services.emprestimos.marcar_emprestimos_atrasados()` — muda para
+  `ATRASADO` todo `Emprestimo` com `status=EMPRESTADO` e `data_prevista_devolucao`
+  anterior a hoje. Ignora empréstimos sem data prevista definida (não há como saber se
+  estão atrasados) e não mexe em empréstimos já `DEVOLVIDO`.
+- **Gatilhos:**
+  1. **A cada carregamento da listagem de Empréstimos** (`views.emprestimos`) — garante
+     que o status exibido está sempre correto, mesmo entre execuções da tarefa
+     periódica.
+  2. **Tarefa periódica diária** (`tasks.marcar_emprestimos_atrasados_task`, Celery
+     Beat, 06:00) — cobre o caso de ninguém visitar a listagem; `data_prevista_devolucao`
+     é um campo de data (não hora), então periodicidade diária é suficiente.
+- **Alerta visual:** a listagem de Empréstimos já traz o badge "Atrasado"
+  (`badge-atrasado`) e o contador clicável "N atrasado(s)" no resumo — como o status
+  agora é atualizado automaticamente, esses indicadores refletem o atraso real sem
+  ação do coordenador.
+- **View/rota (ação manual mantida):** `views.marcar_emprestimo_atrasado` (POST) →
+  `/emprestimos/<pk>/marcar-atrasado/`, só permitida a partir do status `EMPRESTADO`.
+  Continua disponível para casos excepcionais (ex.: sem `data_prevista_devolucao`
+  definida, ou necessidade operacional de marcar atraso antes do prazo formal).
 
 ### UC-20 · Buscar aluno via autocomplete *(caso de uso incluído / componente compartilhado)*
+
+> **Atualizado em 2026-07-20** — implementa a decisão de negócio §7.4.
 
 - **Ator primário:** Coordenador (indiretamente, via UC-03, UC-04, UC-17).
 - **View/rota:** `views.buscar_alunos` (HTMX) → `/alunos/buscar/`
@@ -432,10 +483,19 @@ associada a ele (referenciando o backlog da seção 6).
      retirada.
   3. Busca `limite + 1` registros para sinalizar "há mais resultados" sem precisar de
      `count()` extra.
+- **Fluxo alternativo — busca sem resultado:** quando a busca não encontra nenhum aluno,
+  o fragmento oferece um mini-formulário para **sincronizar a turma do aluno sob
+  demanda** (`views.sincronizar_turma_busca`, POST →
+  `/alunos/sincronizar-turma-busca/`) — decisão de negócio: como o Eduq não tem busca de
+  aluno por nome (só `listar_alunos` por turma), esta é a forma de encontrar, ali mesmo,
+  um aluno que ainda não foi sincronizado, sem precisar sair da tela de entrada/saída/
+  empréstimo. Reaproveita a sincronização por turma já usada em UC-12
+  (`_sincronizar_alunos_da_turma`), com `next` apontando de volta para a página de
+  origem (lida do cabeçalho `HX-Current-URL` do HTMX).
 - **Regra de negócio:** busca é **exclusivamente local** — não consulta o Eduq ao vivo
   (diferente do componente equivalente em Gestão de Laboratório, que combina base local
   + busca ao vivo no Dental Office). Um aluno recém-matriculado só aparece depois de uma
-  sincronização (manual ou às 04:00).
+  sincronização (manual, sob demanda pela turma, ou às 04:00).
 
 ---
 
@@ -476,69 +536,88 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 
 ### 6.1 Usabilidade
 
-| ID | Caso de uso | Problema | Impacto | Sugestão |
-|---|---|---|---|---|
-| U-01 | UC-02 | Data inválida no filtro de período é descartada silenciosamente (campo some, sem mensagem) | Usuário não entende por que o filtro "não aplicou" | Exibir erro de validação inline, como já ocorre nos formulários de cadastro |
-| U-02 | UC-03 | Após gerar N pacotes, a tela mostra os códigos mas não há indicação de progresso de etiquetagem física (quantos já foram etiquetados) | Risco de trocar/pular etiqueta em lotes grandes (até 50) | Checklist interativo opcional na tela de confirmação |
-| U-03 | UC-05 / UC-08 | Alternar status de retirada manualmente (UC-08) não avisa que isso pode descolar o registro do vínculo `entrada_origem`/SAIDA real | Divergência de dados sem o operador perceber a causa | Tooltip/confirmação explicando a consequência antes de aplicar |
-| U-04 | UC-16 | Não há edição nem exclusão de kit pela interface operacional (só criação) | Correção de kit errado exige Admin, fora do fluxo do coordenador | Avaliar se cadastro incompleto é aceitável ou se falta CRUD completo (decisão de negócio, ver §7.1) |
-| U-05 | UC-06/UC-07 | Exclusão de movimentação é irreversível e sem trilha de auditoria (quem excluiu, quando) | Dificulta investigar divergências no histórico de esterilização — sensível para rastreabilidade de material esterilizado | Registrar log de auditoria mínimo (usuário, timestamp, ação) nas exclusões/edições |
-| U-06 | UC-06 | Edição de movimentação não versiona o valor anterior | Mesma lacuna de rastreabilidade do item acima | Idem — histórico de alterações |
-| U-07 | UC-19 | Marcação de atraso é 100% manual; nada compara `data_prevista_devolucao` com hoje | Empréstimos atrasados podem passar despercebidos | Job periódico (Celery Beat) que sinaliza (não necessariamente muda o status sozinho) empréstimos vencidos, com alerta no portal (UC-01), no mesmo padrão já usado para contratos pendentes |
-| U-08 | UC-12 / UC-20 | Rótulo "Atualizar lista de alunos" nas telas de entrada/saída também sincroniza turmas — nome impreciso (já observado na rodada 3 de melhorias, não corrigido) | Confunde o operador sobre o que o botão realmente faz | Renomear para "Atualizar alunos e turmas" |
-| U-09 | UC-13/UC-14 | Não há como ver, a partir da tela de Abrigos (UC-14), o histórico de quem já ocupou um abrigo — só a ocupação atual | Perda de contexto para investigar trocas de abrigo | Tela ou seção de histórico de ocupação (mesmo que simples, via `Aluno.atualizado_em` não é suficiente hoje) |
-| U-10 | Global | Nenhuma tela relatada acima expõe estado de carregamento além do spinner de busca (A-06 já corrigido) para **ações de escrita** (submits de POST fora dos forms padrão, como alternar retirado, atribuir abrigo) | Cliques duplos podem gerar ações repetidas em conexões lentas | Desabilitar botão + spinner nos POSTs de ação rápida (mesmo padrão do `.js-loading-submit`) |
+| ID | Caso de uso | Problema | Impacto | Sugestão | Status |
+|---|---|---|---|---|---|
+| U-01 | UC-02 | Data inválida no filtro de período é descartada silenciosamente (campo some, sem mensagem) | Usuário não entende por que o filtro "não aplicou" | Exibir erro de validação inline, como já ocorre nos formulários de cadastro | Em aberto |
+| U-02 | UC-03 | Após gerar N pacotes, a tela mostra os códigos mas não há indicação de progresso de etiquetagem física (quantos já foram etiquetados) | Risco de trocar/pular etiqueta em lotes grandes (até 50) | Checklist interativo opcional na tela de confirmação | Em aberto |
+| U-03 | UC-05 / UC-08 | Alternar status de retirada manualmente (UC-08) não avisa que isso pode descolar o registro do vínculo `entrada_origem`/SAIDA real | Divergência de dados sem o operador perceber a causa | Tooltip/confirmação explicando a consequência antes de aplicar | Em aberto |
+| U-04 | UC-16 | Não há edição nem exclusão de kit pela interface operacional (só criação) | Correção de kit errado exige Admin, fora do fluxo do coordenador | — | ✅ **Resolvido em 2026-07-20** — ver UC-16 (`editar_kit`/`excluir_kit`) |
+| U-05 | UC-06/UC-07 | Exclusão de movimentação é irreversível e sem trilha de auditoria (quem excluiu, quando) | Dificulta investigar divergências no histórico de esterilização | — | ✅ **Resolvido em 2026-07-20** — ver UC-06/UC-07 (`RegistroAuditoriaMovimentacao`) |
+| U-06 | UC-06 | Edição de movimentação não versiona o valor anterior | Mesma lacuna de rastreabilidade do item acima | — | ✅ **Parcialmente resolvido em 2026-07-20** — auditoria mínima (usuário/ação/quando) implementada; **não** inclui o valor anterior do campo (versionamento completo ficou fora do escopo "mínimo" definido na decisão de negócio) |
+| U-07 | UC-19 | Marcação de atraso é 100% manual; nada compara `data_prevista_devolucao` com hoje | Empréstimos atrasados podem passar despercebidos | — | ✅ **Resolvido em 2026-07-20** — ver UC-19 (`marcar_emprestimos_atrasados`, automático) |
+| U-08 | UC-12 / UC-20 | Rótulo "Atualizar lista de alunos" nas telas de entrada/saída também sincroniza turmas — nome impreciso (já observado na rodada 3 de melhorias, não corrigido) | Confunde o operador sobre o que o botão realmente faz | Renomear para "Atualizar alunos e turmas" | Em aberto |
+| U-09 | UC-13/UC-14 | Não há como ver, a partir da tela de Abrigos (UC-14), o histórico de quem já ocupou um abrigo — só a ocupação atual | Perda de contexto para investigar trocas de abrigo | Tela ou seção de histórico de ocupação (mesmo que simples, via `Aluno.atualizado_em` não é suficiente hoje) | Em aberto |
+| U-10 | Global | Nenhuma tela relatada acima expõe estado de carregamento além do spinner de busca (A-06 já corrigido) para **ações de escrita** (submits de POST fora dos forms padrão, como alternar retirado, atribuir abrigo) | Cliques duplos podem gerar ações repetidas em conexões lentas | Desabilitar botão + spinner nos POSTs de ação rápida (mesmo padrão do `.js-loading-submit`) | Em aberto |
 
 ### 6.2 Melhorias sistêmicas (arquitetura, dados, integrações)
 
-| ID | Área | Problema | Recomendação |
-|---|---|---|---|
-| S-01 | Geração de código de pacote (UC-03) | `max(código numérico)+n` varre toda a tabela **sem lock** — risco de colisão sob concorrência (B-07 da auditoria, ainda em backlog) | Sequência dedicada (`AutoField`/sequence de banco) ou lock explícito na transação |
-| S-02 | Permissões (UC-01 a UC-19) | `permissoes.py` define grupos (`recepcao`, `coordenacao`, `gestao`) e o decorator `requer_grupo`, mas **nenhuma view do projeto o utiliza** — hoje qualquer usuário autenticado tem acesso total a todas as ações do CME, inclusive exclusões irreversíveis | Definir a matriz de permissão por grupo (o que cada grupo pode ver/fazer) e aplicar `requer_grupo` nas views sensíveis (exclusões, edição de abrigo/material, sincronização) — decisão de negócio necessária, ver §7.2 |
-| S-03 | Sincronização Eduq (UC-12) | Botão manual roda o sync **de forma síncrona no request** (identificado no backlog anterior, ainda não corrigido) | Mover para tarefa assíncrona (Celery) com feedback de progresso, ou pelo menos um `select_for_update`/lock para evitar disparos concorrentes duplicando trabalho |
-| S-04 | Dashboard (UC-02) | Período padrão "todo o histórico" implica varredura completa da tabela a cada carga; sem índice em `data_hora` (apontado como risco desde a rodada 3) | Adicionar índice em `Movimentacao.data_hora` (e possivelmente índice composto com `tipo`/`retirado`) |
-| S-05 | Rótulo do app (`apps.py`) | `label = "core"` legado, divergente do nome funcional "Gestão de CME" (B-06 do backlog, decisão pendente desde a auditoria original) | Decidir explicitamente: manter por compatibilidade ou planejar migração de app label/tabelas |
-| S-06 | Usuário de teste (`0011_remover_usuario_coordenador_teste`) | Já removida a criação automática do usuário `coordenador.teste` (B-05 fechado), mas vale confirmar que nenhum ambiente de produção ainda depende dele | Checklist de deploy: confirmar ausência do usuário de teste em produção |
-| S-07 | Integração Eduq (UC-12/UC-20) | Sem endpoint de busca de aluno por nome no Eduq — busca de UC-20 é estritamente local e depende de sincronização prévia (já registrado como pendência de negócio) | Ver §7.2, item "Busca CME" — decisão do fornecedor Eduq, fora do controle da equipe |
-| S-08 | Empréstimos sem itens (UC-17) | Empréstimo sem kit não tem fluxo de adicionar `ItemEmprestimo` avulso pela interface | Avaliar se o caso de uso "emprestar material avulso, sem kit" é real na operação; se for, precisa de tela própria |
-| S-09 | Observabilidade | Erros de integração Eduq não têm logging estruturado (B-08 do backlog original, ainda aberto) | Padronizar logging de falhas de integração (Eduq e demais) para facilitar diagnóstico sem depender de `messages` na UI |
+| ID | Área | Problema | Recomendação | Status |
+|---|---|---|---|---|
+| S-01 | Geração de código de pacote (UC-03) | `max(código numérico)+n` varre toda a tabela **sem lock** — risco de colisão sob concorrência (B-07 da auditoria, ainda em backlog) | Sequência dedicada (`AutoField`/sequence de banco) ou lock explícito na transação | Em aberto |
+| S-02 | Permissões (UC-01 a UC-19) | `permissoes.py` define grupos (`recepcao`, `coordenacao`, `gestao`) e o decorator `requer_grupo`, mas **nenhuma view do projeto o utiliza** — hoje qualquer usuário autenticado tem acesso total a todas as ações do CME, inclusive exclusões irreversíveis | Definir a matriz de permissão por grupo (o que cada grupo pode ver/fazer) e aplicar `requer_grupo` nas views sensíveis (exclusões, edição de abrigo/material, sincronização) | **Decisão registrada em 2026-07-20: não implementar agora** (ver §7.3). Continua documentado como necessidade — nenhuma view ganhou `requer_grupo` nesta rodada, o acesso continua igual para todo usuário autenticado |
+| S-03 | Sincronização Eduq (UC-12) | Botão manual roda o sync **de forma síncrona no request** (identificado no backlog anterior, ainda não corrigido) | Mover para tarefa assíncrona (Celery) com feedback de progresso, ou pelo menos um `select_for_update`/lock para evitar disparos concorrentes duplicando trabalho | Em aberto |
+| S-04 | Dashboard (UC-02) | Período padrão "todo o histórico" implica varredura completa da tabela a cada carga; sem índice em `data_hora` (apontado como risco desde a rodada 3) | Adicionar índice em `Movimentacao.data_hora` (e possivelmente índice composto com `tipo`/`retirado`) | Em aberto |
+| S-05 | Rótulo do app (`apps.py`) | `label = "core"` legado, divergente do nome funcional "Gestão de CME" (B-06 do backlog, decisão pendente desde a auditoria original) | Decidir explicitamente: manter por compatibilidade ou planejar migração de app label/tabelas | Em aberto |
+| S-06 | Usuário de teste (`0011_remover_usuario_coordenador_teste`) | Já removida a criação automática do usuário `coordenador.teste` (B-05 fechado), mas vale confirmar que nenhum ambiente de produção ainda depende dele | Checklist de deploy: confirmar ausência do usuário de teste em produção | Em aberto |
+| S-07 | Integração Eduq (UC-12/UC-20) | Sem endpoint de busca de aluno por nome no Eduq — busca de UC-20 é estritamente local e depende de sincronização prévia | Ver §7.4 | ✅ **Contornado em 2026-07-20** — a limitação em si (Eduq sem busca por nome) continua existindo e está fora do controle da equipe, mas o fluxo agora oferece sincronizar a turma sob demanda a partir da busca vazia (ver UC-20, `sincronizar_turma_busca`) |
+| S-08 | Empréstimos sem itens (UC-17) | Empréstimo sem kit não tem fluxo de adicionar `ItemEmprestimo` avulso pela interface | Avaliar se o caso de uso "emprestar material avulso, sem kit" é real na operação; se for, precisa de tela própria | Em aberto |
+| S-09 | Observabilidade | Erros de integração Eduq não têm logging estruturado (B-08 do backlog original, ainda aberto) | Padronizar logging de falhas de integração (Eduq e demais) para facilitar diagnóstico sem depender de `messages` na UI | Em aberto |
 
 ---
 
-## 7. Pontos que exigem aprovação/decisão de negócio antes de agir
+## 7. Decisões de negócio
 
-Estes itens **não foram resolvidos por suposição** neste documento — cada um tem mais de
-uma solução tecnicamente válida e a escolha depende de como a CME opera no mundo real.
-Alguns já constavam como pendência nos documentos anteriores da equipe e são reafirmados
-aqui; outros são novos, identificados nesta análise.
+> **Atualizado em 2026-07-20.** As sete pendências abaixo foram levadas ao time de
+> negócio e decididas; os itens 1, 2, 4, 6 e 7 foram implementados nesta mesma rodada
+> (ver UC-16, UC-19, UC-20, UC-06/UC-07). O item 3 foi decidido como "não implementar
+> agora", mas **continua documentado** como necessidade futura (S-02). O item 5 não
+> exigiu mudança de código — a grafia decidida já era a praticada em todo o app.
 
-1. **Quantidade por material no cadastro de kit (UC-16).** Hoje a interface cria itens
-   de kit sempre com quantidade 1; ajuste fino só no Admin. Perguntar: a operação
-   precisa definir quantidade > 1 já na criação pela interface, ou o fluxo atual
-   (quantidade 1 + ajuste posterior no Admin) é aceitável permanentemente?
-2. **Edição/exclusão de kit pela interface operacional (U-04).** Falta esse CRUD hoje.
-   É lacuna a preencher ou decisão deliberada de manter simples (só criação +
-   inativação futura)?
-3. **Matriz de permissões por grupo (S-02).** `recepcao`/`coordenacao`/`gestão` existem
-   como esqueleto, sem regra aplicada. É preciso que o time de negócio defina: quem pode
-   excluir movimentação/material/abrigo, quem pode sincronizar com o Eduq, quem só
-   consulta. Sem essa definição, qualquer implementação de controle de acesso seria
-   arbitrária.
-4. **Busca de aluno ainda não sincronizado (UC-20/S-07).** Duas opções possíveis:
-   (a) sincronizar a turma sob demanda antes de buscar, ou (b) verificar com o
-   fornecedor do Eduq se existe/pode existir endpoint de busca por nome. Nenhuma foi
-   implementada — decisão preexistente, reafirmada aqui.
-5. **Grafia "Eduq" vs. "EDUQ" na interface do CME.** Pendência transversal já registrada
-   pela equipe de Contratos; impacta diretamente os textos de UC-12 no CME.
-6. **Auditoria de edição/exclusão de movimentação (U-05/U-06).** Antes de desenhar a
-   solução técnica (log simples vs. versionamento completo), confirmar com a área
-   operacional/qualidade se há exigência regulatória de rastreabilidade de quem alterou
-   registros de esterilização — isso muda o nível de detalhe exigido (ex.: se precisa
-   constar em auditorias externas de biossegurança).
-7. **Job automático para empréstimo atrasado (U-07).** Definir a regra de negócio: o
-   sistema deve **mudar o status automaticamente** ao vencer o prazo, ou apenas **alertar**
-   e deixar a decisão de marcar como atrasado com o coordenador (como é hoje,
-   manualmente)?
+1. **Quantidade por material no cadastro de kit (UC-16) — decidido: sim, quantidade > 1
+   já na criação pela interface.** Implementado: cada material selecionado no formulário
+   de kit tem um campo de quantidade próprio, usado tanto na criação quanto na edição.
+   Complementarmente, `Kit.quantidade` deixou de ser um número digitado à parte e passou
+   a ser sincronizado automaticamente para ser sempre igual ao número de materiais
+   **disponíveis** do kit — não há mais dois números concorrentes ("Quantidade" vs.
+   "Disponíveis") na listagem.
+2. **Edição/exclusão de kit pela interface operacional (U-04) — decidido: sim,
+   implementar.** `editar_kit` e `excluir_kit` adicionados, com o mesmo tratamento de
+   `ProtectedError` já usado em materiais (bloqueia exclusão de kit vinculado a
+   empréstimo, orienta inativar).
+3. **Matriz de permissões por grupo (S-02) — decidido: não implementar agora.** Os
+   grupos (`recepcao`/`coordenacao`/`gestao`) e o decorator `requer_grupo` continuam
+   prontos, mas nenhuma view foi restringida nesta rodada — o acesso continua igual para
+   todo usuário autenticado. **Mantido documentado em S-02** como a maior lacuna
+   estrutural do módulo (nenhum controle sobre quem pode excluir movimentação, material,
+   abrigo ou kit), para ser retomado quando o time de negócio definir a matriz de quem
+   pode fazer o quê.
+4. **Busca de aluno ainda não sincronizado (UC-20/S-07) — decidido: opção (a),
+   sincronizar a turma sob demanda antes de buscar.** A opção (b) (endpoint de busca por
+   nome no Eduq) foi descartada porque o fornecedor não oferece esse recurso. Implementado
+   em `sincronizar_turma_busca`: quando a busca de aluno não encontra ninguém, a tela
+   oferece escolher a turma e sincronizar ali mesmo, sem sair do formulário de
+   entrada/saída/empréstimo.
+5. **Grafia "Eduq" vs. "EDUQ" na interface do CME — decidido: "Eduq".** Verificado que o
+   app já usa consistentemente essa grafia em todo texto voltado ao usuário (título da
+   integração, mensagens de sucesso/erro de sincronização, rótulos de botão) — não havia
+   nenhuma ocorrência de "EDUQ" em maiúsculas fora de identificadores de código
+   (`OrigemDados.EDUQ`, variáveis de configuração como `EDUQ_DOMINIO`), que não são texto
+   de interface. **Nenhuma mudança de código foi necessária**; a pendência transversal
+   citada em `melhorias-cme-contratos-2026-07.md` fica resolvida do lado do CME com o
+   padrão já praticado.
+6. **Auditoria de edição/exclusão de movimentação (U-05/U-06) — decidido: implementar o
+   mínimo (usuário, ação, timestamp).** Novo modelo `RegistroAuditoriaMovimentacao`,
+   gravado em `editar_movimentacao` e `excluir_movimentacao`, com FK `SET_NULL` para a
+   movimentação (sobrevive à exclusão, com cópia textual do pacote/aluno). Exposto na
+   tela de edição ("Histórico de alterações") e no Django Admin (somente leitura).
+   Versionamento completo (valor anterior de cada campo) ficou fora do escopo definido.
+7. **Job automático para empréstimo atrasado (U-07) — decidido: mudar o status
+   automaticamente ao vencer o prazo, com alerta visual na listagem.** Implementado em
+   `services.emprestimos.marcar_emprestimos_atrasados()`, chamado a cada carregamento da
+   listagem de Empréstimos e por uma tarefa Celery Beat diária (06:00, para cobrir quem
+   não visita a tela). O badge "Atrasado" e o contador já existentes na listagem passam a
+   refletir o atraso real automaticamente. A marcação manual (`marcar_emprestimo_atrasado`)
+   foi mantida para casos excepcionais.
 
 ---
 
@@ -561,11 +640,11 @@ aqui; outros são novos, identificados nesta análise.
 | UC-13 | `atribuir_abrigo` | ação inline em `alunos_por_turma.html` |
 | UC-14 | `armarios`, `cadastrar_abrigo`, `editar_abrigo`, `excluir_abrigo` | `armarios.html`, `form_abrigo.html` |
 | UC-15 | `materiais`, `cadastrar_material`, `editar_material`, `excluir_material` | `materiais.html`, `form_material.html` |
-| UC-16 | `kits`, `cadastrar_kit` | `kits.html`, `form_kit.html` |
+| UC-16 | `kits`, `cadastrar_kit`, `editar_kit`, `excluir_kit` | `kits.html`, `form_kit.html` |
 | UC-17 | `criar_emprestimo` | `criar_emprestimo.html` |
 | UC-18 | `devolver_emprestimo` | ação em `emprestimos.html` |
-| UC-19 | `marcar_emprestimo_atrasado` | ação em `emprestimos.html` |
-| UC-20 | `buscar_alunos` | `partials/_aluno_results.html` |
+| UC-19 | `emprestimos` (auto), `marcar_emprestimo_atrasado` (manual), `tasks.marcar_emprestimos_atrasados_task` | `emprestimos.html` |
+| UC-20 | `buscar_alunos`, `sincronizar_turma_busca` | `partials/_aluno_results.html` |
 
 ---
 
@@ -583,15 +662,22 @@ aqui; outros são novos, identificados nesta análise.
 | **Entrada** | Movimentação que registra a entrega de um pacote para esterilização |
 | **Saída** | Movimentação que registra a retirada de um pacote já esterilizado |
 | **Retirado** | Campo booleano (`True`/`False`/`None`) que indica se o pacote já foi retirado |
+| **RegistroAuditoriaMovimentacao** | Trilha mínima (usuário, ação, timestamp) de edições e exclusões de `Movimentacao` |
 
 ---
 
 ## 10. Próximos passos sugeridos
 
-1. Validar este documento com a coordenação da CME, priorizando os itens de §7 (decisões
-   de negócio) antes de qualquer implementação.
-2. Transformar os itens de §6 aprovados em tarefas técnicas, seguindo o mesmo formato já
-   usado em `melhorias-cme-contratos-2026-07.md`.
-3. Reavaliar S-02 (permissões) como prioridade estrutural: hoje é o maior risco
-   sistêmico do módulo — controle de acesso inexistente sobre operações irreversíveis
-   (exclusão de movimentação, material, abrigo).
+> Atualizado em 2026-07-20 após a implementação das decisões de §7.
+
+1. ~~Validar este documento com a coordenação da CME, priorizando os itens de §7~~ —
+   **feito**: as 7 decisões de §7 foram tomadas; itens 1, 2, 4, 6 e 7 estão
+   implementados (ver UC-16, UC-19, UC-20, UC-06/UC-07), suíte completa verde (607
+   testes).
+2. Transformar os itens restantes de §6.1/§6.2 (ainda "Em aberto") em tarefas técnicas,
+   seguindo o mesmo formato já usado em `melhorias-cme-contratos-2026-07.md`.
+3. **S-02 (permissões) continua sendo o maior risco sistêmico do módulo** — decisão de
+   negócio foi "não implementar agora" (§7.3), não "não é um risco". Controle de acesso
+   segue inexistente sobre operações irreversíveis (exclusão de movimentação, material,
+   abrigo, kit) para qualquer usuário autenticado. Prioridade para retomar assim que o
+   time de negócio definir a matriz de quem pode fazer o quê.
