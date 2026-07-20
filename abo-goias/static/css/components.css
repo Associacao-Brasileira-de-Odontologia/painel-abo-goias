@@ -1051,6 +1051,12 @@ a.metric-card:hover {
     color: var(--danger-text);
 }
 
+/* Mesma cor do badge "Retirado" da coluna Status (.badge-devolvido). */
+.results-meta .meta-success,
+.results-meta .meta-success strong {
+    color: var(--success);
+}
+
 /* ── Chips segmentados de status com contagem ───────────────────── */
 
 .status-seg {

@@ -94,7 +94,8 @@
         {% if status_atual == "pendente" and metricas.pendentes %}
             <span class="meta-warn"><strong>{{ metricas.pendentes }}</strong> aguardando retirada</span>
         {% elif status_atual == "retirado" and metricas.retirados %}
-            <span><strong>{{ metricas.retirados }}</strong> retirado{{ metricas.retirados|pluralize }}</span>
+            {# Mesma cor do badge "Retirado" da coluna Status (.badge-devolvido). #}
+            <span class="meta-success"><strong>{{ metricas.retirados }}</strong> retirado{{ metricas.retirados|pluralize }}</span>
         {% endif %}
     </div>
 

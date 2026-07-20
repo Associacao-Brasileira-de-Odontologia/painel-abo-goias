@@ -1793,3 +1793,5 @@ class MovimentacoesRotulosContagemTests(TestCase):
 
         self.assertNotContains(response, "aguardando retirada")
         self.assertContains(response, "<strong>1</strong> retirado</span>")
+        # Mesma cor do badge "Retirado" da coluna Status (.badge-devolvido).
+        self.assertContains(response, 'class="meta-success"')
