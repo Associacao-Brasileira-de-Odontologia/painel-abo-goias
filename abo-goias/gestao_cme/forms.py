@@ -167,11 +167,10 @@ class KitForm(forms.ModelForm):
     material sem conhecer o catálogo de antemão) — decisão de negócio: o
     ajuste de quantidade > 1 acontece já na criação, pela própria tela.
 
-    ``Kit.quantidade`` não é mais preenchido manualmente aqui: o valor do
-    campo passa a ser sincronizado automaticamente para refletir quantos
-    materiais do kit estão disponíveis (ver ``_sincronizar_quantidade_kit``
-    em ``views.py``), para não conviver com "Disponíveis" como dois números
-    concorrentes sem relação entre si.
+    ``Kit.quantidade`` é o estoque cadastrado do kit (quantas unidades físicas
+    desse kit existem) — informado manualmente aqui, independente da
+    disponibilidade dos materiais que compõem o kit (ver coluna "Disponíveis"
+    na listagem, calculada à parte).
     """
 
     materiais = forms.ModelMultipleChoiceField(
@@ -183,7 +182,7 @@ class KitForm(forms.ModelForm):
 
     class Meta:
         model = Kit
-        fields = ["nome", "codigo", "descricao"]
+        fields = ["nome", "codigo", "descricao", "quantidade"]
         error_messages = {
             "nome": {"required": "Nome é obrigatório."},
             "codigo": {"required": "Código é obrigatório."},

@@ -223,6 +223,13 @@ conhece o modelo de dados.
 Admin/cadastro), ou adicionar um rótulo/tooltip explicando a diferença — mesma abordagem já
 usada para a coluna "Status" em Alunos por turma (ícone de informação com `title`).
 
+**Resolvido em 2026-07-20:** adicionado tooltip (mesmo padrão `.th-with-hint`/`.th-hint` da
+coluna Status) em "Quantidade", "Materiais" e "Disponíveis". "Quantidade" voltou a ser o
+estoque cadastrado do kit, digitado manualmente no formulário — uma sincronização
+automática com "Disponíveis" implementada numa rodada anterior foi revertida a pedido do
+time, para que as duas colunas voltassem a responder perguntas distintas ("quantos kits
+existem" vs. "quantos materiais da composição estão livres agora").
+
 ---
 
 ## 7 · [Baixa] Métricas do Portal não são clicáveis (exceto o alerta)

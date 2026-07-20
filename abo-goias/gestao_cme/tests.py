@@ -1112,8 +1112,9 @@ class MateriaisFase32Tests(TestCase):
 
 class KitCrudTests(TestCase):
     """Cadastro/edição/exclusão de kit pela interface, com quantidade por
-    material e sincronização de Kit.quantidade com os materiais disponíveis
-    (decisões de negócio de 2026-07)."""
+    material na composição e Kit.quantidade como estoque cadastrado
+    manualmente, independente da disponibilidade dos materiais (decisões de
+    negócio de 2026-07)."""
 
     def setUp(self) -> None:
         self.usuario = get_user_model().objects.create_user(
@@ -1140,6 +1141,7 @@ class KitCrudTests(TestCase):
                 "nome": "Kit Exame",
                 "codigo": "KIT-EXAME",
                 "descricao": "",
+                "quantidade": "1",
                 "materiais": [self.material_disponivel.pk],
                 f"quantidade_{self.material_disponivel.pk}": "4",
             },
@@ -1150,13 +1152,14 @@ class KitCrudTests(TestCase):
         item = KitMaterial.objects.get(kit=kit, material=self.material_disponivel)
         self.assertEqual(item.quantidade, 4)
 
-    def test_cadastrar_kit_sincroniza_quantidade_com_disponiveis(self) -> None:
+    def test_cadastrar_kit_define_quantidade_em_estoque_manualmente(self) -> None:
         response = self.client.post(
             reverse("cadastrar_kit"),
             {
                 "nome": "Kit Misto",
                 "codigo": "KIT-MISTO",
                 "descricao": "",
+                "quantidade": "7",
                 "materiais": [
                     self.material_disponivel.pk,
                     self.material_indisponivel.pk,
@@ -1168,11 +1171,13 @@ class KitCrudTests(TestCase):
 
         self.assertRedirects(response, reverse("kits"))
         kit = Kit.objects.get(codigo="KIT-MISTO")
-        # 2 materiais vinculados, mas só 1 disponível — quantidade acompanha
-        # os disponíveis, não o total de materiais do kit.
-        self.assertEqual(kit.quantidade, 1)
+        # Quantidade é o estoque cadastrado, informado manualmente — não
+        # depende de quantos dos 2 materiais vinculados estão disponíveis.
+        self.assertEqual(kit.quantidade, 7)
 
-    def test_editar_kit_atualiza_composicao_e_resincroniza_quantidade(self) -> None:
+    def test_editar_kit_atualiza_composicao_sem_alterar_quantidade_automaticamente(
+        self,
+    ) -> None:
         kit = Kit.objects.create(
             nome="Kit Ajustável",
             codigo="KIT-AJUST",
@@ -1189,6 +1194,7 @@ class KitCrudTests(TestCase):
                 "nome": "Kit Ajustável",
                 "codigo": "KIT-AJUST",
                 "descricao": "",
+                "quantidade": "99",
                 "ativo": "on",
                 "materiais": [self.material_indisponivel.pk],
                 f"quantidade_{self.material_indisponivel.pk}": "2",
@@ -1197,8 +1203,9 @@ class KitCrudTests(TestCase):
 
         self.assertRedirects(response, reverse("kits"))
         kit.refresh_from_db()
-        # material antigo saiu, novo entrou com quantidade 2 — e como o novo
-        # material não está disponível, quantidade do kit cai para 0.
+        # material antigo saiu, novo entrou com quantidade 2 — e o estoque
+        # cadastrado (99) não muda, mesmo o novo material não estando
+        # disponível: são conceitos independentes.
         self.assertFalse(
             KitMaterial.objects.filter(
                 kit=kit, material=self.material_disponivel
@@ -1208,7 +1215,7 @@ class KitCrudTests(TestCase):
             kit=kit, material=self.material_indisponivel
         )
         self.assertEqual(item_novo.quantidade, 2)
-        self.assertEqual(kit.quantidade, 0)
+        self.assertEqual(kit.quantidade, 99)
 
     def test_excluir_kit_sem_vinculos(self) -> None:
         kit = Kit.objects.create(

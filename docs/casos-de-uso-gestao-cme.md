@@ -386,25 +386,32 @@ associada a ele (referenciando o backlog da seção 6).
 ### UC-16 · Gerenciar kits
 
 > **Atualizado em 2026-07-20** — implementa as decisões de negócio §7.1 e §7.2.
+> **Revisado em 2026-07-20** (avaliação da auditoria visual, item 6): a
+> sincronização automática de `Kit.quantidade` foi **revertida** — ver ponto 4
+> abaixo.
 
 - **Ator primário:** Coordenador / Superusuário.
 - **Views/rotas:** `views.kits` (`/kits/`), `cadastrar_kit` (`/kits/novo/`),
   `editar_kit` (`/kits/<pk>/editar/`), `excluir_kit` (POST, `/kits/<pk>/excluir/`).
 - **Fluxo principal (cadastro e edição):**
-  1. Coordenador informa nome, código único e descrição, e seleciona os materiais do
-     kit (checkbox múltiplo) — em edição, os materiais já vinculados vêm pré-marcados.
+  1. Coordenador informa nome, código único, descrição e **quantidade em estoque**
+     (`Kit.quantidade`), e seleciona os materiais do kit (checkbox múltiplo) — em
+     edição, os materiais já vinculados vêm pré-marcados.
   2. **Cada material selecionado tem sua própria quantidade**, digitada ao lado do
      checkbox (decisão de negócio: quantidade > 1 já na criação, pela própria tela —
      não depende mais do Django Admin).
   3. Ao salvar, o sistema sincroniza os itens do kit (`KitMaterial`) com a seleção:
      cria/atualiza os marcados com a quantidade informada e remove os que foram
      desmarcados — o mesmo fluxo serve para criar e para editar.
-  4. **`Kit.quantidade` não é mais digitado manualmente.** Decisão de negócio: o valor é
-     recalculado automaticamente a cada criação/edição do kit para ser sempre igual ao
-     número de materiais do kit que estão **disponíveis** (`Material.disponivel=True`)
-     — elimina a divergência entre as colunas "Quantidade" e "Disponíveis" na listagem
-     (`views._sincronizar_quantidade_kit`, mesmo padrão de
-     `_sincronizar_ocupacao_abrigo`).
+  4. **`Kit.quantidade` é o estoque cadastrado do kit** — quantas unidades físicas
+     desse kit existem, informado manualmente e **independente** da disponibilidade
+     dos materiais da composição. Decisão de negócio revista: uma versão anterior
+     desta rodada sincronizava automaticamente `Kit.quantidade` para ser sempre igual
+     a "Disponíveis"; ao revisar a auditoria visual, a equipe decidiu reverter — os
+     dois números respondem perguntas diferentes ("quantos kits existem" vs. "quantos
+     materiais da composição estão livres agora") e cada coluna do listing (Kit,
+     Quantidade, Materiais, Disponíveis) ganhou um tooltip explicando seu significado
+     em vez de forçar os números a coincidir.
 - **Fluxo principal (exclusão):** botão "Excluir kit" na tela de edição, com
   confirmação; se o kit está referenciado por algum `Emprestimo` (`Emprestimo.kit` é
   `PROTECT`), a exclusão é bloqueada e a tela orienta a marcar o kit como inativo —
@@ -576,10 +583,13 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 1. **Quantidade por material no cadastro de kit (UC-16) — decidido: sim, quantidade > 1
    já na criação pela interface.** Implementado: cada material selecionado no formulário
    de kit tem um campo de quantidade próprio, usado tanto na criação quanto na edição.
-   Complementarmente, `Kit.quantidade` deixou de ser um número digitado à parte e passou
-   a ser sincronizado automaticamente para ser sempre igual ao número de materiais
-   **disponíveis** do kit — não há mais dois números concorrentes ("Quantidade" vs.
-   "Disponíveis") na listagem.
+   **Revisado em 2026-07-20:** a sincronização automática de `Kit.quantidade` com o
+   número de materiais disponíveis foi revertida — `Kit.quantidade` voltou a ser
+   digitado manualmente no formulário, representando o estoque cadastrado do kit
+   (quantas unidades físicas existem), independente da disponibilidade dos materiais
+   da composição. A confusão entre "Quantidade" e "Disponíveis" na listagem foi
+   resolvida com tooltips explicando cada coluna (ver item 6 da avaliação visual), não
+   forçando os dois números a coincidir.
 2. **Edição/exclusão de kit pela interface operacional (U-04) — decidido: sim,
    implementar.** `editar_kit` e `excluir_kit` adicionados, com o mesmo tratamento de
    `ProtectedError` já usado em materiais (bloqueia exclusão de kit vinculado a

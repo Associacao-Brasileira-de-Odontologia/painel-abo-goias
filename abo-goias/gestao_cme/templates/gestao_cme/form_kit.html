@@ -49,6 +49,18 @@
         </div>
 
         <div class="field">
+            <label for="quantidade">Quantidade em estoque</label>
+            <input
+                id="quantidade"
+                type="number"
+                name="quantidade"
+                value="{{ form.quantidade.value|default:'0' }}"
+                min="0"
+            >
+            <span class="field-hint">Quantas unidades físicas deste kit existem cadastradas — independente da disponibilidade dos materiais que o compõem.</span>
+        </div>
+
+        <div class="field">
             <label for="descricao">Descrição <span class="field-optional">(opcional)</span></label>
             <textarea
                 id="descricao"

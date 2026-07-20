@@ -832,22 +832,6 @@ def kits(request: HttpRequest) -> HttpResponse:
     )
 
 
-def _sincronizar_quantidade_kit(kit: Kit) -> None:
-    """Mantém ``Kit.quantidade`` igual ao número de materiais disponíveis do kit.
-
-    Decisão de negócio: em vez de um número digitado à parte (que não refletia
-    a composição real do kit e convivia mal com a coluna "Disponíveis" na
-    listagem), "Quantidade" passa a ser sempre igual a "Disponíveis" —
-    recalculado a cada criação/edição do kit, no mesmo padrão de
-    ``_sincronizar_ocupacao_abrigo``.
-    """
-
-    disponiveis = kit.itens.filter(material__disponivel=True).count()
-    if kit.quantidade != disponiveis:
-        kit.quantidade = disponiveis
-        kit.save(update_fields=["quantidade"])
-
-
 @login_required
 def cadastrar_kit(request: HttpRequest) -> HttpResponse:
     """Cria um novo kit manualmente, com composição opcional de materiais.
@@ -855,8 +839,8 @@ def cadastrar_kit(request: HttpRequest) -> HttpResponse:
     Habilita o cadastro de kits pela própria tela de kits (antes só era
     possível pelo Django Admin). Cada material selecionado tem sua própria
     quantidade, informada já nesta tela (ver ``KitForm``); "Quantidade" do
-    kit é sincronizada automaticamente para refletir os materiais
-    disponíveis, em vez de ser digitada à parte.
+    kit é o estoque cadastrado (quantas unidades físicas existem), informado
+    manualmente e independente da disponibilidade dos materiais da composição.
     """
 
     form = KitForm(request.POST or None)
@@ -866,7 +850,6 @@ def cadastrar_kit(request: HttpRequest) -> HttpResponse:
         with transaction.atomic():
             kit.save()
             form._salvar_materiais(kit)
-            _sincronizar_quantidade_kit(kit)
         messages.success(request, f"Kit {kit.nome} cadastrado com sucesso.")
         return redirect("kits")
 
@@ -889,9 +872,7 @@ def editar_kit(request: HttpRequest, pk: int) -> HttpResponse:
     kit = get_object_or_404(Kit, pk=pk)
     form = KitEditForm(request.POST or None, instance=kit)
     if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            form.save()
-            _sincronizar_quantidade_kit(kit)
+        form.save()
         messages.success(request, f"Kit {kit.nome} atualizado com sucesso.")
         return redirect("kits")
 
