@@ -47,9 +47,6 @@ urlpatterns = [
     path(
         "alunos/atualizar/", views.atualizar_alunos_eduq, name="atualizar_alunos_eduq"
     ),
-    path(
-        "turmas/atualizar/", views.atualizar_turmas_eduq, name="atualizar_turmas_eduq"
-    ),
     path("gestao-cme/nova-saida/", views.registrar_saida, name="registrar_saida"),
     path("gestao-cme/nova-entrada/", views.registrar_entrada, name="registrar_entrada"),
     path(

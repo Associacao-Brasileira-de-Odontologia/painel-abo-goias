@@ -1674,37 +1674,6 @@ def atualizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
-def atualizar_turmas_eduq(request: HttpRequest) -> HttpResponse:
-    """Sincroniza somente as turmas com o Eduq e volta para a tela de origem.
-
-    Complementa ``atualizar_alunos_eduq`` (que traz turmas e alunos, e e mais
-    demorado): aqui o alvo e so o cadastro de turmas, usado quando uma turma nova
-    ainda nao aparece na tela.
-    """
-
-    try:
-        resultado = sincronizar_eduq(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-    except EduqAPIError as exc:
-        messages.error(request, f"Não foi possível atualizar as turmas: {exc}")
-    else:
-        messages.success(
-            request,
-            "Turmas atualizadas: "
-            f"{resultado.turmas.criados} nova(s), "
-            f"{resultado.turmas.atualizados} atualizada(s).",
-        )
-
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("criar_emprestimo")
-
-
-@login_required
-@require_POST
 def excluir_material(request: HttpRequest, pk: int) -> HttpResponse:
     """Exclui um material do catalogo permanentemente.
 
