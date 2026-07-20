@@ -294,8 +294,33 @@ select option {
 
 /* ── Autocomplete (resultados de busca clicáveis) ───────────────── */
 
+/* Âncora do overlay de resultados — o campo de busca (input + spinner) fica
+   em fluxo normal; só o resultado da busca flutua por cima do que vem
+   depois no formulário, em vez de empurrar os campos seguintes para baixo
+   a cada tecla digitada. */
+[data-ac-busca] {
+    position: relative;
+}
+
 .search-results-wrap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 30;
     margin-top: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--panel-strong);
+    box-shadow: var(--shadow);
+}
+
+.search-results-wrap:empty {
+    display: none;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
 }
 
 .search-results {
