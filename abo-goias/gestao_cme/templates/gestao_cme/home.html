@@ -86,8 +86,15 @@
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> registro{{ page_obj.paginator.count|pluralize }}</span>
-        {% if metricas.pendentes %}
-            <a class="meta-warn" href="?status=pendente" title="Filtrar pacotes não retirados"><strong>{{ metricas.pendentes }}</strong> aguardando retirada</a>
+        {% comment %}
+        Só aparece quando o status selecionado é o mesmo que o rótulo
+        descreve — com o filtro "todos" (ou outro status) esse número não
+        tem relação com o que está na tela, então era só ruído.
+        {% endcomment %}
+        {% if status_atual == "pendente" and metricas.pendentes %}
+            <span class="meta-warn"><strong>{{ metricas.pendentes }}</strong> aguardando retirada</span>
+        {% elif status_atual == "retirado" and metricas.retirados %}
+            <span><strong>{{ metricas.retirados }}</strong> retirado{{ metricas.retirados|pluralize }}</span>
         {% endif %}
     </div>
 

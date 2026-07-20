@@ -1742,3 +1742,54 @@ class MovimentacoesFiltroPeriodoVisivelTests(TestCase):
         self.assertContains(response, 'value="2026-01-01"')
         self.assertContains(response, 'value="2026-06-30"')
         self.assertNotContains(response, "dd/mm/aaaa")
+
+
+class MovimentacoesRotulosContagemTests(TestCase):
+    """Rótulo de contagem ao lado de "N registros" em Movimentações (item 12
+    da avaliação visual) — só faz sentido quando o status selecionado é o
+    mesmo que ele descreve; com "todos" ele não tem relação com a listagem
+    exibida e era só ruído."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Pendente",
+            pacote_codigo="ROT-1",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-rotulo-pendente",
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Retirado",
+            pacote_codigo="ROT-2",
+            retirado=True,
+            arquivo_origem="painel",
+            row_hash="hash-rotulo-retirado",
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_status_todos_nao_mostra_nenhum_rotulo(self) -> None:
+        response = self.client.get(reverse("cme_home"))
+
+        self.assertNotContains(response, "aguardando retirada")
+        self.assertNotContains(response, "retirado</span>")
+
+    def test_status_pendente_mostra_aguardando_retirada(self) -> None:
+        response = self.client.get(reverse("cme_home"), {"status": "pendente"})
+
+        self.assertContains(response, "aguardando retirada")
+        self.assertContains(response, "<strong>1</strong> aguardando retirada")
+
+    def test_status_retirado_mostra_rotulo_de_retirado(self) -> None:
+        response = self.client.get(reverse("cme_home"), {"status": "retirado"})
+
+        self.assertNotContains(response, "aguardando retirada")
+        self.assertContains(response, "<strong>1</strong> retirado</span>")

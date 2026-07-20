@@ -456,13 +456,17 @@ def home(request: HttpRequest) -> HttpResponse:
         )
         _preparar_datas_do_pacote(registro)
 
-    # Atalho "N aguardando retirada" — segue o mesmo recorte de datas da
-    # listagem para nao contradizer o que esta na tela.
+    # Rotulo de contagem ao lado de "N registros" — segue o mesmo recorte de
+    # datas da listagem para nao contradizer o que esta na tela. So aparece
+    # quando o status selecionado e o mesmo que o rotulo descreve (pendente/
+    # retirado): mostra-lo com o filtro "todos" sugeria, por engano, que
+    # aquele numero era so mais um dado do conjunto exibido.
     metricas = _filtrar_por_intervalo(
         linhas_de_pacote(), data_inicio, data_fim
     ).aggregate(
         total=Count("id"),
         pendentes=Count("id", filter=Q(retirado=False)),
+        retirados=Count("id", filter=Q(retirado=True)),
     )
 
     return render(
