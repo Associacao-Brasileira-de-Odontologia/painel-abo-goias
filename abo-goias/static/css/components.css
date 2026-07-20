@@ -1052,9 +1052,25 @@ tbody td:last-child {
 }
 
 .data-table-wrap {
+    position: relative;
     border-radius: var(--radius-card);
     overflow-x: auto;
     max-height: min(68vh, 720px);
+    /* Pista visual de rolagem horizontal (sem JS): duas sombras finas nas
+       bordas esquerda/direita, cada uma só visível enquanto houver conteúdo
+       cortado nessa direção — "local" acompanha o scroll do conteúdo,
+       "scroll" fica fixo à viewport da tabela. Técnica clássica de
+       "scrolling shadows" baseada em background-attachment. */
+    background-image:
+        linear-gradient(to right, var(--panel-strong), rgba(3, 34, 83, 0)),
+        linear-gradient(to left, var(--panel-strong), rgba(3, 34, 83, 0)),
+        linear-gradient(to right, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0)),
+        linear-gradient(to left, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+    background-repeat: no-repeat;
+    background-color: var(--panel-strong);
+    background-size: 24px 100%, 24px 100%, 10px 100%, 10px 100%;
+    background-position: 0 0, 100% 0, 0 0, 100% 0;
+    background-attachment: local, local, scroll, scroll;
 }
 
 .data-table {
@@ -1080,9 +1096,29 @@ tbody td:last-child {
     opacity: 0.72;
 }
 
+/* Coluna de Ações fixa: continua visível ao rolar a tabela horizontalmente,
+   em vez de sair da área visível junto com as demais colunas. */
 .actions-cell {
+    position: sticky;
+    right: 0;
+    z-index: 1;
     white-space: nowrap;
     padding-right: 12px !important;
+    background: var(--panel-strong);
+    box-shadow: -8px 0 10px -6px rgba(0, 0, 0, 0.45);
+}
+
+tbody tr:hover .actions-cell {
+    background: #0c2c58;
+}
+
+tbody tr.row-atrasado .actions-cell {
+    background: #3a1f28;
+}
+
+.data-table thead th.actions-cell {
+    z-index: 3;
+    box-shadow: none;
 }
 
 .inline-form {
