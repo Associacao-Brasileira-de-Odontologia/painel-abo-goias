@@ -79,7 +79,7 @@
                                 <span class="badge badge-devolvido">Livre</span>
                             {% endif %}
                         </td>
-                        <td>{{ abrigo.ultima_sincronizacao|date:"d/m/Y H:i"|default:"-" }}</td>
+                        <td>{{ abrigo.atualizado_em|date:"d/m/Y H:i"|default:"-" }}</td>
                         <td>
                             {% if abrigo.ativo %}
                                 <span class="badge badge-devolvido">Ativo</span>
