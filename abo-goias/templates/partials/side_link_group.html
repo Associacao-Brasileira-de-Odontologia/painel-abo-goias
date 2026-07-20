@@ -2,23 +2,29 @@
 {% comment %}
 Item da navegação lateral com ações secundárias de cadastro (ex.: "Cadastrar
 kit"). O link principal navega direto para a listagem, como qualquer outro
-item do menu — as ações de cadastro só aparecem, como submenu, quando esta
-seção já está ativa (ver avaliação visual, item 9).
+item do menu. O ícone "v" ao lado abre/fecha o submenu com as ações de
+cadastro (ver static/js/app.js) — a seção ativa já começa expandida (ver
+avaliação visual, item 9).
 
 Parâmetros (além dos de partials/side_link.html):
   action1_label / action1_url_name — primeiro item do submenu
   action2_label / action2_url_name — segundo item, opcional
 {% endcomment %}
 {% nav_ativo url_name match as nav_active %}
-<a class="side-link{% if nav_active %} active{% endif %}" href="{% url url_name %}">
-    <span class="side-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>
-    </span>
-    <span>{{ label }}</span>
-</a>
-{% if nav_active %}
-    <div class="side-submenu">
-        <a class="side-sublink" href="{% url action1_url_name %}">{{ action1_label }}</a>
-        {% if action2_url_name %}<a class="side-sublink" href="{% url action2_url_name %}">{{ action2_label }}</a>{% endif %}
-    </div>
-{% endif %}
+<div class="side-link-row">
+    <a class="side-link{% if nav_active %} active{% endif %}" href="{% url url_name %}">
+        <span class="side-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>
+        </span>
+        <span>{{ label }}</span>
+    </a>
+    <button type="button" class="side-link-toggle" data-side-toggle
+            aria-expanded="{% if nav_active %}true{% else %}false{% endif %}"
+            aria-controls="side-submenu-{{ url_name }}" aria-label="Mostrar ações de {{ label }}">
+        <svg class="side-link-chevron" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron"></use></svg>
+    </button>
+</div>
+<div class="side-submenu" id="side-submenu-{{ url_name }}"{% if not nav_active %} hidden{% endif %}>
+    <a class="side-sublink" href="{% url action1_url_name %}">{{ action1_label }}</a>
+    {% if action2_url_name %}<a class="side-sublink" href="{% url action2_url_name %}">{{ action2_label }}</a>{% endif %}
+</div>

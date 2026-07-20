@@ -1352,6 +1352,52 @@ tbody tr.row-a-confirmar > td:first-child {
     background: rgba(29, 110, 238, 0.12);
 }
 
+.side-link-row {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+}
+
+.side-link-row .side-link {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.side-link-toggle {
+    flex: 0 0 auto;
+    width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted-strong);
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.side-link-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+}
+
+.side-link-chevron {
+    width: 16px;
+    height: 16px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.18s ease;
+}
+
+.side-link-toggle[aria-expanded="true"] .side-link-chevron {
+    transform: rotate(180deg);
+}
+
 .side-submenu {
     display: grid;
     gap: 2px;
