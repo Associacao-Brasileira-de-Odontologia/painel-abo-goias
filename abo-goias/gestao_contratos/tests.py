@@ -157,7 +157,8 @@ class ContratoGeradoModelTests(TestCase):
 
 
 class ChecklistPacienteMaiorTests(TestCase):
-    """Paciente adulto — responsável é opcional."""
+    """Paciente adulto — responsável nem aparece no checklist (o campo fica
+    oculto na tela para quem é maior de idade)."""
 
     def _pac_completo(self) -> Paciente:
         return _paciente_completo(id_dental="C1")
@@ -184,14 +185,13 @@ class ChecklistPacienteMaiorTests(TestCase):
         rotulos_pendentes = [i.rotulo for i in itens if i.status == "pendente"]
         self.assertIn("Cidade/Endereço", rotulos_pendentes)
 
-    def test_responsavel_opcional_para_maior_de_idade(self) -> None:
+    def test_responsavel_ausente_do_checklist_para_maior_de_idade(self) -> None:
         pac = _paciente_completo(id_dental="C4")
         itens = gerar_checklist(pac)
         item_resp = next(
             (i for i in itens if "Responsável" in i.rotulo and "nome" in i.rotulo), None
         )
-        self.assertIsNotNone(item_resp)
-        self.assertFalse(item_resp.obrigatorio)
+        self.assertIsNone(item_resp)
 
     def test_rg_aceito_como_documento(self) -> None:
         pac = _paciente(

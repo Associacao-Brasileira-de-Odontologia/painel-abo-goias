@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class ItemChecklist:
     rotulo: str
     valor: str
-    status: str  # "ok" | "pendente" | "opcional"
+    status: str  # "ok" | "pendente"
     mensagem: str
     obrigatorio: bool = True
 
@@ -27,9 +27,11 @@ class ItemChecklist:
 def gerar_checklist(paciente: "Paciente") -> list[ItemChecklist]:
     """Valida os dados do paciente para preenchimento do contrato.
 
-    Retorna uma lista de itens indicando quais campos estão preenchidos,
-    quais estão pendentes (bloqueiam geração) e quais são opcionais.
-    O responsável legal só é obrigatório se o paciente for menor de 18 anos.
+    Retorna uma lista de itens indicando quais campos estão preenchidos e
+    quais estão pendentes (bloqueiam geração). Os itens de responsável legal
+    só entram na lista quando o paciente é menor de 18 anos — para um
+    paciente maior, o campo fica oculto na tela de qualquer forma, então
+    incluí-lo aqui só geraria um aviso sobre algo que nunca será preenchido.
     """
 
     menor = eh_menor_de_idade(paciente.data_nascimento)
@@ -48,22 +50,6 @@ def gerar_checklist(paciente: "Paciente") -> list[ItemChecklist]:
             [
                 _item("Responsável legal — nome", paciente.nome_responsavel),
                 _item("Responsável legal — CPF", paciente.cpf_responsavel),
-            ]
-        )
-    else:
-        nota_responsavel = "Obrigatório apenas para pacientes menores de 18 anos."
-        itens.extend(
-            [
-                _item_opcional(
-                    "Responsável legal — nome",
-                    paciente.nome_responsavel,
-                    nota_responsavel,
-                ),
-                _item_opcional(
-                    "Responsável legal — CPF",
-                    paciente.cpf_responsavel,
-                    nota_responsavel,
-                ),
             ]
         )
 
@@ -106,17 +92,6 @@ def _item(rotulo: str, valor: str) -> ItemChecklist:
             "Dado ausente no Dental Office. "
             "Verifique a ficha do paciente e sincronize novamente."
         ),
-    )
-
-
-def _item_opcional(rotulo: str, valor: str, mensagem: str) -> ItemChecklist:
-    valor_limpo = (valor or "").strip()
-    return ItemChecklist(
-        rotulo=rotulo,
-        valor=valor_limpo or "Não se aplica",
-        status="ok" if valor_limpo else "opcional",
-        mensagem=mensagem if not valor_limpo else "Preenchido.",
-        obrigatorio=False,
     )
 
 

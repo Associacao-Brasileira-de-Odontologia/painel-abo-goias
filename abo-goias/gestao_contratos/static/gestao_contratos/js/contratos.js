@@ -87,7 +87,6 @@
                     var uf = document.getElementById("id_endereco_estado");
                     var bairro = document.getElementById("id_endereco_bairro");
                     var logradouro = document.getElementById("id_endereco_logradouro");
-                    var enderecoTag = document.getElementById("gc-endereco-tag");
 
                     // Sempre sobrescreve com o resultado do CEP atual — inclusive ao
                     // trocar de um CEP para outro já com os campos preenchidos. Só
@@ -97,7 +96,6 @@
                     if (uf) { uf.value = dados.uf || uf.value; marcarPreenchido(uf); }
                     if (bairro) { bairro.value = dados.bairro || bairro.value; marcarPreenchido(bairro); }
                     if (logradouro) { logradouro.value = dados.logradouro || logradouro.value; marcarPreenchido(logradouro); }
-                    if (enderecoTag && cidade && cidade.value) enderecoTag.textContent = "completo";
                 })
                 .catch(function () {
                     if (erroEl) erroEl.textContent = "Não foi possível consultar o CEP agora — preencha manualmente.";
