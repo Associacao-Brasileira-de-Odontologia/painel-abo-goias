@@ -79,11 +79,15 @@
                     {% endif %}
                 </div>
 
-                {# Ações rápidas: administração agora fica no menu do usuário #}
+                {# Ações rápidas: administração agora fica no menu do usuário.
+                   Ordem alinhada ao menu lateral do CME (partials/menu.html):
+                   entrada primeiro/primária, retirada depois/secundária —
+                   segue o ciclo real do pacote (entra para esterilizar,
+                   depois é retirado). #}
                 {% if 'cme' in apps_disponiveis %}
                     <div class="portal-quick-links">
-                        <a class="button primary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
-                        <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
+                        <a class="button primary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
+                        <a class="button secondary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
                     </div>
                 {% endif %}
             </div>
