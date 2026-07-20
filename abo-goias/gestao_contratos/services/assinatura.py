@@ -262,10 +262,29 @@ def sessao_ativa_para_terminal(
     )
 
 
-def eventos_recentes(contrato: "ContratoGerado", limite: int = 8) -> list:
-    """Retorna os últimos eventos do contrato, mais recente primeiro."""
+_EVENTOS_INICIO_OCULTOS = (
+    "envio_dental_iniciado",
+    "whatsapp_iniciado",
+    "carimbo_tempo_iniciado",
+)
 
-    return list(contrato.eventos.order_by("-criado_em", "-pk")[:limite])
+
+def eventos_recentes(contrato: "ContratoGerado", limite: int = 8) -> list:
+    """Retorna os últimos eventos do contrato, mais recente primeiro.
+
+    Omite os eventos que só marcam o início de uma tarefa assíncrona
+    (envio ao Dental Office, WhatsApp, carimbo de tempo) — cada um já tem
+    um evento de conclusão ou erro correspondente, então o "iniciado" é
+    ruído técnico sem valor para quem acompanha a linha do tempo. Eventos
+    sem par de conclusão (ex.: sessão criada, contrato aberto) continuam
+    aparecendo — são o único registro daquele marco.
+    """
+
+    return list(
+        contrato.eventos.exclude(tipo__in=_EVENTOS_INICIO_OCULTOS).order_by(
+            "-criado_em", "-pk"
+        )[:limite]
+    )
 
 
 def expirar_sessoes_globalmente() -> int:

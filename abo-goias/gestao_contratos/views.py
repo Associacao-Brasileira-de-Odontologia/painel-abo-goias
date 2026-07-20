@@ -32,7 +32,11 @@ from .models import (
     expirar_terminais_vencidos,
 )
 from .services.carimbo_tempo import solicitar_carimbo
-from .services.checklist import gerar_checklist, pendencias_obrigatorias
+from .services.checklist import (
+    eh_menor_de_idade,
+    gerar_checklist,
+    pendencias_obrigatorias,
+)
 from .services.documentos import gerar_e_salvar_contrato
 from .services.envio import (
     calcular_link_whatsapp,
@@ -155,6 +159,7 @@ def contratos(request: HttpRequest) -> HttpResponse:
             "total": total,
             "erro_api": erro_api,
             "dental_pesquisado": dental_pesquisado,
+            "etapa_atual": 0,
         },
     )
 
@@ -258,7 +263,7 @@ def importar_e_gerar(request: HttpRequest, id_dental: str) -> HttpResponse:
         f"Paciente {nome} {acao} com sucesso. Revise e confirme os dados "
         "antes de gerar o contrato.",
     )
-    return redirect("contrato_confirmar_dados", paciente_pk=paciente.pk)
+    return redirect("contrato_gerar", paciente_pk=paciente.pk)
 
 
 def _sincronizar_do_dental(paciente: Paciente) -> None:
@@ -304,17 +309,31 @@ def _sincronizar_do_dental(paciente: Paciente) -> None:
 
 @login_required
 def confirmar_dados_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
-    """Tela de revisão, edição e confirmação dos dados do paciente.
+    """Alias de compatibilidade — a tela de confirmação foi unificada com a
+    de geração do contrato (ver ``gerar_contrato_view``). Mantido para não
+    quebrar links/favoritos antigos que ainda apontem para esta URL."""
 
-    GET: Sincroniza automaticamente com o Dental Office quando os dados
-    mínimos estão ausentes ou quando ``?sincronizar=1`` é passado, e exibe
-    o formulário de edição. A sincronização invalida confirmações anteriores.
+    return redirect("contrato_gerar", paciente_pk=paciente_pk)
 
-    POST: Salva as edições, registra quem confirmou e quando, e redireciona
-    para a tela de geração do contrato.
+
+@login_required
+def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
+    """Tela única de revisão, confirmação e geração do contrato.
+
+    Reúne o que antes eram duas telas e duas navegações (confirmar dados →
+    gerar contrato) em uma só: o mesmo POST salva os dados do paciente,
+    registra a confirmação e — se não houver pendências obrigatórias no
+    checklist — já gera o contrato, sem exigir uma segunda ida à tela
+    seguinte quando está tudo certo.
+
+    GET: sincroniza automaticamente com o Dental Office quando os dados
+    mínimos estão ausentes ou quando ``?sincronizar=1`` é passado — o que
+    invalida uma confirmação anterior (sinalizado ao template via
+    ``sincronizacao_invalidou_confirmacao`` para destacar o aviso).
     """
 
     paciente = get_object_or_404(Paciente, pk=paciente_pk, ativo=True)
+    sincronizacao_invalidou_confirmacao = False
 
     if request.method == "POST":
         form = PacienteConfirmacaoForm(request.POST, instance=paciente)
@@ -323,15 +342,22 @@ def confirmar_dados_view(request: HttpRequest, paciente_pk: int) -> HttpResponse
             paciente.dados_confirmados_em = timezone.now()
             paciente.dados_confirmados_por = request.user
             paciente.save()
-            messages.success(
-                request, f"Dados de {paciente.nome} confirmados com sucesso."
+
+            if not pendencias_obrigatorias(paciente):
+                return _processar_geracao(request, paciente)
+
+            messages.error(
+                request,
+                "Dados salvos, mas ainda há campos obrigatórios pendentes — "
+                "veja o checklist abaixo antes de gerar o contrato.",
             )
-            return redirect("contrato_gerar", paciente_pk=paciente.pk)
     else:
         forcar_sincronizacao = request.GET.get("sincronizar") == "1"
         if forcar_sincronizacao or not paciente.dados_contrato_completos:
+            estava_confirmado = paciente.dados_confirmados
             try:
                 _sincronizar_do_dental(paciente)
+                sincronizacao_invalidou_confirmacao = estava_confirmado
                 if forcar_sincronizacao:
                     messages.success(
                         request,
@@ -346,43 +372,6 @@ def confirmar_dados_view(request: HttpRequest, paciente_pk: int) -> HttpResponse
                 )
         form = PacienteConfirmacaoForm(instance=paciente)
 
-    return render(
-        request,
-        "gestao_contratos/confirmar_dados.html",
-        {
-            "paciente": paciente,
-            "form": form,
-            "breadcrumbs": [
-                {"label": "Contratos", "url": reverse("contratos")},
-                {"label": paciente.nome, "url": None},
-                {"label": "Confirmar dados", "url": None},
-            ],
-        },
-    )
-
-
-@login_required
-def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
-    """Exibe o formulário e processa a geração do contrato.
-
-    Exige que os dados do paciente tenham sido confirmados previamente na
-    tela de confirmação — caso contrário, redireciona para lá. A geração
-    também fica bloqueada enquanto houver campos obrigatórios pendentes
-    (checklist).
-    """
-
-    paciente = get_object_or_404(Paciente, pk=paciente_pk, ativo=True)
-
-    if not paciente.dados_confirmados:
-        messages.info(
-            request,
-            "Revise e confirme os dados do paciente antes de gerar o contrato.",
-        )
-        return redirect("contrato_confirmar_dados", paciente_pk=paciente.pk)
-
-    if request.method == "POST":
-        return _processar_geracao(request, paciente)
-
     checklist = gerar_checklist(paciente)
     pendencias = pendencias_obrigatorias(paciente)
     historico = ContratoGerado.objects.filter(paciente=paciente).order_by("-criado_em")[
@@ -394,18 +383,19 @@ def gerar_contrato_view(request: HttpRequest, paciente_pk: int) -> HttpResponse:
         "gestao_contratos/gerar_contrato.html",
         {
             "paciente": paciente,
+            "form": form,
             "tipos_contrato": TIPOS_CONTRATO,
             "historico": historico,
             "checklist": checklist,
             "pendencias": pendencias,
             "gerado_bloqueado": bool(pendencias),
+            "menor_de_idade": bool(eh_menor_de_idade(paciente.data_nascimento)),
+            "sincronizacao_invalidou_confirmacao": sincronizacao_invalidou_confirmacao,
+            "etapa_atual": 1,
             "breadcrumbs": [
                 {"label": "Contratos", "url": reverse("contratos")},
-                {
-                    "label": paciente.nome,
-                    "url": reverse("contrato_confirmar_dados", args=[paciente.pk]),
-                },
-                {"label": "Gerar contrato", "url": None},
+                {"label": paciente.nome, "url": None},
+                {"label": "Confirmar e gerar contrato", "url": None},
             ],
         },
     )
@@ -433,21 +423,6 @@ def _processar_geracao(request: HttpRequest, paciente: Paciente) -> HttpResponse
     prof_nome = request.POST.get("profissional_nome", "").strip()
     prof_cro = request.POST.get("profissional_cro", "").strip()
     local = request.POST.get("local_assinatura", "Goiânia - GO").strip()
-    email_form = request.POST.get("email_paciente", "").strip()
-    whatsapp_form = request.POST.get("whatsapp_paciente", "").strip()
-
-    # Salva e-mail e WhatsApp preenchidos no formulário de volta ao paciente.
-    # O WhatsApp alimenta paciente.celular, que é o número usado pelo link
-    # de envio na tela de pós-geração.
-    campos_alterados = []
-    if email_form and email_form != paciente.email:
-        paciente.email = email_form
-        campos_alterados.append("email")
-    if whatsapp_form and whatsapp_form != paciente.celular:
-        paciente.celular = whatsapp_form
-        campos_alterados.append("celular")
-    if campos_alterados:
-        paciente.save(update_fields=[*campos_alterados, "atualizado_em"])
 
     tipos_validos = {t[0] for t in TIPOS_CONTRATO}
     if tipo not in tipos_validos:
@@ -488,6 +463,10 @@ def pos_geracao_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
         "paciente": paciente,
         "link_whatsapp": link_whatsapp,
         "whatsapp_automatico_configurado": settings.ZAPI_CONFIGURADO,
+        # Etapa 2 ("Assinar") enquanto o documento aguarda assinatura;
+        # etapa 3 ("Enviar") depois que o paciente já assinou — esta
+        # mesma tela cobre as duas fases do stepper.
+        "etapa_atual": 3 if contrato.status == "assinado" else 2,
         "breadcrumbs": [
             {"label": "Contratos", "url": reverse("contratos")},
             {

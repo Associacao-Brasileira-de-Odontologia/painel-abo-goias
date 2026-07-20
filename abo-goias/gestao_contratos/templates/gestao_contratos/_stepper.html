@@ -1,0 +1,30 @@
+{% comment %}
+Indicador de progresso do atendimento: Buscar → Confirmar e gerar → Assinar
+→ Enviar. Espera `etapa_atual` (0-3, índice da etapa em que esta tela está).
+
+Só aparece nas telas internas do colaborador (contratos.html,
+gerar_contrato.html, pos_geracao.html) — a página pública que o paciente
+acessa para assinar (assinar.html) tem sua própria linguagem visual e não
+deve expor a navegação interna do sistema.
+{% endcomment %}
+<div class="stepper" role="list" aria-label="Progresso do atendimento">
+    <div class="step{% if etapa_atual > 0 %} is-done{% elif etapa_atual == 0 %} is-active{% endif %}" role="listitem">
+        <span class="step-dot" aria-hidden="true">{% if etapa_atual > 0 %}✓{% else %}1{% endif %}</span>
+        <span class="step-label">Buscar</span>
+    </div>
+    <div class="step-line{% if etapa_atual > 0 %} is-done{% endif %}" aria-hidden="true"></div>
+    <div class="step{% if etapa_atual > 1 %} is-done{% elif etapa_atual == 1 %} is-active{% endif %}" role="listitem">
+        <span class="step-dot" aria-hidden="true">{% if etapa_atual > 1 %}✓{% else %}2{% endif %}</span>
+        <span class="step-label">Confirmar e gerar</span>
+    </div>
+    <div class="step-line{% if etapa_atual > 1 %} is-done{% endif %}" aria-hidden="true"></div>
+    <div class="step{% if etapa_atual > 2 %} is-done{% elif etapa_atual == 2 %} is-active{% endif %}" role="listitem">
+        <span class="step-dot" aria-hidden="true">{% if etapa_atual > 2 %}✓{% else %}3{% endif %}</span>
+        <span class="step-label">Assinar</span>
+    </div>
+    <div class="step-line{% if etapa_atual > 2 %} is-done{% endif %}" aria-hidden="true"></div>
+    <div class="step{% if etapa_atual == 3 %} is-active{% endif %}" role="listitem">
+        <span class="step-dot" aria-hidden="true">4</span>
+        <span class="step-label">Enviar</span>
+    </div>
+</div>

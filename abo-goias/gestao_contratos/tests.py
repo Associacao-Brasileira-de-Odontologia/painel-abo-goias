@@ -37,6 +37,7 @@ from gestao_contratos.services.assinatura import (
     _validar_png,
     confirmar_identidade,
     criar_sessao,
+    eventos_recentes,
     expirar_sessoes_globalmente,
     gerar_token,
     processar_assinatura,
@@ -156,7 +157,8 @@ class ContratoGeradoModelTests(TestCase):
 
 
 class ChecklistPacienteMaiorTests(TestCase):
-    """Paciente adulto — responsável é opcional."""
+    """Paciente adulto — responsável nem aparece no checklist (o campo fica
+    oculto na tela para quem é maior de idade)."""
 
     def _pac_completo(self) -> Paciente:
         return _paciente_completo(id_dental="C1")
@@ -183,14 +185,13 @@ class ChecklistPacienteMaiorTests(TestCase):
         rotulos_pendentes = [i.rotulo for i in itens if i.status == "pendente"]
         self.assertIn("Cidade/Endereço", rotulos_pendentes)
 
-    def test_responsavel_opcional_para_maior_de_idade(self) -> None:
+    def test_responsavel_ausente_do_checklist_para_maior_de_idade(self) -> None:
         pac = _paciente_completo(id_dental="C4")
         itens = gerar_checklist(pac)
         item_resp = next(
             (i for i in itens if "Responsável" in i.rotulo and "nome" in i.rotulo), None
         )
-        self.assertIsNotNone(item_resp)
-        self.assertFalse(item_resp.obrigatorio)
+        self.assertIsNone(item_resp)
 
     def test_rg_aceito_como_documento(self) -> None:
         pac = _paciente(
@@ -498,7 +499,7 @@ class ImportarEGerarViewTests(TestCase):
         pac = Paciente.objects.get(id_dental="77")
         self.assertRedirects(
             response,
-            reverse("contrato_confirmar_dados", args=[pac.pk]),
+            reverse("contrato_gerar", args=[pac.pk]),
             fetch_redirect_response=False,
         )
 
@@ -574,29 +575,161 @@ class GerarContratoGetTests(TestCase):
         self.assertIn("checklist", response.context)
         self.assertIn("pendencias", response.context)
 
-    def test_paciente_nao_confirmado_redireciona_para_confirmacao(self) -> None:
+    def test_get_nao_redireciona_mesmo_sem_confirmacao_previa(self) -> None:
+        # A tela de confirmação foi unificada com a de geração: não há mais
+        # um redirecionamento para uma tela separada — o próprio GET já
+        # mostra o formulário (com o checklist indicando o que falta).
         pac = _paciente_completo(id_dental="205", dados_confirmados_em=None)
 
         response = self.client.get(reverse("contrato_gerar", args=[pac.pk]))
 
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_contratos/gerar_contrato.html")
+
+    @patch("gestao_contratos.views.DentalClient")
+    def test_get_retorna_200_sem_sincronizar_quando_completo(
+        self, MockDental: MagicMock
+    ) -> None:
+        pac = _paciente_completo(id_dental="500")
+
+        response = self.client.get(reverse("contrato_gerar", args=[pac.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        MockDental.assert_not_called()
+
+    @patch("gestao_contratos.views.DentalClient")
+    def test_get_sincroniza_quando_dados_incompletos(
+        self, MockDental: MagicMock
+    ) -> None:
+        MockDental.return_value.buscar_detalhes_paciente.return_value = {
+            "document_attributes": {"cpf": "98765432100"},
+            "birth_date": "1985-03-10",
+            "addresses_attributes": [
+                {"street": "Rua Nova", "city": "Goiânia", "state": "GO"}
+            ],
+            "contacts_attributes": [],
+        }
+        pac = _paciente(id_dental="501")
+
+        response = self.client.get(reverse("contrato_gerar", args=[pac.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        pac.refresh_from_db()
+        self.assertEqual(pac.cpf, "987.654.321-00")
+        self.assertEqual(pac.endereco_cidade, "Goiânia")
+
+    @patch("gestao_contratos.views.DentalClient")
+    def test_sincronizacao_forcada_limpa_confirmacao(
+        self, MockDental: MagicMock
+    ) -> None:
+        MockDental.return_value.buscar_detalhes_paciente.return_value = {
+            "document_attributes": {"cpf": "98765432100"},
+            "addresses_attributes": [{"city": "Anápolis", "state": "GO"}],
+            "contacts_attributes": [],
+        }
+        pac = _paciente_completo(id_dental="502", convenio="Unimed")
+
+        response = self.client.get(
+            reverse("contrato_gerar", args=[pac.pk]) + "?sincronizar=1",
+            follow=True,
+        )
+
+        self.assertContains(response, "Dados atualizados")
+        pac.refresh_from_db()
+        self.assertIsNone(pac.dados_confirmados_em)
+        # Convênio é local — sincronização não pode sobrescrevê-lo.
+        self.assertEqual(pac.convenio, "Unimed")
+
+    @patch("gestao_contratos.views.DentalClient")
+    def test_sincronizacao_com_confirmacao_previa_sinaliza_banner(
+        self, MockDental: MagicMock
+    ) -> None:
+        # Paciente já estava confirmado — a sincronização forçada invalida
+        # essa confirmação, e o template precisa saber disso para destacar
+        # o aviso (em vez do colaborador só descobrir ao tentar gerar).
+        MockDental.return_value.buscar_detalhes_paciente.return_value = {
+            "document_attributes": {"cpf": "98765432100"},
+            "addresses_attributes": [{"city": "Anápolis", "state": "GO"}],
+            "contacts_attributes": [],
+        }
+        pac = _paciente_completo(id_dental="506")
+        self.assertTrue(pac.dados_confirmados)
+
+        response = self.client.get(
+            reverse("contrato_gerar", args=[pac.pk]) + "?sincronizar=1"
+        )
+
+        self.assertTrue(response.context["sincronizacao_invalidou_confirmacao"])
+
+    @patch("gestao_contratos.views.DentalClient")
+    def test_sincronizacao_sem_confirmacao_previa_nao_sinaliza_banner(
+        self, MockDental: MagicMock
+    ) -> None:
+        # Paciente incompleto nunca foi confirmado — a sincronização
+        # automática aqui é a situação normal, não uma surpresa a avisar.
+        MockDental.return_value.buscar_detalhes_paciente.return_value = {
+            "document_attributes": {"cpf": "98765432100"},
+            "addresses_attributes": [{"city": "Goiânia", "state": "GO"}],
+            "contacts_attributes": [],
+        }
+        pac = _paciente(id_dental="507")
+
+        response = self.client.get(reverse("contrato_gerar", args=[pac.pk]))
+
+        self.assertFalse(response.context["sincronizacao_invalidou_confirmacao"])
+
+    @patch("gestao_contratos.views.DentalClient")
+    def test_erro_dental_na_sync_exibe_aviso_sem_quebrar(
+        self, MockDental: MagicMock
+    ) -> None:
+        MockDental.return_value.buscar_detalhes_paciente.side_effect = DentalAPIError(
+            "timeout"
+        )
+        # Paciente incompleto (sem CPF e sem cidade) dispara sync automático
+        pac = _paciente(id_dental="503")
+
+        response = self.client.get(reverse("contrato_gerar", args=[pac.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "timeout")
+
+
+# ---------------------------------------------------------------------------
+# Testes de Views — alias de compatibilidade da antiga tela de confirmação
+# ---------------------------------------------------------------------------
+
+
+class ConfirmarDadosAliasTests(TestCase):
+    """A tela de confirmação foi unificada com a de geração do contrato —
+    esta URL só existe para não quebrar links/favoritos antigos."""
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_redireciona_para_gerar_contrato(self) -> None:
+        pac = _paciente_completo(id_dental="509")
+
+        response = self.client.get(reverse("contrato_confirmar_dados", args=[pac.pk]))
+
         self.assertRedirects(
             response,
-            reverse("contrato_confirmar_dados", args=[pac.pk]),
+            reverse("contrato_gerar", args=[pac.pk]),
             fetch_redirect_response=False,
         )
 
 
 # ---------------------------------------------------------------------------
-# Testes de Views — confirmação de dados
+# Testes de Views — gerar contrato (POST)
 # ---------------------------------------------------------------------------
 
 
-class ConfirmarDadosViewTests(TestCase):
+class GerarContratoPostTests(TestCase):
     def setUp(self) -> None:
         self.usuario = _usuario()
         self.client.force_login(self.usuario)
 
-    def _dados_form(self, paciente: Paciente, **kwargs) -> dict:
+    def _dados_paciente(self, paciente: Paciente, **kwargs) -> dict:
         base = {
             "nome": paciente.nome,
             "cpf": paciente.cpf,
@@ -620,163 +753,54 @@ class ConfirmarDadosViewTests(TestCase):
         base.update(kwargs)
         return base
 
-    @patch("gestao_contratos.views.DentalClient")
-    def test_get_retorna_200_sem_sincronizar_quando_completo(
-        self, MockDental: MagicMock
-    ) -> None:
-        pac = _paciente_completo(id_dental="500")
-
-        response = self.client.get(reverse("contrato_confirmar_dados", args=[pac.pk]))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "gestao_contratos/confirmar_dados.html")
-        MockDental.assert_not_called()
-
-    @patch("gestao_contratos.views.DentalClient")
-    def test_get_sincroniza_quando_dados_incompletos(
-        self, MockDental: MagicMock
-    ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.return_value = {
-            "document_attributes": {"cpf": "98765432100"},
-            "birth_date": "1985-03-10",
-            "addresses_attributes": [
-                {"street": "Rua Nova", "city": "Goiânia", "state": "GO"}
-            ],
-            "contacts_attributes": [],
-        }
-        pac = _paciente(id_dental="501")
-
-        response = self.client.get(reverse("contrato_confirmar_dados", args=[pac.pk]))
-
-        self.assertEqual(response.status_code, 200)
-        pac.refresh_from_db()
-        self.assertEqual(pac.cpf, "987.654.321-00")
-        self.assertEqual(pac.endereco_cidade, "Goiânia")
-
-    @patch("gestao_contratos.views.DentalClient")
-    def test_sincronizacao_forcada_limpa_confirmacao(
-        self, MockDental: MagicMock
-    ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.return_value = {
-            "document_attributes": {"cpf": "98765432100"},
-            "addresses_attributes": [{"city": "Anápolis", "state": "GO"}],
-            "contacts_attributes": [],
-        }
-        pac = _paciente_completo(id_dental="502", convenio="Unimed")
-
-        response = self.client.get(
-            reverse("contrato_confirmar_dados", args=[pac.pk]) + "?sincronizar=1",
-            follow=True,
+    def _dados_post(self, paciente: Paciente, **kwargs) -> dict:
+        base = self._dados_paciente(paciente)
+        base.update(
+            {
+                "tipo": "modelo_1",
+                "observacoes_clinicas": "Sem intercorrências.",
+                "profissional_nome": "Dr. Teste",
+                "local_assinatura": "Goiânia - GO",
+            }
         )
-
-        self.assertContains(response, "Dados atualizados")
-        pac.refresh_from_db()
-        self.assertIsNone(pac.dados_confirmados_em)
-        # Convênio é local — sincronização não pode sobrescrevê-lo.
-        self.assertEqual(pac.convenio, "Unimed")
-
-    @patch("gestao_contratos.views.DentalClient")
-    def test_erro_dental_na_sync_exibe_aviso_sem_quebrar(
-        self, MockDental: MagicMock
-    ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.side_effect = DentalAPIError(
-            "timeout"
-        )
-        # Paciente incompleto (sem CPF e sem cidade) dispara sync automático
-        pac = _paciente(id_dental="503")
-
-        response = self.client.get(reverse("contrato_confirmar_dados", args=[pac.pk]))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "timeout")
-
-    def test_post_salva_edicoes_e_confirma(self) -> None:
-        pac = _paciente_completo(id_dental="504", dados_confirmados_em=None)
-
-        response = self.client.post(
-            reverse("contrato_confirmar_dados", args=[pac.pk]),
-            data=self._dados_form(pac, convenio="Amil", celular="(62) 98888-7777"),
-        )
-
-        self.assertRedirects(
-            response,
-            reverse("contrato_gerar", args=[pac.pk]),
-            fetch_redirect_response=False,
-        )
-        pac.refresh_from_db()
-        self.assertEqual(pac.convenio, "Amil")
-        self.assertEqual(pac.celular, "(62) 98888-7777")
-        self.assertIsNotNone(pac.dados_confirmados_em)
-        self.assertEqual(pac.dados_confirmados_por, self.usuario)
-
-    def test_post_sem_nome_reexibe_formulario(self) -> None:
-        pac = _paciente_completo(id_dental="505", dados_confirmados_em=None)
-
-        response = self.client.post(
-            reverse("contrato_confirmar_dados", args=[pac.pk]),
-            data=self._dados_form(pac, nome=""),
-        )
-
-        self.assertEqual(response.status_code, 200)
-        pac.refresh_from_db()
-        self.assertIsNone(pac.dados_confirmados_em)
-
-
-# ---------------------------------------------------------------------------
-# Testes de Views — gerar contrato (POST)
-# ---------------------------------------------------------------------------
-
-
-class GerarContratoPostTests(TestCase):
-    def setUp(self) -> None:
-        self.usuario = _usuario()
-        self.client.force_login(self.usuario)
-
-    def _dados_post(self, **kwargs) -> dict:
-        base = {
-            "tipo": "modelo_1",
-            "observacoes_clinicas": "Sem intercorrências.",
-            "profissional_nome": "Dr. Teste",
-            "profissional_cro": "CRO-GO 1234",
-            "local_assinatura": "Goiânia - GO",
-        }
         base.update(kwargs)
         return base
 
-    @patch("gestao_contratos.views.DentalClient")
-    def test_post_com_pendencias_redireciona_com_erro(
-        self, MockDental: MagicMock
-    ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.return_value = {
-            "name": "Incompleto",
-            "active": True,
-            "contacts_attributes": [],
-        }
-        # Confirmado porém incompleto — o checklist deve barrar a geração.
-        pac = _paciente(id_dental="300", dados_confirmados_em=timezone.now())
+    def test_post_com_pendencias_reexibe_formulario_sem_gerar(self) -> None:
+        # Paciente sem CPF/cidade — o checklist deve barrar a geração, mas
+        # os dados enviados ainda são salvos e marcados como confirmados
+        # (a confirmação e a geração são a mesma etapa agora, porém a
+        # geração em si fica bloqueada até os campos serem completados).
+        pac = _paciente(id_dental="300")
 
         response = self.client.post(
             reverse("contrato_gerar", args=[pac.pk]),
-            data=self._dados_post(),
-            follow=True,
+            data=self._dados_post(pac),
         )
 
-        self.assertContains(response, "dados obrigatórios ausentes")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "campos obrigatórios pendentes")
         self.assertEqual(ContratoGerado.objects.count(), 0)
+        pac.refresh_from_db()
+        self.assertIsNotNone(pac.dados_confirmados_em)
+
+    def test_post_sem_nome_reexibe_formulario_sem_confirmar(self) -> None:
+        pac = _paciente_completo(id_dental="505", dados_confirmados_em=None)
+
+        response = self.client.post(
+            reverse("contrato_gerar", args=[pac.pk]),
+            data=self._dados_post(pac, nome=""),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        pac.refresh_from_db()
+        self.assertIsNone(pac.dados_confirmados_em)
 
     @patch("gestao_contratos.views.gerar_e_salvar_contrato")
-    @patch("gestao_contratos.views.DentalClient")
-    def test_post_valido_registra_contrato_e_redireciona(
-        self, MockDental: MagicMock, mock_gerar: MagicMock
+    def test_post_valido_confirma_gera_contrato_e_redireciona(
+        self, mock_gerar: MagicMock
     ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.return_value = {
-            "name": "Joao Completo",
-            "active": True,
-            "contacts_attributes": [],
-            "cpf": "123.456.789-00",
-            "address_attributes": {"city": "Goiânia", "state": "GO"},
-        }
-        pac = _paciente_completo(id_dental="301")
+        pac = _paciente_completo(id_dental="301", dados_confirmados_em=None)
         contrato = ContratoGerado.objects.create(
             paciente=pac, tipo="modelo_1", gerado_por=self.usuario
         )
@@ -784,7 +808,7 @@ class GerarContratoPostTests(TestCase):
 
         response = self.client.post(
             reverse("contrato_gerar", args=[pac.pk]),
-            data=self._dados_post(),
+            data=self._dados_post(pac, convenio="Amil", celular="(62) 98888-7777"),
         )
 
         self.assertRedirects(
@@ -798,18 +822,16 @@ class GerarContratoPostTests(TestCase):
         self.assertEqual(kwargs["paciente"], pac)
         self.assertEqual(kwargs["gerado_por"], self.usuario)
 
+        pac.refresh_from_db()
+        self.assertEqual(pac.convenio, "Amil")
+        self.assertEqual(pac.celular, "(62) 98888-7777")
+        self.assertIsNotNone(pac.dados_confirmados_em)
+        self.assertEqual(pac.dados_confirmados_por, self.usuario)
+
     @patch("gestao_contratos.views.gerar_e_salvar_contrato")
-    @patch("gestao_contratos.views.DentalClient")
     def test_post_com_email_diferente_atualiza_paciente(
-        self, MockDental: MagicMock, mock_gerar: MagicMock
+        self, mock_gerar: MagicMock
     ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.return_value = {
-            "name": "Joao Completo",
-            "active": True,
-            "contacts_attributes": [],
-            "cpf": "123.456.789-00",
-            "address_attributes": {"city": "Goiânia", "state": "GO"},
-        }
         pac = _paciente_completo(id_dental="303")
         contrato = ContratoGerado.objects.create(
             paciente=pac, tipo="modelo_1", gerado_por=self.usuario
@@ -818,52 +840,34 @@ class GerarContratoPostTests(TestCase):
 
         self.client.post(
             reverse("contrato_gerar", args=[pac.pk]),
-            data=self._dados_post(email_paciente="novo@example.com"),
+            data=self._dados_post(pac, email="novo@example.com"),
         )
 
         pac.refresh_from_db()
         self.assertEqual(pac.email, "novo@example.com")
 
     @patch("gestao_contratos.views.gerar_e_salvar_contrato")
-    @patch("gestao_contratos.views.DentalClient")
     def test_post_arquivo_modelo_ausente_redireciona_com_erro(
-        self, MockDental: MagicMock, mock_gerar: MagicMock
+        self, mock_gerar: MagicMock
     ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.return_value = {
-            "name": "Joao Completo",
-            "active": True,
-            "contacts_attributes": [],
-            "cpf": "123.456.789-00",
-            "address_attributes": {"city": "Goiânia", "state": "GO"},
-        }
         pac = _paciente_completo(id_dental="304")
         mock_gerar.side_effect = FileNotFoundError("Modelo de contrato não encontrado")
 
         response = self.client.post(
             reverse("contrato_gerar", args=[pac.pk]),
-            data=self._dados_post(),
+            data=self._dados_post(pac),
             follow=True,
         )
 
         self.assertContains(response, "Modelo de contrato não encontrado")
         self.assertEqual(ContratoGerado.objects.count(), 0)
 
-    @patch("gestao_contratos.views.DentalClient")
-    def test_post_com_tipo_invalido_redireciona_com_erro(
-        self, MockDental: MagicMock
-    ) -> None:
-        MockDental.return_value.buscar_detalhes_paciente.return_value = {
-            "name": "Joao",
-            "active": True,
-            "contacts_attributes": [],
-            "cpf": "123.456.789-00",
-            "address_attributes": {"city": "Goiânia", "state": "GO"},
-        }
+    def test_post_com_tipo_invalido_redireciona_com_erro(self) -> None:
         pac = _paciente_completo(id_dental="302")
 
         response = self.client.post(
             reverse("contrato_gerar", args=[pac.pk]),
-            data=self._dados_post(tipo="tipo_invalido"),
+            data=self._dados_post(pac, tipo="tipo_invalido"),
             follow=True,
         )
 
@@ -1051,6 +1055,38 @@ class SessaoAssinaturaServiceTests(AssinaturaBaseTests):
             sessao=sessao, tipo="identidade_presencial_confirmada"
         )
         self.assertEqual(evento.payload.get("confirmada_por"), self.usuario.username)
+
+
+class EventosRecentesTests(AssinaturaBaseTests):
+    """Eventos "iniciado" de tarefa assíncrona (com par concluído/erro) não
+    devem aparecer na linha do tempo — são ruído técnico redundante assim
+    que o desfecho chega. Eventos sem par de conclusão (ex.: sessão criada)
+    continuam aparecendo, pois são o único registro daquele marco."""
+
+    def test_oculta_eventos_de_inicio_com_par_de_conclusao(self) -> None:
+        for tipo in (
+            "envio_dental_iniciado",
+            "whatsapp_iniciado",
+            "carimbo_tempo_iniciado",
+        ):
+            EventoContrato.objects.create(contrato=self.contrato, tipo=tipo)
+        EventoContrato.objects.create(
+            contrato=self.contrato, tipo="envio_dental_concluido"
+        )
+
+        tipos = [e.tipo for e in eventos_recentes(self.contrato)]
+
+        self.assertNotIn("envio_dental_iniciado", tipos)
+        self.assertNotIn("whatsapp_iniciado", tipos)
+        self.assertNotIn("carimbo_tempo_iniciado", tipos)
+        self.assertIn("envio_dental_concluido", tipos)
+
+    def test_mantem_eventos_sem_par_de_conclusao(self) -> None:
+        criar_sessao(self.contrato, criado_por=self.usuario)
+
+        tipos = [e.tipo for e in eventos_recentes(self.contrato)]
+
+        self.assertIn("sessao_criada", tipos)
 
     def test_criar_nova_sessao_cancela_anterior(self) -> None:
         antiga = criar_sessao(self.contrato, criado_por=self.usuario)
@@ -3276,6 +3312,37 @@ class ViewsAssinaturaEdgeCasesTests(AssinaturaBaseTests):
         response = self.client.get(
             reverse("contrato_cancelar_assinatura", args=[self.contrato.pk])
         )
+        self.assertRedirects(
+            response,
+            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_cancelar_assinatura_com_next_redireciona_para_destino(self) -> None:
+        # Usado pelo link "Editar dados do paciente" na pós-geração: cancela
+        # a sessão em andamento e já segue direto para a edição, em vez de
+        # voltar para a própria pós-geração.
+        criar_sessao(self.contrato, criado_por=self.usuario)
+        destino = reverse("contrato_gerar", args=[self.contrato.paciente.pk])
+
+        response = self.client.post(
+            reverse("contrato_cancelar_assinatura", args=[self.contrato.pk]),
+            data={"next": destino},
+        )
+
+        self.assertRedirects(response, destino, fetch_redirect_response=False)
+        self.assertIsNone(sessao_ativa(self.contrato))
+
+    def test_cancelar_assinatura_com_next_externo_e_ignorado(self) -> None:
+        # Só aceita caminhos locais (começando com "/") — evita redirect
+        # aberto caso "next" venha manipulado.
+        criar_sessao(self.contrato, criado_por=self.usuario)
+
+        response = self.client.post(
+            reverse("contrato_cancelar_assinatura", args=[self.contrato.pk]),
+            data={"next": "https://evil.example.com/"},
+        )
+
         self.assertRedirects(
             response,
             reverse("contrato_pos_geracao", args=[self.contrato.pk]),

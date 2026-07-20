@@ -13,9 +13,38 @@
 
     <nav class="side-nav" aria-label="Navegação de contratos">
         {% include "partials/side_link.html" with icon="contrato" label="Enviar contrato" current=True %}
-        {% include "partials/side_link.html" with url_name="contrato_gerar" url_arg=paciente.pk icon="novo" label="Gerar novo contrato" %}
+
+        {% comment %}
+        Editar os dados agora cancela a sessão em andamento — o QR Code/terminal
+        atual deixaria de bater com o que o paciente assinaria, então a saída
+        correta é interromper e deixar pronto para uma nova sessão depois.
+        {% endcomment %}
+        {% if sessao_assinatura %}
+            <form method="post" action="{% url 'contrato_cancelar_assinatura' contrato.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'contrato_gerar' paciente.pk %}">
+                <button type="submit" class="side-link gc-side-link-as-button"
+                        data-confirm="Uma sessão de assinatura está em andamento — o QR Code ou terminal atual deixará de funcionar. Você poderá gerar uma nova sessão depois de corrigir os dados do paciente. Deseja continuar?"
+                        data-confirm-title="Interromper assinatura para editar dados"
+                        data-confirm-label="Interromper e editar"
+                        data-confirm-danger="true">
+                    <span class="side-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
+                    </span>
+                    <span>Editar dados do paciente</span>
+                </button>
+            </form>
+        {% else %}
+            {% include "partials/side_link.html" with url_name="contrato_gerar" url_arg=paciente.pk icon="editar" label="Editar dados do paciente" %}
+        {% endif %}
+
         {% include "partials/side_link.html" with url_name="contrato_terminais" icon="lista" label="Terminais de assinatura" %}
-        {% include "partials/side_link.html" with url_name="contratos" icon="voltar" label="Voltar à lista" extra_class="side-link-return" %}
+
+        {% if sessao_assinatura %}
+            {% include "partials/side_link.html" with url_name="contratos" icon="voltar" label="Voltar à lista" extra_class="side-link-return" confirm="Uma sessão de assinatura está em andamento para este paciente. O QR Code ou terminal continua válido, mas você deixará de acompanhar o status aqui até voltar a esta tela. Deseja voltar à lista mesmo assim?" confirm_title="Sair com assinatura em andamento" confirm_label="Voltar à lista" %}
+        {% else %}
+            {% include "partials/side_link.html" with url_name="contratos" icon="voltar" label="Voltar à lista" extra_class="side-link-return" %}
+        {% endif %}
     </nav>
 
     <div class="sidebar-section gc-mt-lg">
@@ -86,6 +115,8 @@
 {% block panel_title %}Contrato gerado com sucesso{% endblock %}
 
 {% block panel %}
+    {% include "gestao_contratos/_stepper.html" %}
+
     {# As mensagens já aparecem via .messages-banner global (base.html) — não duplicar aqui. #}
 
     {# ── Assinatura do paciente (QR Code + polling HTMX) ──── #}
