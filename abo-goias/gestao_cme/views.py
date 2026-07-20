@@ -307,16 +307,21 @@ def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
 
 
 def _filtrar_por_intervalo(
-    queryset: QuerySet[Movimentacao],
+    queryset: QuerySet,
     data_inicio: datetime | None,
     data_fim: datetime | None,
-) -> QuerySet[Movimentacao]:
-    """Recorta um queryset de movimentacoes pelo intervalo de datas."""
+    campo: str = "data_hora",
+) -> QuerySet:
+    """Recorta um queryset pelo intervalo de datas, no campo indicado.
+
+    ``campo`` default e "data_hora" (Movimentacao); Emprestimo usa
+    "data_emprestimo" — mesmo helper, campo diferente.
+    """
 
     if data_inicio:
-        queryset = queryset.filter(data_hora__gte=data_inicio)
+        queryset = queryset.filter(**{f"{campo}__gte": data_inicio})
     if data_fim:
-        queryset = queryset.filter(data_hora__lte=data_fim)
+        queryset = queryset.filter(**{f"{campo}__lte": data_fim})
     return queryset
 
 
@@ -1694,7 +1699,7 @@ _STATUS_EMPRESTIMO_OPCOES = (
 
 @login_required
 def emprestimos(request: HttpRequest) -> HttpResponse:
-    """Lista emprestimos com filtros de status e busca.
+    """Lista emprestimos com filtros de status, busca e periodo.
 
     Antes de montar a listagem, atualiza o status dos empréstimos vencidos
     para ATRASADO — a tarefa periódica (ver tasks.py) cobre quem não visita a
@@ -1705,11 +1710,23 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
 
     busca = request.GET.get("q", "").strip()
     status_filtro = request.GET.get("status", "").strip()
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
+
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
 
     queryset = (
         emprestimos_visiveis(request)
         .select_related("aluno", "aluno__turma", "kit", "coordenador_usuario")
         .prefetch_related("itens")
+    )
+    queryset = _filtrar_por_intervalo(
+        queryset, data_inicio, data_fim, campo="data_emprestimo"
     )
 
     if status_filtro in Emprestimo.Status.values:
@@ -1727,7 +1744,9 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
 
     page_obj, query_string = paginar_queryset(request, queryset)
 
-    base = emprestimos_visiveis(request)
+    base = _filtrar_por_intervalo(
+        emprestimos_visiveis(request), data_inicio, data_fim, campo="data_emprestimo"
+    )
     metricas = base.aggregate(
         total=Count("id"),
         emprestados=Count("id", filter=Q(status=Emprestimo.Status.EMPRESTADO)),
@@ -1744,6 +1763,10 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
             "status_filtro": status_filtro,
             "status_opcoes": _STATUS_EMPRESTIMO_OPCOES,
             "status_label": dict(_STATUS_EMPRESTIMO_OPCOES).get(status_filtro, "Todos"),
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
             "emprestimos": page_obj.object_list,
             "metricas": metricas,
             "page_obj": page_obj,

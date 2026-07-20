@@ -24,14 +24,26 @@ navegação lateral (ver partials/side_link_group.html).
                 <option value="{{ valor }}" {% if status_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
             {% endfor %}
         </select>
+        <div class="field">
+            <label for="data_inicio_emp">De</label>
+            <input type="date" id="data_inicio_emp" name="data_inicio" value="{{ data_inicio_str }}">
+        </div>
+        <div class="field">
+            <label for="data_fim_emp">Até</label>
+            <input type="date" id="data_fim_emp" name="data_fim" value="{{ data_fim_str }}">
+        </div>
         <button class="button primary" type="submit">Buscar</button>
     </form>
 
-    {% if busca or status_filtro %}
+    {% if busca or status_filtro or data_inicio_str or data_fim_str %}
+        {% comment %}
+        Cada chip remove só o próprio filtro e preserva os demais — mesmo
+        padrão de gestao_cme/home.html.
+        {% endcomment %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if status_filtro %}status={{ status_filtro }}{% endif %}"
+                   href="?{% if status_filtro %}status={{ status_filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
@@ -40,10 +52,19 @@ navegação lateral (ver partials/side_link_group.html).
             {% endif %}
             {% if status_filtro %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover filtro de status">
                     <span>Status</span>
                     <strong>{{ status_label }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if data_inicio_str or data_fim_str %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_filtro %}status={{ status_filtro }}{% endif %}"
+                   title="Remover filtro de período">
+                    <span>Período</span>
+                    <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}

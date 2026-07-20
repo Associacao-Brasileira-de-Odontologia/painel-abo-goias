@@ -11,13 +11,6 @@
 
 {% block panel %}
     <form class="filter-bar" method="get">
-        {% comment %}
-        O intervalo de datas chega pela URL (ex.: vindo de um KPI da Visão
-        Geral). Sem estes hidden, buscar ou trocar o status descartaria o
-        recorte e a tela passaria a mostrar outro conjunto.
-        {% endcomment %}
-        {% if data_inicio_str %}<input type="hidden" name="data_inicio" value="{{ data_inicio_str }}">{% endif %}
-        {% if data_fim_str %}<input type="hidden" name="data_fim" value="{{ data_fim_str }}">{% endif %}
         {% if aluno_filtrado %}<input type="hidden" name="aluno" value="{{ aluno_filtrado.pk }}">{% endif %}
         <div class="search-control">
             <input id="results-q-movimentacoes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem..." aria-label="Buscar na listagem">
@@ -33,7 +26,20 @@
         um pacote com as duas datas, então filtrar por tipo não seleciona mais
         linhas distintas. O filtro de status (Retirado / Não retirado) cobre a
         mesma intenção sobre a nova linha.
+
+        As datas eram só um par de hidden — chegavam pela URL (ex.: vindo de
+        um KPI da Visão Geral) mas não tinham controle próprio na tela; para
+        mudar o período era preciso editar a URL a mão. Viraram campo
+        editável, como no filtro da Visão Geral (item 8).
         {% endcomment %}
+        <div class="field">
+            <label for="data_inicio_mov">De</label>
+            <input type="date" id="data_inicio_mov" name="data_inicio" value="{{ data_inicio_str }}">
+        </div>
+        <div class="field">
+            <label for="data_fim_mov">Até</label>
+            <input type="date" id="data_fim_mov" name="data_fim" value="{{ data_fim_str }}">
+        </div>
         <button class="button primary" type="submit">Buscar</button>
     </form>
 

@@ -1495,6 +1495,62 @@ class EmprestimoAtrasoAutomaticoTests(TestCase):
         self.assertEqual(total, 1)
 
 
+class EmprestimosFiltroPeriodoTests(TestCase):
+    """Filtro de período em Empréstimos (item 11 da avaliação visual) — antes
+    só existia em Movimentações/Visão Geral; recorta por ``data_emprestimo``,
+    mesmo formato ISO do <input type="date"> usado nas outras telas."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-emp-periodo", password="senha-segura", is_superuser=True
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Periodo Emp", codigo="TPEMP", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Periodo Emp",
+            matricula="MATPEMP",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        self.dentro = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_emprestimo=datetime(2026, 3, 10, 10, 0, tzinfo=dt_timezone.utc),
+        )
+        self.fora = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_emprestimo=datetime(2026, 8, 10, 10, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def test_filtro_periodo_iso_recorta_listagem_e_metricas(self) -> None:
+        response = self.client.get(
+            reverse("emprestimos"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-06-30"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        emprestimos = list(response.context["emprestimos"])
+        self.assertIn(self.dentro, emprestimos)
+        self.assertNotIn(self.fora, emprestimos)
+        self.assertEqual(response.context["metricas"]["total"], 1)
+
+    def test_formulario_usa_input_type_date(self) -> None:
+        response = self.client.get(reverse("emprestimos"))
+
+        self.assertContains(response, 'type="date"')
+
+    def test_data_invalida_e_ignorada_sem_erro(self) -> None:
+        response = self.client.get(
+            reverse("emprestimos"), {"data_inicio": "31/12/2026"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["data_inicio_str"], "")
+
+
 class EditarEmprestimoTests(TestCase):
     """Edição de empréstimo (item 10 da avaliação visual) — só data prevista
     de devolução e observações são editáveis, e a visibilidade segue a mesma
@@ -1655,4 +1711,34 @@ class CmeDashboardFiltroPeriodoTests(TestCase):
         response = self.client.get(reverse("cme_dashboard"))
 
         self.assertContains(response, 'type="date"')
+
+
+class MovimentacoesFiltroPeriodoVisivelTests(TestCase):
+    """O filtro de período de Movimentações (item 11 da avaliação visual)
+    virou campo editável na própria tela — antes só chegava como hidden pela
+    URL (ex.: vindo de um KPI da Visão Geral), sem controle direto aqui."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-mov-periodo", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+
+    def test_formulario_traz_campos_de_data_visiveis(self) -> None:
+        response = self.client.get(reverse("cme_home"))
+
+        self.assertContains(response, 'type="date"')
+        self.assertContains(response, 'name="data_inicio"')
+        self.assertContains(response, 'name="data_fim"')
+        self.assertNotContains(response, 'type="hidden" name="data_inicio"')
+        self.assertNotContains(response, 'type="hidden" name="data_fim"')
+
+    def test_campos_preenchidos_quando_filtro_vem_pela_url(self) -> None:
+        response = self.client.get(
+            reverse("cme_home"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-06-30"},
+        )
+
+        self.assertContains(response, 'value="2026-01-01"')
+        self.assertContains(response, 'value="2026-06-30"')
         self.assertNotContains(response, "dd/mm/aaaa")
