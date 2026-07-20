@@ -764,6 +764,7 @@ def materiais(request: HttpRequest) -> HttpResponse:
         "total": materiais_base.count(),
         "ativos": materiais_base.filter(ativo=True).count(),
         "disponiveis": materiais_base.filter(disponivel=True).count(),
+        "indisponiveis": materiais_base.filter(disponivel=False).count(),
         "filtrados": page_obj.paginator.count,
     }
 
@@ -790,18 +791,23 @@ def materiais(request: HttpRequest) -> HttpResponse:
 def kits(request: HttpRequest) -> HttpResponse:
     """Lista kits de materiais com resumo dos itens que os compoem.
 
-    Permite busca por dados do kit e de seus materiais, prepara informacoes de
-    resumo para exibicao no template e calcula metricas gerais de kits ativos e
-    quantidade operacional.
+    Permite busca por dados do kit e de seus materiais, filtro por status
+    (ativo/inativo), prepara informacoes de resumo para exibicao no template
+    e calcula metricas gerais de kits ativos e quantidade operacional.
     """
 
     busca = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
 
     kits_queryset = (
         Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
         .prefetch_related("itens__material")
         .order_by("nome")
     )
+    if status == "ativo":
+        kits_queryset = kits_queryset.filter(ativo=True)
+    elif status == "inativo":
+        kits_queryset = kits_queryset.filter(ativo=False)
     if busca:
         kits_queryset = kits_queryset.filter(
             Q(nome__icontains=busca)
@@ -826,6 +832,7 @@ def kits(request: HttpRequest) -> HttpResponse:
     metricas = {
         "total": kits_base.count(),
         "ativos": kits_base.filter(ativo=True).count(),
+        "inativos": kits_base.filter(ativo=False).count(),
         "quantidade": sum(kit.quantidade for kit in kits_base),
         "filtrados": page_obj.paginator.count,
     }
@@ -836,6 +843,10 @@ def kits(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "busca": busca,
+            "status_atual": status,
+            "status_label": {"ativo": "Ativos", "inativo": "Inativos"}.get(
+                status, "Todos"
+            ),
             "metricas": metricas,
             "kits": page_obj.object_list,
             "page_obj": page_obj,

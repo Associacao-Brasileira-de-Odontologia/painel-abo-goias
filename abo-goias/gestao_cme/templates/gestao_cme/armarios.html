@@ -52,8 +52,16 @@ navegação lateral (ver partials/side_link_group.html).
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> resultado{{ page_obj.paginator.count|pluralize }}</span>
-        <a href="?ocupacao=ocupado" title="Filtrar ocupados"><strong>{{ metricas.ocupados }}</strong> ocupado{{ metricas.ocupados|pluralize }}</a>
-        <a href="?ocupacao=livre" title="Filtrar livres"><strong>{{ metricas.livres }}</strong> livre{{ metricas.livres|pluralize }}</a>
+        {% comment %}
+        Só aparece quando o filtro de Ocupação correspondente está
+        selecionado — mesmo conceito aplicado em Movimentações. Cores iguais
+        às do badge da coluna Ocupação (badge-atrasado/badge-devolvido).
+        {% endcomment %}
+        {% if ocupacao_atual == "ocupado" and metricas.ocupados %}
+            <span class="meta-warn"><strong>{{ metricas.ocupados }}</strong> ocupado{{ metricas.ocupados|pluralize }}</span>
+        {% elif ocupacao_atual == "livre" and metricas.livres %}
+            <span class="meta-success"><strong>{{ metricas.livres }}</strong> livre{{ metricas.livres|pluralize }}</span>
+        {% endif %}
     </div>
 
     <div class="table-wrap data-table-wrap">

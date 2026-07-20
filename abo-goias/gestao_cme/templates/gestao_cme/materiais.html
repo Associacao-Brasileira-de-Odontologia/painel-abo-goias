@@ -52,7 +52,16 @@ navegação lateral (ver partials/side_link_group.html).
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> resultado{{ page_obj.paginator.count|pluralize }}</span>
-        <a href="?disponibilidade=disponivel" title="Filtrar disponíveis"><strong>{{ metricas.disponiveis }}</strong> de {{ metricas.total }} disponíve{{ metricas.disponiveis|pluralize:"l,is" }}</a>
+        {% comment %}
+        Só aparece quando o filtro de Disponibilidade correspondente está
+        selecionado — mesmo conceito aplicado em Movimentações. Cores iguais
+        às do badge da coluna Status (badge-devolvido/badge-atrasado).
+        {% endcomment %}
+        {% if disponibilidade_atual == "disponivel" and metricas.disponiveis %}
+            <span class="meta-success"><strong>{{ metricas.disponiveis }}</strong> de {{ metricas.total }} disponíve{{ metricas.disponiveis|pluralize:"l,is" }}</span>
+        {% elif disponibilidade_atual == "indisponivel" and metricas.indisponiveis %}
+            <span class="meta-warn"><strong>{{ metricas.indisponiveis }}</strong> de {{ metricas.total }} indisponíve{{ metricas.indisponiveis|pluralize:"l,is" }}</span>
+        {% endif %}
     </div>
 
     <div class="table-wrap data-table-wrap">

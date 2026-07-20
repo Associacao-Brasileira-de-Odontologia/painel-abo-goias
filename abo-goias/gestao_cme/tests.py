@@ -1795,3 +1795,119 @@ class MovimentacoesRotulosContagemTests(TestCase):
         self.assertContains(response, "<strong>1</strong> retirado</span>")
         # Mesma cor do badge "Retirado" da coluna Status (.badge-devolvido).
         self.assertContains(response, 'class="meta-success"')
+
+
+class AbrigosRotulosContagemTests(TestCase):
+    """Rótulos "ocupado"/"livre" em Abrigos só aparecem quando o filtro de
+    Ocupação correspondente está selecionado — mesmo conceito do item 12,
+    estendido para Abrigos/Materiais/Kits."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-abrigos-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Abrigo.objects.create(
+            identificador="ROT-OCUPADO", ocupado=True, origem=OrigemDados.MANUAL
+        )
+        Abrigo.objects.create(
+            identificador="ROT-LIVRE", ocupado=False, origem=OrigemDados.MANUAL
+        )
+
+    def test_ocupacao_todos_nao_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("abrigos"))
+
+        self.assertNotContains(response, "ocupado</span>")
+        self.assertNotContains(response, "livre</span>")
+
+    def test_ocupacao_ocupado_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("abrigos"), {"ocupacao": "ocupado"})
+
+        self.assertContains(response, "<strong>1</strong> ocupado</span>")
+        self.assertNotContains(response, "livre</span>")
+
+    def test_ocupacao_livre_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("abrigos"), {"ocupacao": "livre"})
+
+        self.assertContains(response, "<strong>1</strong> livre</span>")
+        self.assertNotContains(response, "ocupado</span>")
+
+
+class MateriaisRotulosContagemTests(TestCase):
+    """Rótulos "disponíveis"/"indisponíveis" em Materiais só aparecem quando
+    o filtro de Disponibilidade correspondente está selecionado."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-materiais-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Material.objects.create(
+            nome="Material Rótulo Disponível",
+            codigo="ROT-DISP",
+            disponivel=True,
+            origem=OrigemDados.MANUAL,
+        )
+        Material.objects.create(
+            nome="Material Rótulo Indisponível",
+            codigo="ROT-INDISP",
+            disponivel=False,
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_disponibilidade_todos_nao_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("materiais"))
+
+        self.assertNotContains(response, 'class="meta-success"')
+        self.assertNotContains(response, 'class="meta-warn"')
+
+    def test_disponibilidade_disponivel_mostra_rotulo(self) -> None:
+        response = self.client.get(
+            reverse("materiais"), {"disponibilidade": "disponivel"}
+        )
+
+        self.assertContains(response, "<strong>1</strong> de 2 disponível")
+        self.assertNotContains(response, "indisponíve")
+
+    def test_disponibilidade_indisponivel_mostra_rotulo(self) -> None:
+        response = self.client.get(
+            reverse("materiais"), {"disponibilidade": "indisponivel"}
+        )
+
+        self.assertContains(response, "<strong>1</strong> de 2 indisponível")
+
+
+class KitsFiltroStatusTests(TestCase):
+    """Kits ganhou um filtro de Status (Ativo/Inativo), igual Abrigos e
+    Materiais — antes só tinha busca, e o rótulo "N de M ativos" aparecia
+    sempre, sem nenhum filtro correspondente para ligá-lo/desligá-lo."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-kits-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Kit.objects.create(nome="Kit Ativo Rótulo", codigo="ROT-KIT-ATIVO", ativo=True)
+        Kit.objects.create(
+            nome="Kit Inativo Rótulo", codigo="ROT-KIT-INATIVO", ativo=False
+        )
+
+    def test_status_todos_nao_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("kits"))
+
+        self.assertNotContains(response, 'class="meta-success"')
+        self.assertNotContains(response, 'class="meta-warn"')
+
+    def test_status_ativo_filtra_e_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("kits"), {"status": "ativo"})
+
+        self.assertContains(response, "Kit Ativo Rótulo")
+        self.assertNotContains(response, "Kit Inativo Rótulo")
+        self.assertContains(response, "<strong>1</strong> de 2 ativo</span>")
+
+    def test_status_inativo_filtra_e_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("kits"), {"status": "inativo"})
+
+        self.assertContains(response, "Kit Inativo Rótulo")
+        self.assertNotContains(response, "Kit Ativo Rótulo")
+        self.assertContains(response, "<strong>1</strong> de 2 inativo</span>")
