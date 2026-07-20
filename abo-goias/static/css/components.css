@@ -1352,41 +1352,27 @@ tbody tr.row-a-confirmar > td:first-child {
     background: rgba(29, 110, 238, 0.12);
 }
 
-.side-link-group {
-    position: relative;
+.side-submenu {
+    display: grid;
+    gap: 2px;
+    margin: 2px 0 4px 34px;
+    padding-left: 10px;
+    border-left: 1px solid var(--line);
 }
 
-.side-link-group summary {
-    list-style: none;
-    cursor: pointer;
+.side-sublink {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--muted-strong);
+    font-size: 13px;
+    text-decoration: none;
+    transition: background 0.18s ease, color 0.18s ease;
 }
 
-.side-link-group summary::marker,
-.side-link-group summary::-webkit-details-marker {
-    display: none;
-    content: "";
-}
-
-.side-link-group summary::after {
-    content: "";
-    width: 6px;
-    height: 6px;
-    margin-left: auto;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    opacity: 0.55;
-    transform: rotate(45deg);
-    transition: transform 0.18s ease;
-}
-
-.side-link-group[open] summary::after {
-    transform: rotate(-135deg);
-}
-
-.side-link-panel {
-    left: 12px;
-    right: 12px;
-    min-width: 0;
+.side-sublink:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
 }
 
 .side-quick-actions {

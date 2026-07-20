@@ -1,26 +1,24 @@
 {% load nav_tags %}
 {% comment %}
-Item da navegação lateral com mini-menu de ações rápidas (ex.: "Cadastrar
-kit"). Usado nas telas onde o botão de cadastro ficava fixo no topo do
-painel — foi movido para cá para não repetir ação em duas telas diferentes
-(ver avaliação visual, item 9). Reaproveita o mesmo padrão de menu suspenso
-do menu do usuário (details/summary + .dropdown-panel, ver base.html).
+Item da navegação lateral com ações secundárias de cadastro (ex.: "Cadastrar
+kit"). O link principal navega direto para a listagem, como qualquer outro
+item do menu — as ações de cadastro só aparecem, como submenu, quando esta
+seção já está ativa (ver avaliação visual, item 9).
 
 Parâmetros (além dos de partials/side_link.html):
-  action1_label / action1_url_name — primeiro item do mini-menu
+  action1_label / action1_url_name — primeiro item do submenu
   action2_label / action2_url_name — segundo item, opcional
 {% endcomment %}
 {% nav_ativo url_name match as nav_active %}
-<details class="side-link-group" name="side-nav-group"{% if nav_active %} open{% endif %}>
-    <summary class="side-link{% if nav_active %} active{% endif %}">
-        <span class="side-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>
-        </span>
-        <span>{{ label }}</span>
-    </summary>
-    <div class="dropdown-panel side-link-panel">
-        <a href="{% url url_name %}">Ver {{ label|lower }}</a>
-        <a href="{% url action1_url_name %}">{{ action1_label }}</a>
-        {% if action2_url_name %}<a href="{% url action2_url_name %}">{{ action2_label }}</a>{% endif %}
+<a class="side-link{% if nav_active %} active{% endif %}" href="{% url url_name %}">
+    <span class="side-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>
+    </span>
+    <span>{{ label }}</span>
+</a>
+{% if nav_active %}
+    <div class="side-submenu">
+        <a class="side-sublink" href="{% url action1_url_name %}">{{ action1_label }}</a>
+        {% if action2_url_name %}<a class="side-sublink" href="{% url action2_url_name %}">{{ action2_label }}</a>{% endif %}
     </div>
-</details>
+{% endif %}
