@@ -1,8 +1,9 @@
 {% extends "gestao_contratos/base.html" %}
+{% load static %}
 
-{% block title %}Gerar Contrato — {{ paciente.nome }}{% endblock %}
+{% block title %}Confirmar e Gerar Contrato — {{ paciente.nome }}{% endblock %}
 {% block header_eyebrow %}ABO Goiás — Contratos{% endblock %}
-{% block header_title %}Gerar Contrato{% endblock %}
+{% block header_title %}Confirmar e Gerar Contrato{% endblock %}
 
 {% block breadcrumb %}{% include "partials/breadcrumb.html" %}{% endblock %}
 
@@ -10,9 +11,34 @@
     <p class="section-label">Paciente</p>
     <h2>{{ paciente.nome }}</h2>
 
+    <div class="gc-row-tight gc-mt-sm">
+        {% if paciente.dados_confirmados %}
+            <span class="badge badge-devolvido">Confirmado</span>
+        {% else %}
+            <span class="badge badge-atrasado">Aguardando confirmação</span>
+        {% endif %}
+    </div>
+
+    <p class="panel-copy gc-text-muted-sm">
+        {% if paciente.ultima_sincronizacao %}
+            Dados do Dental Office obtidos em
+            {{ paciente.ultima_sincronizacao|date:"d/m/Y H:i" }}.
+        {% else %}
+            Paciente ainda não sincronizado com o Dental Office.
+        {% endif %}
+        {% if paciente.dados_confirmados %}
+            <br>Confirmados em {{ paciente.dados_confirmados_em|date:"d/m/Y H:i" }}
+            por {{ paciente.dados_confirmados_por }}.
+        {% endif %}
+    </p>
+
+    <a class="button secondary compact-button gc-full-width gc-mt-md"
+       href="{% url 'contrato_gerar' paciente.pk %}?sincronizar=1">
+        Atualizar do Dental Office
+    </a>
+
     <nav class="side-nav" aria-label="Navegação de contratos">
-        {% include "partials/side_link.html" with icon="contrato" label="Gerar contrato" current=True %}
-        {% include "partials/side_link.html" with url_name="contrato_confirmar_dados" url_arg=paciente.pk icon="editar" label="Editar dados do paciente" %}
+        {% include "partials/side_link.html" with icon="contrato" label="Confirmar e gerar contrato" current=True %}
         {% include "partials/side_link.html" with url_name="contratos" icon="voltar" label="Voltar à lista" extra_class="side-link-return" %}
     </nav>
 
@@ -67,7 +93,6 @@
 {% endblock %}
 
 {% block panel_topbar %}
-    {# Cabeçalho com badge de status #}
     <div class="results-topbar">
         <div class="gc-row-tight">
             {% if gerado_bloqueado %}
@@ -76,122 +101,23 @@
                 <span class="badge badge-devolvido">Pronto para gerar</span>
             {% endif %}
         </div>
-        <a class="button secondary compact-button"
-           href="{% url 'contrato_confirmar_dados' paciente.pk %}"
-           title="Abre a tela de revisão e edição dos dados do paciente">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <use href="#i-editar"></use>
-            </svg>
-            Editar dados do paciente
-        </a>
     </div>
 {% endblock %}
 
 {% block panel %}
-    {# ── Seção 1: Dados do paciente retornados do Dental Office ── #}
-    <div class="kpi-section">
-        <p class="section-label">Dados do paciente</p>
+    {% include "gestao_contratos/_stepper.html" %}
 
-        <div class="selection-summary">
-            {% if paciente.cpf %}
-                <div class="info-chip">
-                    <span>CPF</span>
-                    <strong>{{ paciente.cpf }}</strong>
-                </div>
-            {% elif paciente.rg %}
-                <div class="info-chip">
-                    <span>RG</span>
-                    <strong>{{ paciente.rg }}</strong>
-                </div>
-            {% else %}
-                <div class="info-chip gc-danger-chip">
-                    <span>Documento</span>
-                    <strong class="gc-danger-text">Não encontrado</strong>
-                </div>
-            {% endif %}
-
-            {% if paciente.data_nascimento %}
-                <div class="info-chip">
-                    <span>Nascimento</span>
-                    <strong>{{ paciente.data_nascimento|date:"d/m/Y" }}</strong>
-                </div>
-            {% else %}
-                <div class="info-chip gc-danger-chip">
-                    <span>Nascimento</span>
-                    <strong class="gc-danger-text">Não informado</strong>
-                </div>
-            {% endif %}
-
-            {% if paciente.celular %}
-                <div class="info-chip">
-                    <span>Celular</span>
-                    <strong>{{ paciente.celular }}</strong>
-                </div>
-            {% endif %}
-
-            {% if paciente.email %}
-                <div class="info-chip">
-                    <span>E-mail</span>
-                    <strong>{{ paciente.email }}</strong>
-                </div>
-            {% endif %}
-
-            {% if paciente.convenio %}
-                <div class="info-chip">
-                    <span>Convênio</span>
-                    <strong>{{ paciente.convenio }}</strong>
-                </div>
-            {% endif %}
-
-            <div class="info-chip">
-                <span>Registro Dental Office</span>
-                <strong>#{{ paciente.id_dental }}</strong>
+    {% if sincronizacao_invalidou_confirmacao %}
+        <div class="gc-sync-alert">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.36"/><path d="M21 4v5h-5"/></svg>
+            <div>
+                <strong>Dados atualizados pelo Dental Office</strong>
+                <p>Os dados deste paciente mudaram desde a última confirmação — a confirmação anterior foi invalidada. Revise tudo abaixo antes de gerar o contrato.</p>
             </div>
-
-            {% if paciente.dados_confirmados %}
-                <div class="info-chip">
-                    <span>Dados confirmados</span>
-                    <strong>{{ paciente.dados_confirmados_em|date:"d/m/Y H:i" }}</strong>
-                </div>
-            {% endif %}
         </div>
+    {% endif %}
 
-        {% if paciente.endereco_logradouro or paciente.endereco_cidade %}
-            <div class="contrato-info-box">
-                <p class="section-label gc-mt-sm">Endereço</p>
-                <p class="contrato-info-text">
-                    {% if paciente.endereco_logradouro %}
-                        {{ paciente.endereco_logradouro }}{% if paciente.endereco_numero %}, {{ paciente.endereco_numero }}{% endif %}{% if paciente.endereco_complemento %} — {{ paciente.endereco_complemento }}{% endif %}
-                    {% endif %}
-                    {% if paciente.endereco_bairro %}<br>{{ paciente.endereco_bairro }}{% endif %}
-                    {% if paciente.endereco_cidade %}
-                        <br>{{ paciente.endereco_cidade }}{% if paciente.endereco_estado %} - {{ paciente.endereco_estado }}{% endif %}{% if paciente.endereco_cep %} · CEP {{ paciente.endereco_cep }}{% endif %}
-                    {% endif %}
-                </p>
-            </div>
-        {% else %}
-            <div class="contrato-info-box contrato-info-box--blocked">
-                <p class="section-label gc-mt-sm">Endereço</p>
-                <p class="contrato-info-text gc-danger-text">
-                    Endereço não encontrado no Dental Office. Preencha a ficha do paciente e volte a esta tela.
-                </p>
-            </div>
-        {% endif %}
-
-        {% if paciente.nome_responsavel %}
-            <div class="contrato-info-box gc-mt-md">
-                <p class="section-label gc-mt-sm">Responsável legal</p>
-                <p class="contrato-info-text">
-                    {{ paciente.nome_responsavel }}
-                    {% if paciente.cpf_responsavel %}
-                        <span class="gc-muted"> · CPF {{ paciente.cpf_responsavel }}</span>
-                    {% endif %}
-                </p>
-            </div>
-        {% endif %}
-    </div>
-
-    {# ── Seção 2: Status de prontidão (checklist) ─────────────── #}
+    {# ── Verificação dos campos obrigatórios ─────────────────────── #}
     <div class="kpi-section">
         <p class="section-label">Verificação dos campos obrigatórios</p>
 
@@ -199,8 +125,8 @@
             <div class="checklist-alert checklist-alert-blocked gc-mt-md">
                 <strong>{{ pendencias|length }} campo(s) obrigatório(s) ausente(s)</strong>
                 <p>
-                    Corrija os campos abaixo na ficha do Dental Office e recarregue — a
-                    sincronização ocorre automaticamente.
+                    Corrija os campos abaixo (ou sincronize novamente com o Dental
+                    Office) e confirme os dados de novo para liberar a geração.
                 </p>
             </div>
             <ul class="checklist-list">
@@ -216,7 +142,7 @@
                                 {% else %}
                                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <circle cx="12" cy="12" r="10"/>
-                                        <path d="M12 16v-4"/>
+                                        <path d="M12 8v-4"/>
                                         <path d="M12 8h.01"/>
                                     </svg>
                                 {% endif %}
@@ -240,73 +166,189 @@
         {% endif %}
     </div>
 
-    {# ── Seção 3: Formulário de geração ──────────────────────── #}
-    <div class="kpi-section">
-        <p class="section-label">Modelo e envio</p>
+    {# ── Formulário único: dados do paciente + modelo do contrato ─── #}
+    <form method="post">
+        {% csrf_token %}
 
-        {% if gerado_bloqueado %}
-            <p class="gc-text-muted-sm gc-mb-md">
-                Complete os dados do paciente no Dental Office para habilitar a geração.
-            </p>
-        {% endif %}
-
-        <form class="form-stack-wide" method="post"
-              {% if gerado_bloqueado %}aria-disabled="true"{% endif %}>
-            {% csrf_token %}
-
-            <div class="field field-required">
-                <label for="id_tipo">Modelo de documento</label>
-                <select id="id_tipo" name="tipo" required
-                        {% if gerado_bloqueado %}disabled{% endif %}>
-                    <option value="">— Selecione o modelo —</option>
-                    {% for codigo, nome in tipos_contrato %}
-                        <option value="{{ codigo }}">{{ nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="field">
-                <label for="id_local">Local de assinatura</label>
-                <input id="id_local" type="text" name="local_assinatura"
-                       value="Goiânia - GO"
-                       {% if gerado_bloqueado %}disabled{% endif %}>
-            </div>
-
-            <div class="contrato-form-row">
-                <div class="field">
-                    <label for="id_email_paciente">
-                        E-mail para envio
-                        <span class="field-optional">(opcional)</span>
-                    </label>
-                    <input id="id_email_paciente" type="email" name="email_paciente"
-                           value="{{ paciente.email }}"
-                           placeholder="email@exemplo.com"
-                           {% if gerado_bloqueado %}disabled{% endif %}>
+        <div class="gc-collapsible is-open">
+            <button type="button" class="gc-collapsible-head" aria-expanded="true">
+                <h3>Dados pessoais <span class="gc-collapsible-tag">nome · CPF · nascimento · contato</span></h3>
+                <svg class="gc-collapsible-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="gc-collapsible-body"><div class="gc-collapsible-body-inner"><div class="gc-collapsible-content">
+                <div class="field field-required">
+                    <label for="{{ form.nome.id_for_label }}">Nome completo</label>
+                    {{ form.nome }}
+                    {{ form.nome.errors }}
                 </div>
-                <div class="field">
-                    <label for="id_whatsapp_paciente">
-                        WhatsApp
-                        <span class="field-optional">(usado no envio)</span>
-                    </label>
-                    <input id="id_whatsapp_paciente" type="tel" name="whatsapp_paciente"
-                           value="{{ paciente.celular }}"
-                           placeholder="(62) 90000-0000"
-                           {% if gerado_bloqueado %}disabled{% endif %}>
-                </div>
-            </div>
 
-            <div class="form-actions">
-                {% if gerado_bloqueado %}
-                    <button class="button primary gc-btn-disabled-look" type="button" disabled>
-                        Dados incompletos — geração bloqueada
-                    </button>
-                {% else %}
-                    <button class="button primary" type="submit">
-                        Gerar e baixar contrato
-                    </button>
-                {% endif %}
-                <a class="button secondary" href="{% url 'contratos' %}">Cancelar</a>
-            </div>
-        </form>
-    </div>
+                <div class="contrato-form-row gc-mt-md">
+                    <div class="field">
+                        <label for="{{ form.cpf.id_for_label }}">CPF</label>
+                        {{ form.cpf }}
+                        {{ form.cpf.errors }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.rg.id_for_label }}">RG</label>
+                        {{ form.rg }}
+                        {{ form.rg.errors }}
+                    </div>
+                </div>
+
+                <div class="contrato-form-row gc-mt-md">
+                    <div class="field">
+                        <label for="{{ form.data_nascimento.id_for_label }}">Data de nascimento</label>
+                        {{ form.data_nascimento }}
+                        {{ form.data_nascimento.errors }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.celular.id_for_label }}">Celular</label>
+                        {{ form.celular }}
+                        {{ form.celular.errors }}
+                    </div>
+                </div>
+
+                <div class="contrato-form-row gc-mt-md">
+                    <div class="field">
+                        <label for="{{ form.email.id_for_label }}">E-mail</label>
+                        {{ form.email }}
+                        {{ form.email.errors }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.convenio.id_for_label }}">
+                            Convênio
+                            <span class="field-optional">(dado local)</span>
+                        </label>
+                        {{ form.convenio }}
+                        {{ form.convenio.errors }}
+                    </div>
+                </div>
+            </div></div></div>
+        </div>
+
+        <div class="gc-collapsible is-open">
+            <button type="button" class="gc-collapsible-head" aria-expanded="true">
+                <h3>Endereço
+                    <span class="gc-collapsible-tag" id="gc-endereco-tag">
+                        {% if paciente.endereco_cidade %}completo{% else %}pendente{% endif %}
+                    </span>
+                </h3>
+                <svg class="gc-collapsible-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="gc-collapsible-body"><div class="gc-collapsible-body-inner"><div class="gc-collapsible-content">
+                <div class="contrato-form-row">
+                    <div class="field field-required">
+                        <label for="{{ form.endereco_cep.id_for_label }}">CEP</label>
+                        <div class="gc-cep-wrap" id="gc-cep-wrap">
+                            {{ form.endereco_cep }}
+                            <span class="gc-cep-spinner" aria-hidden="true"></span>
+                        </div>
+                        <span class="field-hint">Digite os 8 dígitos — cidade e UF são preenchidos automaticamente.</span>
+                        <span class="gc-cep-erro" id="gc-cep-erro"></span>
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.endereco_bairro.id_for_label }}">Bairro</label>
+                        {{ form.endereco_bairro }}
+                    </div>
+                </div>
+
+                <div class="gc-row-logradouro gc-mt-md">
+                    <div class="field">
+                        <label for="{{ form.endereco_logradouro.id_for_label }}">Logradouro</label>
+                        {{ form.endereco_logradouro }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.endereco_numero.id_for_label }}">Número</label>
+                        {{ form.endereco_numero }}
+                    </div>
+                </div>
+
+                <div class="gc-row-endereco-3 gc-mt-md">
+                    <div class="field field-required">
+                        <label for="{{ form.endereco_cidade.id_for_label }}">Cidade</label>
+                        {{ form.endereco_cidade }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.endereco_estado.id_for_label }}">UF</label>
+                        {{ form.endereco_estado }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.endereco_complemento.id_for_label }}">Complemento</label>
+                        {{ form.endereco_complemento }}
+                    </div>
+                </div>
+            </div></div></div>
+        </div>
+
+        <div class="gc-collapsible{% if menor_de_idade %} is-open{% endif %}"
+             id="gc-secao-responsavel"
+             {% if not menor_de_idade %}style="display:none;"{% endif %}>
+            <button type="button" class="gc-collapsible-head" aria-expanded="{% if menor_de_idade %}true{% else %}false{% endif %}">
+                <h3>Responsável legal <span class="gc-collapsible-tag">obrigatório — paciente menor de idade</span></h3>
+                <svg class="gc-collapsible-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="gc-collapsible-body"><div class="gc-collapsible-body-inner"><div class="gc-collapsible-content">
+                <div class="contrato-form-row">
+                    <div class="field">
+                        <label for="{{ form.nome_responsavel.id_for_label }}">Nome</label>
+                        {{ form.nome_responsavel }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.cpf_responsavel.id_for_label }}">CPF</label>
+                        {{ form.cpf_responsavel }}
+                    </div>
+                </div>
+            </div></div></div>
+        </div>
+
+        <div class="gc-collapsible is-open">
+            <button type="button" class="gc-collapsible-head" aria-expanded="true">
+                <h3>Modelo e assinatura</h3>
+                <svg class="gc-collapsible-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="gc-collapsible-body"><div class="gc-collapsible-body-inner"><div class="gc-collapsible-content">
+                <div class="contrato-form-row">
+                    <div class="field field-required">
+                        <label for="id_tipo">Modelo de documento</label>
+                        <select id="id_tipo" name="tipo" required>
+                            <option value="">— Selecione o modelo —</option>
+                            {% for codigo, nome in tipos_contrato %}
+                                <option value="{{ codigo }}">{{ nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="id_local">Local de assinatura</label>
+                        <input id="id_local" type="text" name="local_assinatura" value="Goiânia - GO">
+                    </div>
+                </div>
+
+                <div class="contrato-form-row gc-mt-md">
+                    <div class="field">
+                        <label for="id_observacoes">
+                            Observações clínicas
+                            <span class="field-optional">(opcional)</span>
+                        </label>
+                        <input id="id_observacoes" type="text" name="observacoes_clinicas">
+                    </div>
+                    <div class="field">
+                        <label for="id_prof_nome">
+                            Profissional responsável
+                            <span class="field-optional">(opcional)</span>
+                        </label>
+                        <input id="id_prof_nome" type="text" name="profissional_nome">
+                    </div>
+                </div>
+            </div></div></div>
+        </div>
+
+        <div class="form-actions">
+            <a class="button secondary" href="{% url 'contratos' %}">Cancelar</a>
+            <button class="button primary" type="submit">Confirmar dados e gerar contrato</button>
+        </div>
+    </form>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'gestao_contratos/js/contratos.js' %}"></script>
 {% endblock %}

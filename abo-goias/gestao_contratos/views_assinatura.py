@@ -378,7 +378,13 @@ def iniciar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpRespo
 
 @login_required
 def cancelar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
-    """Cancela a sessão de assinatura ativa do contrato."""
+    """Cancela a sessão de assinatura ativa do contrato.
+
+    Aceita um campo opcional ``next`` no POST para redirecionar a um destino
+    diferente da própria pós-geração — usado quando o cancelamento acontece
+    como consequência de outra ação (ex.: voltar para editar os dados do
+    paciente interrompe a sessão em andamento e já segue para lá).
+    """
 
     if request.method != "POST":
         return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
@@ -398,6 +404,10 @@ def cancelar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpResp
             else "Nenhuma sessão ativa para cancelar."
         ),
     )
+
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return redirect(next_url)
     return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
 
 

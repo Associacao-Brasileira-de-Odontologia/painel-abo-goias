@@ -3,13 +3,12 @@
   "configurations": [
     {
       "name": "abo-goias",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": "cmd",
       "runtimeArgs": [
-        "abo-goias/manage.py",
-        "runserver",
-        "8000"
+        "/c",
+        "python abo-goias/manage.py runserver 0.0.0.0:%PORT%"
       ],
-      "port": 8000
+      "autoPort": true
     }
   ]
 }

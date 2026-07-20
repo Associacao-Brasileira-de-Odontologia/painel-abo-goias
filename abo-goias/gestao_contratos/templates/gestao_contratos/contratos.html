@@ -19,6 +19,8 @@
 {% block panel_title %}Selecione um paciente{% endblock %}
 
 {% block panel %}
+    {% include "gestao_contratos/_stepper.html" %}
+
     {# Barra de busca #}
     <form class="results-search" method="get" autocomplete="off" id="form-busca-contratos">
         <label class="search-label" for="results-q-contratos">Buscar paciente</label>
@@ -82,13 +84,13 @@
     {# ── Listagem unificada de pacientes ─────────────────────── #}
     {% if pacientes_unificados %}
         <div class="table-wrap data-table-wrap">
-            <table class="data-table">
+            <table class="data-table gc-tabela-pacientes">
                 <thead>
                     <tr>
-                        <th>Paciente</th>
-                        <th>Nascimento</th>
-                        <th>Celular</th>
-                        <th>Ação</th>
+                        <th class="gc-col-paciente">Paciente</th>
+                        <th class="gc-col-nascimento">Nascimento</th>
+                        <th class="gc-col-celular">Celular</th>
+                        <th class="actions-cell gc-acao-fixa">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -99,7 +101,13 @@
                                 {% if pac.cpf %}
                                     <span class="cell-muted">CPF {{ pac.cpf }}</span>
                                 {% elif not pac.no_sistema %}
-                                    <span class="cell-muted">Dental Office · ID #{{ pac.id_dental }}</span>
+                                    <span class="cell-muted">ID #{{ pac.id_dental }}</span>
+                                {% endif %}
+                                {# Selo de origem — única informação de origem da linha; não repete o texto acima. Fonte igual à do CPF/ID por ser dado secundário na listagem. #}
+                                {% if pac.no_sistema %}
+                                    <span class="badge badge-local badge-origin">No sistema</span>
+                                {% else %}
+                                    <span class="badge badge-dental badge-origin">Dental Office</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -116,7 +124,7 @@
                                     <span class="cell-muted">—</span>
                                 {% endif %}
                             </td>
-                            <td class="actions-cell">
+                            <td class="actions-cell gc-acao-fixa">
                                 <a class="button compact-button primary" href="{{ pac.acao_url }}">
                                     {{ pac.acao_label }}
                                 </a>

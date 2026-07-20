@@ -24,7 +24,15 @@
         acceptEl.onclick = function () {
             dialog.close();
             var form = trigger.closest("form");
-            if (form) form.requestSubmit(trigger);
+            if (form) {
+                form.requestSubmit(trigger);
+                return;
+            }
+            // Sem form ancestral: o gatilho é um link de navegação simples
+            // (ex.: "Voltar à lista" avisando sobre um processo em andamento).
+            if (trigger.tagName === "A" && trigger.href) {
+                window.location.href = trigger.href;
+            }
         };
 
         dialog.showModal();

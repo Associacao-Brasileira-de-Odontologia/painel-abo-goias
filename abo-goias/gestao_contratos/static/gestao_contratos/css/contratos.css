@@ -126,6 +126,19 @@ body.gestao-contratos .badge.gc-selo {
     border: 1px solid var(--gc-ink-line);
 }
 
+/* Botão que precisa se comportar como um item de .side-nav (ex.: "Editar
+   dados do paciente" quando isso implica cancelar uma sessão de assinatura
+   em andamento — uma ação de POST, não um link puro). Remove os estilos
+   nativos de <button> para ficar visualmente idêntico a um .side-link. */
+body.gestao-contratos form > .gc-side-link-as-button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
 /* ══ Utilitários — substituem os style= inline dos templates ══════ */
 
 .gc-row {
@@ -569,6 +582,350 @@ body.gestao-contratos .checklist-list .checklist-item:nth-child(n+6) { animation
 
 .gc-qr-pulsando {
     animation: gc-qr-pulse 2.6s ease-in-out infinite;
+}
+
+/* ══ Largura da tabela de pacientes ══════════════════════════════ */
+/* .data-table (components.css) tem min-width:920px — pensado para
+   tabelas com mais colunas em outras apps. Com só 4 colunas aqui
+   (Paciente, Nascimento, Celular, Ação de 172px fixos), isso força
+   rolagem horizontal mesmo em telas de desktop padrão (~1280-1366px),
+   já que sobra bem menos que 920px para a tabela depois da barra
+   lateral. Reduz a largura mínima e a fonte das células — dado
+   tabular denso, não precisa do mesmo tamanho do corpo de texto. */
+body.gestao-contratos .gc-tabela-pacientes {
+    min-width: 620px;
+    font-size: 0.86rem;
+}
+
+body.gestao-contratos .gc-tabela-pacientes .gc-col-paciente {
+    width: 46%;
+}
+
+body.gestao-contratos .gc-tabela-pacientes .gc-col-nascimento {
+    width: 17%;
+}
+
+body.gestao-contratos .gc-tabela-pacientes .gc-col-celular {
+    width: 19%;
+}
+
+body.gestao-contratos .gc-tabela-pacientes td,
+body.gestao-contratos .gc-tabela-pacientes th {
+    padding: 10px 12px;
+}
+
+/* ══ Selo de origem dos dados (No sistema / Dental Office) ════════ */
+/* Uma linha discreta abaixo do CPF/ID — nunca ao lado do nome, e nunca
+   repetida com o texto do CPF/ID acima (ver contratos.html: quando o
+   selo já diz "Dental Office", o texto do CPF/ID vira só "ID #...",
+   sem repetir "Dental Office"). Fonte igual à do CPF/ID (.cell-muted)
+   porque é dado secundário na listagem — não precisa se destacar. */
+body.gestao-contratos .badge-origin {
+    display: block;
+    width: fit-content;
+    margin-top: 3px;
+    min-height: auto;
+    padding: 1px 7px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+body.gestao-contratos .badge-local {
+    background: var(--blue-soft, rgba(29, 110, 238, 0.16));
+    color: var(--info-text, #8edafd);
+}
+
+body.gestao-contratos .badge-dental {
+    background: var(--warn-bg);
+    color: var(--warn-text);
+}
+
+/* ══ Coluna de ação fixa na listagem de pacientes ═══════════════════ */
+/* Escopado a .gc-acao-fixa (não ao .actions-cell genérico, usado por
+   outras tabelas da própria app como a de envios pendentes) para não
+   afetar tabelas onde o botão já tem largura única e não precisa disso.
+   Resolve dois problemas: (1) em telas estreitas ou com muitos dados
+   por linha, a tabela pode precisar rolar horizontalmente — sem isto o
+   botão principal ("Gerar contrato") ficaria escondido atrás da barra
+   de rolagem; (2) "Gerar contrato" e "Importar e gerar" têm tamanhos de
+   texto diferentes — a largura fixa + botão a 100% faz as duas ações
+   ocuparem o mesmo espaço, em vez de uma coluna "serrilhada". */
+body.gestao-contratos .gc-acao-fixa {
+    width: 172px;
+    position: sticky;
+    right: 0;
+    background: #0a1f42;
+}
+
+body.gestao-contratos .gc-acao-fixa.actions-cell {
+    box-shadow: -12px 0 16px -8px rgba(0, 0, 0, 0.45);
+}
+
+body.gestao-contratos .gc-acao-fixa .button {
+    width: 100%;
+}
+
+body.gestao-contratos thead th.gc-acao-fixa {
+    text-align: center;
+    top: 0;
+    z-index: 3;
+    background: var(--panel-strong);
+}
+
+body.gestao-contratos tbody tr:hover td.gc-acao-fixa {
+    background: #0f2a54;
+}
+
+/* ══ Indicador de progresso do atendimento (stepper) ═══════════════ */
+
+.stepper {
+    display: flex;
+    align-items: center;
+    margin-bottom: 22px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 18px;
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex: 0 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--gc-mono);
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(139, 167, 204, 0.14);
+    color: var(--muted);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.step-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.step-line {
+    height: 2px;
+    flex: 1;
+    background: var(--line);
+    margin: 0 6px;
+    border-radius: 2px;
+    transition: background 0.3s ease;
+}
+
+.step-line.is-done {
+    background: var(--success-border);
+}
+
+.step.is-done .step-dot {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.step.is-done .step-label {
+    color: var(--muted-strong);
+}
+
+.step.is-active .step-dot {
+    background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+    color: #ffffff;
+}
+
+.step.is-active .step-label {
+    color: var(--text);
+}
+
+@media (max-width: 760px) {
+    .step-label {
+        display: none;
+    }
+}
+
+/* ══ Aviso de sincronização que invalidou a confirmação ════════════ */
+
+.gc-sync-alert {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    color: var(--warn-text);
+}
+
+.gc-sync-alert svg {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+}
+
+.gc-sync-alert strong {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.92rem;
+}
+
+.gc-sync-alert p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    opacity: 0.92;
+}
+
+/* ══ Seções colapsáveis do formulário de confirmação/geração ═══════ */
+
+.gc-collapsible {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.gc-collapsible-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    color: inherit;
+    text-align: left;
+    font-family: var(--font-body);
+}
+
+.gc-collapsible-head:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.gc-collapsible-head h3 {
+    font-size: 14.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.gc-collapsible-tag {
+    font-family: var(--gc-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: none;
+}
+
+.gc-collapsible-chev {
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+    transition: transform 0.22s ease;
+    flex-shrink: 0;
+}
+
+.gc-collapsible.is-open .gc-collapsible-chev {
+    transform: rotate(180deg);
+}
+
+.gc-collapsible-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease;
+}
+
+.gc-collapsible.is-open .gc-collapsible-body {
+    grid-template-rows: 1fr;
+}
+
+.gc-collapsible-body-inner {
+    overflow: hidden;
+}
+
+.gc-collapsible-content {
+    padding: 4px 18px 18px;
+}
+
+/* ══ CEP com preenchimento automático (ViaCEP) ══════════════════════ */
+
+.gc-cep-wrap {
+    position: relative;
+}
+
+.gc-cep-spinner {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: var(--gc-ink);
+    border-radius: 50%;
+    display: none;
+}
+
+.gc-cep-wrap.is-loading .gc-cep-spinner {
+    display: block;
+    animation: gc-cep-spin 0.7s linear infinite;
+}
+
+@keyframes gc-cep-spin {
+    to { transform: translateY(-50%) rotate(360deg); }
+}
+
+.gc-cep-erro {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.78rem;
+    color: var(--warn-text);
+}
+
+.gc-autofilled {
+    animation: gc-autofill-glow 1.1s ease;
+}
+
+@keyframes gc-autofill-glow {
+    0% { background: rgba(103, 249, 224, 0.22); }
+    100% { background: rgba(2, 11, 30, 0.68); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gc-collapsible-body,
+    .gc-collapsible-chev,
+    .step-dot,
+    .step-line {
+        transition-duration: 0.001ms !important;
+    }
+    .gc-cep-wrap.is-loading .gc-cep-spinner {
+        animation: none;
+    }
+    .gc-autofilled {
+        animation: none;
+    }
 }
 
 /* ══ Acessibilidade de movimento ════════════════════════════════── */

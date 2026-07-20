@@ -19,10 +19,17 @@ Parâmetros:
   new_tab      — quando verdadeiro, abre o link em uma nova guia (target=_blank
                  com rel de segurança) — usado para telas que não devem
                  substituir o contexto atual (ex.: validação de documento)
+  confirm         — quando definido, exige confirmação (modal genérico de
+                    static/js/app.js) antes de navegar — usado em pontos do
+                    fluxo onde sair da tela tem alguma consequência (ex.:
+                    perder o acompanhamento de uma assinatura em andamento)
+  confirm_title   — título do modal (opcional)
+  confirm_label   — texto do botão de confirmar (opcional)
+  confirm_danger  — quando verdadeiro, destaca o botão de confirmar como perigoso
 {% endcomment %}
 {% nav_ativo url_name match as nav_active %}
 <a class="side-link{% if current or nav_active %} active{% endif %}{% if extra_class %} {{ extra_class }}{% endif %}"
-   href="{% if current %}#{% elif url_arg %}{% url url_name url_arg %}{% else %}{% url url_name %}{% endif %}"{% if new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}>
+   href="{% if current %}#{% elif url_arg %}{% url url_name url_arg %}{% else %}{% url url_name %}{% endif %}"{% if new_tab %} target="_blank" rel="noopener noreferrer"{% endif %}{% if confirm %} data-confirm="{{ confirm }}"{% if confirm_title %} data-confirm-title="{{ confirm_title }}"{% endif %}{% if confirm_label %} data-confirm-label="{{ confirm_label }}"{% endif %}{% if confirm_danger %} data-confirm-danger="true"{% endif %}{% endif %}>
     <span class="side-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><use href="#i-{{ icon }}"></use></svg>
     </span>
