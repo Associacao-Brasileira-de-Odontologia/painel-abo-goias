@@ -1495,6 +1495,90 @@ class EmprestimoAtrasoAutomaticoTests(TestCase):
         self.assertEqual(total, 1)
 
 
+class EditarEmprestimoTests(TestCase):
+    """Edição de empréstimo (item 10 da avaliação visual) — só data prevista
+    de devolução e observações são editáveis, e a visibilidade segue a mesma
+    regra de ``emprestimos_visiveis`` usada na listagem e nas outras ações."""
+
+    def setUp(self) -> None:
+        self.turma = Turma.objects.create(
+            nome="Turma Editar", codigo="TEDIT", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Editar",
+            matricula="MATEDIT",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        self.coordenador = get_user_model().objects.create_user(
+            username="cme-coord-editar", password="senha-segura"
+        )
+        self.outro_coordenador = get_user_model().objects.create_user(
+            username="cme-outro-editar", password="senha-segura"
+        )
+        self.superusuario = get_user_model().objects.create_user(
+            username="cme-super-editar", password="senha-segura", is_superuser=True
+        )
+        self.emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            coordenador_usuario=self.coordenador,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=timezone.localdate() + timedelta(days=5),
+            observacoes="Observação original",
+        )
+
+    def test_get_exibe_formulario_preenchido(self) -> None:
+        self.client.force_login(self.coordenador)
+
+        response = self.client.get(reverse("editar_emprestimo", args=[self.emp.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Observação original")
+        self.assertContains(response, self.aluno.nome)
+        # input type="date" só aceita ISO (aaaa-mm-dd) — não o "27 de Julho
+        # de 2026" que o template geraria sem a formatação explícita.
+        data_iso = self.emp.data_prevista_devolucao.isoformat()
+        self.assertContains(response, f'value="{data_iso}"')
+
+    def test_post_atualiza_data_e_observacoes(self) -> None:
+        self.client.force_login(self.coordenador)
+        nova_data = timezone.localdate() + timedelta(days=10)
+
+        response = self.client.post(
+            reverse("editar_emprestimo", args=[self.emp.pk]),
+            {
+                "data_prevista_devolucao": nova_data.isoformat(),
+                "observacoes": "Observação atualizada",
+            },
+        )
+
+        self.assertRedirects(response, reverse("emprestimos"))
+        self.emp.refresh_from_db()
+        self.assertEqual(self.emp.data_prevista_devolucao, nova_data)
+        self.assertEqual(self.emp.observacoes, "Observação atualizada")
+
+    def test_coordenador_nao_acessa_emprestimo_de_outro(self) -> None:
+        self.client.force_login(self.outro_coordenador)
+
+        response = self.client.get(reverse("editar_emprestimo", args=[self.emp.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_superusuario_acessa_emprestimo_de_qualquer_coordenador(self) -> None:
+        self.client.force_login(self.superusuario)
+
+        response = self.client.get(reverse("editar_emprestimo", args=[self.emp.pk]))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_listagem_traz_link_de_editar(self) -> None:
+        self.client.force_login(self.coordenador)
+
+        response = self.client.get(reverse("emprestimos"))
+
+        self.assertContains(response, reverse("editar_emprestimo", args=[self.emp.pk]))
+
+
 class CmeDashboardFiltroPeriodoTests(TestCase):
     """Filtro de período da Visão Geral usa formato ISO (aaaa-mm-dd), o
     mesmo que <input type="date"> envia — decisão de negócio de 2026-07

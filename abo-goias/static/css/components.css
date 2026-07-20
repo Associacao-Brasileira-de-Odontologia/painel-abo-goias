@@ -1163,6 +1163,15 @@ tbody tr.row-atrasado .actions-cell {
     box-shadow: none;
 }
 
+/* Quando a coluna de Ações combina um ícone (34px) com botões de texto
+   (min-height maior, ex.: "Devolver"/"Atrasado"), o alinhamento por baseline
+   padrão do inline-flex deixa os dois desalinhados verticalmente. */
+.actions-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .inline-form {
     display: inline;
     margin: 0;

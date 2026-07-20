@@ -1,0 +1,95 @@
+{% extends "layouts/painel.html" %}
+
+{% block title %}Gestão de CME | Editar empréstimo{% endblock %}
+{% block header_eyebrow %}Controle de materiais{% endblock %}
+{% block header_title %}Editar empréstimo{% endblock %}
+
+{% block breadcrumb %}{% include "partials/breadcrumb.html" %}{% endblock %}
+
+{% block sidebar_copy %}Edite a data prevista de devolução ou as observações do empréstimo.{% endblock %}
+{% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
+
+{% block panel_title %}Editar empréstimo #{{ emp.pk }}{% endblock %}
+{% block panel %}
+    {# Resumo do empréstimo #}
+    <div class="kpi-section">
+        <p class="section-label">Informações do empréstimo</p>
+        <div class="selection-summary">
+            <div class="info-chip">
+                <span>Aluno</span>
+                <strong>{{ emp.aluno.nome }}</strong>
+            </div>
+            {% if emp.kit %}
+                <div class="info-chip">
+                    <span>Kit</span>
+                    <strong>{{ emp.kit.nome }}</strong>
+                </div>
+            {% endif %}
+            <div class="info-chip">
+                <span>Emprestado em</span>
+                <strong>{{ emp.data_emprestimo|date:"d/m/Y H:i" }}</strong>
+            </div>
+            <div class="info-chip">
+                <span>Status</span>
+                <strong>
+                    {% if emp.status == "EMPRESTADO" %}
+                        <span class="badge badge-emprestado">Emprestado</span>
+                    {% elif emp.status == "DEVOLVIDO" %}
+                        <span class="badge badge-devolvido">Devolvido</span>
+                    {% else %}
+                        <span class="badge badge-atrasado">Atrasado</span>
+                    {% endif %}
+                </strong>
+            </div>
+        </div>
+    </div>
+
+    {# Formulário de edição #}
+    <div class="kpi-section">
+        <p class="section-label">Editar campos</p>
+
+        {% include "partials/form_errors.html" with com_rotulo=True %}
+
+        <form class="form-stack form-stack-wide" method="post">
+            {% csrf_token %}
+
+            <div class="field">
+                <label for="id_data_prevista_devolucao">
+                    Data prevista de devolução
+                    <span class="field-optional">(opcional)</span>
+                </label>
+                <input
+                    id="id_data_prevista_devolucao"
+                    type="date"
+                    name="data_prevista_devolucao"
+                    {% comment %}
+                    O valor inicial vem do model (objeto date) e o template
+                    o formataria por extenso ("27 de Julho de 2026") sem essa
+                    conversão explícita — <input type="date"> só aceita ISO
+                    (aaaa-mm-dd). stringformat:"s" força str(), que devolve
+                    ISO tanto para o date do GET quanto para a string já ISO
+                    de um POST inválido reexibido.
+                    {% endcomment %}
+                    value="{{ form.data_prevista_devolucao.value|default_if_none:''|stringformat:'s' }}"
+                >
+            </div>
+
+            <div class="field">
+                <label for="id_observacoes">
+                    Observações
+                    <span class="field-optional">(opcional)</span>
+                </label>
+                <textarea
+                    id="id_observacoes"
+                    name="observacoes"
+                    rows="3"
+                >{{ form.observacoes.value|default:'' }}</textarea>
+            </div>
+
+            <div class="form-actions">
+                <button class="button primary" type="submit">Salvar alterações</button>
+                <a class="button secondary" href="{% url 'emprestimos' %}">Cancelar</a>
+            </div>
+        </form>
+    </div>
+{% endblock %}

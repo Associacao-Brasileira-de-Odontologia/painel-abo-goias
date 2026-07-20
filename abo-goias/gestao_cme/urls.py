@@ -79,6 +79,11 @@ urlpatterns = [
     path("emprestimos/", views.emprestimos, name="emprestimos"),
     path("emprestimos/novo/", views.criar_emprestimo, name="criar_emprestimo"),
     path(
+        "emprestimos/<int:pk>/editar/",
+        views.editar_emprestimo,
+        name="editar_emprestimo",
+    ),
+    path(
         "emprestimos/<int:pk>/devolver/",
         views.devolver_emprestimo,
         name="devolver_emprestimo",

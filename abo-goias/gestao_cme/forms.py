@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import (
     Abrigo,
     Aluno,
+    Emprestimo,
     Kit,
     KitMaterial,
     Material,
@@ -405,3 +406,23 @@ class EmprestimoForm(forms.Form):
             .prefetch_related("itens__material")
             .order_by("nome")
         )
+
+
+class EditarEmprestimoForm(forms.ModelForm):
+    """Permite editar um empréstimo já registrado.
+
+    Aluno e kit não entram aqui de propósito: trocá-los depois de criado o
+    empréstimo deixaria os itens já retirados (ver ItemEmprestimo) fora de
+    sincronia com o novo kit — mesma lógica de editar_movimentacao, que
+    também não permite editar o aluno de um registro existente.
+    """
+
+    data_prevista_devolucao = forms.DateField(
+        required=False,
+        input_formats=["%Y-%m-%d"],
+        error_messages={"invalid": "Data prevista de devolução inválida."},
+    )
+
+    class Meta:
+        model = Emprestimo
+        fields = ["data_prevista_devolucao", "observacoes"]

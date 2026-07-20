@@ -115,20 +115,26 @@ navegação lateral (ver partials/side_link_group.html).
                             {% endif %}
                         </td>
                         <td class="actions-cell">
-                            {% if emp.status != "DEVOLVIDO" %}
-                                <form method="post" action="{% url 'devolver_emprestimo' emp.pk %}" class="inline-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button class="button compact-button secondary" type="submit" title="Registrar devolução">Devolver</button>
-                                </form>
-                            {% endif %}
-                            {% if emp.status == "EMPRESTADO" %}
-                                <form method="post" action="{% url 'marcar_emprestimo_atrasado' emp.pk %}" class="inline-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button class="button compact-button danger-button" type="submit" title="Marcar como atrasado">Atrasado</button>
-                                </form>
-                            {% endif %}
+                            <div class="actions-group">
+                                <a class="icon-action" href="{% url 'editar_emprestimo' emp.pk %}"
+                                   title="Editar" aria-label="Editar empréstimo">
+                                    <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
+                                </a>
+                                {% if emp.status != "DEVOLVIDO" %}
+                                    <form method="post" action="{% url 'devolver_emprestimo' emp.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button class="button compact-button secondary" type="submit" title="Registrar devolução">Devolver</button>
+                                    </form>
+                                {% endif %}
+                                {% if emp.status == "EMPRESTADO" %}
+                                    <form method="post" action="{% url 'marcar_emprestimo_atrasado' emp.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button class="button compact-button danger-button" type="submit" title="Marcar como atrasado">Atrasado</button>
+                                    </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                 {% empty %}

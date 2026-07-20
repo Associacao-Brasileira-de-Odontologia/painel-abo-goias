@@ -23,6 +23,7 @@ from .forms import (
     AbrigoForm,
     CadastrarAlunoForm,
     CadastrarTurmaForm,
+    EditarEmprestimoForm,
     EditarMovimentacaoForm,
     EmprestimoForm,
     EntradaForm,
@@ -1803,6 +1804,44 @@ def criar_emprestimo(request: HttpRequest) -> HttpResponse:
             "kits": form.fields["kit"].queryset,
             "form": form,
             "aluno_selecionado": aluno_selecionado,
+        },
+    )
+
+
+@login_required
+def editar_emprestimo(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exibe e processa o formulario de edicao de um emprestimo existente."""
+
+    emp = get_object_or_404(
+        emprestimos_visiveis(request).select_related(
+            "aluno", "aluno__turma", "kit", "coordenador_usuario"
+        ),
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        form = EditarEmprestimoForm(request.POST, instance=emp)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Empréstimo #{emp.pk} de {emp.aluno.nome} atualizado.",
+            )
+            return redirect("emprestimos")
+    else:
+        form = EditarEmprestimoForm(instance=emp)
+
+    return render(
+        request,
+        "gestao_cme/editar_emprestimo.html",
+        {
+            "usuario_logado": request.user,
+            "form": form,
+            "emp": emp,
+            "breadcrumbs": [
+                {"label": "Empréstimos", "url": reverse("emprestimos")},
+                {"label": "Editar empréstimo", "url": None},
+            ],
         },
     )
 
