@@ -27,19 +27,11 @@
         linhas distintas. O filtro de status (Retirado / Não retirado) cobre a
         mesma intenção sobre a nova linha.
 
-        As datas eram só um par de hidden — chegavam pela URL (ex.: vindo de
-        um KPI da Visão Geral) mas não tinham controle próprio na tela; para
-        mudar o período era preciso editar a URL a mão. Viraram campo
-        editável, como no filtro da Visão Geral (item 8).
+        O período era um par de campos de data sempre visíveis, o que
+        deixava a barra grande demais — virou painel expansível (ver
+        partials/filtro_periodo.html), igual ao ajuste feito em Empréstimos.
         {% endcomment %}
-        <div class="field">
-            <label for="data_inicio_mov">De</label>
-            <input type="date" id="data_inicio_mov" name="data_inicio" value="{{ data_inicio_str }}">
-        </div>
-        <div class="field">
-            <label for="data_fim_mov">Até</label>
-            <input type="date" id="data_fim_mov" name="data_fim" value="{{ data_fim_str }}">
-        </div>
+        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="mov" %}
         <button class="button primary" type="submit">Buscar</button>
     </form>
 

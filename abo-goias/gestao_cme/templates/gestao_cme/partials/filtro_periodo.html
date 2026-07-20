@@ -1,0 +1,42 @@
+{% comment %}
+Filtro de período compacto — expansível (details/summary), para não ocupar
+espaço fixo na barra de filtros nem sobrepor os componentes abaixo dela
+(ajuste de 2026-07 sobre o item 11 da avaliação visual: os campos De/Até
+sempre visíveis ficavam grandes demais e "poluíam" a tela). Os campos
+continuam dentro do <form> GET já existente — funcionam mesmo com o painel
+fechado — e o painel abre sozinho quando já há um recorte de período ativo.
+
+Parâmetros:
+  id_prefix     — sufixo único para os ids dos campos (evita colisão entre
+                  páginas que incluem este partial)
+  periodo_ativo — booleano: existe um recorte de período pedido pelo
+                  usuário. NÃO dá pra derivar isso de
+                  data_inicio_str/data_fim_str aqui dentro — na Visão Geral
+                  elas nunca ficam vazias (caem num padrão "todo o
+                  histórico" quando não vem nada na URL), então cada view
+                  calcula seu próprio periodo_ativo com a semântica certa.
+  url_limpar    — opcional; quando informado, mostra "Todo o período" dentro
+                  do painel (só a Visão Geral usa — seu formulário não tem
+                  outros filtros para preservar; Movimentações/Empréstimos já
+                  têm um chip removível próprio para isso)
+{% endcomment %}
+<details class="filter-period"{% if periodo_ativo %} open{% endif %}>
+    <summary>
+        <span>Período</span>
+        {% if periodo_ativo %}<span class="filter-period-dot" aria-hidden="true"></span>{% endif %}
+    </summary>
+    <div class="dropdown-panel filter-period-panel">
+        <div class="field">
+            <label for="data_inicio_{{ id_prefix }}">De</label>
+            <input type="date" id="data_inicio_{{ id_prefix }}" name="data_inicio" value="{{ data_inicio_str }}">
+        </div>
+        <div class="field">
+            <label for="data_fim_{{ id_prefix }}">Até</label>
+            <input type="date" id="data_fim_{{ id_prefix }}" name="data_fim" value="{{ data_fim_str }}">
+        </div>
+        <button class="button primary compact-button" type="submit">Aplicar</button>
+        {% if url_limpar and periodo_ativo %}
+            <a class="button secondary compact-button" href="{{ url_limpar }}">Todo o período</a>
+        {% endif %}
+    </div>
+</details>

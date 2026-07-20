@@ -24,14 +24,12 @@ navegação lateral (ver partials/side_link_group.html).
                 <option value="{{ valor }}" {% if status_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
             {% endfor %}
         </select>
-        <div class="field">
-            <label for="data_inicio_emp">De</label>
-            <input type="date" id="data_inicio_emp" name="data_inicio" value="{{ data_inicio_str }}">
-        </div>
-        <div class="field">
-            <label for="data_fim_emp">Até</label>
-            <input type="date" id="data_fim_emp" name="data_fim" value="{{ data_fim_str }}">
-        </div>
+        {% comment %}
+        O período era um par de campos de data sempre visíveis, o que
+        deixava a barra grande demais — virou painel expansível (ver
+        partials/filtro_periodo.html), igual ao ajuste feito em Movimentações.
+        {% endcomment %}
+        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="emp" %}
         <button class="button primary" type="submit">Buscar</button>
     </form>
 

@@ -922,8 +922,10 @@ a.metric-card:hover {
     flex: 0 1 auto;
 }
 
-/* Filtro de período (ex.: Visão Geral do CME) dentro da barra de filtros —
-   label + calendário nativo lado a lado com o botão "Aplicar". */
+/* Filtro de período (Visão Geral, Movimentações, Empréstimos) — painel
+   expansível dentro da barra de filtros (ver
+   gestao_cme/partials/filtro_periodo.html) em vez de dois campos de data
+   sempre visíveis, que ocupavam espaço demais e "poluíam" a barra. */
 .filter-bar .field {
     width: auto;
     flex: 0 1 auto;
@@ -937,6 +939,86 @@ a.metric-card:hover {
 .filter-bar input[type="date"] {
     min-height: 46px;
     width: auto;
+}
+
+.filter-period {
+    position: relative;
+}
+
+.filter-period summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 46px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    color: var(--muted-strong);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-period summary::marker,
+.filter-period summary::-webkit-details-marker {
+    display: none;
+    content: "";
+}
+
+.filter-period summary::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-top: -3px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    opacity: 0.6;
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+}
+
+.filter-period[open] summary::after {
+    margin-top: 3px;
+    transform: rotate(-135deg);
+}
+
+.filter-period summary:hover,
+.filter-period[open] summary {
+    background: rgba(29, 110, 238, 0.1);
+    border-color: rgba(29, 110, 238, 0.4);
+    color: var(--info-text);
+}
+
+.filter-period-dot {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--accent-strong);
+}
+
+.filter-period-panel {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    left: 0;
+    right: auto;
+    min-width: max-content;
+    padding: 12px;
+}
+
+.filter-period-panel .field label {
+    font-size: 0.7rem;
+}
+
+.filter-period-panel input[type="date"] {
+    min-height: 40px;
+    font-size: 13px;
 }
 
 /* ── Linha de resumo dos resultados ─────────────────────────────── */

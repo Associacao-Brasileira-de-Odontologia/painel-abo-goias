@@ -478,6 +478,7 @@ def home(request: HttpRequest) -> HttpResponse:
             "data_fim_str": data_fim_str,
             "data_inicio": data_inicio,
             "data_fim": data_fim,
+            "periodo_ativo": bool(data_inicio_str or data_fim_str),
             "aluno_filtrado": aluno_filtrado,
             "movimentacoes": page_obj.object_list,
             "metricas": metricas,
@@ -1767,6 +1768,7 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
             "data_fim": data_fim,
             "data_inicio_str": data_inicio_str,
             "data_fim_str": data_fim_str,
+            "periodo_ativo": bool(data_inicio_str or data_fim_str),
             "emprestimos": page_obj.object_list,
             "metricas": metricas,
             "page_obj": page_obj,
@@ -1936,6 +1938,11 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
 
     data_inicio_str = request.GET.get("data_inicio", "").strip()
     data_fim_str = request.GET.get("data_fim", "").strip()
+    # Guardado antes do preenchimento do padrão abaixo — diferente de
+    # Movimentações/Empréstimos, aqui data_inicio_str/data_fim_str NUNCA
+    # ficam vazias (sempre caem no padrão "todo o histórico"), então não dá
+    # pra usá-las para saber se foi o usuário quem pediu um recorte.
+    periodo_ativo = bool(data_inicio_str or data_fim_str)
 
     # Padrão: do primeiro registro do banco até hoje — abre mostrando todo o
     # histórico, em vez de recortar no mês atual (que escondia o passado sem o
@@ -2035,9 +2042,7 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
             "data_fim_str": data_fim_str,
             "data_inicio": data_inicio,
             "data_fim": data_fim,
-            "filtro_ativo": bool(
-                request.GET.get("data_inicio") or request.GET.get("data_fim")
-            ),
+            "periodo_ativo": periodo_ativo,
             "filtro_datas_qs": filtro_datas_qs,
             "metricas_mov": metricas_mov,
             "pacotes_aguardando": pacotes_aguardando,
