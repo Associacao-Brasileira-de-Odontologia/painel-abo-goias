@@ -922,6 +922,23 @@ a.metric-card:hover {
     flex: 0 1 auto;
 }
 
+/* Filtro de período (ex.: Visão Geral do CME) dentro da barra de filtros —
+   label + calendário nativo lado a lado com o botão "Aplicar". */
+.filter-bar .field {
+    width: auto;
+    flex: 0 1 auto;
+    gap: 4px;
+}
+
+.filter-bar .field label {
+    font-size: 0.78rem;
+}
+
+.filter-bar input[type="date"] {
+    min-height: 46px;
+    width: auto;
+}
+
 /* ── Linha de resumo dos resultados ─────────────────────────────── */
 
 .results-meta {

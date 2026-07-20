@@ -1,5 +1,6 @@
 ﻿import json
-from datetime import timedelta
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -1492,3 +1493,82 @@ class EmprestimoAtrasoAutomaticoTests(TestCase):
         total = marcar_emprestimos_atrasados()
 
         self.assertEqual(total, 1)
+
+
+class CmeDashboardFiltroPeriodoTests(TestCase):
+    """Filtro de período da Visão Geral usa formato ISO (aaaa-mm-dd), o
+    mesmo que <input type="date"> envia — decisão de negócio de 2026-07
+    (calendário nativo em vez de texto livre dd/mm/aaaa)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-dashboard", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Dashboard", codigo="TDASH", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Dashboard",
+            matricula="MATDASH",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=datetime(2026, 3, 10, 10, 0, tzinfo=dt_timezone.utc),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=self.aluno,
+            aluno_nome=self.aluno.nome,
+            pacote_codigo="D-1",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-dash-1",
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=datetime(2026, 8, 10, 10, 0, tzinfo=dt_timezone.utc),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=self.aluno,
+            aluno_nome=self.aluno.nome,
+            pacote_codigo="D-2",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-dash-2",
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_filtro_periodo_iso_recorta_metricas(self) -> None:
+        response = self.client.get(
+            reverse("cme_dashboard"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-06-30"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["metricas_mov"]["total"], 1)
+        self.assertEqual(response.context["data_inicio_str"], "2026-01-01")
+        self.assertEqual(response.context["data_fim_str"], "2026-06-30")
+
+    def test_data_invalida_e_ignorada_sem_erro(self) -> None:
+        response = self.client.get(
+            reverse("cme_dashboard"),
+            {"data_inicio": "31/12/2026", "data_fim": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        # formato dd/mm/aaaa nao e mais aceito (so aaaa-mm-dd) - descartado.
+        self.assertEqual(response.context["data_inicio_str"], "")
+
+    def test_kpi_link_carrega_filtro_em_formato_iso(self) -> None:
+        response = self.client.get(
+            reverse("cme_dashboard"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-12-31"},
+        )
+
+        self.assertContains(response, "data_inicio=2026-01-01")
+        self.assertContains(response, "data_fim=2026-12-31")
+
+    def test_formulario_usa_input_type_date(self) -> None:
+        response = self.client.get(reverse("cme_dashboard"))
+
+        self.assertContains(response, 'type="date"')
+        self.assertNotContains(response, "dd/mm/aaaa")

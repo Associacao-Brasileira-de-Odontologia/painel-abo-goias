@@ -78,7 +78,7 @@
                    href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_atual %}status={{ status_atual }}{% endif %}"
                    title="Remover filtro de período">
                     <span>Período</span>
-                    <strong>{% if data_inicio_str %}{{ data_inicio_str }}{% else %}início{% endif %} → {% if data_fim_str %}{{ data_fim_str }}{% else %}hoje{% endif %}</strong>
+                    <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}

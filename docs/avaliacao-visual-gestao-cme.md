@@ -265,6 +265,15 @@ incorreto, mas o link visual entre "o que está filtrado" e "onde eu mudo isso" 
 o mesmo formulário) ou mover o formulário de data para perto dos chips, deixando a barra
 lateral só para navegação e ações rápidas.
 
+**Resolvido em 2026-07-20:** o formulário de data foi movido da barra lateral para o topo do
+conteúdo principal (`.filter-bar`, mesmo padrão usado em Movimentações/Empréstimos) e os três
+chips somente leitura foram removidos — agora existe um único lugar para ver e alterar o
+período. Os campos passaram de texto livre (`dd/mm/aaaa`) para `<input type="date">`, com
+calendário nativo do navegador; o formato trafegado na URL também mudou de `dd/mm/aaaa` para
+ISO (`aaaa-mm-dd`, o formato que o próprio `<input type="date">` envia), com o helper
+`_parse_data_iso` (`views.py`, antigo `_parse_data_br`) compartilhado entre Visão Geral e
+Movimentações para manter o link entre os KPIs e a listagem detalhada funcionando.
+
 ---
 
 ## Anexo — telas capturadas

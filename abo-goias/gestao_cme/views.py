@@ -290,13 +290,14 @@ def linhas_de_pacote() -> QuerySet[Movimentacao]:
     )
 
 
-def _parse_data_br(valor: str, fim_do_dia: bool = False) -> datetime | None:
-    """Converte "dd/mm/aaaa" em datetime aware, ou None se invalido."""
+def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
+    """Converte "aaaa-mm-dd" (formato de ``<input type="date">``) em datetime
+    aware, ou None se invalido."""
 
     if not valor:
         return None
     try:
-        dt = datetime.strptime(valor, "%d/%m/%Y")
+        dt = datetime.strptime(valor, "%Y-%m-%d")
     except ValueError:
         return None
     if fim_do_dia:
@@ -389,8 +390,8 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Intervalo de datas — os KPIs da visao geral linkam para ca com o mesmo
     # recorte que usaram para contar; sem isso o link abriria outro conjunto.
-    data_inicio = _parse_data_br(data_inicio_str)
-    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
@@ -1880,11 +1881,11 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
     if not data_inicio_str and not data_fim_str:
         primeiro = linhas_de_pacote().aggregate(Min("data_hora"))["data_hora__min"]
         inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
-        data_inicio_str = inicio_padrao.strftime("%d/%m/%Y")
-        data_fim_str = hoje.strftime("%d/%m/%Y")
+        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
+        data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_br(data_inicio_str)
-    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
