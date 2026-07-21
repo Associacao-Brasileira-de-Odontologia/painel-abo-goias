@@ -51,8 +51,9 @@ REGISTROS_POR_PAGINA = 10
 
 STATUS_OPCOES = [
     (PedidoMaterial.Status.EM_DIA, "Em dia"),
-    (PedidoMaterial.Status.A_CONFIRMAR, "A confirmar"),
     (PedidoMaterial.Status.ATRASADO, "Atrasado"),
+    (PedidoMaterial.Status.ENTREGUE_NAO_FATURADO, "Entregue — não faturado"),
+    (PedidoMaterial.Status.CONCLUIDO, "Concluído"),
 ]
 
 STATUS_LABELS = {v: l for v, l in STATUS_OPCOES}
@@ -110,11 +111,10 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 
     metricas = {
         "em_dia": qs.filter(status=PedidoMaterial.Status.EM_DIA).count(),
-        "a_confirmar": qs.filter(status=PedidoMaterial.Status.A_CONFIRMAR).count(),
         "atrasado": qs.filter(status=PedidoMaterial.Status.ATRASADO).count(),
-        "pendentes_faturamento": qs.filter(entregue=True)
-        .exclude(faturado_paciente=True, faturado_lab=True)
-        .count(),
+        "entregue_nao_faturado": qs.filter(
+            status=PedidoMaterial.Status.ENTREGUE_NAO_FATURADO
+        ).count(),
         "concluidos": qs.filter(status=PedidoMaterial.Status.CONCLUIDO).count(),
     }
 
@@ -195,15 +195,15 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
         "em_dia": PedidoMaterial.objects.filter(
             status=PedidoMaterial.Status.EM_DIA
         ).count(),
-        "a_confirmar": PedidoMaterial.objects.filter(
-            status=PedidoMaterial.Status.A_CONFIRMAR
-        ).count(),
         "atrasado": PedidoMaterial.objects.filter(
             status=PedidoMaterial.Status.ATRASADO
         ).count(),
+        "entregue_nao_faturado": PedidoMaterial.objects.filter(
+            status=PedidoMaterial.Status.ENTREGUE_NAO_FATURADO
+        ).count(),
     }
     metricas["total"] = (
-        metricas["em_dia"] + metricas["a_confirmar"] + metricas["atrasado"]
+        metricas["em_dia"] + metricas["atrasado"] + metricas["entregue_nao_faturado"]
     )
 
     page_obj, query_string = _paginar(request, qs)
