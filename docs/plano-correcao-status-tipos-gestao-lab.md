@@ -1,8 +1,10 @@
 # Plano de Correção — Status de Pedidos e Tipos de Serviço (`gestao_lab`)
 
 > Data: 2026-07-21 · Complementa `docs/casos-de-uso-gestao-lab.md`.
-> **Nenhuma mudança de código foi feita nesta rodada** — este documento é a avaliação e a
-> construção dos pontos de correção solicitados, para decisão antes de implementar.
+> **Atualização de 2026-07-21:** Ponto 1 (status) foi confirmado e **implementado**
+> (commit `a4077e5`, branch `claude/gestao-pedidos`) — ver detalhes no final da seção 1.
+> Ponto 2 (tipo de serviço) foi **decidido sem necessidade de código** — ver o final da
+> seção 2. Este documento permanece como registro da análise original.
 
 ## Contexto de negócio (conforme descrito)
 
@@ -138,16 +140,18 @@ entregues", sem distinguir se já foi enviado).
 **Nada se perde operacionalmente:** `data_envio` continua gravado e visível na linha do
 tempo do detalhe do pedido (UC-04) — só deixa de ser, por si só, um valor de `status`.
 
-### Decisão de negócio pendente
+### Decisão de negócio — confirmada e implementada (2026-07-21)
 
-> **Preciso da sua confirmação antes de implementar:** "A confirmar" (enviado, aguardando
-> devolução, dentro do prazo) deixa de ser um status/aba separado e passa a contar dentro
-> de "Em dia", como a correção acima propõe? Essa é a leitura mais direta da sua descrição
-> ("em dia = dentro do prazo, não entregue"), mas é uma mudança de comportamento visível
-> (a aba "A confirmar" do Acompanhamento desaparece) — por isso trago para confirmação em
-> vez de assumir.
+Confirmado: "A confirmar" deixou de ser status/aba separado e passou a contar dentro de
+"Em dia". Implementado no commit `a4077e5` (branch `claude/gestao-pedidos`): novo status
+`ENTREGUE_NAO_FATURADO`, `calcular_status()` reescrito exatamente como proposto acima,
+migration `0010_reformular_status_pedido` (schema + recálculo de dados, reversível),
+Visão Geral e Acompanhamento atualizados (cards/abas), badges/CSS renomeados
+(`badge-a-confirmar`→`badge-entregue-pendente`), e a métrica de faturamento pendente do
+Portal do CME (`gestao_cme/views.py::portal`, que fazia o mesmo cálculo ad-hoc) também
+passou a usar o campo `status`. Suíte completa (634 testes) verde.
 
-### Impacto em cascata (uma vez confirmado)
+### Impacto em cascata (era o plano; já executado)
 
 | Arquivo | Mudança necessária |
 |---|---|
@@ -204,28 +208,24 @@ precise de uma etapa de registro antes de virar um `PedidoMaterial` formal.
   todas as views/templates/urls/testes que hoje mencionam "moldagem" explicitamente —
   são referenciados em pelo menos 8 arquivos).
 
-### Pergunta que preciso que você responda antes de implementar
+### Decisão — respondida (2026-07-21): nem A, nem B
 
-> A etapa de "pré-registro antes do pedido formal" (o que hoje é `Moldagem`) é um passo
-> que **só faz sentido para moldagens** (por exemplo, porque o aluno precisa registrar
-> fisicamente a moldagem antes de saber se vai virar pedido), ou o negócio precisa do
-> **mesmo tipo de pré-registro para aparelhos e outros serviços também**? A resposta
-> decide entre a Opção A (mais simples, mantém `Moldagem` como está) e a Opção B
-> (generaliza o modelo).
->
-> Recomendo a **Opção A como primeiro passo**, mesmo que a resposta aponte para a Opção B
-> no longo prazo — adicionar `tipo_servico` ao `PedidoMaterial` já resolve a parte
-> "reportar/filtrar por tipo" sem depender de uma decisão maior sobre o futuro do modelo
-> `Moldagem`.
+A resposta descarta as duas opções acima. `Moldagem` continua **exatamente como está**
+hoje — um pré-registro específico do fluxo de moldagem (aluno registra → depois
+encaminha para virar `PedidoMaterial`) — e **não** deve ser tratada como uma categoria de
+"tipo de serviço". `descricao_servico` **permanece texto livre**: a capacidade de
+descrever o serviço livremente é mais importante do que a de filtrar por categoria
+estruturada. **Nenhuma mudança de código para este ponto** — ver
+`docs/plano-implementacao-gestao-lab.md`, item 5.
 
 ---
 
 ## 3 · Resumo executivo
 
-| # | Ponto | Severidade | Ação necessária antes de implementar |
+| # | Ponto | Severidade | Status |
 |---|---|---|---|
-| 1 | Status do pedido não tem uma categoria própria para "entregue e não faturado" — cai silenciosamente em "Em dia" | **Crítico** | Confirmar que "A confirmar" deixa de ser status separado (fundido em "Em dia") |
-| 2 | Falta um campo estruturado de tipo de serviço/material; `Moldagem` é hardcoded só para esse tipo | **Alto** | Decidir entre Opção A (campo simples) e Opção B (generalizar o modelo) |
+| 1 | Status do pedido não tinha uma categoria própria para "entregue e não faturado" — caía silenciosamente em "Em dia" | **Crítico** | ✅ **Implementado** (commit `a4077e5`) — 4 categorias exatas, "A confirmar" fundido em "Em dia" |
+| 2 | Falta um campo estruturado de tipo de serviço/material; `Moldagem` é hardcoded só para esse tipo | **Alto** | ✅ **Decidido, sem código** — `Moldagem` mantida como está, `descricao_servico` permanece texto livre |
 
 ---
 

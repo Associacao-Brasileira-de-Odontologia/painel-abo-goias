@@ -2,10 +2,12 @@
 
 > Data: 2026-07-21 · Complementa `docs/casos-de-uso-gestao-lab.md` e
 > `docs/plano-correcao-status-tipos-gestao-lab.md`.
-> **Nenhuma mudança de código foi feita ainda** — este documento cruza os 11 itens
-> recebidos com o que já estava documentado, resolve as duas confirmações pendentes e
-> propõe a sequência de implementação (um item por vez: implementar, testar, commitar,
-> enviar, aguardar aprovação — mesma disciplina já usada no CME).
+> Este documento cruza os 11 itens recebidos com o que já estava documentado, resolve as
+> duas confirmações pendentes e propõe a sequência de implementação (um item por vez:
+> implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
+> no CME).
+> **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código —
+> ver §4.
 
 ---
 
@@ -89,13 +91,19 @@ Reusar o mesmo componente `partials/filtro_periodo.html` do CME (ou uma cópia a
 também resolve o item 1 para o Acompanhamento (o seletor de campo entra como mais um
 controle dentro do mesmo widget colapsável).
 
-### Item 4 · Status (já detalhado em `plano-correcao-status-tipos-gestao-lab.md`)
+### Item 4 · Status → ✅ **Implementado** (commit `a4077e5`, branch `claude/gestao-pedidos`)
 
-Sem mudanças ao plano já escrito.
+Sem mudanças ao plano já escrito. `PedidoMaterial.Status` com as 4 categorias exatas,
+migration `0010` (schema + recálculo de dados, reversível), Visão Geral/Acompanhamento
+atualizados (cards e abas), badges/CSS renomeados, e a métrica equivalente do Portal do
+CME também corrigida. Suíte completa (634 testes) verde. Documentação atualizada em
+`casos-de-uso-gestao-lab.md` (UC-01, UC-02, UC-07, UC-09, §5 regra 1, S-05) e
+`plano-correcao-status-tipos-gestao-lab.md`.
 
-### Item 5 · Moldagem (decisão fechada, sem código)
+### Item 5 · Moldagem → ✅ **Fechado, sem código**
 
-Só atualização de documentação.
+Só atualização de documentação (`casos-de-uso-gestao-lab.md`, UC-10, e
+`plano-correcao-status-tipos-gestao-lab.md`, Ponto 2) — feita junto do item 4.
 
 ### Item 6/8 · Filtro de faturamento na fila de Faturamento
 
@@ -108,15 +116,17 @@ proposta, por ser mais direto — ajusto se preferir a combinação num único f
 
 ### Item 7 · Remover linguagem de "devolução"
 
-Ocorrências encontradas (todas serão revisadas para a linguagem
-registrar-serviço → solicitar-serviço → registrar-entrega → faturar):
+Duas das quatro ocorrências **já foram corrigidas como efeito colateral do item 4**
+(implementado): o docstring de `models.py` foi reescrito em termos de "entrega" (sem
+nenhuma menção a "devolução") e o card "A confirmar" do `dashboard.html` (que tinha a
+legenda "aguardando devolução") foi removido. Restam 2 arquivos:
 
-| Arquivo | Texto atual | Novo texto proposto |
-|---|---|---|
-| `models.py` (docstring da classe) | "devolucao do material finalizado e encerramento financeiro" / "aguardando devolucao" / "sem devolucao registrada" / "material devolvido e faturamento completo" | Reescrever em termos de "entrega" (ex.: "registro da entrega do material e encerramento financeiro") |
-| `dashboard.html` | "aguardando devolução" (legenda do card "A confirmar" — **este card também some com a correção do item 4**, então este texto já seria removido junto) | — (removido junto com a correção de status) |
-| `detalhe_pedido.html` (3 ocorrências) | "Devolução do laboratório" / "Material finalizado devolvido" | "Entrega do laboratório" / "Material entregue" |
-| `form_pedido.html` | "Previsão de entrega (devolução)" | "Previsão de entrega" (o "(devolução)" é redundante e é o termo que queremos evitar) |
+| Arquivo | Texto atual | Novo texto proposto | Status |
+|---|---|---|---|
+| `models.py` (docstring da classe) | ~~"devolucao do material finalizado..."~~ | ~~"entrega do material finalizado..."~~ | ✅ Já corrigido (item 4) |
+| `dashboard.html` | ~~"aguardando devolução" (legenda do card "A confirmar")~~ | — | ✅ Já removido (item 4) |
+| `detalhe_pedido.html` (3 ocorrências) | "Devolução do laboratório" / "Material finalizado devolvido" | "Entrega do laboratório" / "Material entregue" | Em aberto |
+| `form_pedido.html` | "Previsão de entrega (devolução)" | "Previsão de entrega" (o "(devolução)" é redundante e é o termo que queremos evitar) | Em aberto |
 
 ### Item 9 · Busca de Pacientes no padrão de Gestão de Contratos
 
@@ -160,19 +170,20 @@ cadastro separado da navegação:
 
 Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente relacionado:
 
-1. **Item 4** — Crítico, autocontido, base para os KPIs de faturamento.
-2. **Item 7** — Médio, mas rápido e sem dependências (e parcialmente sobreposto ao item 4, já que o card "A confirmar" some junto).
-3. **Item 6/8** — Filtro de faturamento.
-4. **Item 3 + item 2** — Padronizar o filtro de período do Acompanhamento e alinhar Buscar/Limpar tudo (mesma área de tela, faz sentido em sequência).
-5. **Item 1** — Estender período (com seletor de campo) às demais páginas, reaproveitando o widget já ajustado no item 3.
-6. **Item 9** — Busca unificada de Pacientes (Alta).
-7. **Item 10** — Sincronização de Alunos (Alta).
-8. **Item 11** — Mini-menu para os botões secundários (Alta, mas é o que mais toca a navegação — deixo por último para não reordenar a sidebar antes das outras mudanças de conteúdo de cada página estarem prontas).
-9. **Item 5** — Só atualização de documentação, posso fazer isso junto do item 4 (mesmo commit ou logo em seguida).
+1. ✅ **Item 4** — Crítico, autocontido, base para os KPIs de faturamento. **Implementado**
+   (commit `a4077e5`).
+2. ✅ **Item 5** — Só atualização de documentação, feito junto do item 4.
+3. **Item 7** — Médio, rápido; restam só 2 arquivos (`detalhe_pedido.html`,
+   `form_pedido.html`) — os outros 2 já saíram junto do item 4.
+4. **Item 6/8** — Filtro de faturamento.
+5. **Item 3 + item 2** — Padronizar o filtro de período do Acompanhamento e alinhar Buscar/Limpar tudo (mesma área de tela, faz sentido em sequência).
+6. **Item 1** — Estender período (com seletor de campo) às demais páginas, reaproveitando o widget já ajustado no item 3.
+7. **Item 9** — Busca unificada de Pacientes (Alta).
+8. **Item 10** — Sincronização de Alunos (Alta).
+9. **Item 11** — Mini-menu para os botões secundários (Alta, mas é o que mais toca a navegação — deixo por último para não reordenar a sidebar antes das outras mudanças de conteúdo de cada página estarem prontas).
 
 Cada item segue o fluxo já estabelecido: implementar, rodar a suíte completa (os
 partials/testes de `gestao_lab` também tocam `paginacao.html` e o design system
 compartilhado), commitar, enviar e aguardar sua aprovação antes do próximo.
 
-Me confirme se a ordem acima serve, ou se prefere outra sequência — e eu começo pelo
-item 4.
+Pronto para seguir com o item 7 (ou outro, se preferir mudar a ordem).
