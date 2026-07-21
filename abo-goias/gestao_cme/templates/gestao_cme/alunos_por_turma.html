@@ -84,7 +84,10 @@
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> aluno{{ page_obj.paginator.count|pluralize }}</span>
-        <span><strong>{{ total_turmas }}</strong> turma{{ total_turmas|pluralize }}</span>
+        {% comment %}
+        O rótulo "N turmas" foi removido (R2-2): não existe mais nenhum
+        filtro de turma na tela (removido em R2-1) para o rótulo se referir.
+        {% endcomment %}
         {% if sem_abrigo %}
             <span class="meta-warn"><strong>{{ sem_abrigo }}</strong> sem abrigo</span>
         {% endif %}

@@ -563,9 +563,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             "page_obj": page_obj,
             "query_string": query_string,
             "ultima_sincronizacao": ultima_sincronizacao,
-            "total_alunos": alunos_base.count(),
-            "total_turmas": turmas_base.count(),
-            "total_ativos": alunos_base.filter(ativo=True).count(),
             "sem_abrigo": sem_abrigo,
         },
     )
