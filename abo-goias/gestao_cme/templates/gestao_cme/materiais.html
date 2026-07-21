@@ -23,7 +23,13 @@ navegação lateral (ver partials/side_link_group.html).
             <option value="disponivel" {% if disponibilidade_atual == "disponivel" %}selected{% endif %}>Disponíveis</option>
             <option value="indisponivel" {% if disponibilidade_atual == "indisponivel" %}selected{% endif %}>Indisponíveis</option>
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or disponibilidade_atual %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'materiais' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if busca or disponibilidade_atual %}
@@ -46,7 +52,6 @@ navegação lateral (ver partials/side_link_group.html).
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'materiais' %}">Limpar tudo</a>
         </div>
     {% endif %}
 

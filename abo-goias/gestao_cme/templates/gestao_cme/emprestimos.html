@@ -30,7 +30,13 @@ navegação lateral (ver partials/side_link_group.html).
         partials/filtro_periodo.html), igual ao ajuste feito em Movimentações.
         {% endcomment %}
         {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="emp" %}
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_filtro or data_inicio_str or data_fim_str %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'emprestimos' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if busca or status_filtro or data_inicio_str or data_fim_str %}
@@ -66,7 +72,6 @@ navegação lateral (ver partials/side_link_group.html).
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'emprestimos' %}">Limpar tudo</a>
         </div>
     {% endif %}
 

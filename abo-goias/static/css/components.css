@@ -924,6 +924,17 @@ a.metric-card:hover {
     min-height: 46px;
 }
 
+/* "Buscar" e "Limpar tudo" ficam lado a lado, na mesma linha da barra de
+   filtros. Agrupá-los num flex garante que, quando a barra tiver de quebrar
+   linha (ex.: Alunos por turma, com dois selects), os dois permaneçam
+   juntos em vez de "Limpar tudo" cair sozinho para a linha de baixo. */
+.filter-bar .filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
 .filter-bar select {
     width: auto;
     min-width: 150px;

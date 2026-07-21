@@ -32,7 +32,13 @@
         partials/filtro_periodo.html), igual ao ajuste feito em Empréstimos.
         {% endcomment %}
         {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="mov" %}
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_atual or data_inicio_str or data_fim_str %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'cme_home' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if aluno_filtrado %}
@@ -80,7 +86,6 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'cme_home' %}">Limpar tudo</a>
         </div>
     {% endif %}
 

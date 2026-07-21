@@ -50,7 +50,13 @@
                 </option>
             {% endfor %}
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or turma_id or status_aluno != "ativo" %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {# Chips removíveis de filtro ativo #}
@@ -83,7 +89,6 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
         </div>
     {% endif %}
 

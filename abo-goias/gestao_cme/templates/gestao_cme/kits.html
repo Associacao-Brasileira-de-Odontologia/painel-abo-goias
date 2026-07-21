@@ -23,7 +23,13 @@ lateral (ver partials/side_link_group.html) — não fica mais duplicado aqui.
             <option value="ativo" {% if status_atual == "ativo" %}selected{% endif %}>Ativos</option>
             <option value="inativo" {% if status_atual == "inativo" %}selected{% endif %}>Inativos</option>
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_atual %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'kits' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if busca or status_atual %}
@@ -46,7 +52,6 @@ lateral (ver partials/side_link_group.html) — não fica mais duplicado aqui.
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'kits' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
