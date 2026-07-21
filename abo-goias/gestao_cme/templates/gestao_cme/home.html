@@ -11,13 +11,6 @@
 
 {% block panel %}
     <form class="filter-bar" method="get">
-        {% comment %}
-        O intervalo de datas chega pela URL (ex.: vindo de um KPI da Visão
-        Geral). Sem estes hidden, buscar ou trocar o status descartaria o
-        recorte e a tela passaria a mostrar outro conjunto.
-        {% endcomment %}
-        {% if data_inicio_str %}<input type="hidden" name="data_inicio" value="{{ data_inicio_str }}">{% endif %}
-        {% if data_fim_str %}<input type="hidden" name="data_fim" value="{{ data_fim_str }}">{% endif %}
         {% if aluno_filtrado %}<input type="hidden" name="aluno" value="{{ aluno_filtrado.pk }}">{% endif %}
         <div class="search-control">
             <input id="results-q-movimentacoes" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por aluno, turma, pacote, material ou origem..." aria-label="Buscar na listagem">
@@ -33,8 +26,19 @@
         um pacote com as duas datas, então filtrar por tipo não seleciona mais
         linhas distintas. O filtro de status (Retirado / Não retirado) cobre a
         mesma intenção sobre a nova linha.
+
+        O período era um par de campos de data sempre visíveis, o que
+        deixava a barra grande demais — virou painel expansível (ver
+        partials/filtro_periodo.html), igual ao ajuste feito em Empréstimos.
         {% endcomment %}
-        <button class="button primary" type="submit">Buscar</button>
+        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="mov" %}
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_atual or data_inicio_str or data_fim_str %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'cme_home' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if aluno_filtrado %}
@@ -78,18 +82,25 @@
                    href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_atual %}status={{ status_atual }}{% endif %}"
                    title="Remover filtro de período">
                     <span>Período</span>
-                    <strong>{% if data_inicio_str %}{{ data_inicio_str }}{% else %}início{% endif %} → {% if data_fim_str %}{{ data_fim_str }}{% else %}hoje{% endif %}</strong>
+                    <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'cme_home' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> registro{{ page_obj.paginator.count|pluralize }}</span>
-        {% if metricas.pendentes %}
-            <a class="meta-warn" href="?status=pendente" title="Filtrar pacotes não retirados"><strong>{{ metricas.pendentes }}</strong> aguardando retirada</a>
+        {% comment %}
+        Só aparece quando o status selecionado é o mesmo que o rótulo
+        descreve — com o filtro "todos" (ou outro status) esse número não
+        tem relação com o que está na tela, então era só ruído.
+        {% endcomment %}
+        {% if status_atual == "pendente" and metricas.pendentes %}
+            <span class="meta-warn"><strong>{{ metricas.pendentes }}</strong> aguardando retirada</span>
+        {% elif status_atual == "retirado" and metricas.retirados %}
+            {# Mesma cor do badge "Retirado" da coluna Status (.badge-devolvido). #}
+            <span class="meta-success"><strong>{{ metricas.retirados }}</strong> retirado{{ metricas.retirados|pluralize }}</span>
         {% endif %}
     </div>
 
@@ -103,7 +114,7 @@
                     <th>Turma</th>
                     <th>Pacote</th>
                     <th>Status</th>
-                    <th></th>
+                    <th class="actions-cell"></th>
                 </tr>
             </thead>
             <tbody>

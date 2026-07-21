@@ -10,10 +10,16 @@
 
 {% block panel_title %}Registrar empréstimo{% endblock %}
 {% block panel_actions %}
-    <form class="sync-form" method="post" action="{% url 'atualizar_turmas_eduq' %}">
+    {% comment %}
+    Mesmo botão de "Atualizar lista de alunos" usado em registrar_entrada/
+    registrar_saida (sincroniza turmas e alunos) — o campo de aluno desta
+    tela usa o mesmo autocomplete local, que depende dessa sincronização
+    para encontrar alunos recém-matriculados.
+    {% endcomment %}
+    <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{% url 'criar_emprestimo' %}">
-        <button class="button secondary compact-button" type="submit">Atualizar turmas</button>
+        <button class="button secondary compact-button" type="submit">Atualizar lista de alunos</button>
     </form>
 {% endblock %}
 {% block panel %}

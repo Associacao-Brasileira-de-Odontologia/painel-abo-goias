@@ -8,20 +8,25 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Alunos por turma{% endblock %}
+{% comment %}
+"Cadastrar aluno" e "Cadastrar turma" foram movidos para o mini-menu do item
+"Alunos por turma" na navegação lateral (ver partials/side_link_group.html).
+{% endcomment %}
 {% block panel_actions %}
     <div class="topbar-actions">
-        <a class="button primary" href="{% url 'cadastrar_aluno' %}">Cadastrar aluno</a>
-        <a class="button secondary" href="{% url 'cadastrar_turma' %}">Cadastrar turma</a>
-        {% if sync_alunos_url %}
-            <form class="sync-form" method="post" action="{{ sync_alunos_url }}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button class="button secondary" type="submit">{{ sync_alunos_label }}</button>
-            </form>
-        {% endif %}
-        <form class="sync-form" method="post" action="{% url 'sincronizar_turmas_eduq' %}">
+        {% comment %}
+        Botão único de sincronização com o Eduq. Antes a sincronização de
+        alunos só aparecia para uma turma específica escolhida no filtro por
+        turma (removido — ver R2-1). Agora usa atualizar_alunos_eduq, que
+        primeiro busca todas as turmas na API e, em seguida, busca todos os
+        alunos de cada turma (ver services/eduq_sync.sincronizar_eduq) — por
+        isso o rótulo "Sincronizar alunos e turmas". O botão separado só de
+        turmas foi removido por ficar redundante (este já cobre as turmas).
+        {% endcomment %}
+        <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
             {% csrf_token %}
-            <button class="button secondary" type="submit">Sincronizar turmas</button>
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button class="button secondary" type="submit">Sincronizar alunos e turmas</button>
         </form>
     </div>
 {% endblock %}
@@ -40,23 +45,25 @@
             <option value="inativo" {% if status_aluno == "inativo" %}selected{% endif %}>Somente inativos</option>
             <option value="todos" {% if status_aluno == "todos" %}selected{% endif %}>Todos</option>
         </select>
-        <select name="turma" aria-label="Filtrar por turma" onchange="this.form.submit()">
-            <option value="">Turma — todas</option>
-            {% for turma in turmas %}
-                <option value="{{ turma.pk }}" {% if turma_id == turma.pk|stringformat:"s" %}selected{% endif %}>
-                    {{ turma.codigo }} — {{ turma.nome }}
-                </option>
-            {% endfor %}
-        </select>
-        <button class="button primary" type="submit">Buscar</button>
+        {% comment %}
+        O filtro dedicado por turma (select) foi removido (R2-1): a busca
+        textual acima já pesquisa por nome e código da turma.
+        {% endcomment %}
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_aluno != "ativo" %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {# Chips removíveis de filtro ativo #}
-    {% if busca or turma_id or status_aluno != "ativo" %}
+    {% if busca or status_aluno != "ativo" %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if status_aluno != 'ativo' %}status={{ status_aluno }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                   href="?{% if status_aluno != 'ativo' %}status={{ status_aluno }}{% endif %}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
@@ -65,29 +72,22 @@
             {% endif %}
             {% if status_aluno != "ativo" %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
                    title="Voltar a exibir somente ativos">
                     <span>Exibindo</span>
                     <strong>{% if status_aluno == "inativo" %}Inativos{% else %}Todos{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            {% if turma_id %}
-                <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_aluno != 'ativo' %}status={{ status_aluno }}{% endif %}"
-                   title="Remover filtro de turma">
-                    <span>Turma</span>
-                    <strong>{% for turma in turmas %}{% if turma_id == turma.pk|stringformat:"s" %}{{ turma.codigo }}{% endif %}{% endfor %}</strong>
-                    <span class="chip-x" aria-hidden="true">×</span>
-                </a>
-            {% endif %}
-            <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> aluno{{ page_obj.paginator.count|pluralize }}</span>
-        <span><strong>{{ total_turmas }}</strong> turma{{ total_turmas|pluralize }}</span>
+        {% comment %}
+        O rótulo "N turmas" foi removido (R2-2): não existe mais nenhum
+        filtro de turma na tela (removido em R2-1) para o rótulo se referir.
+        {% endcomment %}
         {% if sem_abrigo %}
             <span class="meta-warn"><strong>{{ sem_abrigo }}</strong> sem abrigo</span>
         {% endif %}

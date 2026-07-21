@@ -250,6 +250,21 @@
     color: var(--gold);
 }
 
+/* KPI clicável: mesmo tratamento de hover dos cards da Visão Geral do CME
+   (.metric-card--link em components.css). */
+a.portal-status-item {
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+a.portal-status-item:hover,
+a.portal-status-item:focus-visible {
+    border-color: rgba(29, 110, 238, 0.55);
+    background: rgba(29, 110, 238, 0.08);
+    transform: translateY(-1px);
+}
+
 .portal-quick-links {
     display: grid;
     gap: 8px;

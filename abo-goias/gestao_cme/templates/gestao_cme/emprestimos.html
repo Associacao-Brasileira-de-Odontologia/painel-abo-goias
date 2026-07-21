@@ -8,11 +8,10 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Empréstimos registrados{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'criar_emprestimo' %}">Novo empréstimo</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Novo empréstimo" foi movido para o mini-menu do item "Empréstimos" na
+navegação lateral (ver partials/side_link_group.html).
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">
@@ -25,14 +24,30 @@
                 <option value="{{ valor }}" {% if status_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
             {% endfor %}
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        {% comment %}
+        O período era um par de campos de data sempre visíveis, o que
+        deixava a barra grande demais — virou painel expansível (ver
+        partials/filtro_periodo.html), igual ao ajuste feito em Movimentações.
+        {% endcomment %}
+        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="emp" %}
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_filtro or data_inicio_str or data_fim_str %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'emprestimos' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
-    {% if busca or status_filtro %}
+    {% if busca or status_filtro or data_inicio_str or data_fim_str %}
+        {% comment %}
+        Cada chip remove só o próprio filtro e preserva os demais — mesmo
+        padrão de gestao_cme/home.html.
+        {% endcomment %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if status_filtro %}status={{ status_filtro }}{% endif %}"
+                   href="?{% if status_filtro %}status={{ status_filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
@@ -41,14 +56,22 @@
             {% endif %}
             {% if status_filtro %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover filtro de status">
                     <span>Status</span>
                     <strong>{{ status_label }}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'emprestimos' %}">Limpar tudo</a>
+            {% if data_inicio_str or data_fim_str %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_filtro %}status={{ status_filtro }}{% endif %}"
+                   title="Remover filtro de período">
+                    <span>Período</span>
+                    <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
         </div>
     {% endif %}
 
@@ -71,7 +94,7 @@
                     <th>Emprestado em</th>
                     <th>Devolução prevista</th>
                     <th>Status</th>
-                    <th>Ações</th>
+                    <th class="actions-cell">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -116,20 +139,26 @@
                             {% endif %}
                         </td>
                         <td class="actions-cell">
-                            {% if emp.status != "DEVOLVIDO" %}
-                                <form method="post" action="{% url 'devolver_emprestimo' emp.pk %}" class="inline-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button class="button compact-button secondary" type="submit" title="Registrar devolução">Devolver</button>
-                                </form>
-                            {% endif %}
-                            {% if emp.status == "EMPRESTADO" %}
-                                <form method="post" action="{% url 'marcar_emprestimo_atrasado' emp.pk %}" class="inline-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button class="button compact-button danger-button" type="submit" title="Marcar como atrasado">Atrasado</button>
-                                </form>
-                            {% endif %}
+                            <div class="actions-group">
+                                <a class="icon-action" href="{% url 'editar_emprestimo' emp.pk %}"
+                                   title="Editar" aria-label="Editar empréstimo">
+                                    <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
+                                </a>
+                                {% if emp.status != "DEVOLVIDO" %}
+                                    <form method="post" action="{% url 'devolver_emprestimo' emp.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button class="button compact-button secondary" type="submit" title="Registrar devolução">Devolver</button>
+                                    </form>
+                                {% endif %}
+                                {% if emp.status == "EMPRESTADO" %}
+                                    <form method="post" action="{% url 'marcar_emprestimo_atrasado' emp.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button class="button compact-button danger-button" type="submit" title="Marcar como atrasado">Atrasado</button>
+                                    </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                 {% empty %}

@@ -24,3 +24,12 @@ def nav_ativo(context, url_name: str, match: str = "") -> str:
         return ""
     nomes = {url_name, *match.split()}
     return "active" if atual in nomes else ""
+
+
+@register.filter
+def dict_get(dicionario, chave):
+    """Busca um valor em um dict por chave dinâmica — Django não permite
+    ``{{ dicionario.chave_variavel }}`` no template, só chaves literais."""
+    if not dicionario:
+        return None
+    return dicionario.get(chave)

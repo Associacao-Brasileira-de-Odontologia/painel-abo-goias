@@ -54,6 +54,23 @@
 })();
 
 (function () {
+    // Ícone "v" ao lado dos itens da navegação lateral que têm ações de
+    // cadastro (ver partials/side_link_group.html) — abre/fecha o submenu
+    // sem navegar, independente da seção estar ativa ou não.
+    document.addEventListener("click", function (event) {
+        var toggle = event.target.closest("[data-side-toggle]");
+        if (!toggle) return;
+
+        var submenu = document.getElementById(toggle.getAttribute("aria-controls"));
+        if (!submenu) return;
+
+        var aberto = toggle.getAttribute("aria-expanded") === "true";
+        toggle.setAttribute("aria-expanded", String(!aberto));
+        submenu.hidden = aberto;
+    });
+})();
+
+(function () {
     function removerMensagem(mensagem) {
         if (mensagem) mensagem.remove();
     }

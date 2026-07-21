@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import (
     Abrigo,
     Aluno,
+    Emprestimo,
     Kit,
     KitMaterial,
     Material,
@@ -13,57 +14,6 @@ from .models import (
     OrigemDados,
     Turma,
 )
-
-
-class MovimentacaoForm(forms.Form):
-    """Valida entradas de saída e entrada de materiais/pacotes."""
-
-    aluno = forms.ModelChoiceField(
-        queryset=Aluno.objects.none(),
-        empty_label="Selecione um aluno...",
-        error_messages={
-            "required": "Selecione um aluno.",
-            "invalid_choice": "Aluno inválido.",
-        },
-    )
-    pacote_codigo = forms.CharField(
-        max_length=80,
-        strip=True,
-        error_messages={"required": "Informe o código do pacote."},
-    )
-    material = forms.ModelChoiceField(
-        queryset=Material.objects.none(),
-        required=False,
-        empty_label="Nenhum material específico",
-    )
-    data_hora = forms.DateTimeField(
-        required=False,
-        input_formats=["%Y-%m-%dT%H:%M"],
-        error_messages={"invalid": "Data e hora inválidas."},
-    )
-    observacoes = forms.CharField(required=False, strip=True)
-
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
-        self.fields["aluno"].queryset = (
-            Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
-            .filter(ativo=True)
-            .select_related("turma")
-            .order_by("turma__nome", "nome")
-        )
-        self.fields["material"].queryset = (
-            Material.objects.exclude(origem=OrigemDados.EXEMPLO)
-            .filter(ativo=True)
-            .order_by("nome")
-        )
-
-    def clean_data_hora(self) -> object:
-        data_hora = self.cleaned_data.get("data_hora")
-        if not data_hora:
-            return timezone.now()
-        if timezone.is_naive(data_hora):
-            return timezone.make_aware(data_hora)
-        return data_hora
 
 
 class CadastrarAlunoForm(forms.ModelForm):
@@ -161,9 +111,16 @@ class KitForm(forms.ModelForm):
     """Valida o cadastro manual de um kit e sua composição de materiais.
 
     O painel só permitia criar kits pelo Django Admin; este form habilita o
-    cadastro pela própria tela de kits. Os materiais escolhidos são gravados
-    como itens do kit (KitMaterial) com quantidade 1 — o ajuste fino de
-    quantidade por material continua no Admin (ver documentação da melhoria).
+    cadastro pela própria tela de kits. Cada material selecionado tem sua
+    própria quantidade (campo ``quantidade_<pk do material>`` no POST, lido
+    diretamente de ``self.data`` porque não há como declarar um campo por
+    material sem conhecer o catálogo de antemão) — decisão de negócio: o
+    ajuste de quantidade > 1 acontece já na criação, pela própria tela.
+
+    ``Kit.quantidade`` é o estoque cadastrado do kit (quantas unidades físicas
+    desse kit existem) — informado manualmente aqui, independente da
+    disponibilidade dos materiais que compõem o kit (ver coluna "Disponíveis"
+    na listagem, calculada à parte).
     """
 
     materiais = forms.ModelMultipleChoiceField(
@@ -188,6 +145,9 @@ class KitForm(forms.ModelForm):
             .filter(ativo=True)
             .order_by("nome")
         )
+        # Em edição, pré-marca os materiais já vinculados ao kit.
+        if self.instance.pk:
+            self.fields["materiais"].initial = self.instance.materiais.all()
 
     def clean_codigo(self) -> str:
         codigo = self.cleaned_data.get("codigo", "")
@@ -204,15 +164,46 @@ class KitForm(forms.ModelForm):
             self._salvar_materiais(kit)
         return kit
 
-    def _salvar_materiais(self, kit: Kit) -> None:
-        """Cria os itens do kit para os materiais selecionados (quantidade 1)."""
+    def _quantidade_informada(self, material_pk: int) -> int:
+        """Lê a quantidade digitada para um material, com piso de 1.
 
+        O campo não é declarado no form (não há como saber o catálogo de
+        materiais antes de instanciar), então é lido diretamente do POST
+        bruto pelo nome de convenção ``quantidade_<pk>``.
+        """
+
+        bruto = self.data.get(f"quantidade_{material_pk}", "1")
+        try:
+            valor = int(bruto)
+        except (TypeError, ValueError):
+            return 1
+        return max(1, valor)
+
+    def _salvar_materiais(self, kit: Kit) -> None:
+        """Sincroniza os itens do kit com os materiais e quantidades do form.
+
+        Cria/atualiza um ``KitMaterial`` por material selecionado (com a
+        quantidade informada) e remove os itens de materiais que ficaram
+        desmarcados — necessário para a edição funcionar (não só a criação).
+        """
+
+        selecionados_pks: set[int] = set()
         for material in self.cleaned_data.get("materiais", []):
-            KitMaterial.objects.get_or_create(
+            quantidade = self._quantidade_informada(material.pk)
+            KitMaterial.objects.update_or_create(
                 kit=kit,
                 material=material,
-                defaults={"quantidade": 1},
+                defaults={"quantidade": quantidade},
             )
+            selecionados_pks.add(material.pk)
+        kit.itens.exclude(material_id__in=selecionados_pks).delete()
+
+
+class KitEditForm(KitForm):
+    """Estende KitForm com o campo ativo para edição."""
+
+    class Meta(KitForm.Meta):
+        fields = [*KitForm.Meta.fields, "ativo"]
 
 
 class MaterialForm(forms.ModelForm):
@@ -364,3 +355,23 @@ class EmprestimoForm(forms.Form):
             .prefetch_related("itens__material")
             .order_by("nome")
         )
+
+
+class EditarEmprestimoForm(forms.ModelForm):
+    """Permite editar um empréstimo já registrado.
+
+    Aluno e kit não entram aqui de propósito: trocá-los depois de criado o
+    empréstimo deixaria os itens já retirados (ver ItemEmprestimo) fora de
+    sincronia com o novo kit — mesma lógica de editar_movimentacao, que
+    também não permite editar o aluno de um registro existente.
+    """
+
+    data_prevista_devolucao = forms.DateField(
+        required=False,
+        input_formats=["%Y-%m-%d"],
+        error_messages={"invalid": "Data prevista de devolução inválida."},
+    )
+
+    class Meta:
+        model = Emprestimo
+        fields = ["data_prevista_devolucao", "observacoes"]

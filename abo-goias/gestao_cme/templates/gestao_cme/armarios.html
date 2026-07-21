@@ -8,11 +8,10 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Mapa dos abrigos{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'cadastrar_abrigo' %}">Cadastrar abrigo</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Cadastrar abrigo" foi movido para o mini-menu do item "Abrigos" na
+navegação lateral (ver partials/side_link_group.html).
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">
@@ -24,7 +23,13 @@
             <option value="ocupado" {% if ocupacao_atual == "ocupado" %}selected{% endif %}>Ocupados</option>
             <option value="livre" {% if ocupacao_atual == "livre" %}selected{% endif %}>Livres</option>
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or ocupacao_atual %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'abrigos' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if busca or ocupacao_atual %}
@@ -47,14 +52,21 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'abrigos' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> resultado{{ page_obj.paginator.count|pluralize }}</span>
-        <a href="?ocupacao=ocupado" title="Filtrar ocupados"><strong>{{ metricas.ocupados }}</strong> ocupado{{ metricas.ocupados|pluralize }}</a>
-        <a href="?ocupacao=livre" title="Filtrar livres"><strong>{{ metricas.livres }}</strong> livre{{ metricas.livres|pluralize }}</a>
+        {% comment %}
+        Só aparece quando o filtro de Ocupação correspondente está
+        selecionado — mesmo conceito aplicado em Movimentações. Cores iguais
+        às do badge da coluna Ocupação (badge-atrasado/badge-devolvido).
+        {% endcomment %}
+        {% if ocupacao_atual == "ocupado" and metricas.ocupados %}
+            <span class="meta-warn"><strong>{{ metricas.ocupados }}</strong> ocupado{{ metricas.ocupados|pluralize }}</span>
+        {% elif ocupacao_atual == "livre" and metricas.livres %}
+            <span class="meta-success"><strong>{{ metricas.livres }}</strong> livre{{ metricas.livres|pluralize }}</span>
+        {% endif %}
     </div>
 
     <div class="table-wrap data-table-wrap">
@@ -65,7 +77,7 @@
                     <th>Ocupação</th>
                     <th>Última atualização</th>
                     <th>Status</th>
-                    <th>Ações</th>
+                    <th class="actions-cell">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -79,7 +91,7 @@
                                 <span class="badge badge-devolvido">Livre</span>
                             {% endif %}
                         </td>
-                        <td>{{ abrigo.ultima_sincronizacao|date:"d/m/Y H:i"|default:"-" }}</td>
+                        <td>{{ abrigo.atualizado_em|date:"d/m/Y H:i"|default:"-" }}</td>
                         <td>
                             {% if abrigo.ativo %}
                                 <span class="badge badge-devolvido">Ativo</span>

@@ -34,6 +34,24 @@ caso "veio da API e precisa ser gravado no clique" que o laboratório tem.
     <p class="help-text search-results-empty">
         Nenhum aluno encontrado para &ldquo;{{ busca }}&rdquo;.
     </p>
+    {% if turmas_para_sincronizar %}
+        <form method="post" action="{% url 'sincronizar_turma_busca' %}" class="sync-turma-busca">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ origem_busca }}">
+            <label for="id_turma_busca" class="field-hint">
+                Aluno ainda não sincronizado? O Eduq não permite buscar por nome — sincronize a turma dele:
+            </label>
+            <div class="sync-turma-busca-row">
+                <select id="id_turma_busca" name="turma_id" required>
+                    <option value="">Selecione a turma do aluno...</option>
+                    {% for turma in turmas_para_sincronizar %}
+                        <option value="{{ turma.pk }}">{{ turma.nome }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button secondary compact-button">Sincronizar turma</button>
+            </div>
+        </form>
+    {% endif %}
 {% else %}
     <p class="help-text search-results-empty">
         Digite o nome ou a matrícula para buscar um aluno.

@@ -294,8 +294,33 @@ select option {
 
 /* ── Autocomplete (resultados de busca clicáveis) ───────────────── */
 
+/* Âncora do overlay de resultados — o campo de busca (input + spinner) fica
+   em fluxo normal; só o resultado da busca flutua por cima do que vem
+   depois no formulário, em vez de empurrar os campos seguintes para baixo
+   a cada tecla digitada. */
+[data-ac-busca] {
+    position: relative;
+}
+
 .search-results-wrap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 30;
     margin-top: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--panel-strong);
+    box-shadow: var(--shadow);
+}
+
+.search-results-wrap:empty {
+    display: none;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
 }
 
 .search-results {
@@ -343,6 +368,26 @@ select option {
 
 .search-results-empty {
     margin-top: 8px;
+}
+
+/* Sincronizar turma sob demanda a partir da busca de aluno sem resultado */
+.sync-turma-busca {
+    margin-top: 4px;
+}
+
+.sync-turma-busca .field-hint {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.sync-turma-busca-row {
+    display: flex;
+    gap: 8px;
+}
+
+.sync-turma-busca-row select {
+    flex: 1;
+    min-width: 0;
 }
 
 .selected-chip {
@@ -614,6 +659,18 @@ select option {
     margin: 0;
 }
 
+/* Quantidade por material no cadastro/edição de kit — número compacto, à
+   direita do rótulo do material, sem herdar a largura livre do checkbox. */
+.checkbox-list-quantidade .checkbox-list-item span {
+    flex: 1;
+}
+
+.checkbox-list-item input.quantidade-material-input {
+    width: 64px;
+    text-align: center;
+    flex: none;
+}
+
 /* ── Cartões de métrica e KPIs ──────────────────────────────────── */
 
 .metric-grid {
@@ -741,8 +798,17 @@ a.metric-card:hover {
 .selection-summary {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
     margin-bottom: 18px;
+}
+
+/* Mesma altura do botão "Buscar"/campo de busca da barra de filtros (ver
+   .filter-bar input, .filter-bar .button) — "Limpar tudo"/"Ver todas"
+   usavam a altura padrão de .compact-button (40px), menor que a da barra
+   de filtros logo acima (46px). */
+.selection-summary .button {
+    min-height: 46px;
 }
 
 .info-chip {
@@ -858,11 +924,136 @@ a.metric-card:hover {
     min-height: 46px;
 }
 
+/* "Buscar" e "Limpar tudo" ficam lado a lado, na mesma linha da barra de
+   filtros. Agrupá-los num flex garante que, quando a barra tiver de quebrar
+   linha (ex.: Alunos por turma, com dois selects), os dois permaneçam
+   juntos em vez de "Limpar tudo" cair sozinho para a linha de baixo. */
+.filter-bar .filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
 .filter-bar select {
     width: auto;
     min-width: 150px;
     max-width: 260px;
     flex: 0 1 auto;
+}
+
+/* Filtro de período (Visão Geral, Movimentações, Empréstimos) — painel
+   expansível dentro da barra de filtros (ver
+   gestao_cme/partials/filtro_periodo.html) em vez de dois campos de data
+   sempre visíveis, que ocupavam espaço demais e "poluíam" a barra. */
+.filter-bar .field {
+    width: auto;
+    flex: 0 1 auto;
+    gap: 4px;
+}
+
+.filter-bar .field label {
+    font-size: 0.78rem;
+}
+
+.filter-bar input[type="date"] {
+    min-height: 46px;
+    width: auto;
+}
+
+.filter-period {
+    position: relative;
+}
+
+.filter-period summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 46px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    color: var(--muted-strong);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-period summary::marker,
+.filter-period summary::-webkit-details-marker {
+    display: none;
+    content: "";
+}
+
+.filter-period summary::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-top: -3px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    opacity: 0.6;
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+}
+
+.filter-period[open] summary::after {
+    margin-top: 3px;
+    transform: rotate(-135deg);
+}
+
+.filter-period summary:hover,
+.filter-period[open] summary {
+    background: rgba(29, 110, 238, 0.1);
+    border-color: rgba(29, 110, 238, 0.4);
+    color: var(--info-text);
+}
+
+.filter-period-dot {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--accent-strong);
+}
+
+/* Quando aberto, o item ocupa a linha inteira da barra de filtros — empurra
+   "Buscar"/"Limpar tudo" para a linha de baixo (.filter-bar já quebra linha,
+   ver item 13) em vez de deixá-los cobertos por um painel flutuante. */
+.filter-period[open] {
+    flex-basis: 100%;
+}
+
+/* R2-4: o painel era position:absolute (herdado de .dropdown-panel), o que
+   causava dois problemas — a largura automática de um layout em linha era
+   calculada a partir da largura do <details> ("Período", só o tamanho do
+   botão), não do conteúdo real, fazendo os campos quebrarem linha de forma
+   imprevisível; e, sendo flutuante, sempre sobrepunha o conteúdo abaixo (KPIs,
+   tabela) e podia ultrapassar a borda direita do painel de resultados quando
+   o botão fica mais à direita da barra (Movimentações/Empréstimos). Virou
+   parte do fluxo normal (position: static): abre empurrando o conteúdo
+   abaixo para baixo, sem sobrepor nem escapar de nenhuma borda. */
+.filter-period-panel {
+    position: static;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 12px;
+}
+
+.filter-period-panel .field label {
+    font-size: 0.7rem;
+}
+
+.filter-period-panel input[type="date"] {
+    min-height: 40px;
+    font-size: 13px;
 }
 
 /* ── Linha de resumo dos resultados ─────────────────────────────── */
@@ -893,6 +1084,12 @@ a.metric-card:hover {
 .results-meta .meta-warn,
 .results-meta .meta-warn strong {
     color: var(--danger-text);
+}
+
+/* Mesma cor do badge "Retirado" da coluna Status (.badge-devolvido). */
+.results-meta .meta-success,
+.results-meta .meta-success strong {
+    color: var(--success);
 }
 
 /* ── Chips segmentados de status com contagem ───────────────────── */
@@ -1020,9 +1217,25 @@ tbody td:last-child {
 }
 
 .data-table-wrap {
+    position: relative;
     border-radius: var(--radius-card);
     overflow-x: auto;
     max-height: min(68vh, 720px);
+    /* Pista visual de rolagem horizontal (sem JS): duas sombras finas nas
+       bordas esquerda/direita, cada uma só visível enquanto houver conteúdo
+       cortado nessa direção — "local" acompanha o scroll do conteúdo,
+       "scroll" fica fixo à viewport da tabela. Técnica clássica de
+       "scrolling shadows" baseada em background-attachment. */
+    background-image:
+        linear-gradient(to right, var(--panel-strong), rgba(3, 34, 83, 0)),
+        linear-gradient(to left, var(--panel-strong), rgba(3, 34, 83, 0)),
+        linear-gradient(to right, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0)),
+        linear-gradient(to left, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+    background-repeat: no-repeat;
+    background-color: var(--panel-strong);
+    background-size: 24px 100%, 24px 100%, 10px 100%, 10px 100%;
+    background-position: 0 0, 100% 0, 0 0, 100% 0;
+    background-attachment: local, local, scroll, scroll;
 }
 
 .data-table {
@@ -1048,9 +1261,38 @@ tbody td:last-child {
     opacity: 0.72;
 }
 
+/* Coluna de Ações fixa: continua visível ao rolar a tabela horizontalmente,
+   em vez de sair da área visível junto com as demais colunas. */
 .actions-cell {
+    position: sticky;
+    right: 0;
+    z-index: 1;
     white-space: nowrap;
     padding-right: 12px !important;
+    background: var(--panel-strong);
+    box-shadow: -8px 0 10px -6px rgba(0, 0, 0, 0.45);
+}
+
+tbody tr:hover .actions-cell {
+    background: #0c2c58;
+}
+
+tbody tr.row-atrasado .actions-cell {
+    background: #3a1f28;
+}
+
+.data-table thead th.actions-cell {
+    z-index: 3;
+    box-shadow: none;
+}
+
+/* Quando a coluna de Ações combina um ícone (34px) com botões de texto
+   (min-height maior, ex.: "Devolver"/"Atrasado"), o alinhamento por baseline
+   padrão do inline-flex deixa os dois desalinhados verticalmente. */
+.actions-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .inline-form {
@@ -1240,6 +1482,75 @@ tbody tr.row-a-confirmar > td:first-child {
 
 .side-link-return .side-icon {
     background: rgba(29, 110, 238, 0.12);
+}
+
+.side-link-row {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+}
+
+.side-link-row .side-link {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.side-link-toggle {
+    flex: 0 0 auto;
+    width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted-strong);
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.side-link-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+}
+
+.side-link-chevron {
+    width: 16px;
+    height: 16px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.18s ease;
+}
+
+.side-link-toggle[aria-expanded="true"] .side-link-chevron {
+    transform: rotate(180deg);
+}
+
+.side-submenu {
+    display: grid;
+    gap: 2px;
+    margin: 2px 0 4px 34px;
+    padding-left: 10px;
+    border-left: 1px solid var(--line);
+}
+
+.side-sublink {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--muted-strong);
+    font-size: 13px;
+    text-decoration: none;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.side-sublink:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
 }
 
 .side-quick-actions {
@@ -1742,6 +2053,24 @@ tbody tr.row-a-confirmar > td:first-child {
     color: var(--muted);
     font-size: 0.88rem;
     margin-bottom: 14px;
+}
+
+/* Trilha de auditoria de edição/exclusão (ex.: editar_movimentacao.html) */
+.audit-log {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.audit-log li {
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.audit-log strong {
+    color: var(--text);
 }
 
 .info-box {

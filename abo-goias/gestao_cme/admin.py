@@ -17,6 +17,7 @@ from .models import (
     KitMaterial,
     Material,
     Movimentacao,
+    RegistroAuditoriaMovimentacao,
     Turma,
 )
 
@@ -217,3 +218,22 @@ class MovimentacaoAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("aluno", "turma", "material")
     date_hierarchy = "data_hora"
+
+
+@admin.register(RegistroAuditoriaMovimentacao)
+class RegistroAuditoriaMovimentacaoAdmin(admin.ModelAdmin):
+    """Trilha somente leitura — os registros são gravados pelas views, nunca
+    pelo Admin, então não faz sentido permitir criar/editar por aqui."""
+
+    list_display = ("criado_em", "acao", "pacote_codigo", "aluno_nome", "usuario")
+    list_filter = ("acao",)
+    search_fields = ("pacote_codigo", "aluno_nome", "usuario__username")
+    date_hierarchy = "criado_em"
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(
+        self, request: HttpRequest, obj: Any | None = None
+    ) -> bool:
+        return False
