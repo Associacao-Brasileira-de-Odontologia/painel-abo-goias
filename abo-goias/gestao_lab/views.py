@@ -6,6 +6,7 @@ import logging
 import secrets as _secrets
 from datetime import date as date_type
 from datetime import datetime
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -101,6 +102,63 @@ def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
     return timezone.make_aware(dt)
 
 
+# Campos de data que aceitam filtro de período — ``criado_em`` é DateTimeField
+# (ModeloBase); os demais sao DateField do proprio PedidoMaterial. A distincao
+# importa porque um DateField comparado com um datetime completo (com hora)
+# nao compara como o esperado — precisa do ``.date()``.
+_CAMPOS_DATA_DATETIME = {"criado_em"}
+
+CAMPO_DATA_ACOMPANHAMENTO_OPCOES = [
+    ("registro", "Registro"),
+    ("previsao", "Previsão de entrega"),
+    ("entrega", "Entrega"),
+    ("faturamento", "Faturamento"),
+]
+CAMPO_DATA_ACOMPANHAMENTO_MODELO = {
+    "registro": "criado_em",
+    "previsao": "previsao_entrega",
+    "entrega": "data_entrega",
+    "faturamento": "data_faturamento",
+}
+CAMPO_DATA_ACOMPANHAMENTO_LABELS = dict(CAMPO_DATA_ACOMPANHAMENTO_OPCOES)
+
+CAMPO_DATA_FATURAMENTO_OPCOES = [
+    ("registro", "Registro"),
+    ("entrega", "Entrega"),
+    ("vencimento", "Vencimento"),
+]
+CAMPO_DATA_FATURAMENTO_MODELO = {
+    "registro": "criado_em",
+    "entrega": "data_entrega",
+    "vencimento": "data_vencimento",
+}
+CAMPO_DATA_FATURAMENTO_LABELS = dict(CAMPO_DATA_FATURAMENTO_OPCOES)
+
+
+def _filtrar_por_campo_data(
+    queryset: QuerySet,
+    campo: str,
+    data_inicio: datetime | None,
+    data_fim: datetime | None,
+) -> QuerySet:
+    """Recorta um queryset pelo intervalo de datas, no campo do modelo indicado.
+
+    ``campo`` pode ser um DateTimeField (``criado_em``) ou um DateField
+    (``previsao_entrega``, ``data_envio``, ``data_entrega``,
+    ``data_faturamento``, ``data_vencimento``) — os DateField são comparados
+    só pela data (``.date()``), sem a parte de hora.
+    """
+
+    e_datetime = campo in _CAMPOS_DATA_DATETIME
+    if data_inicio:
+        valor = data_inicio if e_datetime else data_inicio.date()
+        queryset = queryset.filter(**{f"{campo}__gte": valor})
+    if data_fim:
+        valor = data_fim if e_datetime else data_fim.date()
+        queryset = queryset.filter(**{f"{campo}__lte": valor})
+    return queryset
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
@@ -109,7 +167,31 @@ def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     hoje = date_type.today()
-    qs = PedidoMaterial.objects.all()
+
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
+    # Guardado antes do preenchimento do padrão abaixo, senão o filtro
+    # apareceria sempre "ativo" — mesmo cuidado do CME (cme_dashboard).
+    periodo_ativo = bool(data_inicio_str or data_fim_str)
+
+    # Padrão: do primeiro registro até hoje (todo o histórico) — mesmo
+    # comportamento do CME.
+    if not data_inicio_str and not data_fim_str:
+        primeiro = PedidoMaterial.objects.aggregate(Min("criado_em"))["criado_em__min"]
+        inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
+        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
+        data_fim_str = hoje.strftime("%Y-%m-%d")
+
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
+
+    qs = _filtrar_por_campo_data(
+        PedidoMaterial.objects.all(), "criado_em", data_inicio, data_fim
+    )
 
     metricas = {
         "em_dia": qs.filter(status=PedidoMaterial.Status.EM_DIA).count(),
@@ -119,6 +201,20 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         ).count(),
         "concluidos": qs.filter(status=PedidoMaterial.Status.CONCLUIDO).count(),
     }
+
+    # Query string do período, reaproveitada nos links dos KPIs — cada card
+    # abre o Acompanhamento já no mesmo recorte que usou para contar (mesmo
+    # padrão do CME).
+    filtro_datas_qs = urlencode(
+        {
+            chave: valor
+            for chave, valor in (
+                ("data_inicio", data_inicio_str),
+                ("data_fim", data_fim_str),
+            )
+            if valor
+        }
+    )
 
     proximas_entregas = (
         qs.filter(entregue=False)
@@ -138,6 +234,10 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "proximas_entregas": proximas_entregas,
             "recentes": recentes,
             "hoje": hoje,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
+            "periodo_ativo": periodo_ativo,
+            "filtro_datas_qs": filtro_datas_qs,
         },
     )
 
@@ -162,6 +262,9 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
     status_filtro = request.GET.get("status", "").strip()
     data_inicio_str = request.GET.get("data_inicio", "").strip()
     data_fim_str = request.GET.get("data_fim", "").strip()
+    campo_data = request.GET.get("campo_data", "registro").strip()
+    if campo_data not in CAMPO_DATA_ACOMPANHAMENTO_MODELO:
+        campo_data = "registro"
 
     # periodo_ativo precisa ser calculado a partir do que veio na URL, antes do
     # preenchimento do padrão "todo o histórico" abaixo — mesmo cuidado do CME
@@ -179,8 +282,9 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
     if status_filtro:
         qs = qs.filter(status=status_filtro)
 
-    # Filtro de período (mesmo comportamento do CME) — recorta pela data de
-    # registro do pedido. Default: 1º registro → hoje (todo o histórico).
+    # Filtro de período (mesmo comportamento do CME) — recorta pelo campo de
+    # data escolhido pelo usuário. Default: 1º registro → hoje (todo o
+    # histórico).
     if not data_inicio_str and not data_fim_str:
         primeiro = PedidoMaterial.objects.aggregate(Min("criado_em"))["criado_em__min"]
         inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
@@ -193,10 +297,9 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-    if data_inicio:
-        qs = qs.filter(criado_em__gte=data_inicio)
-    if data_fim:
-        qs = qs.filter(criado_em__lte=data_fim)
+    qs = _filtrar_por_campo_data(
+        qs, CAMPO_DATA_ACOMPANHAMENTO_MODELO[campo_data], data_inicio, data_fim
+    )
 
     metricas = {
         "em_dia": PedidoMaterial.objects.filter(
@@ -231,6 +334,9 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
             "data_inicio": data_inicio,
             "data_fim": data_fim,
             "periodo_ativo": periodo_ativo,
+            "campo_data": campo_data,
+            "campo_data_opcoes": CAMPO_DATA_ACOMPANHAMENTO_OPCOES,
+            "campo_data_label": CAMPO_DATA_ACOMPANHAMENTO_LABELS.get(campo_data),
             "metricas": metricas,
             "hoje": hoje,
         },
@@ -433,6 +539,7 @@ def _bool_filtro(valor: str) -> bool | None:
 
 @login_required
 def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
+    hoje = date_type.today()
     qs = (
         PedidoMaterial.objects.filter(entregue=True)
         .exclude(faturado_paciente=True, faturado_lab=True)
@@ -459,6 +566,32 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
     if valor_lab is not None:
         qs = qs.filter(faturado_lab=valor_lab)
 
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
+    campo_data = request.GET.get("campo_data", "registro").strip()
+    if campo_data not in CAMPO_DATA_FATURAMENTO_MODELO:
+        campo_data = "registro"
+
+    # periodo_ativo precisa ser calculado antes do preenchimento do padrão
+    # "todo o histórico" abaixo — mesmo cuidado das demais páginas.
+    periodo_ativo = bool(data_inicio_str or data_fim_str)
+
+    if not data_inicio_str and not data_fim_str:
+        primeiro = PedidoMaterial.objects.aggregate(Min("criado_em"))["criado_em__min"]
+        inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
+        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
+        data_fim_str = hoje.strftime("%Y-%m-%d")
+
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
+    qs = _filtrar_por_campo_data(
+        qs, CAMPO_DATA_FATURAMENTO_MODELO[campo_data], data_inicio, data_fim
+    )
+
     page_obj, query_string = _paginar(request, qs)
 
     return render(
@@ -471,6 +604,14 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
             "busca": busca,
             "faturado_paciente_filtro": faturado_paciente_filtro,
             "faturado_lab_filtro": faturado_lab_filtro,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "periodo_ativo": periodo_ativo,
+            "campo_data": campo_data,
+            "campo_data_opcoes": CAMPO_DATA_FATURAMENTO_OPCOES,
+            "campo_data_label": CAMPO_DATA_FATURAMENTO_LABELS.get(campo_data),
         },
     )
 
@@ -493,6 +634,7 @@ FILTRO_MOLDAGEM_LABELS = dict(FILTRO_MOLDAGEM_OPCOES)
 
 @login_required
 def moldagens(request: HttpRequest) -> HttpResponse:
+    hoje = date_type.today()
     qs = (
         Moldagem.objects.filter(ativo=True)
         .select_related("paciente", "aluno", "pedido_material")
@@ -501,6 +643,9 @@ def moldagens(request: HttpRequest) -> HttpResponse:
 
     busca = request.GET.get("q", "").strip()
     filtro = request.GET.get("filtro", "").strip()
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
+    periodo_ativo = bool(data_inicio_str or data_fim_str)
 
     if busca:
         qs = qs.filter(
@@ -520,6 +665,25 @@ def moldagens(request: HttpRequest) -> HttpResponse:
         qs = qs.exclude(pedido_material=None)
     elif filtro == "nao_convertida":
         qs = qs.filter(pedido_material=None)
+
+    # Filtro de período (registro da moldagem) — Moldagem só tem criado_em
+    # como data, então não há seletor de campo aqui (diferente de
+    # Acompanhamento/Faturamento). Padrão: 1º registro → hoje.
+    if not data_inicio_str and not data_fim_str:
+        primeiro = Moldagem.objects.filter(ativo=True).aggregate(Min("criado_em"))[
+            "criado_em__min"
+        ]
+        inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
+        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
+        data_fim_str = hoje.strftime("%Y-%m-%d")
+
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
+    qs = _filtrar_por_campo_data(qs, "criado_em", data_inicio, data_fim)
 
     metricas = {
         "total": Moldagem.objects.filter(ativo=True).count(),
@@ -544,6 +708,11 @@ def moldagens(request: HttpRequest) -> HttpResponse:
             "filtro": filtro,
             "filtro_label": FILTRO_MOLDAGEM_LABELS.get(filtro, "Todas"),
             "filtro_opcoes": FILTRO_MOLDAGEM_OPCOES,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "periodo_ativo": periodo_ativo,
             "metricas": metricas,
         },
     )

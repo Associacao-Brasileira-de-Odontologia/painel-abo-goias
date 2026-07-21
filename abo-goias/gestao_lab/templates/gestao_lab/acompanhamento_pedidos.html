@@ -49,9 +49,10 @@ redundante.
         {% comment %}
         Filtro de período — mesmo widget colapsável do CME
         (partials/filtro_periodo.html, promovido para reuso entre apps).
-        Recorta pela data de registro do pedido (criado_em).
+        Acompanhamento tem várias datas (registro, previsão, entrega,
+        faturamento), então o widget ganha um seletor de campo.
         {% endcomment %}
-        {% include "partials/filtro_periodo.html" with id_prefix="ped" %}
+        {% include "partials/filtro_periodo.html" with id_prefix="ped" campo_data_opcoes=campo_data_opcoes campo_data_atual=campo_data %}
         <div class="filter-actions">
             <button class="button primary" type="submit">Buscar</button>
             {% if busca or status_filtro or periodo_ativo %}
@@ -64,7 +65,7 @@ redundante.
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if status_filtro %}status={{ status_filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
+                   href="?{% if status_filtro %}status={{ status_filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}&{% endif %}campo_data={{ campo_data }}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
@@ -75,7 +76,7 @@ redundante.
                 <a class="info-chip info-chip--removable"
                    href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_filtro %}status={{ status_filtro }}{% endif %}"
                    title="Remover filtro de período">
-                    <span>Período (registro)</span>
+                    <span>Período ({{ campo_data_label|lower }})</span>
                     <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>

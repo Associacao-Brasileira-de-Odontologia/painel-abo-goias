@@ -47,19 +47,25 @@
                 <option value="{{ valor }}" {% if filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
             {% endfor %}
         </select>
+        {% comment %}
+        Filtro de período por data de registro — Moldagem só tem criado_em
+        como campo de data, então o widget não tem seletor de campo aqui
+        (diferente de Acompanhamento/Faturamento).
+        {% endcomment %}
+        {% include "partials/filtro_periodo.html" with id_prefix="mold" %}
         <div class="filter-actions">
             <button class="button primary" type="submit">Buscar</button>
-            {% if busca or filtro %}
+            {% if busca or filtro or periodo_ativo %}
                 <a class="button secondary compact-button" href="{% url 'lab_moldagens' %}">Limpar tudo</a>
             {% endif %}
         </div>
     </form>
 
-    {% if busca or filtro %}
+    {% if busca or filtro or periodo_ativo %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if filtro %}filtro={{ filtro }}{% endif %}"
+                   href="?{% if filtro %}filtro={{ filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
@@ -68,10 +74,19 @@
             {% endif %}
             {% if filtro %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
                    title="Remover filtro de situação">
                     <span>Situação</span>
                     <strong>{{ filtro_label }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if periodo_ativo %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if filtro %}filtro={{ filtro }}{% endif %}"
+                   title="Remover filtro de período">
+                    <span>Período (registro)</span>
+                    <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
