@@ -15,20 +15,18 @@
 {% block panel_actions %}
     <div class="topbar-actions">
         {% comment %}
-        Sincronização de alunos com o Eduq. Antes só aparecia para uma turma
-        específica escolhida no filtro por turma (removido — ver R2-1); virou
-        um botão global que atualiza turmas e alunos de uma vez
-        (atualizar_alunos_eduq), para não perder a capacidade de sincronizar
-        alunos a partir desta tela.
+        Botão único de sincronização com o Eduq. Antes a sincronização de
+        alunos só aparecia para uma turma específica escolhida no filtro por
+        turma (removido — ver R2-1). Agora usa atualizar_alunos_eduq, que
+        primeiro busca todas as turmas na API e, em seguida, busca todos os
+        alunos de cada turma (ver services/eduq_sync.sincronizar_eduq) — por
+        isso o rótulo "Sincronizar alunos e turmas". O botão separado só de
+        turmas foi removido por ficar redundante (este já cobre as turmas).
         {% endcomment %}
         <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <button class="button secondary" type="submit">Sincronizar alunos</button>
-        </form>
-        <form class="sync-form" method="post" action="{% url 'sincronizar_turmas_eduq' %}">
-            {% csrf_token %}
-            <button class="button secondary" type="submit">Sincronizar turmas</button>
+            <button class="button secondary" type="submit">Sincronizar alunos e turmas</button>
         </form>
     </div>
 {% endblock %}

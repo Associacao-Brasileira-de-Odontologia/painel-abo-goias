@@ -232,11 +232,10 @@ class RotasIniciaisTests(TestCase):
 
         response = self.client.get(reverse("alunos_por_turma"))
 
-        self.assertContains(response, "Sincronizar turmas")
-        self.assertContains(response, reverse("sincronizar_turmas_eduq"))
-        # A sincronização de alunos virou um botão global (antes dependia da
-        # turma escolhida no filtro por turma, removido em R2-1).
-        self.assertContains(response, "Sincronizar alunos")
+        # Botão único que busca todas as turmas na API e, em seguida, os
+        # alunos de cada turma (atualizar_alunos_eduq). O botão separado só de
+        # turmas foi removido por ficar redundante.
+        self.assertContains(response, "Sincronizar alunos e turmas")
         self.assertContains(response, reverse("atualizar_alunos_eduq"))
 
     def test_alunos_por_turma_sem_filtro_por_turma(self) -> None:
