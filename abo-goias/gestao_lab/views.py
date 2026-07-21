@@ -81,17 +81,19 @@ def _paginar(request: HttpRequest, queryset: QuerySet) -> tuple[Page, str]:
     return paginator.get_page(request.GET.get("page")), params.urlencode()
 
 
-def _parse_data_br(valor: str, fim_do_dia: bool = False) -> datetime | None:
-    """Converte "dd/mm/aaaa" em datetime aware, ou None se invalido.
+def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
+    """Converte "aaaa-mm-dd" (formato de ``<input type="date">``) em datetime
+    aware, ou None se invalido.
 
     Mesmo contrato do helper homonimo em gestao_cme.views — o filtro de periodo
-    do acompanhamento espelha o comportamento do CME.
+    do acompanhamento reusa o mesmo widget colapsável do CME
+    (``partials/filtro_periodo.html``).
     """
 
     if not valor:
         return None
     try:
-        dt = datetime.strptime(valor, "%d/%m/%Y")
+        dt = datetime.strptime(valor, "%Y-%m-%d")
     except ValueError:
         return None
     if fim_do_dia:
@@ -161,6 +163,11 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
     data_inicio_str = request.GET.get("data_inicio", "").strip()
     data_fim_str = request.GET.get("data_fim", "").strip()
 
+    # periodo_ativo precisa ser calculado a partir do que veio na URL, antes do
+    # preenchimento do padrão "todo o histórico" abaixo — mesmo cuidado do CME
+    # (cme_dashboard), senão o filtro apareceria sempre "ativo".
+    periodo_ativo = bool(data_inicio_str or data_fim_str)
+
     if busca:
         qs = qs.filter(
             Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
@@ -177,11 +184,11 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
     if not data_inicio_str and not data_fim_str:
         primeiro = PedidoMaterial.objects.aggregate(Min("criado_em"))["criado_em__min"]
         inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
-        data_inicio_str = inicio_padrao.strftime("%d/%m/%Y")
-        data_fim_str = hoje.strftime("%d/%m/%Y")
+        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
+        data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_br(data_inicio_str)
-    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
@@ -221,6 +228,9 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
             "status_label": status_label,
             "data_inicio_str": data_inicio_str,
             "data_fim_str": data_fim_str,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "periodo_ativo": periodo_ativo,
             "metricas": metricas,
             "hoje": hoje,
         },

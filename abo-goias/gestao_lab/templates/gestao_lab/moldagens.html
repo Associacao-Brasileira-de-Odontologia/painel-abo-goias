@@ -47,7 +47,12 @@
                 <option value="{{ valor }}" {% if filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
             {% endfor %}
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or filtro %}
+                <a class="button secondary compact-button" href="{% url 'lab_moldagens' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if busca or filtro %}
@@ -70,7 +75,6 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'lab_moldagens' %}">Limpar tudo</a>
         </div>
     {% endif %}
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 import io
 import json
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
@@ -528,6 +528,39 @@ class AcompanhamentoPedidosTests(TestCase):
         self.assertIn(pedido_entregue, pedidos)
         self.assertNotIn(self.pedido_em_dia, pedidos)
         self.assertNotIn(self.pedido_atrasado, pedidos)
+
+    def test_periodo_ativo_falso_sem_filtro_explicito(self) -> None:
+        # A view preenche data_inicio_str/data_fim_str com um padrao "todo o
+        # historico" quando nada vem na URL — periodo_ativo precisa continuar
+        # False nesse caso, senao o widget apareceria sempre aberto/ativo.
+        response = self.client.get(reverse("lab_pedidos"))
+        self.assertFalse(response.context["periodo_ativo"])
+
+    def test_periodo_ativo_verdadeiro_com_filtro_explicito(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos"), {"data_inicio": "2026-01-01"}
+        )
+        self.assertTrue(response.context["periodo_ativo"])
+
+    def test_filtra_por_periodo_de_registro_formato_iso(self) -> None:
+        pedido_antigo = _pedido(
+            self.pedido_em_dia.paciente,
+            self.pedido_em_dia.aluno,
+            self.pedido_em_dia.laboratorio,
+            self.pedido_em_dia.equipe,
+        )
+        PedidoMaterial.objects.filter(pk=pedido_antigo.pk).update(
+            criado_em=timezone.make_aware(datetime(2020, 1, 15))
+        )
+
+        response = self.client.get(
+            reverse("lab_pedidos"),
+            {"data_inicio": "2025-01-01", "data_fim": "2026-12-31"},
+        )
+
+        pedidos = list(response.context["pedidos"])
+        self.assertNotIn(pedido_antigo, pedidos)
+        self.assertIn(self.pedido_em_dia, pedidos)
 
 
 # ---------------------------------------------------------------------------

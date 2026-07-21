@@ -37,7 +37,12 @@
             <option value="">Pedido — todos</option>
             <option value="aberto" {% if pedido_filtro == "aberto" %}selected{% endif %}>Com pedido aberto</option>
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or pedido_filtro %}
+                <a class="button secondary compact-button" href="{% url 'lab_pacientes' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if busca or pedido_filtro %}
@@ -60,7 +65,6 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'lab_pacientes' %}">Limpar tudo</a>
         </div>
     {% endif %}
 

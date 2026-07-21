@@ -47,19 +47,20 @@ redundante.
             <input id="results-q-pedidos" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por paciente, aluno, laboratório ou descrição..." aria-label="Buscar na listagem">
         </div>
         {% comment %}
-        Filtro de período (mesmo comportamento do CME) — recorta pela data de
-        registro do pedido. Default preenchido pela view: 1º registro → hoje.
+        Filtro de período — mesmo widget colapsável do CME
+        (partials/filtro_periodo.html, promovido para reuso entre apps).
+        Recorta pela data de registro do pedido (criado_em).
         {% endcomment %}
-        <input type="text" name="data_inicio" value="{{ data_inicio_str }}"
-               placeholder="dd/mm/aaaa" maxlength="10" pattern="\d{2}/\d{2}/\d{4}"
-               aria-label="Data inicial (registro do pedido)">
-        <input type="text" name="data_fim" value="{{ data_fim_str }}"
-               placeholder="dd/mm/aaaa" maxlength="10" pattern="\d{2}/\d{2}/\d{4}"
-               aria-label="Data final (registro do pedido)">
-        <button class="button primary" type="submit">Buscar</button>
+        {% include "partials/filtro_periodo.html" with id_prefix="ped" %}
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_filtro or periodo_ativo %}
+                <a class="button secondary compact-button" href="{% url 'lab_pedidos' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
-    {% if busca or data_inicio_str or data_fim_str %}
+    {% if busca or periodo_ativo %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
@@ -70,16 +71,15 @@ redundante.
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            {% if data_inicio_str or data_fim_str %}
+            {% if periodo_ativo %}
                 <a class="info-chip info-chip--removable"
                    href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_filtro %}status={{ status_filtro }}{% endif %}"
                    title="Remover filtro de período">
                     <span>Período (registro)</span>
-                    <strong>{% if data_inicio_str %}{{ data_inicio_str }}{% else %}início{% endif %} → {% if data_fim_str %}{{ data_fim_str }}{% else %}hoje{% endif %}</strong>
+                    <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'lab_pedidos' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
