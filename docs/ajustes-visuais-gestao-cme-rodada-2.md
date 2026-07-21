@@ -1,5 +1,10 @@
 # Ajustes Visuais — Gestão de CME (rodada 2)
 
+> **Documento histórico.** Desde 2026-07-21, o estado atual do módulo `gestao_cme` está
+> consolidado em [`casos-de-uso-gestao-cme.md`](casos-de-uso-gestao-cme.md) — ver §11.2
+> para o resumo destes 4 itens e como foram resolvidos (todos implementados). Mantido
+> aqui como registro histórico da rodada — não reflete o comportamento atual das telas.
+
 > Data: 2026-07-21 · Complementa `docs/avaliacao-visual-gestao-cme.md` (rodada 1, 13 itens).
 > Metodologia: mesma da rodada 1 — aplicação executada localmente (Django dev server,
 > SQLite) com dados sintéticos, navegada com Chromium via Playwright autenticado como

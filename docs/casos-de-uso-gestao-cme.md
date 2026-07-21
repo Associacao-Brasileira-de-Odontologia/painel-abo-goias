@@ -2,16 +2,32 @@
 
 > Documento gerado a partir de análise autônoma do código-fonte (`abo-goias/gestao_cme`),
 > cruzando `models.py`, `views.py`, `forms.py`, `urls.py`, `permissoes.py`,
-> `integrations/eduq.py`, templates e os documentos já produzidos pelo time
-> (`auditoria-gestao-cme.md`, `melhorias-cme-contratos-2026-07.md`).
-> Data: 2026-07-20 · Escopo: aplicação `gestao_cme` (app label legado `core`).
+> `integrations/eduq.py`, templates e os documentos já produzidos pelo time.
+> Data: 2026-07-20 · Última atualização: 2026-07-21 · Escopo: aplicação `gestao_cme`
+> (app label legado `core`).
 >
 > Este documento nasceu como referência de priorização, sem implementar mudanças —
 > pontos que exigiam decisão de negócio foram marcados explicitamente na seção 7,
-> sem resolvê-los por suposição. **Atualização de 2026-07-20:** as 7 decisões de §7
-> foram tomadas pelo time de negócio e a maior parte foi implementada nesta mesma
-> data (ver marcações "Atualizado em 2026-07-20" nos casos de uso afetados e o
-> resumo em §7). O restante do backlog de §6 segue como referência de priorização.
+> sem resolvê-los por suposição. Ao longo de 2026-07-20/21 as decisões de §7 foram
+> tomadas e implementadas, seguidas por duas rodadas de auditoria/ajuste visual
+> (13 + 4 itens). **Atualização de 2026-07-21: unificação da documentação** — este
+> passou a ser o **documento único e atual** de referência para o módulo `gestao_cme`,
+> consolidando o estado mais recente de todas as rodadas anteriores. Ver §11 para o
+> histórico condensado e o índice dos demais documentos.
+
+## 0. Documentos relacionados (índice)
+
+| Documento | Data | Conteúdo | Status |
+|---|---|---|---|
+| **`casos-de-uso-gestao-cme.md`** (este arquivo) | 2026-07-20/21 | Casos de uso, regras de negócio, backlog e histórico consolidado — referência única e atual do módulo | ✅ Vigente |
+| `auditoria-gestao-cme.md` | 2026-07-13 | Auditoria inicial de backend (bugs, fluxos testados, backlog original) | Histórico — conteúdo relevante incorporado a §5/§6/§11 |
+| `melhorias-cme-contratos-2026-07.md` | 2026-07-15 | Rodadas 1–3 de melhorias (CME **e** Gestão de Contratos) | Histórico (parte de CME) — incorporado a §11; a parte de Contratos permanece como referência daquele módulo |
+| `avaliacao-visual-gestao-cme.md` | 2026-07-20 | Auditoria visual com screenshots (13 itens: tabelas, autocomplete, mini-menu, filtros, etc.) | Histórico — todos os itens resolvidos, resumo em §11.1 |
+| `ajustes-visuais-gestao-cme-rodada-2.md` | 2026-07-21 | Rodada 2 de ajustes visuais (4 itens: filtro por turma, rótulos de contagem, paginação, sobreposição do filtro de período) | Histórico — todos os itens resolvidos, resumo em §11.2 |
+
+Os documentos marcados "Histórico" continuam no repositório como registro (inclusive
+as evidências visuais em `docs/assets/avaliacao-visual-cme/`), mas **não devem ser lidos
+como descrição do comportamento atual** do sistema — para isso, use este arquivo.
 
 ---
 
@@ -85,9 +101,10 @@ flowchart LR
         UC18(("UC-18 Devolver empréstimo"))
         UC19(("UC-19 Marcar empréstimo atrasado"))
         UC20(("UC-20 Buscar aluno (autocomplete)"))
+        UC21(("UC-21 Editar empréstimo"))
     end
 
-    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC08 & UC09 & UC10 & UC11 & UC13 & UC14 & UC15 & UC16 & UC17 & UC18 & UC19
+    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC08 & UC09 & UC10 & UC11 & UC13 & UC14 & UC15 & UC16 & UC17 & UC18 & UC19 & UC21
     Super --> UC12
     Coord --> UC12
     Beat --> UC12
@@ -96,6 +113,7 @@ flowchart LR
     UC04 -.include.-> UC20
     UC17 -.include.-> UC20
     UC13 -.extend.-> UC09
+    UC21 -.extend.-> UC17
 ```
 
 ---
@@ -130,6 +148,8 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-02 · Consultar a Visão Geral (Dashboard CME)
 
+> **Atualizado em 2026-07-20/21** — filtro de período redesenhado (itens 8, 11 e R2-4).
+
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.cme_dashboard` → `/gestao-cme/visao-geral/`
 - **Fluxo principal:**
@@ -144,9 +164,15 @@ associada a ele (referenciando o backlog da seção 6).
      saídas do feed).
   5. Cada KPI é um link que abre a listagem de movimentações (UC-05) já filtrada e no
      mesmo intervalo de datas.
-- **Fluxo alternativo:** usuário informa `data_inicio`/`data_fim` (formato `dd/mm/aaaa`);
-  datas inválidas são silenciosamente descartadas (campo volta vazio, sem alertar o
-  usuário — ver melhoria U-01 em §6).
+- **Filtro de período (widget compartilhado `partials/filtro_periodo.html`):** um único
+  controle **"Período"**, no topo da barra de filtros (`.filter-bar`), com dois campos
+  `<input type="date">` ("De"/"Até", formato ISO `aaaa-mm-dd`) e botão "Aplicar". É um
+  `<details>` colapsável — só expande quando o usuário clica; quando há filtro ativo,
+  mostra um indicador (ponto) no resumo e um botão "Todo o período" para limpar. Ao
+  abrir, o painel ocupa a linha inteira da barra de filtros e **empurra** o restante do
+  conteúdo para baixo (não sobrepõe nada) — ver R2-4 em §11.2. O mesmo componente é
+  reusado, com a mesma aparência e comportamento, em Movimentações (UC-05) e Empréstimos
+  (UC-19).
 - **Regra de negócio:** Total = Retirados + Aguardando + Sem status (garantida pela
   fonte única `linhas_de_pacote()`).
 - **Risco sistêmico já registrado (B-07 da auditoria):** com o padrão "todo o histórico",
@@ -205,6 +231,10 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-05 · Consultar movimentações (histórico de pacotes)
 
+> **Atualizado em 2026-07-20/21** — filtro de período (item 11), rótulos de contagem
+> condicionados ao filtro ativo (item 12), botões Buscar/Limpar tudo lado a lado
+> (item 13) e painel do filtro de período sem sobreposição (R2-4).
+
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.home` → `/gestao-cme/movimentacoes/`
 - **Fluxo principal:**
@@ -217,9 +247,15 @@ associada a ele (referenciando o backlog da seção 6).
   3. Filtros disponíveis: texto livre (nome, matrícula, turma, código do pacote,
      material, arquivo de origem — todos acento-insensível via `nome_normalizado`),
      status (Retirado / Não retirado / Sem status), aluno específico (vindo de UC-09),
-     intervalo de datas.
-  4. Cada linha permite: alternar status de retirada (UC-08), editar (UC-06), excluir
+     e período (mesmo widget "Período" colapsável descrito em UC-02).
+  4. O resumo de resultados mostra "N aguardando retirada"/"N retirados" **apenas**
+     quando o filtro de Status correspondente está selecionado (não como atalho
+     permanente), com a mesma cor do badge da coluna Status (`.meta-warn`/`.meta-success`).
+  5. Cada linha permite: alternar status de retirada (UC-08), editar (UC-06), excluir
      (UC-07).
+  6. A paginação (rodapé da tabela, compartilhada por todas as listagens do módulo —
+     ver §5) oferece atalhos textuais **"« Primeira"** e **"Última »"**, além de
+     Anterior/Próxima e números de página.
 - **Regra de negócio:** filtro de "Movimentação" (Entrada/Saída) foi **removido**
   deliberadamente na consolidação por pacote — não fazia mais sentido com uma linha por
   pacote; o filtro de Status cobre a mesma necessidade.
@@ -277,23 +313,37 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-09 · Gerenciar alunos por turma
 
+> **Atualizado em 2026-07-21 (R2-1/R2-2).**
+
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.alunos_por_turma` → `/alunos-por-turma/`
 - **Estende:** UC-13 (atribuição de abrigo é feita inline nesta tela).
 - **Fluxo principal:**
-  1. Lista alunos agrupados/filtráveis por turma, com busca textual acento-insensível,
-     filtro de status (Ativo/Inativo/Todos) e total de movimentações por aluno.
-  2. Exibe a data da última sincronização com o Eduq (turmas e alunos).
+  1. Lista alunos com busca textual acento-insensível (por nome, matrícula, e-mail
+     **ou turma** — nome/código) e filtro de status (Ativo/Inativo/Todos).
+  2. Exibe a data da última sincronização com o Eduq (turmas e alunos) e o total de
+     alunos exibidos; se houver alunos sem abrigo, mostra a contagem em destaque.
   3. Coluna "Movimentações" é clicável e abre UC-05 já filtrado por aquele aluno.
   4. Coluna "Abrigo" é editável inline (UC-13).
-  5. Se a turma selecionada tem origem `EDUQ`, exibe botão de sincronização específica
-     daquela turma (UC-12).
+  5. Um único botão **"Sincronizar alunos e turmas"** (`atualizar_alunos_eduq`) busca
+     primeiro todas as turmas na API e, em seguida, todos os alunos de cada turma
+     (UC-12) — sempre visível, sem depender de nenhuma turma selecionada.
+- **Removido em 2026-07-21 (R2-1):** o `<select>` dedicado de filtro por turma foi
+  retirado da barra de filtros — a busca textual já cobre nome/código de turma, e o
+  dropdown era redundante (era também a maior causa de a barra de filtros dessa tela
+  precisar quebrar linha). Junto com ele saíram: o chip removível de "Turma", os
+  botões condicionais "Sincronizar turmas"/"Sincronizar alunos de \<turma\>" (que só
+  apareciam com uma turma selecionada) — substituídos pelo botão único do item 5
+  acima — e, em R2-2, o rótulo de contagem "N turmas" no resumo de resultados (não
+  fazia mais sentido sem nenhum filtro de turma na tela para ele se referir).
 - **Observação de usabilidade já mapeada:** o campo "Status" tem ambiguidade (situação
   de matrícula do aluno vs. vínculo com turma ativa) — **já mitigado** com tooltip
   (`melhorias-cme-contratos-2026-07.md`, item 3), mas vale validar se a ambiguidade
   conceitual de fato desapareceu ou só ganhou uma explicação.
 
 ### UC-10 · Cadastrar aluno manualmente
+
+> **Navegação atualizada em 2026-07-20 (item 9)** — ver nota abaixo.
 
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.cadastrar_aluno` → `/alunos-por-turma/novo/`
@@ -312,21 +362,47 @@ associada a ele (referenciando o backlog da seção 6).
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.cadastrar_turma` → `/turmas/nova/`
 - **Fluxo principal:** análogo a UC-10, com código único de turma.
+- **Navegação (item 9, 2026-07-20):** os links "Cadastrar aluno" (UC-10) e "Cadastrar
+  turma" (UC-11) deixaram de ficar como botões soltos no topo da tela de Alunos por
+  turma e passaram a ser um **mini-menu** (`partials/side_link_group.html`) sob o item
+  "Alunos por turma" da navegação lateral: clicar no item principal navega direto para
+  a listagem (UC-09), que já mostra o submenu automaticamente por estar ativo; um ícone
+  de seta (chevron) permite abrir/fechar o submenu manualmente a qualquer momento,
+  independente de qual tela está ativa. O mesmo padrão de mini-menu foi aplicado aos
+  demais itens de cadastro do módulo (Abrigos, Materiais, Kits, Empréstimos).
 
 ### UC-12 · Sincronizar cadastros com o Eduq
 
+> **Atualizado em 2026-07-21 (R2-1)** — botões consolidados, ver abaixo.
+
 - **Ator primário:** Coordenador / Superusuário (acionamento manual); **Celery Beat**
   (acionamento automático diário às 04:00).
-- **Views/rotas:**
-  - `sincronizar_turmas_eduq` (POST) → botão em `alunos_por_turma`.
-  - `sincronizar_alunos_turma` (POST, por turma) → botão em `alunos_por_turma`.
-  - `atualizar_alunos_eduq` (POST, turmas + alunos) → botão em `registrar_entrada` /
-    `registrar_saida`.
-  - `atualizar_turmas_eduq` (POST, só turmas) → botão em `criar_emprestimo`.
-  - `gestao_cme/tasks.py::sincronizar_eduq_task` (Celery Beat, 04:00 diária).
-- **Fluxo principal:** chama `services.eduq_sync.sincronizar_eduq`, que autentica e
-  consulta a API Eduq, faz `update_or_create` de turmas/alunos e retorna contadores
-  (criados/atualizados/erros) exibidos via `messages`.
+- **Views/rotas acionadas por botão hoje:**
+  - `atualizar_alunos_eduq` (POST, turmas **e** alunos) — botão em `alunos_por_turma`
+    ("Sincronizar alunos e turmas", UC-09), `registrar_entrada` e `registrar_saida`
+    ("Atualizar lista de alunos").
+  - `gestao_cme/tasks.py::sincronizar_eduq_task` (Celery Beat, 04:00 diária) — mesma
+    função de serviço (`sincronizar_eduq`, turmas + alunos), disparo automático.
+- **Views/rotas órfãs (código ainda existe, sem botão que as chame):** `sincronizar_turmas_eduq`
+  e `sincronizar_alunos_turma` ficaram sem nenhum template que as referencie depois que
+  R2-1 removeu o filtro por turma de `alunos_por_turma` (elas serviam ao botão
+  condicional "Sincronizar turmas"/"Sincronizar alunos de \<turma\>" daquela tela, que
+  dependia de uma turma selecionada). `atualizar_turmas_eduq` (só turmas, usado antes em
+  `criar_emprestimo`) já havia sido removida em rodada anterior, quando o botão de Novo
+  Empréstimo passou a usar `atualizar_alunos_eduq` (item 5 da avaliação visual, ver
+  §11.1). Nenhuma dessas três rotinas quebra nada permanecendo no código — mas são
+  candidatas a remoção em uma limpeza futura (ver S-10 em §6.2).
+- **Rótulo do botão (U-08):** **parcialmente resolvido.** Em `alunos_por_turma` o botão
+  foi renomeado para "Sincronizar alunos e turmas" (preciso — descreve as duas etapas).
+  Em `registrar_entrada`, `registrar_saida` e `criar_emprestimo` o mesmo botão **continua**
+  rotulado "Atualizar lista de alunos", que é impreciso pelo mesmo motivo original (também
+  sincroniza turmas) — renomear essas três telas ficou fora do escopo das rodadas já
+  feitas.
+- **Fluxo principal:** chama `services.eduq_sync.sincronizar_eduq(client,
+  sincronizar_turmas=True, sincronizar_alunos=True, ...)`, que busca **todas as turmas**
+  na API (`client.listar_turmas()`) e, em seguida, para **cada turma**, busca seus alunos
+  (`client.listar_alunos(codigo_turma)`), fazendo `update_or_create` de turmas/alunos e
+  retornando contadores (criados/atualizados/erros) exibidos via `messages`.
 - **Fluxo de exceção:** `EduqAPIError` (config/autenticação/rede) → mensagem de erro,
   nenhuma alteração parcial visível ao usuário além do que já foi persistido.
 - **Limitação estrutural conhecida:** a API Eduq **não expõe busca de aluno por nome**
@@ -336,7 +412,7 @@ associada a ele (referenciando o backlog da seção 6).
   como pendência de negócio (ver §7, item 6).
 - **Risco sistêmico:** o botão manual "Atualizar alunos" roda o sync **de forma síncrona
   no request** — pode ser lento com muitas turmas (43 turmas hoje). Já identificado no
-  backlog da auditoria como candidato a mover para fila assíncrona.
+  backlog da auditoria como candidato a mover para fila assíncrona (S-03).
 
 ### UC-13 · Atribuir ou remover abrigo de um aluno
 
@@ -353,9 +429,16 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-14 · Gerenciar abrigos
 
+> **Atualizado em 2026-07-21 (R2-2)** — rótulo de contagem condicionado ao filtro ativo.
+
 - **Ator primário:** Coordenador / Superusuário.
 - **Views/rotas:** `views.armarios` (listar, `/abrigos/`), `cadastrar_abrigo` (`/abrigos/novo/`),
   `editar_abrigo` (`/abrigos/<pk>/editar/`), `excluir_abrigo` (POST, `/abrigos/<pk>/excluir/`).
+- **Listagem:** busca textual, filtro de ocupação (`?ocupacao=ocupado|livre`); o resumo
+  de resultados mostra "N ocupado(s)" (`.meta-warn`) apenas com `ocupacao=ocupado`
+  selecionado, e "N livre(s)" (`.meta-success`) apenas com `ocupacao=livre` — mesmo
+  conceito aplicado em Materiais (UC-15) e Kits (UC-16): o rótulo de contagem só
+  aparece quando o filtro correspondente está ativo, em vez de sempre visível.
 - **Fluxo principal (edição):**
   1. Tela mostra o resumo dos alunos atualmente vinculados ao abrigo.
   2. Salvar exige **confirmação dupla obrigatória** via modal, listando quem ocupa o
@@ -368,10 +451,16 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-15 · Gerenciar materiais
 
+> **Atualizado em 2026-07-21 (R2-2)** — rótulo de contagem condicionado ao filtro ativo.
+
 - **Ator primário:** Coordenador / Superusuário.
 - **Views/rotas:** `views.materiais` (`/materiais/`), `cadastrar_material`
   (`/materiais/novo/`), `editar_material` (`/materiais/<pk>/editar/`), `excluir_material`
   (POST, `/materiais/<pk>/excluir/`).
+- **Listagem:** busca textual, filtro de disponibilidade (`?disponibilidade=disponivel|indisponivel`);
+  o resumo mostra "N de M disponíve(is)" (`.meta-success`) só com o filtro
+  "disponível" ativo, e "N de M indisponíve(is)" (`.meta-warn`) só com "indisponível"
+  ativo (mesmo conceito de UC-14/UC-16).
 - **Fluxo principal (edição/exclusão):**
   1. Edição permite alterar todos os campos, incluindo `ativo` (inativação, reversível).
   2. Tela de edição calcula e exibe quantas **unidades estão atualmente em empréstimo**
@@ -388,7 +477,8 @@ associada a ele (referenciando o backlog da seção 6).
 > **Atualizado em 2026-07-20** — implementa as decisões de negócio §7.1 e §7.2.
 > **Revisado em 2026-07-20** (avaliação da auditoria visual, item 6): a
 > sincronização automática de `Kit.quantidade` foi **revertida** — ver ponto 4
-> abaixo.
+> abaixo. **Atualizado em 2026-07-21 (R2-2):** ganhou filtro de Status
+> (Ativo/Inativo/Todos), que faltava em relação a Abrigos/Materiais — ver ponto 5.
 
 - **Ator primário:** Coordenador / Superusuário.
 - **Views/rotas:** `views.kits` (`/kits/`), `cadastrar_kit` (`/kits/novo/`),
@@ -420,6 +510,11 @@ associada a ele (referenciando o backlog da seção 6).
 - **Pós-condição (exclusão):** kit removido; `KitMaterial` associados são apagados em
   cascata (`on_delete=CASCADE`); empréstimos que já usaram o kit não são afetados
   (histórico preservado, exclusão só é possível quando não há vínculo ativo).
+- **Listagem (R2-2):** busca textual e filtro de Status (`?status=ativo|inativo`); o
+  resumo mostra "N de M ativo(s)" (`.meta-success`) só com "ativo" selecionado, e "N de
+  M inativo(s)" (`.meta-warn`) só com "inativo" selecionado — mesmo conceito de
+  UC-14/UC-15. Antes desta rodada, Kits era a única das três listagens sem filtro de
+  Status.
 
 ### UC-17 · Criar empréstimo de kit/material
 
@@ -453,7 +548,8 @@ associada a ele (referenciando o backlog da seção 6).
 
 ### UC-19 · Empréstimo atrasado (automático) e marcação manual
 
-> **Atualizado em 2026-07-20** — implementa a decisão de negócio §7.7.
+> **Atualizado em 2026-07-20/21** — decisão de negócio §7.7; filtro de período e
+> paginação adicionados à listagem de Empréstimos (item 11, R2-3, R2-4).
 
 - **Ator primário:** Sistema (automático); Coordenador (dono do empréstimo) /
   Superusuário (ação manual, como caso excepcional).
@@ -468,6 +564,12 @@ associada a ele (referenciando o backlog da seção 6).
   2. **Tarefa periódica diária** (`tasks.marcar_emprestimos_atrasados_task`, Celery
      Beat, 06:00) — cobre o caso de ninguém visitar a listagem; `data_prevista_devolucao`
      é um campo de data (não hora), então periodicidade diária é suficiente.
+- **Filtro de período e paginação (`views.emprestimos`):** a listagem ganhou o mesmo
+  widget "Período" das UC-02/UC-05 (filtrando por `data_emprestimo`, via
+  `_filtrar_por_intervalo(..., campo="data_emprestimo")`), e a paginação compartilhada
+  traz os atalhos "« Primeira"/"Última »". Cada linha oferece, além de "Devolver"/marcar
+  atrasado, o ícone de editar (UC-21), agrupados em `.actions-group` para alinhamento
+  vertical consistente.
 - **Alerta visual:** a listagem de Empréstimos já traz o badge "Atrasado"
   (`badge-atrasado`) e o contador clicável "N atrasado(s)" no resumo — como o status
   agora é atualizado automaticamente, esses indicadores refletem o atraso real sem
@@ -504,6 +606,36 @@ associada a ele (referenciando o backlog da seção 6).
   + busca ao vivo no Dental Office). Um aluno recém-matriculado só aparece depois de uma
   sincronização (manual, sob demanda pela turma, ou às 04:00).
 
+### UC-21 · Editar empréstimo *(adicionado em 2026-07-21)*
+
+- **Ator primário:** Coordenador (dono do empréstimo) / Superusuário.
+- **Estende:** UC-17 (Criar empréstimo) — mesma tela de listagem (UC-19), ação de linha.
+- **View/rota:** `views.editar_emprestimo` → `/emprestimos/<pk>/editar/`
+- **Pré-condição:** o empréstimo é visível ao usuário (`emprestimos_visiveis(request)` —
+  coordenador comum só edita os próprios; superusuário edita qualquer um), mesma regra
+  de visibilidade de UC-18/UC-19.
+- **Fluxo principal:**
+  1. A partir da listagem de Empréstimos, o coordenador abre a tela de edição de um
+     empréstimo específico.
+  2. A tela mostra um resumo somente leitura (aluno, kit, data do empréstimo, status
+     atual em badge) e um formulário (`EditarEmprestimoForm`) com apenas dois campos
+     editáveis: **data prevista de devolução** e **observações**. Aluno, kit e itens do
+     empréstimo não são editáveis aqui (corrigir isso exigiria desfazer/refazer o
+     empréstimo, fora do escopo desta tela).
+  3. Ao salvar, o registro é atualizado e o coordenador retorna à listagem (UC-19) com
+     mensagem de sucesso.
+- **Detalhe de implementação relevante:** o campo de data usa
+  `default_if_none:""|stringformat:"s"` no template para pré-preencher o
+  `<input type="date">` — sem esse filtro, o Django localiza o objeto `date` para
+  português ("27 de Julho de 2026"), formato que o `<input type="date">` não reconhece
+  e que fazia o campo aparecer vazio ao abrir a tela.
+- **Ação de linha associada (correção de bug, mesma rodada):** o botão de editar
+  empréstimo foi agrupado com os botões existentes "Devolver"/"Atrasado" da listagem
+  (`.actions-group`) — antes desse ajuste, os botões ficavam desalinhados verticalmente
+  entre si.
+- **Pós-condição:** `Emprestimo.data_prevista_devolucao`/`observacoes` atualizados;
+  demais campos (aluno, kit, status, itens) inalterados.
+
 ---
 
 ## 5. Regras de negócio transversais
@@ -531,6 +663,25 @@ associada a ele (referenciando o backlog da seção 6).
 5. **Fonte única de verdade para KPIs vs. listagem** — `linhas_de_pacote()` é usada tanto
    pela Visão Geral (UC-02) quanto pela listagem de Movimentações (UC-05); qualquer nova
    métrica de pacotes deve reusar essa função para não divergir.
+6. **Rótulo de contagem só aparece com o filtro correspondente ativo** *(adicionado em
+   2026-07-21)* — em Movimentações (UC-05), Abrigos (UC-14), Materiais (UC-15) e Kits
+   (UC-16), os rótulos de contagem ao lado de "N resultados" (ex.: "N ocupados", "N
+   disponíveis", "N de M ativos") só aparecem quando o filtro de status/situação
+   correspondente está selecionado — não como atalho permanente — usando a mesma cor do
+   badge da coluna de status (`.meta-warn`/`.meta-success`). Em Alunos por turma (UC-09)
+   o rótulo de contagem por turma foi **removido** (não gated) porque o filtro que ele
+   descrevia deixou de existir (R2-1).
+7. **Paginação com atalhos de primeira/última página** *(adicionado em 2026-07-21,
+   R2-3)* — `templates/partials/paginacao.html`, compartilhado por **todas** as
+   listagens do módulo (e também por `gestao_lab`/`gestao_contratos`), sempre oferece
+   "« Primeira" e "Última »" ao lado de "Anterior"/"Próxima", com rótulo textual (não só
+   o símbolo) para maior descoberta, desabilitados quando não aplicável.
+8. **Filtro de período: widget único e reusado** *(item 8/11, corrigido em R2-4)* —
+   `partials/filtro_periodo.html`, um `<details>` colapsável ("Período") com dois
+   `<input type="date">`, reusado sem alteração visual em Visão Geral (UC-02),
+   Movimentações (UC-05) e Empréstimos (UC-19). Ao abrir, ocupa a linha inteira da
+   barra de filtros e empurra o conteúdo abaixo para baixo — nunca sobrepõe nem
+   ultrapassa a borda do painel de resultados (bug corrigido na rodada 2, ver §11.2).
 
 ---
 
@@ -545,14 +696,14 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 
 | ID | Caso de uso | Problema | Impacto | Sugestão | Status |
 |---|---|---|---|---|---|
-| U-01 | UC-02 | Data inválida no filtro de período é descartada silenciosamente (campo some, sem mensagem) | Usuário não entende por que o filtro "não aplicou" | Exibir erro de validação inline, como já ocorre nos formulários de cadastro | Em aberto |
+| U-01 | UC-02 | Data inválida no filtro de período é descartada silenciosamente (campo some, sem mensagem) | Usuário não entende por que o filtro "não aplicou" | Exibir erro de validação inline, como já ocorre nos formulários de cadastro | 🟡 **Mitigado em 2026-07-20** — os campos passaram de texto livre (`dd/mm/aaaa`) para `<input type="date">` nativo (item 8/11), cujo próprio calendário do navegador já impede a maioria das entradas inválidas por digitação. Não há, porém, mensagem de validação inline explícita se uma data malformada chegar por URL manual — o campo simplesmente ignora o valor |
 | U-02 | UC-03 | Após gerar N pacotes, a tela mostra os códigos mas não há indicação de progresso de etiquetagem física (quantos já foram etiquetados) | Risco de trocar/pular etiqueta em lotes grandes (até 50) | Checklist interativo opcional na tela de confirmação | Em aberto |
 | U-03 | UC-05 / UC-08 | Alternar status de retirada manualmente (UC-08) não avisa que isso pode descolar o registro do vínculo `entrada_origem`/SAIDA real | Divergência de dados sem o operador perceber a causa | Tooltip/confirmação explicando a consequência antes de aplicar | Em aberto |
 | U-04 | UC-16 | Não há edição nem exclusão de kit pela interface operacional (só criação) | Correção de kit errado exige Admin, fora do fluxo do coordenador | — | ✅ **Resolvido em 2026-07-20** — ver UC-16 (`editar_kit`/`excluir_kit`) |
 | U-05 | UC-06/UC-07 | Exclusão de movimentação é irreversível e sem trilha de auditoria (quem excluiu, quando) | Dificulta investigar divergências no histórico de esterilização | — | ✅ **Resolvido em 2026-07-20** — ver UC-06/UC-07 (`RegistroAuditoriaMovimentacao`) |
 | U-06 | UC-06 | Edição de movimentação não versiona o valor anterior | Mesma lacuna de rastreabilidade do item acima | — | ✅ **Parcialmente resolvido em 2026-07-20** — auditoria mínima (usuário/ação/quando) implementada; **não** inclui o valor anterior do campo (versionamento completo ficou fora do escopo "mínimo" definido na decisão de negócio) |
 | U-07 | UC-19 | Marcação de atraso é 100% manual; nada compara `data_prevista_devolucao` com hoje | Empréstimos atrasados podem passar despercebidos | — | ✅ **Resolvido em 2026-07-20** — ver UC-19 (`marcar_emprestimos_atrasados`, automático) |
-| U-08 | UC-12 / UC-20 | Rótulo "Atualizar lista de alunos" nas telas de entrada/saída também sincroniza turmas — nome impreciso (já observado na rodada 3 de melhorias, não corrigido) | Confunde o operador sobre o que o botão realmente faz | Renomear para "Atualizar alunos e turmas" | Em aberto |
+| U-08 | UC-12 / UC-20 | Rótulo "Atualizar lista de alunos" nas telas de entrada/saída também sincroniza turmas — nome impreciso (já observado na rodada 3 de melhorias, não corrigido) | Confunde o operador sobre o que o botão realmente faz | Renomear para "Atualizar alunos e turmas" | 🟡 **Parcialmente resolvido em 2026-07-21 (R2-1)** — em Alunos por turma (UC-09) o botão foi consolidado e renomeado para "Sincronizar alunos e turmas". Em `registrar_entrada`, `registrar_saida` e `criar_emprestimo` o rótulo continua "Atualizar lista de alunos" (mesmo problema, ainda em aberto nessas três telas) |
 | U-09 | UC-13/UC-14 | Não há como ver, a partir da tela de Abrigos (UC-14), o histórico de quem já ocupou um abrigo — só a ocupação atual | Perda de contexto para investigar trocas de abrigo | Tela ou seção de histórico de ocupação (mesmo que simples, via `Aluno.atualizado_em` não é suficiente hoje) | Em aberto |
 | U-10 | Global | Nenhuma tela relatada acima expõe estado de carregamento além do spinner de busca (A-06 já corrigido) para **ações de escrita** (submits de POST fora dos forms padrão, como alternar retirado, atribuir abrigo) | Cliques duplos podem gerar ações repetidas em conexões lentas | Desabilitar botão + spinner nos POSTs de ação rápida (mesmo padrão do `.js-loading-submit`) | Em aberto |
 
@@ -569,6 +720,7 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 | S-07 | Integração Eduq (UC-12/UC-20) | Sem endpoint de busca de aluno por nome no Eduq — busca de UC-20 é estritamente local e depende de sincronização prévia | Ver §7.4 | ✅ **Contornado em 2026-07-20** — a limitação em si (Eduq sem busca por nome) continua existindo e está fora do controle da equipe, mas o fluxo agora oferece sincronizar a turma sob demanda a partir da busca vazia (ver UC-20, `sincronizar_turma_busca`) |
 | S-08 | Empréstimos sem itens (UC-17) | Empréstimo sem kit não tem fluxo de adicionar `ItemEmprestimo` avulso pela interface | Avaliar se o caso de uso "emprestar material avulso, sem kit" é real na operação; se for, precisa de tela própria | Em aberto |
 | S-09 | Observabilidade | Erros de integração Eduq não têm logging estruturado (B-08 do backlog original, ainda aberto) | Padronizar logging de falhas de integração (Eduq e demais) para facilitar diagnóstico sem depender de `messages` na UI | Em aberto |
+| S-10 | Sincronização Eduq (UC-12) *(identificado em 2026-07-21)* | `views.sincronizar_turmas_eduq` e `views.sincronizar_alunos_turma` (com suas rotas em `urls.py`) ficaram **órfãs** — nenhum template as chama mais desde que R2-1 removeu o filtro por turma (e o botão condicional que dependia dele) de Alunos por turma | Remover a view/rota morta numa limpeza futura, ou documentar explicitamente a intenção de mantê-la caso haja plano de reuso | Em aberto |
 
 ---
 
@@ -646,7 +798,7 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 | UC-09 | `alunos_por_turma` | `alunos_por_turma.html` |
 | UC-10 | `cadastrar_aluno` | `cadastrar_aluno.html` |
 | UC-11 | `cadastrar_turma` | `cadastrar_turma.html` |
-| UC-12 | `sincronizar_turmas_eduq`, `sincronizar_alunos_turma`, `atualizar_alunos_eduq`, `atualizar_turmas_eduq`, `tasks.sincronizar_eduq_task` | botões em `alunos_por_turma.html`, `registrar_entrada.html`, `registrar_saida.html`, `criar_emprestimo.html` |
+| UC-12 | `atualizar_alunos_eduq`, `tasks.sincronizar_eduq_task` (+ `sincronizar_turmas_eduq`/`sincronizar_alunos_turma`, órfãs — ver S-10) | botões em `alunos_por_turma.html`, `registrar_entrada.html`, `registrar_saida.html`, `criar_emprestimo.html` |
 | UC-13 | `atribuir_abrigo` | ação inline em `alunos_por_turma.html` |
 | UC-14 | `armarios`, `cadastrar_abrigo`, `editar_abrigo`, `excluir_abrigo` | `armarios.html`, `form_abrigo.html` |
 | UC-15 | `materiais`, `cadastrar_material`, `editar_material`, `excluir_material` | `materiais.html`, `form_material.html` |
@@ -655,6 +807,7 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 | UC-18 | `devolver_emprestimo` | ação em `emprestimos.html` |
 | UC-19 | `emprestimos` (auto), `marcar_emprestimo_atrasado` (manual), `tasks.marcar_emprestimos_atrasados_task` | `emprestimos.html` |
 | UC-20 | `buscar_alunos`, `sincronizar_turma_busca` | `partials/_aluno_results.html` |
+| UC-21 | `editar_emprestimo` | `editar_emprestimo.html` |
 
 ---
 
@@ -673,21 +826,104 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 | **Saída** | Movimentação que registra a retirada de um pacote já esterilizado |
 | **Retirado** | Campo booleano (`True`/`False`/`None`) que indica se o pacote já foi retirado |
 | **RegistroAuditoriaMovimentacao** | Trilha mínima (usuário, ação, timestamp) de edições e exclusões de `Movimentacao` |
+| **Período ativo** (`periodo_ativo`) | Indica se o usuário informou algum filtro de data (`data_inicio`/`data_fim`) explicitamente — controla se o widget "Período" aparece expandido e se o botão "Todo o período" é exibido |
 
 ---
 
 ## 10. Próximos passos sugeridos
 
-> Atualizado em 2026-07-20 após a implementação das decisões de §7.
+> Atualizado em 2026-07-21 após a unificação da documentação e as rodadas de auditoria
+> visual (13 + 4 itens, ver §11).
 
 1. ~~Validar este documento com a coordenação da CME, priorizando os itens de §7~~ —
    **feito**: as 7 decisões de §7 foram tomadas; itens 1, 2, 4, 6 e 7 estão
-   implementados (ver UC-16, UC-19, UC-20, UC-06/UC-07), suíte completa verde (607
-   testes).
-2. Transformar os itens restantes de §6.1/§6.2 (ainda "Em aberto") em tarefas técnicas,
-   seguindo o mesmo formato já usado em `melhorias-cme-contratos-2026-07.md`.
-3. **S-02 (permissões) continua sendo o maior risco sistêmico do módulo** — decisão de
-   negócio foi "não implementar agora" (§7.3), não "não é um risco". Controle de acesso
-   segue inexistente sobre operações irreversíveis (exclusão de movimentação, material,
-   abrigo, kit) para qualquer usuário autenticado. Prioridade para retomar assim que o
-   time de negócio definir a matriz de quem pode fazer o quê.
+   implementados (ver UC-16, UC-19, UC-20, UC-06/UC-07).
+2. ~~Auditoria visual e ajustes de usabilidade (13 itens + rodada 2 de 4 itens)~~ —
+   **feito**: todos os 17 itens das duas rodadas foram implementados, testados e
+   enviados (ver §11.1/§11.2 para o resumo de cada um).
+3. Itens ainda "Em aberto" em §6.1/§6.2 (usabilidade e sistêmicos) seguem como backlog
+   de priorização — nenhum é bloqueante para o uso normal do sistema hoje. Destaques:
+   - **S-02 (permissões) continua sendo o maior risco sistêmico do módulo** — decisão
+     de negócio foi "não implementar agora" (§7.3), não "não é um risco". Controle de
+     acesso segue inexistente sobre operações irreversíveis (exclusão de movimentação,
+     material, abrigo, kit) para qualquer usuário autenticado. Prioridade para retomar
+     assim que o time de negócio definir a matriz de quem pode fazer o quê.
+   - **U-08 (rótulo do botão de sincronização)** parcialmente resolvido — falta
+     renomear em `registrar_entrada`/`registrar_saida`/`criar_emprestimo`.
+   - **S-10 (views órfãs de sincronização por turma)** — candidatas a remoção numa
+     limpeza futura de código, sem urgência.
+4. Suíte completa do projeto (634 testes) segue verde após todas as rodadas; qualquer
+   nova alteração em `templates/partials/paginacao.html` ou nos partials compartilhados
+   de filtro/autocomplete deve rodar a suíte **completa** (não só `gestao_cme`), por
+   serem reusados também por `gestao_lab` e `gestao_contratos`.
+
+---
+
+## 11. Histórico consolidado de auditorias e ajustes visuais
+
+> Seção adicionada em 2026-07-21 na unificação da documentação. Resume o que cada
+> rodada anterior encontrou e como foi resolvido, para que este arquivo seja
+> suficiente sem precisar abrir os documentos históricos listados em §0.
+
+### 11.0 Antes das rodadas visuais — auditoria de backend e melhorias (2026-07-13 a 07-15)
+
+`auditoria-gestao-cme.md` (2026-07-13) auditou o backend recém após a integração real
+com o Eduq (43 turmas) e encontrou, entre outros: busca sensível a acento (crítico,
+corrigido com `nome_normalizado`), botões de ação quebrados por vazamento de CSS em
+formulários `form-stack` (corrigido), ausência de autocomplete de aluno (implementado
+com HTMX), ausência de exclusão de material (implementada com tratamento de
+`ProtectedError`), e o backlog sistêmico ainda hoje aberto (B-06 label `core`, B-07
+geração de código de pacote sem lock, B-08 logging de integração — refletidos em
+S-05/S-01/S-09 de §6.2).
+
+`melhorias-cme-contratos-2026-07.md` (2026-07-15) implementou, em três rodadas, a maior
+parte do que a auditoria listou: botão de cadastro de kit, confirmação dupla ao editar
+abrigo, tooltip no campo Status, padronização do botão "Limpar tudo", sincronização
+abrigo↔ocupação, movimentações clicáveis por aluno, autocomplete padronizado no
+formulário de empréstimo, ícones no lugar de texto em "Editar", exclusão de abrigo,
+consolidação da listagem de movimentações em uma linha por pacote (com o vínculo
+explícito `entrada_origem` — ver regra transversal 2 em §5), botão de atualizar turmas
+no formulário de empréstimo (depois substituído, ver item 5 abaixo), KPIs clicáveis da
+Visão Geral e período padrão "todo o histórico". Esses resultados estão refletidos nos
+casos de uso correspondentes (UC-05, UC-09, UC-13, UC-14, UC-17, UC-02) e não são
+repetidos aqui em detalhe.
+
+### 11.1 Rodada 1 — auditoria visual com screenshots (`avaliacao-visual-gestao-cme.md`, 2026-07-20)
+
+Feita por observação direta das telas renderizadas (Playwright, desktop 1440×900 e
+mobile 390×844), encontrou 8 achados; os itens 9–13 abaixo vieram de pedidos diretos
+complementares na mesma rodada. **Todos os 13 itens foram implementados, testados e
+enviados:**
+
+| # | Achado / pedido | Severidade | Resolução |
+|---|---|---|---|
+| 1 | Toda tabela de listagem era mais larga que o container, escondendo a coluna de Ações (`min-width: 920px` fixo em `.data-table`) | Alta | Coluna de Ações fixada (`position: sticky; right: 0`) + indicador visual de rolagem, nas 6 listagens |
+| 2 | Autocomplete de aluno empurrava o formulário para baixo a cada tecla (sem `position: absolute`) | Alta | `.search-results-wrap` convertido em overlay posicionado sobre o formulário |
+| 3 | Ordem dos botões "Registrar entrada"/"Registrar retirada" invertida entre Portal e menu lateral | Média | Ordem unificada (entrada primeiro, consistente com o ciclo operacional) |
+| 4 | Coluna "Última atualização" em Abrigos sempre vazia (`ultima_sincronizacao`, campo que só existe para Turma/Aluno) | Média | Coluna trocada para `atualizado_em` (sempre populado) |
+| 5 | "Novo empréstimo" só sincronizava turmas, não alunos, apesar de usar o mesmo autocomplete das outras telas | Média | Botão trocado para `atualizar_alunos_eduq` (turmas + alunos), igual a Registrar entrada/saída — `atualizar_turmas_eduq` removida |
+| 6 | Colunas "Quantidade" e "Disponíveis" de Kits pareciam contraditórias, sem explicação | Baixa | Tooltips explicando cada coluna; `Kit.quantidade` mantido como estoque cadastrado manual (decisão de negócio revista — ver UC-16, §7.1) |
+| 7 | Métricas do Portal (exceto o alerta) não eram clicáveis, ao contrário dos KPIs da Visão Geral | Baixa | Métricas relevantes do Portal viraram links, mesmo padrão da Visão Geral |
+| 8 | Filtro de período da Visão Geral aparecia em dois lugares (chips no topo, formulário na barra lateral) | Baixa | Formulário único movido para o topo (`.filter-bar`), chips somente-leitura removidos; datas passaram a `<input type="date">` ISO |
+| 9 | *(pedido direto)* Botões "Cadastrar X" no topo das telas | — | Convertidos em mini-menu na navegação lateral (`side_link_group.html`) — ver UC-10/UC-11 |
+| 10 | *(pedido direto)* Faltava editar empréstimo; botão de Ações desalinhado | — | `editar_emprestimo` implementado (UC-21); botões agrupados em `.actions-group` |
+| 11 | *(pedido direto)* Filtro de período ausente em Movimentações/Empréstimos | — | Widget "Período" (item 8) reusado nas duas telas, com `_filtrar_por_intervalo` generalizado |
+| 12 | *(pedido direto)* Rótulos de contagem de Movimentações confusos | — | Rótulos "N aguardando"/"N retirados" só aparecem com o filtro de Status correspondente ativo, na cor do badge |
+| 13 | *(pedido direto)* Botões "Buscar"/"Limpar tudo" desalinhados verticalmente | — | "Limpar tudo" movido para dentro do `<form class="filter-bar">`, lado a lado com "Buscar" (`.filter-actions`), nas 6 listagens |
+
+Evidências visuais (antes da correção) preservadas em
+`docs/assets/avaliacao-visual-cme/` e referenciadas em `avaliacao-visual-gestao-cme.md`.
+
+### 11.2 Rodada 2 — ajustes visuais (`ajustes-visuais-gestao-cme-rodada-2.md`, 2026-07-21)
+
+Quatro itens adicionais, mesma metodologia da rodada 1. **Todos implementados:**
+
+| # | Ajuste | Resolução |
+|---|---|---|
+| R2-1 | Remover o filtro por turma de Alunos por turma | `<select name="turma">`, chip e leitura de `turma_id` removidos (busca textual já cobre turma); botões condicionais de sincronização por turma substituídos por um único "Sincronizar alunos e turmas" (ver UC-09/UC-12) |
+| R2-2 | Rótulo de contagem só com filtro ativo em Abrigos/Materiais/Kits; e remoção do rótulo de turma em Alunos por turma | Já implementado no commit `d6f1f2a` antes desta rodada (que também adicionou o filtro de Status faltante em Kits); confirmado nas três telas. Rótulo "N turmas" removido de Alunos por turma por não ter mais filtro correspondente |
+| R2-3 | Atalhos de primeira/última página nas listagens | Já existiam (`page=1`/`page=num_pages`); tornados mais descobríveis com rótulo textual "« Primeira"/"Última »" em vez de só os símbolos |
+| R2-4 | Painel do filtro de período sobrepunha componentes e escapava da borda ao abrir | Causa: `.filter-period-panel` com `position: absolute` e largura calculada pelo próprio botão, não pelo conteúdo. Corrigido convertendo o painel para `position: static` (em fluxo), com `.filter-period[open] { flex-basis: 100% }` — o painel empurra o conteúdo abaixo em vez de sobrepor, e nunca ultrapassa a borda |
+
+Verificado nas três telas afetadas pelo R2-4 (Visão Geral, Movimentações,
+Empréstimos) com screenshots mostrando o reflow limpo, sem sobreposição.

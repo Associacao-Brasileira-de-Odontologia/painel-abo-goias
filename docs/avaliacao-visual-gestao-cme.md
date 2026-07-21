@@ -1,5 +1,12 @@
 # Avaliação Visual — Gestão de CME (botões, filtros e posicionamento)
 
+> **Documento histórico.** Desde 2026-07-21, o estado atual do módulo `gestao_cme` está
+> consolidado em [`casos-de-uso-gestao-cme.md`](casos-de-uso-gestao-cme.md) — ver §11.1
+> para o resumo de cada achado abaixo e como foi resolvido (todos os 13 itens foram
+> implementados). Mantido aqui como registro das evidências visuais (screenshots em
+> `docs/assets/avaliacao-visual-cme/`) e das medições originais — não reflete o
+> comportamento atual das telas.
+
 > Data: 2026-07-20 · Complementa `docs/casos-de-uso-gestao-cme.md`.
 > Metodologia: aplicação executada localmente (Django dev server, SQLite), populada com
 > dados sintéticos (turmas, alunos, abrigos, movimentações, empréstimos — sem relação com
