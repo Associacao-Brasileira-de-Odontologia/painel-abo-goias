@@ -234,6 +234,47 @@ class RotasIniciaisTests(TestCase):
 
         self.assertContains(response, "Sincronizar turmas")
         self.assertContains(response, reverse("sincronizar_turmas_eduq"))
+        # A sincronização de alunos virou um botão global (antes dependia da
+        # turma escolhida no filtro por turma, removido em R2-1).
+        self.assertContains(response, "Sincronizar alunos")
+        self.assertContains(response, reverse("atualizar_alunos_eduq"))
+
+    def test_alunos_por_turma_sem_filtro_por_turma(self) -> None:
+        """R2-1: o filtro dedicado por turma foi removido — a tela não traz
+        mais o select name="turma"; a busca textual cobre turma por nome e
+        código."""
+
+        turma_a = Turma.objects.create(
+            codigo="TA1", nome="Turma A", origem=OrigemDados.MANUAL
+        )
+        turma_b = Turma.objects.create(
+            codigo="TB2", nome="Turma B", origem=OrigemDados.MANUAL
+        )
+        Aluno.objects.create(
+            matricula="MA1", nome="Ana", turma=turma_a, origem=OrigemDados.MANUAL
+        )
+        Aluno.objects.create(
+            matricula="MB2", nome="Bruno", turma=turma_b, origem=OrigemDados.MANUAL
+        )
+        usuario = get_user_model().objects.create_user(
+            username="coord-turma", password="senha-segura"
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("alunos_por_turma"))
+        self.assertNotContains(response, 'name="turma"')
+
+        # O parâmetro turma na URL não recorta mais a listagem.
+        resposta_param = self.client.get(
+            reverse("alunos_por_turma"), {"turma": turma_a.pk}
+        )
+        self.assertContains(resposta_param, "Ana")
+        self.assertContains(resposta_param, "Bruno")
+
+        # A busca textual continua encontrando alunos pela turma (código).
+        resposta_busca = self.client.get(reverse("alunos_por_turma"), {"q": "TA1"})
+        self.assertContains(resposta_busca, "Ana")
+        self.assertNotContains(resposta_busca, "Bruno")
 
     def test_alunos_por_turma_exibe_ultima_sincronizacao(self) -> None:
         usuario = get_user_model().objects.create_user(

@@ -14,13 +14,18 @@
 {% endcomment %}
 {% block panel_actions %}
     <div class="topbar-actions">
-        {% if sync_alunos_url %}
-            <form class="sync-form" method="post" action="{{ sync_alunos_url }}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button class="button secondary" type="submit">{{ sync_alunos_label }}</button>
-            </form>
-        {% endif %}
+        {% comment %}
+        Sincronização de alunos com o Eduq. Antes só aparecia para uma turma
+        específica escolhida no filtro por turma (removido — ver R2-1); virou
+        um botão global que atualiza turmas e alunos de uma vez
+        (atualizar_alunos_eduq), para não perder a capacidade de sincronizar
+        alunos a partir desta tela.
+        {% endcomment %}
+        <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button class="button secondary" type="submit">Sincronizar alunos</button>
+        </form>
         <form class="sync-form" method="post" action="{% url 'sincronizar_turmas_eduq' %}">
             {% csrf_token %}
             <button class="button secondary" type="submit">Sincronizar turmas</button>
@@ -42,17 +47,13 @@
             <option value="inativo" {% if status_aluno == "inativo" %}selected{% endif %}>Somente inativos</option>
             <option value="todos" {% if status_aluno == "todos" %}selected{% endif %}>Todos</option>
         </select>
-        <select name="turma" aria-label="Filtrar por turma" onchange="this.form.submit()">
-            <option value="">Turma — todas</option>
-            {% for turma in turmas %}
-                <option value="{{ turma.pk }}" {% if turma_id == turma.pk|stringformat:"s" %}selected{% endif %}>
-                    {{ turma.codigo }} — {{ turma.nome }}
-                </option>
-            {% endfor %}
-        </select>
+        {% comment %}
+        O filtro dedicado por turma (select) foi removido (R2-1): a busca
+        textual acima já pesquisa por nome e código da turma.
+        {% endcomment %}
         <div class="filter-actions">
             <button class="button primary" type="submit">Buscar</button>
-            {% if busca or turma_id or status_aluno != "ativo" %}
+            {% if busca or status_aluno != "ativo" %}
                 {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
                 <a class="button secondary compact-button" href="{% url 'alunos_por_turma' %}">Limpar tudo</a>
             {% endif %}
@@ -60,11 +61,11 @@
     </form>
 
     {# Chips removíveis de filtro ativo #}
-    {% if busca or turma_id or status_aluno != "ativo" %}
+    {% if busca or status_aluno != "ativo" %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if status_aluno != 'ativo' %}status={{ status_aluno }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                   href="?{% if status_aluno != 'ativo' %}status={{ status_aluno }}{% endif %}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
@@ -73,19 +74,10 @@
             {% endif %}
             {% if status_aluno != "ativo" %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if turma_id %}turma={{ turma_id }}{% endif %}"
+                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
                    title="Voltar a exibir somente ativos">
                     <span>Exibindo</span>
                     <strong>{% if status_aluno == "inativo" %}Inativos{% else %}Todos{% endif %}</strong>
-                    <span class="chip-x" aria-hidden="true">×</span>
-                </a>
-            {% endif %}
-            {% if turma_id %}
-                <a class="info-chip info-chip--removable"
-                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_aluno != 'ativo' %}status={{ status_aluno }}{% endif %}"
-                   title="Remover filtro de turma">
-                    <span>Turma</span>
-                    <strong>{% for turma in turmas %}{% if turma_id == turma.pk|stringformat:"s" %}{{ turma.codigo }}{% endif %}{% endfor %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}

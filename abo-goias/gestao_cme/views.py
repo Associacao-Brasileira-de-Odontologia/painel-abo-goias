@@ -501,7 +501,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     """
 
     busca = request.GET.get("q", "").strip()
-    turma_id = request.GET.get("turma", "").strip()
     status_aluno = request.GET.get("status", "ativo").strip()
 
     alunos = (
@@ -522,8 +521,8 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     elif status_aluno == "inativo":
         alunos = alunos.filter(ativo=False)
 
-    if turma_id.isdigit():
-        alunos = alunos.filter(turma_id=turma_id)
+    # O filtro dedicado por turma foi removido (a busca textual já cobre turma,
+    # por nome e código — ver abaixo).
     if busca:
         alunos = alunos.filter(
             Q(nome_normalizado__icontains=normalizar_texto(busca))
@@ -535,17 +534,7 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
 
     page_obj, query_string = paginar_queryset(request, alunos)
 
-    turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
     abrigos = Abrigo.objects.filter(ativo=True).order_by("identificador")
-
-    turma_selecionada = None
-    if turma_id.isdigit():
-        try:
-            turma_selecionada = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).get(
-                pk=turma_id
-            )
-        except Turma.DoesNotExist:
-            pass
 
     alunos_base = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
     turmas_base = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
@@ -569,10 +558,7 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "busca": busca,
-            "turma_id": turma_id,
             "status_aluno": status_aluno,
-            "turmas": turmas,
-            "turma_selecionada": turma_selecionada,
             "abrigos": abrigos,
             "page_obj": page_obj,
             "query_string": query_string,
@@ -581,19 +567,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             "total_turmas": turmas_base.count(),
             "total_ativos": alunos_base.filter(ativo=True).count(),
             "sem_abrigo": sem_abrigo,
-            "sync_alunos_url": (
-                reverse(
-                    "sincronizar_alunos_turma",
-                    kwargs={"turma_id": turma_selecionada.pk},
-                )
-                if turma_selecionada and turma_selecionada.origem == OrigemDados.EDUQ
-                else None
-            ),
-            "sync_alunos_label": (
-                f"Sincronizar alunos de {turma_selecionada.nome}"
-                if turma_selecionada
-                else None
-            ),
         },
     )
 
