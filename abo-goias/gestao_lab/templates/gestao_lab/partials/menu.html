@@ -3,17 +3,26 @@ Navegação lateral da Gestão de Laboratório. O item ativo é resolvido
 automaticamente a partir da rota atual (ver partials/side_link.html) — basta
 incluir este partial sem parâmetros.
 
-Botões secundários de cadastro (Registrar pedido, Nova moldagem, Novo
-laboratório, Nova equipe) vivem nos mini-menus abaixo (side_link_group.html),
-mesmo padrão do CME — não duplicam mais em "Ações rápidas" nem em
-panel_actions das respectivas páginas (item 11 do plano de 2026-07).
+"Registrar pedido" e "Nova moldagem" são ações de fluxo principal (criar o
+registro mais frequente da operação), não cadastros auxiliares — por isso
+ficam em destaque no bloco "Ações rápidas", e não escondidos num mini-menu
+(mesmo critério do CME para "Registrar entrada"/"Registrar retirada" em
+Movimentações). "Novo laboratório"/"Nova equipe" continuam nos mini-menus
+(side_link_group.html) por serem cadastros auxiliares, mesmo padrão do CME
+para Materiais/Kits/Abrigos/Empréstimos.
 {% endcomment %}
 <nav class="side-nav" aria-label="Navegação do laboratório">
     <p class="side-nav-label">Operação</p>
     {% include "partials/side_link.html" with url_name="lab_dashboard" icon="dashboard" label="Visão Geral" %}
-    {% include "partials/side_link_group.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" match="lab_detalhe_pedido lab_criar_pedido" action1_label="Registrar pedido" action1_url_name="lab_criar_pedido" %}
-    {% include "partials/side_link_group.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" match="lab_criar_moldagem" action1_label="Nova moldagem" action1_url_name="lab_criar_moldagem" %}
+    {% include "partials/side_link.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" match="lab_detalhe_pedido" %}
+    {% include "partials/side_link.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" match="lab_criar_moldagem" %}
     {% include "partials/side_link.html" with url_name="lab_pedidos_faturamento" icon="emprestimo" label="Faturamento" %}
+
+    <div class="side-quick-actions">
+        <p class="section-label">Ações rápidas</p>
+        <a class="button primary" href="{% url 'lab_criar_pedido' %}">Registrar pedido</a>
+        <a class="button secondary" href="{% url 'lab_criar_moldagem' %}">Nova moldagem</a>
+    </div>
 
     <p class="side-nav-label">Cadastros</p>
     {% include "partials/side_link_group.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" match="lab_criar_laboratorio lab_editar_laboratorio" action1_label="Novo laboratório" action1_url_name="lab_criar_laboratorio" %}

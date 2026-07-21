@@ -226,15 +226,25 @@ cadastro separado da navegação:
 mais o `action1_label`/`action1_url_name` de cada cadastro) e removeu o bloco
 "Ações rápidas" (que só continha "Registrar pedido"). Cada uma das 4 páginas teve seu
 `panel_actions`/bloco de botão removido, substituído por um comentário apontando para o
-mini-menu (mesmo padrão dos templates do CME, ex.: `materiais.html`). Não precisou de
-nenhuma mudança em CSS/JS — `side_link_group.html`, `side_link.html` e o JS de
-abrir/fechar submenu (`static/js/app.js`) já são compartilhados e genéricos, sem nenhum
-código específico do CME. 5 novos testes (`MiniMenuBotoesSecundariosTests`) cobrindo os 4
-botões e a expansão automática do mini-menu na página de criação; suíte `gestao_lab`
-(163 testes) verde — não precisou da suíte completa por não tocar nenhum partial/CSS
-compartilhado entre apps (só o `menu.html` específico do laboratório, que reusa os
-partials/CSS/JS já existentes sem modificá-los). Verificação visual no navegador
-(Playwright) confirmando os 4 mini-menus e a expansão automática.
+mini-menu (mesmo padrão dos templates do CME, ex.: `materiais.html`). 5 novos testes
+(`MiniMenuBotoesSecundariosTests`), suíte `gestao_lab` (163 testes) verde. Verificação
+visual no navegador (Playwright) confirmando os 4 mini-menus e a expansão automática.
+
+**Ajuste posterior (mesmo dia):** a pedido do usuário, "Registrar pedido" e "Nova
+moldagem" voltaram a ser botões de **ação rápida** na sidebar (bloco "Ações rápidas",
+como antes do item 11), em vez de sub-links de mini-menu — por serem a ação de fluxo
+principal de cada tela (criar o registro mais frequente da operação), não um cadastro
+auxiliar, ficam em destaque em vez de escondidos atrás de um clique extra (mesmo
+critério que o próprio CME já usa para "Registrar entrada"/"Registrar retirada" em
+Movimentações, que nunca foram para um mini-menu). "Novo laboratório"/"Nova equipe"
+continuam nos mini-menus — são cadastros auxiliares, não o fluxo principal da tela.
+`partials/menu.html` voltou a usar `side_link.html` (sem grupo) para Acompanhamento e
+Moldagens, com o bloco "Ações rápidas" reintroduzido com os dois botões. Testes
+renomeados/ajustados (`MenuBotoesSecundariosTests`); suíte `gestao_lab` (164 testes)
+verde. Não precisou de nenhuma mudança em CSS/JS em nenhuma das duas rodadas —
+`side_link_group.html`, `side_link.html`, `.side-quick-actions` e o JS de abrir/fechar
+submenu (`static/js/app.js`) já eram compartilhados e genéricos, sem nenhum código
+específico do CME.
 
 ---
 
