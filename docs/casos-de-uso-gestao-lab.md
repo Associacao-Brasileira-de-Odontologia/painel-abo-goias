@@ -226,7 +226,7 @@ flowchart LR
 - **Fluxo principal:**
   1. Mostra os dados do pedido (paciente, aluno, laboratório, equipe, previsão,
      descrição, data de registro) e uma **linha do tempo** com três etapas: "Pedido
-     criado" (sempre concluída), "Envio ao laboratório" e "Devolução do laboratório".
+     criado" (sempre concluída), "Envio ao laboratório" e "Entrega do laboratório".
   2. A etapa **ativa** (a próxima a acontecer) embute o próprio formulário de ação
      (data pré-preenchida com hoje, editável) — não é preciso ir para outra tela.
   3. Quando `entregue=True`, exibe também o formulário de faturamento (UC-07) na mesma
@@ -238,8 +238,9 @@ flowchart LR
 
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.marcar_envio` (POST) → `/laboratorio/pedidos/<pk>/marcar-envio/`
-- **Fluxo principal:** grava `data_envio`; o `save()` do modelo recalcula `status` para
-  `A_CONFIRMAR` (se dentro do prazo) automaticamente.
+- **Fluxo principal:** grava `data_envio`. Desde a reforma de status (item 4, ver §5
+  regra 1), `data_envio` não influencia mais o `status` calculado — o pedido continua
+  "Em dia" ou "Atrasado" (conforme o prazo) até ser de fato entregue.
 - **Fluxo de exceção:** data inválida → mensagem de erro, nenhuma alteração.
 - **Achado sistêmico (S-01):** o redirecionamento pós-ação usa
   `redirect(request.POST.get("next") or "lab_pedidos")` **sem validar** que `next` seja
@@ -713,11 +714,11 @@ flowchart LR
 
 | Termo | Significado |
 |---|---|
-| **Pedido de material** (`PedidoMaterial`) | Solicitação de serviço a um laboratório externo: molde/material enviado, devolução esperada e fechamento financeiro |
+| **Pedido de material** (`PedidoMaterial`) | Solicitação de serviço a um laboratório externo: material enviado, entrega esperada e fechamento financeiro |
 | **Moldagem** (`Moldagem`) | Registro da etapa inicial (aluno molda o paciente), antes de ser encaminhada como pedido a um laboratório |
-| **Laboratório** (`Laboratorio`) | Prestador externo que recebe o material e devolve a peça finalizada |
+| **Laboratório** (`Laboratorio`) | Prestador externo que recebe o material e entrega a peça finalizada |
 | **Equipe** (`Equipe`) | Estrutura de coordenação responsável por um conjunto de laboratórios/pedidos |
-| **Status** (`PedidoMaterial.Status`) | `EM_DIA` / `A_CONFIRMAR` / `ATRASADO` / `CONCLUIDO` — sempre calculado, nunca definido manualmente |
+| **Status** (`PedidoMaterial.Status`) | `EM_DIA` / `ATRASADO` / `ENTREGUE_NAO_FATURADO` / `CONCLUIDO` — sempre calculado, nunca definido manualmente |
 | **Faturado (paciente / lab)** | Duas flags independentes; `data_faturamento` é derivada de ambas ficarem verdadeiras |
 | **Dental Office** | Sistema de gestão clínica externo, fonte de verdade de pacientes e alunos deste módulo |
 | **Materializar** | Ato de gravar localmente um paciente/aluno escolhido no autocomplete, cujo conteúdo veio da API (não do navegador) |

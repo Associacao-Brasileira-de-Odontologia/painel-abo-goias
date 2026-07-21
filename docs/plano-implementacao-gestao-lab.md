@@ -6,8 +6,8 @@
 > duas confirmações pendentes e propõe a sequência de implementação (um item por vez:
 > implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
 > no CME).
-> **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código —
-> ver §4.
+> **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código;
+> item 7 implementado — ver §4.
 
 ---
 
@@ -114,19 +114,26 @@ Vou propor **dois selects independentes** (um por coluna, espelhando exatamente 
 colunas "Faturado Paciente"/"Faturado Lab" já existentes na tabela) como primeira
 proposta, por ser mais direto — ajusto se preferir a combinação num único filtro.
 
-### Item 7 · Remover linguagem de "devolução"
+### Item 7 · Remover linguagem de "devolução" → ✅ **Implementado**
 
-Duas das quatro ocorrências **já foram corrigidas como efeito colateral do item 4**
-(implementado): o docstring de `models.py` foi reescrito em termos de "entrega" (sem
-nenhuma menção a "devolução") e o card "A confirmar" do `dashboard.html` (que tinha a
-legenda "aguardando devolução") foi removido. Restam 2 arquivos:
-
-| Arquivo | Texto atual | Novo texto proposto | Status |
+| Arquivo | Texto atual | Novo texto | Status |
 |---|---|---|---|
-| `models.py` (docstring da classe) | ~~"devolucao do material finalizado..."~~ | ~~"entrega do material finalizado..."~~ | ✅ Já corrigido (item 4) |
-| `dashboard.html` | ~~"aguardando devolução" (legenda do card "A confirmar")~~ | — | ✅ Já removido (item 4) |
-| `detalhe_pedido.html` (3 ocorrências) | "Devolução do laboratório" / "Material finalizado devolvido" | "Entrega do laboratório" / "Material entregue" | Em aberto |
-| `form_pedido.html` | "Previsão de entrega (devolução)" | "Previsão de entrega" (o "(devolução)" é redundante e é o termo que queremos evitar) | Em aberto |
+| `models.py` (docstring da classe) | ~~"devolucao do material finalizado..."~~ | "entrega do material finalizado..." | ✅ Corrigido (item 4) |
+| `dashboard.html` | ~~"aguardando devolução" (legenda do card "A confirmar")~~ | — (card removido) | ✅ Removido (item 4) |
+| `detalhe_pedido.html` (3 ocorrências) | ~~"Devolução do laboratório" / "Material finalizado devolvido"~~ | "Entrega do laboratório" / "Material entregue" | ✅ Corrigido |
+| `form_pedido.html` | ~~"Previsão de entrega (devolução)"~~ | "Previsão de entrega" | ✅ Corrigido |
+
+Ao revisar, também encontrei duas referências desatualizadas em
+`casos-de-uso-gestao-lab.md` que datavam de antes da reforma do item 4 (não tinham
+relação com "devolução", mas ficaram erradas depois da mudança de status): a UC-05
+ainda dizia que registrar o envio mudava o status para `A_CONFIRMAR` (não existe mais) e
+o glossário ainda listava `A_CONFIRMAR` como uma das 4 categorias. Corrigidas junto.
+
+`gestao_lab/services/dental_sync.py` menciona "ordem devolvida pela API" — termo técnico
+sobre a resposta HTTP paginada, sem relação com o processo de negócio; mantido como
+está. As ocorrências de "devolução" em `gestao_cme` (Empréstimos) também foram
+verificadas e são de um processo diferente (devolução de kit emprestado, que existe de
+fato no CME) — fora do escopo deste item.
 
 ### Item 9 · Busca de Pacientes no padrão de Gestão de Contratos
 
@@ -173,8 +180,10 @@ Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente r
 1. ✅ **Item 4** — Crítico, autocontido, base para os KPIs de faturamento. **Implementado**
    (commit `a4077e5`).
 2. ✅ **Item 5** — Só atualização de documentação, feito junto do item 4.
-3. **Item 7** — Médio, rápido; restam só 2 arquivos (`detalhe_pedido.html`,
-   `form_pedido.html`) — os outros 2 já saíram junto do item 4.
+3. ✅ **Item 7** — **Implementado**. Restava corrigir 2 arquivos (`detalhe_pedido.html`,
+   `form_pedido.html`) — feito, além de 2 referências desatualizadas encontradas em
+   `casos-de-uso-gestao-lab.md` durante a revisão (UC-05 e glossário, ambas ainda citavam
+   o status `A_CONFIRMAR` removido no item 4).
 4. **Item 6/8** — Filtro de faturamento.
 5. **Item 3 + item 2** — Padronizar o filtro de período do Acompanhamento e alinhar Buscar/Limpar tudo (mesma área de tela, faz sentido em sequência).
 6. **Item 1** — Estender período (com seletor de campo) às demais páginas, reaproveitando o widget já ajustado no item 3.
