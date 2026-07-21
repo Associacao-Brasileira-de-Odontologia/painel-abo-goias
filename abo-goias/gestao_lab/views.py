@@ -1157,7 +1157,11 @@ def pacientes(request: HttpRequest) -> HttpResponse:
     Segue o mesmo padrão da app de contratos: em vez de um botão de "Atualizar
     lista" (que sincroniza tudo e pode demorar muito), a busca consulta a base
     local e, havendo termo, também o Dental Office ao vivo — avisando quando há
-    mais resultados do que os exibidos, para o usuário refinar a busca.
+    mais resultados do que os exibidos, para o usuário refinar a busca. Os dois
+    conjuntos de resultados aparecem numa única tabela (``pacientes_unificados``,
+    mesmo conceito de ``gestao_contratos.views.contratos``), com um selo de
+    origem por linha em vez de duas tabelas separadas; quem só existe no
+    Dental Office ganha uma ação "Importar" (ver ``importar_paciente_dental``).
 
     A coluna de "processo em aberto" foi trocada por "pedido em aberto": se o
     paciente tem algum PedidoMaterial ainda não concluído (ver
@@ -1191,12 +1195,26 @@ def pacientes(request: HttpRequest) -> HttpResponse:
     total_abertos = len(pacientes_com_pedido_aberto)
 
     page_obj, query_string = _paginar(request, qs)
+
+    # ── Listagem unificada ────────────────────────────────────────────
+    # Uma única lista para o template, em vez de duas tabelas separadas
+    # (local + Dental Office) — mesmo padrão de gestao_contratos.views.contratos.
+    pacientes_unificados: list[dict] = []
     for paciente in page_obj.object_list:
-        paciente.tem_pedido_aberto = paciente.pk in pacientes_com_pedido_aberto
+        pacientes_unificados.append(
+            {
+                "nome": paciente.nome,
+                "celular": paciente.celular,
+                "no_sistema": True,
+                "tem_pedido_aberto": paciente.pk in pacientes_com_pedido_aberto,
+                "data_previsao_retorno": paciente.data_previsao_retorno,
+                "ultima_sincronizacao": paciente.ultima_sincronizacao,
+                "id_dental": None,
+            }
+        )
 
     # Busca ao vivo no Dental Office (só na 1ª página, só com termo) — traz quem
     # ainda não está na base local, sem gravar nada. Ver contratos.views.
-    pacientes_dental: list[dict] = []
     erro_dental = ""
     dental_ha_mais = False
     primeira_pagina = request.GET.get("page") in (None, "", "1")
@@ -1216,11 +1234,15 @@ def pacientes(request: HttpRequest) -> HttpResponse:
                 for pac in remotos:
                     if str(pac.id) in ids_locais:
                         continue
-                    pacientes_dental.append(
+                    pacientes_unificados.append(
                         {
-                            "id_dental": str(pac.id),
                             "nome": pac.nome,
                             "celular": pac.celular,
+                            "no_sistema": False,
+                            "tem_pedido_aberto": False,
+                            "data_previsao_retorno": None,
+                            "ultima_sincronizacao": None,
+                            "id_dental": str(pac.id),
                         }
                     )
             except DentalAPIError as exc:
@@ -1240,11 +1262,53 @@ def pacientes(request: HttpRequest) -> HttpResponse:
             "hoje": date_type.today(),
             "total": total,
             "total_abertos": total_abertos,
-            "pacientes_dental": pacientes_dental,
+            "pacientes_unificados": pacientes_unificados,
             "erro_dental": erro_dental,
             "dental_ha_mais": dental_ha_mais,
         },
     )
+
+
+@login_required
+@require_POST
+def importar_paciente_dental(request: HttpRequest, id_dental: str) -> HttpResponse:
+    """Importa (materializa) um paciente encontrado só no Dental Office.
+
+    Ação da linha "Dental Office" na listagem unificada de Pacientes (UC-17,
+    achado U-05) — reusa a mesma ``materializar_paciente`` já usada pelo
+    autocomplete de pedido/moldagem, sem passar por nenhum fluxo de contrato.
+    """
+
+    from django.conf import settings
+    from gestao_lab.integrations.dental import DentalAPIError
+    from gestao_lab.services.dental_sync import materializar_paciente
+
+    next_url = request.POST.get("next", "")
+    destino = (
+        HttpResponseRedirect(next_url)
+        if next_url.startswith("/")
+        else redirect("lab_pacientes")
+    )
+
+    clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+    if not clinic_id:
+        messages.error(
+            request, "A importação não está configurada. Avise o suporte técnico."
+        )
+        return destino
+
+    try:
+        paciente = materializar_paciente(id_dental=id_dental, clinic_id=clinic_id)
+    except DentalAPIError as exc:
+        messages.error(request, f"Não foi possível importar o paciente: {exc}")
+        return destino
+
+    if paciente is None:
+        messages.error(request, "Paciente não encontrado no Dental Office.")
+        return destino
+
+    messages.success(request, f"Paciente {paciente.nome} importado com sucesso.")
+    return destino
 
 
 # ---------------------------------------------------------------------------

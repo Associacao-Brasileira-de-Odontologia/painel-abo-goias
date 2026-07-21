@@ -470,6 +470,10 @@ flowchart LR
 
 ### UC-17 · Consultar pacientes sincronizados (com busca ao vivo)
 
+> **Atualizado em 2026-07-21** — listagem unificada (base local + Dental Office numa
+> única tabela) e ação "Importar" adicionadas (item 9), no padrão de
+> `gestao_contratos.views.contratos`. Resolve o achado U-05.
+
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.pacientes` → `/laboratorio/pacientes/`
 - **Fluxo principal:**
@@ -481,22 +485,26 @@ flowchart LR
      antiga coluna "processo em aberto" (`Paciente.processo_aberto`, um flag vindo direto
      do Dental Office sem relação com pedidos do laboratório).
   3. **Busca ao vivo (só na 1ª página, só com termo preenchido):** além da base local, a
-     view consulta o Dental Office em tempo real e lista, numa seção separada
-     "Encontrados no Dental Office", quem **ainda não está** na base local — com aviso
-     "refine a busca" quando há mais páginas na API do que as exibidas. Mesmo padrão já
-     usado em `gestao_contratos`.
-- **Achado de usabilidade (U-05):** os resultados de "Encontrados no Dental Office" são
-  **somente leitura** (nome + celular) — não há botão para importar um desses pacientes
-  diretamente desta tela; a única forma de trazê-lo para a base local é usar o
-  autocomplete de UC-03/UC-10 (que materializa ao selecionar). Já registrado como possível
-  próximo passo em `melhorias-gestao-lab-2026-07.md` (item 4). Ver U-05 em §6.1.
+     view consulta o Dental Office em tempo real. Os dois conjuntos de resultados
+     aparecem **numa única tabela** (`pacientes_unificados`, mesmo conceito de
+     `gestao_contratos.views.contratos`), com um selo de origem por linha ("No sistema" /
+     "Dental Office") em vez de duas tabelas separadas — quem já está na base local nunca
+     aparece duplicado. Aviso "refine a busca" quando há mais páginas na API do que as
+     exibidas, e degradação graciosa (mensagem de erro na área de resumo, sem quebrar a
+     lista local) se o Dental Office estiver indisponível.
+  4. **Ação "Importar" (resolve U-05):** cada linha "Dental Office" ganhou um botão
+     "Importar" (POST → `views.importar_paciente_dental`) que materializa o paciente na
+     base local (mesma `materializar_paciente` já usada pelo autocomplete de UC-03/UC-10)
+     e mostra mensagem de sucesso/erro — sem precisar passar pelo formulário de
+     pedido/moldagem só para trazer o paciente para o sistema.
 - **Achado de usabilidade (U-03, mesmo de UC-10):** "N com pedido aberto" no resumo de
   resultados aparece sempre que `total_abertos > 0`, mesmo quando o filtro
   `pedido=aberto` já está selecionado (nesse caso o número deixa de acrescentar
   informação nova, pois já é o total filtrado).
 - **"Buscar"/"Limpar tudo" (U-02, resolvido em 2026-07-21):** mesma correção de UC-02 —
   os dois ficam lado a lado dentro do `<form class="filter-bar">`.
-- **Pós-condição:** nenhuma (somente leitura).
+- **Pós-condição:** nenhuma para a consulta; a ação "Importar" cria (ou reaproveita, se já
+  existir) um `Paciente` local.
 
 ### UC-18 · Buscar paciente/aluno via autocomplete *(caso de uso incluído / componente compartilhado)*
 
@@ -668,7 +676,7 @@ flowchart LR
 | U-02 | UC-02 | "Limpar tudo" fica fora da `<form class="filter-bar">`, podendo ficar desalinhado de "Buscar" quando a barra quebra linha | Mesmo defeito visual já identificado e corrigido no CME (item 13) | Mover "Limpar tudo" para dentro do `.filter-bar`, ao lado de "Buscar" | ✅ **Resolvido em 2026-07-21** — corrigido em Acompanhamento (UC-02), Moldagens (UC-10), Pacientes (UC-17) e Faturamento (UC-09, junto do item 6/8); Alunos/Laboratórios/Equipes não tinham "Limpar tudo" (só busca, sem outro filtro) — nada a corrigir ali |
 | U-03 | UC-10 / UC-17 | Rótulos de contagem "N não convertida(s)" (Moldagens) e "N com pedido aberto" (Pacientes) aparecem sempre que a contagem é > 0, mesmo quando o filtro correspondente já está selecionado | Rótulo redundante quando o filtro já está ativo; inconsistente com o padrão já adotado no CME | Gatear a exibição do rótulo por `filtro == "..."`/`pedido_filtro == "aberto"`, como já feito no CME (R2-2) | Em aberto |
 | U-04 | UC-08 / UC-10 | Não há edição de `PedidoMaterial`/`Moldagem` (paciente, aluno, laboratório, equipe, previsão, descrição) pela interface operacional — só criação, toggles e exclusão. Corrigir um erro exige excluir e recriar, perdendo envio/entrega/faturamento já preenchidos | Fricção operacional e risco de perda de histórico por um erro de cadastro simples | Tela de edição restrita a esses campos, mesmo padrão do CME para `editar_emprestimo` (UC-21 de `casos-de-uso-gestao-cme.md`) | Em aberto |
-| U-05 | UC-17 | Resultados "Encontrados no Dental Office" na tela de Pacientes são somente leitura — não há ação para importar dali | Operador precisa ir a outra tela (pedido/moldagem) para de fato trazer o paciente para a base local | Adicionar um botão "Importar" que chama a mesma `materializar_paciente` já usada pelo autocomplete | Em aberto — já citado como possível próximo passo em `melhorias-gestao-lab-2026-07.md` (item 4) |
+| U-05 | UC-17 | Resultados "Encontrados no Dental Office" na tela de Pacientes são somente leitura — não há ação para importar dali | Operador precisa ir a outra tela (pedido/moldagem) para de fato trazer o paciente para a base local | Adicionar um botão "Importar" que chama a mesma `materializar_paciente` já usada pelo autocomplete | ✅ **Resolvido em 2026-07-21** (item 9) — cada linha "Dental Office" da listagem unificada ganhou o botão "Importar" (`views.importar_paciente_dental`) |
 | U-06 | UC-14 / UC-15 | Botões "Novo laboratório"/"Nova equipe" ficam em `panel_actions` (topo da página), diferente do padrão de mini-menu na navegação lateral já adotado no CME para os cadastros do módulo (item 9) | Inconsistência de padrão de navegação entre módulos — não é um bug, é uma diferença de estilo | Avaliar se vale replicar o mini-menu por consistência, ou manter como está (o padrão atual é simples e funcional) | Em aberto — decisão de padronização, ver §7 |
 | U-07 | UC-14 | `LaboratorioForm` permite salvar sem nenhuma equipe vinculada, apesar do docstring do modelo dizer "ao menos uma equipe deve ser vinculada" | Dado pode ficar inconsistente com a documentação do próprio modelo (hoje sem efeito funcional observado) | Tornar `equipes` obrigatório no formulário, ou atualizar o docstring do modelo para refletir a realidade (0 é permitido) | Em aberto — decisão de negócio, ver §7 |
 | U-08 | UC-05 a UC-07, UC-12 | Ações de toggle (faturamento, entrega de moldagem) não têm spinner/estado de carregamento — cliques duplos em conexão lenta podem reenviar o POST (idempotente, mas sem feedback visual) | Pequena confusão em conexões lentas, sem risco de dado incorreto (toggle idempotente) | Mesmo padrão `.js-loading-submit` já usado em outros formulários do projeto | Em aberto |
@@ -705,9 +713,10 @@ flowchart LR
 3. **Regra "ao menos uma equipe" em Laboratório (U-07) — tornar obrigatório no
    formulário, ou ajustar a documentação do modelo para refletir que 0 equipes é
    permitido?**
-4. **Importar paciente diretamente da lista "Encontrados no Dental Office" (U-05) —
+4. ~~Importar paciente diretamente da lista "Encontrados no Dental Office" (U-05) —
    vale investir, ou o fluxo atual (materializar só via autocomplete de pedido/moldagem)
-   é suficiente para a operação?**
+   é suficiente para a operação?~~ — **decidido e implementado em 2026-07-21**: sim
+   (item 9). Ver UC-17.
 5. **Remover as views órfãs de busca direcionada (S-02) — remover já, ou manter
    registrado como pendência técnica sem urgência (mesma decisão tomada no CME antes de
    uma limpeza dedicada)?**
@@ -743,7 +752,7 @@ flowchart LR
 | UC-14 | `laboratorios`, `criar_laboratorio`, `editar_laboratorio` | `laboratorios.html`, `form_laboratorio.html` |
 | UC-15 | `equipes`, `criar_equipe`, `editar_equipe` | `equipes.html`, `form_equipe.html` |
 | UC-16 | `alunos_lab` | `alunos.html` |
-| UC-17 | `pacientes` | `pacientes.html` |
+| UC-17 | `pacientes`, `importar_paciente_dental` | `pacientes.html` |
 | UC-18 | `buscar_pacientes`, `buscar_alunos_lab`, `materializar` | `partials/_ac_field.html`, `partials/_ac_results.html` |
 | UC-19 | `sincronizar_dental`, `tasks.sincronizar_dental_task` | `partials/sync_dental.html` |
 | UC-20 | `sincronizar_alunos_dental` | `partials/atualizar_alunos.html` |

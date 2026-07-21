@@ -69,6 +69,11 @@ urlpatterns = [
     path("alunos/", views.alunos_lab, name="lab_alunos"),
     # Pacientes (Dental Office)
     path("pacientes/", views.pacientes, name="lab_pacientes"),
+    path(
+        "pacientes/<str:id_dental>/importar/",
+        views.importar_paciente_dental,
+        name="lab_importar_paciente",
+    ),
     # Sincronização Dental Office
     path("pedidos/<int:pk>/excluir/", views.excluir_pedido, name="lab_excluir_pedido"),
     path(

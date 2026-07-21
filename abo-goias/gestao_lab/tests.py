@@ -970,6 +970,102 @@ class PacientesViewTests(TestCase):
         self.assertContains(response, "Com Pedido")
         self.assertNotContains(response, "Sem Pedido")
 
+    def test_listagem_unificada_marca_paciente_local(self) -> None:
+        _paciente(nome="Paciente Local", id_dental="310")
+        response = self.client.get(reverse("lab_pacientes"))
+        unificados = response.context["pacientes_unificados"]
+        alvo = next(p for p in unificados if p["nome"] == "Paciente Local")
+        self.assertTrue(alvo["no_sistema"])
+        self.assertIsNone(alvo["id_dental"])
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.procurar_pacientes")
+    def test_busca_unifica_local_e_dental_numa_unica_lista(self, mock_procurar) -> None:
+        _paciente(nome="Maria Local", id_dental="311")
+        mock_procurar.return_value = (
+            [
+                PacienteDental(
+                    id=999, nome="Gustavo Só no Dental", celular="", ativo=True
+                )
+            ],
+            1,
+        )
+
+        response = self.client.get(reverse("lab_pacientes"), {"q": "a"})
+
+        unificados = response.context["pacientes_unificados"]
+        por_nome = {p["nome"]: p for p in unificados}
+        self.assertIn("Maria Local", por_nome)
+        self.assertTrue(por_nome["Maria Local"]["no_sistema"])
+        self.assertIn("Gustavo Só no Dental", por_nome)
+        self.assertFalse(por_nome["Gustavo Só no Dental"]["no_sistema"])
+        self.assertEqual(por_nome["Gustavo Só no Dental"]["id_dental"], "999")
+        self.assertContains(response, "Importar")
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.procurar_pacientes")
+    def test_busca_nao_duplica_quem_ja_esta_na_base_local(self, mock_procurar) -> None:
+        _paciente(nome="Ja Local", id_dental="312")
+        mock_procurar.return_value = (
+            [PacienteDental(id=312, nome="Ja Local", celular="", ativo=True)],
+            1,
+        )
+
+        response = self.client.get(reverse("lab_pacientes"), {"q": "Ja"})
+
+        unificados = response.context["pacientes_unificados"]
+        self.assertEqual(len(unificados), 1)
+        self.assertTrue(unificados[0]["no_sistema"])
+
+
+class ImportarPacienteDentalTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.DentalClient")
+    def test_importa_paciente_encontrado_no_dental(self, mock_client) -> None:
+        mock_client.return_value.buscar_detalhes_paciente.return_value = {
+            "id": 500,
+            "name": "Novo Paciente",
+            "active": True,
+        }
+        antes = Paciente.objects.count()
+
+        response = self.client.post(
+            reverse("lab_importar_paciente", args=["500"]),
+            {"next": reverse("lab_pacientes")},
+        )
+
+        self.assertRedirects(response, reverse("lab_pacientes"))
+        self.assertEqual(Paciente.objects.count(), antes + 1)
+        self.assertTrue(Paciente.objects.filter(id_dental="500").exists())
+
+    @override_settings(DENTAL_CLINIC_ID=None)
+    def test_sem_clinic_id_configurado_mostra_erro(self) -> None:
+        response = self.client.post(
+            reverse("lab_importar_paciente", args=["500"]), follow=True
+        )
+        self.assertContains(response, "não está configurada")
+
+    @override_settings(DENTAL_CLINIC_ID=1)
+    @patch("gestao_lab.services.dental_sync.DentalClient")
+    def test_erro_da_api_mostra_mensagem(self, mock_client) -> None:
+        mock_client.return_value.buscar_detalhes_paciente.side_effect = DentalAPIError(
+            "fora do ar"
+        )
+
+        response = self.client.post(
+            reverse("lab_importar_paciente", args=["500"]), follow=True
+        )
+
+        self.assertContains(response, "Não foi possível importar")
+
+    def test_get_nao_permitido(self) -> None:
+        response = self.client.get(reverse("lab_importar_paciente", args=["500"]))
+        self.assertEqual(response.status_code, 405)
+
 
 class AlunosLabViewTests(TestCase):
     def setUp(self) -> None:
