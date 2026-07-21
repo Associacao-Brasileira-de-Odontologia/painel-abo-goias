@@ -300,6 +300,9 @@ flowchart LR
 
 ### UC-09 · Consultar fila de faturamento
 
+> **Atualizado em 2026-07-21** — filtros por faturamento do paciente/laboratório
+> (item 6/8).
+
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.pedidos_faturamento` → `/laboratorio/pedidos/faturamento/`
 - **Fluxo principal:**
@@ -307,11 +310,19 @@ flowchart LR
      excluindo os que já têm as duas flags), ordenados pela data de entrega mais antiga
      primeiro (fila FIFO) — exatamente os pedidos com
      `status=ENTREGUE_NAO_FATURADO` (ver UC-01, §5 regra 1).
-  2. Cada linha permite alternar as duas flags de faturamento inline (checkbox-like
+  2. Filtros: busca textual (paciente, aluno, laboratório) e dois selects
+     independentes — **Fat. paciente** (Faturado/Não faturado/Todos) e **Fat.
+     laboratório** (idem) —, cada um espelhando exatamente uma das duas colunas
+     "Fat. Paciente"/"Fat. Lab" da tabela. Os dois filtros podem ser combinados (ex.:
+     "não faturado pelo paciente" **e** "não faturado pelo laboratório", para achar os
+     pedidos que ainda não tiveram nenhum lado resolvido).
+  3. Cada linha permite alternar as duas flags de faturamento inline (checkbox-like
      `.toggle-check`, sem sair da tela) e ir ao detalhe para preencher nota fiscal e
      vencimento (UC-07 completo).
 - **Regra de negócio:** um pedido sai desta fila automaticamente assim que as duas flags
-  ficam verdadeiras (vira `CONCLUIDO` e deixa de casar com o filtro da queryset).
+  ficam verdadeiras (vira `CONCLUIDO` e deixa de casar com o filtro da queryset) — por
+  isso filtrar por "Faturado pelo paciente" aqui sempre mostra só quem falta o lado do
+  laboratório (o inverso já saiu da fila).
 - **Pós-condição:** nenhuma própria (leitura + toggles de UC-07).
 
 ### UC-10 · Gerenciar moldagens

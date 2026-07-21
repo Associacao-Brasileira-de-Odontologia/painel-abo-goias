@@ -7,7 +7,7 @@
 > implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
 > no CME).
 > **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código;
-> item 7 implementado — ver §4.
+> itens 7 e 6/8 implementados — ver §4.
 
 ---
 
@@ -105,14 +105,16 @@ CME também corrigida. Suíte completa (634 testes) verde. Documentação atuali
 Só atualização de documentação (`casos-de-uso-gestao-lab.md`, UC-10, e
 `plano-correcao-status-tipos-gestao-lab.md`, Ponto 2) — feita junto do item 4.
 
-### Item 6/8 · Filtro de faturamento na fila de Faturamento
+### Item 6/8 · Filtro de faturamento na fila de Faturamento → ✅ **Implementado**
 
-`pedidos_faturamento()` ganha `?faturado_paciente=sim|nao` e `?faturado_lab=sim|nao` (ou
-combinado, ex. `?faturamento=pendente_paciente|pendente_lab|pendente_ambos` — a definir
-qual UI é mais clara: dois selects independentes ou um único agrupando as combinações).
-Vou propor **dois selects independentes** (um por coluna, espelhando exatamente as duas
-colunas "Faturado Paciente"/"Faturado Lab" já existentes na tabela) como primeira
-proposta, por ser mais direto — ajusto se preferir a combinação num único filtro.
+`pedidos_faturamento()` ganhou `?faturado_paciente=sim|nao` e `?faturado_lab=sim|nao`,
+com dois selects independentes na `.filter-bar` (mesmo padrão auto-submit já usado em
+outros filtros do projeto), combináveis entre si e com a busca textual. Chips removíveis
+por filtro ativo + "Limpar tudo" ao lado de "Buscar" (mesmo padrão de alinhamento já
+usado no restante do app). Estado vazio diferencia "fila realmente vazia" de "nenhum
+resultado para os filtros aplicados". Adicionada suíte de testes para a view
+(`PedidosFaturamentoViewTests`, 6 testes) — não havia nenhum teste dela antes. Suíte
+`gestao_lab` (132 testes) verde.
 
 ### Item 7 · Remover linguagem de "devolução" → ✅ **Implementado**
 
@@ -184,7 +186,8 @@ Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente r
    `form_pedido.html`) — feito, além de 2 referências desatualizadas encontradas em
    `casos-de-uso-gestao-lab.md` durante a revisão (UC-05 e glossário, ambas ainda citavam
    o status `A_CONFIRMAR` removido no item 4).
-4. **Item 6/8** — Filtro de faturamento.
+4. ✅ **Item 6/8** — **Implementado**. Filtros por Fat. paciente/Fat. laboratório na fila
+   de Faturamento, combináveis com a busca; suíte de testes nova para essa view.
 5. **Item 3 + item 2** — Padronizar o filtro de período do Acompanhamento e alinhar Buscar/Limpar tudo (mesma área de tela, faz sentido em sequência).
 6. **Item 1** — Estender período (com seletor de campo) às demais páginas, reaproveitando o widget já ajustado no item 3.
 7. **Item 9** — Busca unificada de Pacientes (Alta).
