@@ -383,15 +383,15 @@ associada a ele (referenciando o backlog da seção 6).
     ("Atualizar lista de alunos").
   - `gestao_cme/tasks.py::sincronizar_eduq_task` (Celery Beat, 04:00 diária) — mesma
     função de serviço (`sincronizar_eduq`, turmas + alunos), disparo automático.
-- **Views/rotas órfãs (código ainda existe, sem botão que as chame):** `sincronizar_turmas_eduq`
-  e `sincronizar_alunos_turma` ficaram sem nenhum template que as referencie depois que
-  R2-1 removeu o filtro por turma de `alunos_por_turma` (elas serviam ao botão
-  condicional "Sincronizar turmas"/"Sincronizar alunos de \<turma\>" daquela tela, que
-  dependia de uma turma selecionada). `atualizar_turmas_eduq` (só turmas, usado antes em
-  `criar_emprestimo`) já havia sido removida em rodada anterior, quando o botão de Novo
-  Empréstimo passou a usar `atualizar_alunos_eduq` (item 5 da avaliação visual, ver
-  §11.1). Nenhuma dessas três rotinas quebra nada permanecendo no código — mas são
-  candidatas a remoção em uma limpeza futura (ver S-10 em §6.2).
+- **Views/rotas removidas em 2026-07-21 (limpeza de código morto):** as views
+  `sincronizar_turmas_eduq` e `sincronizar_alunos_turma` (com suas rotas em `urls.py`)
+  haviam ficado órfãs depois que R2-1 removeu o filtro por turma de `alunos_por_turma`
+  (elas serviam ao botão condicional "Sincronizar turmas"/"Sincronizar alunos de
+  \<turma\>" daquela tela, que dependia de uma turma selecionada) — foram removidas,
+  junto com os 3 testes que só existiam para exercitá-las. `atualizar_turmas_eduq` (só
+  turmas, usado antes em `criar_emprestimo`) já havia sido removida em rodada anterior,
+  quando o botão de Novo Empréstimo passou a usar `atualizar_alunos_eduq` (item 5 da
+  avaliação visual, ver §11.1). Ver S-10 em §6.2 (agora resolvido).
 - **Rótulo do botão (U-08):** **parcialmente resolvido.** Em `alunos_por_turma` o botão
   foi renomeado para "Sincronizar alunos e turmas" (preciso — descreve as duas etapas).
   Em `registrar_entrada`, `registrar_saida` e `criar_emprestimo` o mesmo botão **continua**
@@ -720,7 +720,7 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 | S-07 | Integração Eduq (UC-12/UC-20) | Sem endpoint de busca de aluno por nome no Eduq — busca de UC-20 é estritamente local e depende de sincronização prévia | Ver §7.4 | ✅ **Contornado em 2026-07-20** — a limitação em si (Eduq sem busca por nome) continua existindo e está fora do controle da equipe, mas o fluxo agora oferece sincronizar a turma sob demanda a partir da busca vazia (ver UC-20, `sincronizar_turma_busca`) |
 | S-08 | Empréstimos sem itens (UC-17) | Empréstimo sem kit não tem fluxo de adicionar `ItemEmprestimo` avulso pela interface | Avaliar se o caso de uso "emprestar material avulso, sem kit" é real na operação; se for, precisa de tela própria | Em aberto |
 | S-09 | Observabilidade | Erros de integração Eduq não têm logging estruturado (B-08 do backlog original, ainda aberto) | Padronizar logging de falhas de integração (Eduq e demais) para facilitar diagnóstico sem depender de `messages` na UI | Em aberto |
-| S-10 | Sincronização Eduq (UC-12) *(identificado em 2026-07-21)* | `views.sincronizar_turmas_eduq` e `views.sincronizar_alunos_turma` (com suas rotas em `urls.py`) ficaram **órfãs** — nenhum template as chama mais desde que R2-1 removeu o filtro por turma (e o botão condicional que dependia dele) de Alunos por turma | Remover a view/rota morta numa limpeza futura, ou documentar explicitamente a intenção de mantê-la caso haja plano de reuso | Em aberto |
+| S-10 | Sincronização Eduq (UC-12) *(identificado em 2026-07-21)* | `views.sincronizar_turmas_eduq` e `views.sincronizar_alunos_turma` (com suas rotas em `urls.py`) haviam ficado **órfãs** — nenhum template as chamava mais desde que R2-1 removeu o filtro por turma (e o botão condicional que dependia dele) de Alunos por turma | Remover a view/rota morta | ✅ **Resolvido em 2026-07-21** — as duas views, suas rotas e os 3 testes que só as exercitavam foram removidos; junto, uma limpeza mais ampla removeu `_contexto_movimentacao`, `_salvar_movimentacao` e `MovimentacaoForm` (código morto de uma versão anterior de registrar entrada/saída, não usados por nenhuma view atual). `_sincronizar_alunos_da_turma` foi mantida por ainda servir `sincronizar_turma_busca` (UC-20) |
 
 ---
 
@@ -798,7 +798,7 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
 | UC-09 | `alunos_por_turma` | `alunos_por_turma.html` |
 | UC-10 | `cadastrar_aluno` | `cadastrar_aluno.html` |
 | UC-11 | `cadastrar_turma` | `cadastrar_turma.html` |
-| UC-12 | `atualizar_alunos_eduq`, `tasks.sincronizar_eduq_task` (+ `sincronizar_turmas_eduq`/`sincronizar_alunos_turma`, órfãs — ver S-10) | botões em `alunos_por_turma.html`, `registrar_entrada.html`, `registrar_saida.html`, `criar_emprestimo.html` |
+| UC-12 | `atualizar_alunos_eduq`, `tasks.sincronizar_eduq_task` | botões em `alunos_por_turma.html`, `registrar_entrada.html`, `registrar_saida.html`, `criar_emprestimo.html` |
 | UC-13 | `atribuir_abrigo` | ação inline em `alunos_por_turma.html` |
 | UC-14 | `armarios`, `cadastrar_abrigo`, `editar_abrigo`, `excluir_abrigo` | `armarios.html`, `form_abrigo.html` |
 | UC-15 | `materiais`, `cadastrar_material`, `editar_material`, `excluir_material` | `materiais.html`, `form_material.html` |
@@ -850,8 +850,9 @@ já resolvidos foram omitidos; o objetivo é apontar o que resta.
      assim que o time de negócio definir a matriz de quem pode fazer o quê.
    - **U-08 (rótulo do botão de sincronização)** parcialmente resolvido — falta
      renomear em `registrar_entrada`/`registrar_saida`/`criar_emprestimo`.
-   - **S-10 (views órfãs de sincronização por turma)** — candidatas a remoção numa
-     limpeza futura de código, sem urgência.
+   - ~~**S-10 (views órfãs de sincronização por turma)**~~ — **feito**: views, rotas e
+     testes órfãos removidos em 2026-07-21, junto com outro código morto encontrado na
+     mesma limpeza (`_contexto_movimentacao`, `_salvar_movimentacao`, `MovimentacaoForm`).
 4. Suíte completa do projeto (634 testes) segue verde após todas as rodadas; qualquer
    nova alteração em `templates/partials/paginacao.html` ou nos partials compartilhados
    de filtro/autocomplete deve rodar a suíte **completa** (não só `gestao_cme`), por

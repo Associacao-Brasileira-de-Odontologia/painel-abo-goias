@@ -381,65 +381,6 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "KITLEG-1")
         self.assertContains(response, "KIT 1")
 
-    @patch("gestao_cme.views.sincronizar_eduq")
-    def test_botao_sincroniza_turmas_sem_sincronizar_alunos(
-        self, sync_mock: MagicMock
-    ) -> None:
-        sync_mock.return_value = SimpleNamespace(
-            turmas=SimpleNamespace(criados=2, atualizados=3, erros=[]),
-        )
-        usuario = get_user_model().objects.create_user(
-            username="coordenador",
-            password="senha-segura",
-        )
-        self.client.force_login(usuario)
-
-        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
-
-        sync_mock.assert_called_once_with(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-        self.assertRedirects(response, reverse("alunos_por_turma"))
-        self.assertContains(response, "Turmas sincronizadas: 2 criadas, 3 atualizadas")
-
-    @patch("gestao_cme.views.sincronizar_eduq")
-    def test_sincronizacao_de_turmas_exibe_erro_da_api(
-        self, sync_mock: MagicMock
-    ) -> None:
-        sync_mock.side_effect = EduqAPIError("API indisponivel")
-        usuario = get_user_model().objects.create_user(
-            username="coordenador",
-            password="senha-segura",
-            is_staff=True,
-        )
-        self.client.force_login(usuario)
-
-        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
-
-        self.assertContains(response, "Não foi possível sincronizar turmas")
-        self.assertContains(response, "API indisponivel")
-
-    @patch("gestao_cme.views.sincronizar_eduq")
-    def test_usuario_comum_pode_sincronizar_turmas(self, sync_mock: MagicMock) -> None:
-        sync_mock.return_value = SimpleNamespace(
-            turmas=SimpleNamespace(criados=1, atualizados=0, erros=[]),
-        )
-        usuario = get_user_model().objects.create_user(
-            username="coordenador",
-            password="senha-segura",
-        )
-        self.client.force_login(usuario)
-
-        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
-
-        sync_mock.assert_called_once_with(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-        self.assertRedirects(response, reverse("alunos_por_turma"))
-        self.assertContains(response, "Turmas sincronizadas")
-
 
 class EduqSyncTests(TestCase):
     def test_sincroniza_turmas_e_alunos_do_payload_eduq(self) -> None:

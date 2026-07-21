@@ -31,7 +31,6 @@ from .forms import (
     KitForm,
     MaterialEditForm,
     MaterialForm,
-    MovimentacaoForm,
 )
 from .integrations.eduq import EduqAPIError
 from .models import (
@@ -621,35 +620,6 @@ def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
 
 
 @login_required
-@require_POST
-def sincronizar_turmas_eduq(request: HttpRequest) -> HttpResponse:
-    """Executa a sincronizacao manual de turmas com o Eduq.
-
-    Processa apenas turmas, registra mensagens de sucesso ou erro para a
-    interface e redireciona o usuario de volta para a listagem de alunos por
-    turma.
-    """
-
-    try:
-        resultado = sincronizar_eduq(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-    except EduqAPIError as exc:
-        messages.error(request, f"Não foi possível sincronizar turmas: {exc}")
-    else:
-        messages.success(
-            request,
-            "Turmas sincronizadas: "
-            f"{resultado.turmas.criados} criadas, "
-            f"{resultado.turmas.atualizados} atualizadas, "
-            f"{len(resultado.turmas.erros)} erro(s).",
-        )
-
-    return redirect("alunos_por_turma")
-
-
-@login_required
 def armarios(request: HttpRequest) -> HttpResponse:
     """Lista abrigos controlados pela CME com filtros de ocupacao.
 
@@ -918,57 +888,6 @@ def excluir_kit(request: HttpRequest, pk: int) -> HttpResponse:
 
     messages.success(request, f"Kit {nome} excluído permanentemente.")
     return redirect("kits")
-
-
-def _contexto_movimentacao(
-    request: HttpRequest,
-    tipo: str,
-    form: MovimentacaoForm,
-) -> dict[str, Any]:
-    """Monta o contexto compartilhado entre registrar_saida e registrar_entrada."""
-
-    tipo_label = "Saída" if tipo == Movimentacao.Tipo.SAIDA else "Entrada"
-    return {
-        "usuario_logado": request.user,
-        "tipo": tipo,
-        "tipo_label": tipo_label,
-        "titulo": f"Registrar {tipo_label.lower()}",
-        "subtitulo": (
-            "Registre a entrega de um pacote ao aluno."
-            if tipo == Movimentacao.Tipo.SAIDA
-            else "Registre a devolução de um pacote pelo aluno."
-        ),
-        "submit_label": f"Registrar {tipo_label.lower()}",
-        "alunos": form.fields["aluno"].queryset,
-        "materiais": form.fields["material"].queryset,
-        "form": form,
-    }
-
-
-def _salvar_movimentacao(
-    form: MovimentacaoForm,
-    tipo: str,
-    retirado: bool | None,
-) -> Movimentacao:
-    """Persiste uma movimentacao a partir de um form já validado."""
-
-    aluno: Aluno = form.cleaned_data["aluno"]
-    return Movimentacao.objects.create(
-        data_hora=form.cleaned_data["data_hora"],
-        tipo=tipo,
-        aluno=aluno,
-        turma=aluno.turma,
-        material=form.cleaned_data.get("material"),
-        aluno_nome=aluno.nome,
-        aluno_codigo_externo=aluno.matricula,
-        turma_nome=aluno.turma.nome if aluno.turma else "",
-        pacote_codigo=form.cleaned_data["pacote_codigo"],
-        retirado=retirado,
-        arquivo_origem="painel",
-        row_hash=_gerar_row_hash(),
-        origem=OrigemDados.MANUAL,
-        observacoes=form.cleaned_data.get("observacoes", ""),
-    )
 
 
 @login_required
@@ -1290,10 +1209,8 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
 def _sincronizar_alunos_da_turma(request: HttpRequest, turma: Turma) -> None:
     """Sincroniza os alunos de uma turma com o Eduq e registra a mensagem do resultado.
 
-    Compartilhado por ``sincronizar_alunos_turma`` (turma escolhida na tela de
-    Alunos por turma) e ``sincronizar_turma_busca`` (turma escolhida a partir
-    do estado vazio da busca de aluno) — mesma operação, dois pontos de
-    entrada diferentes.
+    Usado por ``sincronizar_turma_busca`` (turma escolhida a partir do estado
+    vazio da busca de aluno).
     """
 
     try:
@@ -1315,25 +1232,6 @@ def _sincronizar_alunos_da_turma(request: HttpRequest, turma: Turma) -> None:
             f"{resultado.alunos.atualizados} atualizados"
             + (f", {erros} erro(s)." if erros else "."),
         )
-
-
-@login_required
-@require_POST
-def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpResponse:
-    """Sincroniza alunos de uma turma especifica com o Eduq."""
-
-    try:
-        turma = Turma.objects.get(pk=turma_id)
-    except Turma.DoesNotExist:
-        messages.error(request, "Turma não encontrada.")
-        return redirect("alunos_por_turma")
-
-    _sincronizar_alunos_da_turma(request, turma)
-
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect(f"{reverse('alunos_por_turma')}?turma={turma_id}")
 
 
 @login_required

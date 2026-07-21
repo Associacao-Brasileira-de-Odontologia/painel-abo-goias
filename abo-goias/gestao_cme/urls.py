@@ -19,11 +19,6 @@ urlpatterns = [
     path("gestao-cme/movimentacoes/", views.home, name="cme_home"),
     path("gestao-cme/visao-geral/", views.cme_dashboard, name="cme_dashboard"),
     path("alunos-por-turma/", views.alunos_por_turma, name="alunos_por_turma"),
-    path(
-        "alunos-por-turma/sincronizar-turmas/",
-        views.sincronizar_turmas_eduq,
-        name="sincronizar_turmas_eduq",
-    ),
     path("abrigos/", views.armarios, name="abrigos"),
     path("abrigos/novo/", views.cadastrar_abrigo, name="cadastrar_abrigo"),
     path("abrigos/<int:pk>/editar/", views.editar_abrigo, name="editar_abrigo"),
@@ -63,11 +58,6 @@ urlpatterns = [
         "gestao-cme/<int:pk>/editar/",
         views.editar_movimentacao,
         name="editar_movimentacao",
-    ),
-    path(
-        "alunos-por-turma/sincronizar-alunos/<int:turma_id>/",
-        views.sincronizar_alunos_turma,
-        name="sincronizar_alunos_turma",
     ),
     path("alunos-por-turma/novo/", views.cadastrar_aluno, name="cadastrar_aluno"),
     path(

@@ -16,57 +16,6 @@ from .models import (
 )
 
 
-class MovimentacaoForm(forms.Form):
-    """Valida entradas de saída e entrada de materiais/pacotes."""
-
-    aluno = forms.ModelChoiceField(
-        queryset=Aluno.objects.none(),
-        empty_label="Selecione um aluno...",
-        error_messages={
-            "required": "Selecione um aluno.",
-            "invalid_choice": "Aluno inválido.",
-        },
-    )
-    pacote_codigo = forms.CharField(
-        max_length=80,
-        strip=True,
-        error_messages={"required": "Informe o código do pacote."},
-    )
-    material = forms.ModelChoiceField(
-        queryset=Material.objects.none(),
-        required=False,
-        empty_label="Nenhum material específico",
-    )
-    data_hora = forms.DateTimeField(
-        required=False,
-        input_formats=["%Y-%m-%dT%H:%M"],
-        error_messages={"invalid": "Data e hora inválidas."},
-    )
-    observacoes = forms.CharField(required=False, strip=True)
-
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
-        self.fields["aluno"].queryset = (
-            Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
-            .filter(ativo=True)
-            .select_related("turma")
-            .order_by("turma__nome", "nome")
-        )
-        self.fields["material"].queryset = (
-            Material.objects.exclude(origem=OrigemDados.EXEMPLO)
-            .filter(ativo=True)
-            .order_by("nome")
-        )
-
-    def clean_data_hora(self) -> object:
-        data_hora = self.cleaned_data.get("data_hora")
-        if not data_hora:
-            return timezone.now()
-        if timezone.is_naive(data_hora):
-            return timezone.make_aware(data_hora)
-        return data_hora
-
-
 class CadastrarAlunoForm(forms.ModelForm):
     """Valida o cadastro manual de um aluno."""
 
