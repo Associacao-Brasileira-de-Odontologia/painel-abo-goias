@@ -1020,15 +1020,30 @@ a.metric-card:hover {
     background: var(--accent-strong);
 }
 
+/* Quando aberto, o item ocupa a linha inteira da barra de filtros — empurra
+   "Buscar"/"Limpar tudo" para a linha de baixo (.filter-bar já quebra linha,
+   ver item 13) em vez de deixá-los cobertos por um painel flutuante. */
+.filter-period[open] {
+    flex-basis: 100%;
+}
+
+/* R2-4: o painel era position:absolute (herdado de .dropdown-panel), o que
+   causava dois problemas — a largura automática de um layout em linha era
+   calculada a partir da largura do <details> ("Período", só o tamanho do
+   botão), não do conteúdo real, fazendo os campos quebrarem linha de forma
+   imprevisível; e, sendo flutuante, sempre sobrepunha o conteúdo abaixo (KPIs,
+   tabela) e podia ultrapassar a borda direita do painel de resultados quando
+   o botão fica mais à direita da barra (Movimentações/Empréstimos). Virou
+   parte do fluxo normal (position: static): abre empurrando o conteúdo
+   abaixo para baixo, sem sobrepor nem escapar de nenhuma borda. */
 .filter-period-panel {
+    position: static;
     display: flex;
     flex-direction: row;
-    align-items: flex-end;
     flex-wrap: wrap;
+    align-items: flex-end;
     gap: 8px;
-    left: 0;
-    right: auto;
-    min-width: max-content;
+    margin-top: 8px;
     padding: 12px;
 }
 
