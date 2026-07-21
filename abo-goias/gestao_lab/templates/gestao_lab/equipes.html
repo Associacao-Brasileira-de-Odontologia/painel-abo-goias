@@ -18,11 +18,10 @@
 {% endblock %}
 
 {% block panel_title %}Equipes de coordenação{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'lab_criar_equipe' %}">Nova equipe</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Nova equipe" foi movida para o mini-menu do item "Equipes" na navegação
+lateral (ver partials/side_link_group.html) — item 11 do plano de 2026-07.
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">

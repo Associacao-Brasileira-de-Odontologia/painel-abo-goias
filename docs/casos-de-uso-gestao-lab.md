@@ -170,7 +170,9 @@ flowchart LR
 
 > **Atualizado em 2026-07-21** — status reformulado (ver UC-01, §5 regra 1); filtro de
 > período e alinhamento de botões padronizados com o CME (itens 2 e 3); seletor de
-> campo de data adicionado ao filtro de período (item 1).
+> campo de data adicionado ao filtro de período (item 1); "Registrar pedido" movido do
+> bloco "Ações rápidas" da sidebar para o mini-menu do item "Acompanhamento" na
+> navegação lateral (item 11).
 
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.acompanhamento_pedidos` → `/laboratorio/pedidos/`
@@ -359,6 +361,10 @@ flowchart LR
 > `PedidoMaterial.descricao_servico` **permanece texto livre** — não haverá campo
 > estruturado de tipo/categoria. Nenhuma mudança de código para este ponto.
 
+> **Atualizado em 2026-07-21** — "Nova moldagem" movida de `panel_actions` (topo da
+> página) para o mini-menu do item "Moldagens" na navegação lateral, mesmo padrão do
+> CME (item 11).
+
 - **Ator primário:** Coordenador.
 - **Views/rotas:** `views.moldagens` (listar, `/laboratorio/moldagens/`),
   `views.criar_moldagem` (`/laboratorio/moldagens/nova/`).
@@ -425,6 +431,10 @@ flowchart LR
 
 ### UC-14 · Gerenciar laboratórios
 
+> **Atualizado em 2026-07-21** — "Novo laboratório" movido do topo da página
+> (`panel_actions`) para o mini-menu do item "Laboratórios" na navegação lateral,
+> mesmo padrão do CME (item 11). Resolve o achado U-06.
+
 - **Ator primário:** Coordenador / Superusuário.
 - **Views/rotas:** `views.laboratorios` (listar, `/laboratorio/laboratorios/`),
   `criar_laboratorio` (`/novo/`), `editar_laboratorio` (`/<pk>/editar/`).
@@ -446,6 +456,10 @@ flowchart LR
 - **Pós-condição:** `Laboratorio` criado/atualizado.
 
 ### UC-15 · Gerenciar equipes
+
+> **Atualizado em 2026-07-21** — "Nova equipe" movida do topo da página
+> (`panel_actions`) para o mini-menu do item "Equipes" na navegação lateral, mesmo
+> padrão do CME (item 11). Resolve o achado U-06.
 
 - **Ator primário:** Coordenador / Superusuário.
 - **Views/rotas:** `views.equipes` (listar, `/laboratorio/equipes/`), `criar_equipe`
@@ -699,7 +713,7 @@ flowchart LR
 | U-03 | UC-10 / UC-17 | Rótulos de contagem "N não convertida(s)" (Moldagens) e "N com pedido aberto" (Pacientes) aparecem sempre que a contagem é > 0, mesmo quando o filtro correspondente já está selecionado | Rótulo redundante quando o filtro já está ativo; inconsistente com o padrão já adotado no CME | Gatear a exibição do rótulo por `filtro == "..."`/`pedido_filtro == "aberto"`, como já feito no CME (R2-2) | Em aberto |
 | U-04 | UC-08 / UC-10 | Não há edição de `PedidoMaterial`/`Moldagem` (paciente, aluno, laboratório, equipe, previsão, descrição) pela interface operacional — só criação, toggles e exclusão. Corrigir um erro exige excluir e recriar, perdendo envio/entrega/faturamento já preenchidos | Fricção operacional e risco de perda de histórico por um erro de cadastro simples | Tela de edição restrita a esses campos, mesmo padrão do CME para `editar_emprestimo` (UC-21 de `casos-de-uso-gestao-cme.md`) | Em aberto |
 | U-05 | UC-17 | Resultados "Encontrados no Dental Office" na tela de Pacientes são somente leitura — não há ação para importar dali | Operador precisa ir a outra tela (pedido/moldagem) para de fato trazer o paciente para a base local | Adicionar um botão "Importar" que chama a mesma `materializar_paciente` já usada pelo autocomplete | ✅ **Resolvido em 2026-07-21** (item 9) — cada linha "Dental Office" da listagem unificada ganhou o botão "Importar" (`views.importar_paciente_dental`) |
-| U-06 | UC-14 / UC-15 | Botões "Novo laboratório"/"Nova equipe" ficam em `panel_actions` (topo da página), diferente do padrão de mini-menu na navegação lateral já adotado no CME para os cadastros do módulo (item 9) | Inconsistência de padrão de navegação entre módulos — não é um bug, é uma diferença de estilo | Avaliar se vale replicar o mini-menu por consistência, ou manter como está (o padrão atual é simples e funcional) | Em aberto — decisão de padronização, ver §7 |
+| U-06 | UC-02 / UC-10 / UC-14 / UC-15 | Botões "Registrar pedido"/"Nova moldagem"/"Novo laboratório"/"Nova equipe" ficavam em blocos à parte (Ações rápidas, `panel_actions`), diferente do padrão de mini-menu na navegação lateral já adotado no CME para os cadastros do módulo | Inconsistência de padrão de navegação entre módulos — não é um bug, é uma diferença de estilo | Replicar `partials/side_link_group.html` do CME para os 4 itens | ✅ **Resolvido em 2026-07-21** (item 11) — os 4 botões viraram sub-links dos respectivos mini-menus (Acompanhamento, Moldagens, Laboratórios, Equipes) em `partials/menu.html`; a navegação lateral do laboratório segue o mesmo padrão do CME |
 | U-07 | UC-14 | `LaboratorioForm` permite salvar sem nenhuma equipe vinculada, apesar do docstring do modelo dizer "ao menos uma equipe deve ser vinculada" | Dado pode ficar inconsistente com a documentação do próprio modelo (hoje sem efeito funcional observado) | Tornar `equipes` obrigatório no formulário, ou atualizar o docstring do modelo para refletir a realidade (0 é permitido) | Em aberto — decisão de negócio, ver §7 |
 | U-08 | UC-05 a UC-07, UC-12 | Ações de toggle (faturamento, entrega de moldagem) não têm spinner/estado de carregamento — cliques duplos em conexão lenta podem reenviar o POST (idempotente, mas sem feedback visual) | Pequena confusão em conexões lentas, sem risco de dado incorreto (toggle idempotente) | Mesmo padrão `.js-loading-submit` já usado em outros formulários do projeto | Em aberto |
 
@@ -745,9 +759,10 @@ flowchart LR
 6. ~~Padronizar o filtro de período do Acompanhamento (U-01) com o widget colapsável já
    usado no CME~~ — **decidido e implementado em 2026-07-21**: sim, replicar (item 3).
    Ver UC-02.
-7. **Padronizar os cadastros de Laboratórios/Equipes com o mini-menu de navegação lateral
-   do CME (U-06) — replicar por consistência, ou manter o padrão atual (botão no topo da
-   página)?**
+7. ~~Padronizar os cadastros de Laboratórios/Equipes (e também Acompanhamento/Moldagens)
+   com o mini-menu de navegação lateral do CME (U-06) — replicar por consistência, ou
+   manter o padrão atual (botão à parte)?~~ — **decidido e implementado em 2026-07-21**:
+   sim, replicar (item 11). Ver UC-14/UC-15.
 8. **Matriz de permissões por grupo/papel (S-03) — mesma pendência já registrada no CME:
    reusar os grupos existentes (`gestao_cme/permissoes.py`) ou criar um esquema
    específico para `gestao_lab`?**

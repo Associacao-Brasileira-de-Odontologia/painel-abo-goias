@@ -30,11 +30,10 @@
 {% endblock %}
 
 {% block panel_title %}Moldagens registradas{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'lab_criar_moldagem' %}">Nova moldagem</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Nova moldagem" foi movida para o mini-menu do item "Moldagens" na navegação
+lateral (ver partials/side_link_group.html) — item 11 do plano de 2026-07.
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">

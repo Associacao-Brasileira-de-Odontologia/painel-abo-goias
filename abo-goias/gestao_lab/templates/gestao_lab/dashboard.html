@@ -9,9 +9,9 @@
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% comment %}
-Sem sidebar_extra aqui de propósito: "Registrar pedido" e "Acompanhamento" já
-estão no menu lateral (Ações rápidas / navegação principal) — este bloco
-duplicava os mesmos dois botões logo abaixo.
+Sem sidebar_extra aqui de propósito: "Registrar pedido" já está no mini-menu
+de "Acompanhamento" (partials/menu.html) — um bloco extra aqui duplicaria o
+mesmo botão.
 {% endcomment %}
 
 {% block panel_title %}Visão geral do laboratório{% endblock %}
