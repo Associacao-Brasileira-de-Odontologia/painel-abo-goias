@@ -13,10 +13,14 @@ query_string (filtros ativos, sem o parâmetro page).
 {% if page_obj.paginator.num_pages > 1 %}
     <nav class="pagination" aria-label="Paginação">
         {% if page_obj.has_previous %}
-            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page=1" title="Primeira página" aria-label="Primeira página">«</a>
+            {% comment %}
+            Rótulo textual em vez de só o símbolo «, que passava despercebido
+            (achado R2-3) — mesmo peso visual de "Anterior"/"Próxima".
+            {% endcomment %}
+            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page=1" title="Primeira página" aria-label="Primeira página">« Primeira</a>
             <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
         {% else %}
-            <span class="page-link disabled" aria-hidden="true">«</span>
+            <span class="page-link disabled">« Primeira</span>
             <span class="page-link disabled">Anterior</span>
         {% endif %}
 
@@ -30,10 +34,10 @@ query_string (filtros ativos, sem o parâmetro page).
 
         {% if page_obj.has_next %}
             <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>
-            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.paginator.num_pages }}" title="Última página" aria-label="Última página">»</a>
+            <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.paginator.num_pages }}" title="Última página" aria-label="Última página">Última »</a>
         {% else %}
             <span class="page-link disabled">Próxima</span>
-            <span class="page-link disabled" aria-hidden="true">»</span>
+            <span class="page-link disabled">Última »</span>
         {% endif %}
     </nav>
 {% endif %}
