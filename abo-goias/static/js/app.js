@@ -216,6 +216,28 @@
         }
     });
 
+    // A lista de resultados flutua por cima dos campos seguintes (ver CSS);
+    // sem isto, ela ficava aberta indefinidamente depois de uma busca, escondendo
+    // (e bloqueando o clique em) qualquer campo atrás dela até o usuário
+    // escolher um resultado. Fecha a lista assim que o foco ou o clique sai do
+    // bloco [data-ac] a que ela pertence — clicar/tabular para outro campo, ou
+    // em qualquer área fora da busca, fecha a lista aberta.
+    function fecharListasForaDe(alvo) {
+        document.querySelectorAll(".search-results-wrap").forEach(function (lista) {
+            if (!lista.innerHTML.trim()) return;
+            var b = bloco(lista);
+            if (b && !b.contains(alvo)) lista.innerHTML = "";
+        });
+    }
+
+    document.addEventListener("click", function (event) {
+        fecharListasForaDe(event.target);
+    });
+
+    document.addEventListener("focusin", function (event) {
+        fecharListasForaDe(event.target);
+    });
+
     // Enter num campo de busca não deve submeter o formulário do registro.
     document.addEventListener("keydown", function (event) {
         if (
@@ -223,6 +245,15 @@
             event.target.matches('[data-ac] input[type="search"]')
         ) {
             event.preventDefault();
+        }
+
+        // Esc fecha a lista de resultados sem precisar clicar fora dela.
+        if (event.key === "Escape") {
+            var b = bloco(event.target);
+            if (b) {
+                var lista = b.querySelector(".search-results-wrap");
+                if (lista) lista.innerHTML = "";
+            }
         }
     });
 })();
