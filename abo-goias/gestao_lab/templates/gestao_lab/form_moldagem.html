@@ -24,11 +24,10 @@
         {% url 'lab_buscar_pacientes' as url_pac %}
         {% url 'lab_buscar_alunos_lab' as url_alu %}
         {% url 'lab_materializar' 'paciente' as url_mat_pac %}
-        {% url 'lab_materializar' 'aluno' as url_mat_alu %}
 
         {% include "partials/_ac_field.html" with ac_name="paciente" ac_label="Paciente" ac_url=url_pac ac_materializar_url=url_mat_pac ac_id=paciente_sel.pk ac_nome=paciente_sel.nome ac_errors=form.paciente.errors %}
 
-        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_alu ac_materializar_url=url_mat_alu ac_id=aluno_sel.pk ac_nome=aluno_sel.nome ac_errors=form.aluno.errors %}
+        {% include "partials/_ac_field.html" with ac_name="aluno" ac_label="Aluno" ac_url=url_alu ac_id=aluno_sel.pk ac_nome=aluno_sel.nome ac_errors=form.aluno.errors %}
 
         <div class="field field-checkbox">
             <label>

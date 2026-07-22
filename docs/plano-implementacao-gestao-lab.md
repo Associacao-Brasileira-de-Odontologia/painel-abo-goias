@@ -190,6 +190,16 @@ referência:
 
 ### Item 10 · Busca de Alunos no padrão do CME (Alunos por turma) → ✅ **Implementado**
 
+> **Superado em 2026-07-22** — este item corrigiu apenas *qual botão* sincronizava
+> Alunos (completa → só-alunos), mas manteve a fonte de dados errada: a sincronização
+> continuava puxando "alunos" do **Dental Office**, que é um sistema clínico e nunca
+> teve esse dado — nenhum `AlunoLab` sincronizado por ali representava um aluno real.
+> A correção definitiva (trocar a fonte para o **Eduq**, mesmo sistema acadêmico já
+> usado pelo `gestao_cme`, com um novo `TurmaLab` e sincronização de turma sob demanda)
+> está registrada em `casos-de-uso-gestao-lab.md`, §11. O texto abaixo é o registro
+> histórico da implementação original deste item — não reflete mais o comportamento
+> atual do botão de sincronização de Alunos.
+
 A busca em si **já era** local-only com `nome_normalizado`/`icontains`, igual ao CME — o
 que divergia era o **botão de sincronização**: a página de Alunos usava o botão
 "Atualizar lista" que acionava `lab_sincronizar` (sincronização **completa**, pacientes

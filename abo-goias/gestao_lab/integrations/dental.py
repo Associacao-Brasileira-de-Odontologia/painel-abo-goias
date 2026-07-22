@@ -110,16 +110,6 @@ class PacienteDental:
     ativo: bool
 
 
-@dataclass(frozen=True)
-class AlunoLabDental:
-    """Representacao normalizada de um aluno (usuario grupo 8) do Dental Office."""
-
-    id: int
-    nome: str
-    celular: str
-    ativo: bool
-
-
 def carregar_config_dental() -> ConfigDental:
     """Monta a configuracao da API Dental Office a partir de settings.
 
@@ -136,7 +126,9 @@ def carregar_config_dental() -> ConfigDental:
             if not valor
         ]
         variaveis = ", ".join(f"DENTAL_{nome}" for nome in ausentes)
-        raise DentalConfigurationError(f"Configure as variaveis de ambiente: {variaveis}")
+        raise DentalConfigurationError(
+            f"Configure as variaveis de ambiente: {variaveis}"
+        )
 
     return ConfigDental(
         client_id=client_id,
@@ -184,14 +176,6 @@ class DentalClient:
         """
 
         return self._get_autenticado(f"customers/{id_dental}")
-
-    def listar_usuarios(
-        self, user_group: int, page: int = 1, q: str = ""
-    ) -> dict[str, Any]:
-        """Consulta a listagem paginada de usuarios do Dental Office por grupo."""
-
-        params = urlencode({"q": q, "user_group": user_group, "page": page})
-        return self._get_autenticado(f"users?{params}")
 
     # ------------------------------------------------------------------
     # Documentos
@@ -460,7 +444,9 @@ class DentalClient:
             raise self._erro_para_status(exc.code, detail) from exc
         except TimeoutError as exc:
             self._log_requisicao(metodo, endpoint, None, inicio, sucesso=False)
-            raise DentalTimeoutError(f"Timeout ao consultar Dental Office: {exc}") from exc
+            raise DentalTimeoutError(
+                f"Timeout ao consultar Dental Office: {exc}"
+            ) from exc
         except URLError as exc:
             self._log_requisicao(metodo, endpoint, None, inicio, sucesso=False)
             if isinstance(exc.reason, TimeoutError):
@@ -549,34 +535,6 @@ def normalizar_paciente(item: dict[str, Any]) -> PacienteDental | None:
         nome=nome,
         celular=celular,
         ativo=bool(item.get("active", True)),
-    )
-
-
-def normalizar_aluno_lab(item: dict[str, Any]) -> AlunoLabDental | None:
-    """Converte um registro bruto de usuario do Dental Office em ``AlunoLabDental``.
-
-    Retorna ``None`` quando o registro nao possui id ou nome valido.
-    O campo deleted_at indica se o usuario foi removido (ativo=False).
-    """
-
-    id_ = item.get("id")
-    nome = (item.get("name") or "").strip()
-    if not id_ or not nome:
-        return None
-
-    celular = ""
-    contatos = item.get("contacts_attributes") or []
-    if contatos:
-        primeiro = contatos[0]
-        celular = (primeiro.get("cellphone") or primeiro.get("phone") or "").strip()
-
-    ativo = item.get("deleted_at") is None
-
-    return AlunoLabDental(
-        id=int(id_),
-        nome=nome,
-        celular=celular,
-        ativo=ativo,
     )
 
 

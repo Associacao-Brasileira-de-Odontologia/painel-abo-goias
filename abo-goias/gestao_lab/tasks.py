@@ -11,6 +11,8 @@ import logging
 
 from celery import shared_task
 
+from gestao_cme.integrations.eduq import EduqAPIError
+
 from .integrations.dental import DentalAPIError
 
 logger = logging.getLogger(__name__)
@@ -25,12 +27,14 @@ logger = logging.getLogger(__name__)
     max_retries=3,
 )
 def sincronizar_dental_task(self) -> dict[str, int] | None:
-    """Atualiza pacientes e alunos a partir do Dental Office, em segundo plano.
+    """Atualiza pacientes a partir do Dental Office, em segundo plano.
 
-    Agendada via Celery Beat. Mantém as listagens de pacientes/alunos em dia sem
+    Agendada via Celery Beat. Mantém a listagem de pacientes em dia sem
     ninguém precisar apertar "Atualizar lista" — a busca dos formulários já
-    consulta a API ao vivo (ver ``buscar_pacientes``), então esta rotina serve às
-    telas de consulta e ao trabalho offline sobre a base local.
+    consulta a API ao vivo (ver ``buscar_pacientes``), então esta rotina serve
+    às telas de consulta e ao trabalho offline sobre a base local. Só
+    pacientes — alunos são sincronizados do Eduq por
+    ``sincronizar_eduq_lab_task``, num fluxo independente.
 
     Reaproveita ``executar_sync_e_registrar``, que grava o resultado em
     ``RegistroSync`` — o mesmo histórico exibido na interface, agora também
@@ -53,7 +57,6 @@ def sincronizar_dental_task(self) -> dict[str, int] | None:
 
     registro = executar_sync_e_registrar(
         clinic_id=clinic_id,
-        user_group=getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8),
         disparado_por="agendamento",
         tipo=RegistroSync.Tipo.AGENDADA,
     )
@@ -61,10 +64,42 @@ def sincronizar_dental_task(self) -> dict[str, int] | None:
     resumo = {
         "pacientes_criados": registro.pacientes_criados,
         "pacientes_atualizados": registro.pacientes_atualizados,
+    }
+    logger.info("sincronizar_dental_task: %s", resumo)
+    return resumo
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(EduqAPIError,),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+    max_retries=3,
+)
+def sincronizar_eduq_lab_task(self) -> dict[str, int] | None:
+    """Atualiza turmas e alunos a partir do Eduq, em segundo plano.
+
+    Agendada via Celery Beat — mesmo papel de
+    ``gestao_cme.tasks.sincronizar_eduq_task``, mas numa base própria do
+    laboratório (``TurmaLab``/``AlunoLab``, não compartilhada com o CME).
+    Reaproveita ``executar_sync_alunos_e_registrar``, que grava o resultado em
+    ``RegistroSync`` (mesmo histórico exibido na interface).
+    """
+
+    from .models import RegistroSync
+    from .services.eduq_lab_sync import executar_sync_alunos_e_registrar
+
+    registro = executar_sync_alunos_e_registrar(
+        disparado_por="agendamento",
+        tipo=RegistroSync.Tipo.AGENDADA,
+    )
+
+    resumo = {
         "alunos_criados": registro.alunos_criados,
         "alunos_atualizados": registro.alunos_atualizados,
     }
-    logger.info("sincronizar_dental_task: %s", resumo)
+    logger.info("sincronizar_eduq_lab_task: %s", resumo)
     return resumo
 
 

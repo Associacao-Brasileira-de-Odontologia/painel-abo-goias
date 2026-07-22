@@ -8,15 +8,13 @@ from typing import Any, Callable
 
 from django.utils import timezone
 from gestao_lab.integrations.dental import (
-    AlunoLabDental,
     DentalAPIError,
     DentalClient,
     PacienteDental,
-    normalizar_aluno_lab,
     normalizar_paciente,
     normalizar_paciente_detalhado,
 )
-from gestao_lab.models import AlunoLab, OrigemDados, Paciente
+from gestao_lab.models import OrigemDados, Paciente
 
 logger = logging.getLogger(__name__)
 
@@ -178,55 +176,19 @@ def sincronizar_pacientes(clinic_id: int) -> ResultadoSync:
     return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados}
 
 
-def sincronizar_alunos(user_group: int) -> ResultadoSync:
-    """Busca todos os alunos (usuarios do grupo especificado) e faz upsert local.
-
-    Percorre todas as páginas do endpoint /users filtrando por user_group
-    (ver :func:`listar_todas_paginas`), cria ou atualiza cada AlunoLab
-    usando id_dental como chave.
-    """
-    client = DentalClient()
-    criados = atualizados = ignorados = 0
-    agora = timezone.now()
-
-    itens = listar_todas_paginas(
-        lambda page: client.listar_usuarios(user_group=user_group, page=page),
-        contexto="alunos:sincronizacao_completa",
-    )
-
-    for item in itens:
-        aluno = normalizar_aluno_lab(item)
-        if not aluno:
-            ignorados += 1
-            continue
-
-        _, criado = AlunoLab.objects.update_or_create(
-            id_dental=str(aluno.id),
-            defaults={
-                "nome": aluno.nome,
-                "celular": aluno.celular,
-                "ativo": aluno.ativo,
-                "origem": OrigemDados.DENTAL,
-                "ultima_sincronizacao": agora,
-            },
-        )
-        if criado:
-            criados += 1
-        else:
-            atualizados += 1
-
-    return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados}
-
-
 # ---------------------------------------------------------------------------
 # Busca para o autocomplete: leitura sem gravar + gravacao so do escolhido
 # ---------------------------------------------------------------------------
 #
-# O autocomplete do formulario nao pode usar `buscar_e_importar_*`: aquelas
-# funcoes percorrem TODAS as paginas e gravam TODOS os resultados (uma busca por
+# O autocomplete do formulario nao pode usar `buscar_e_importar_pacientes`: ela
+# percorre TODAS as paginas e grava TODOS os resultados (uma busca por
 # "Gustavo" chegou a importar 149 pacientes e levar ~9s). Aqui a busca le apenas
 # a primeira pagina e nao grava nada; o registro so vai para o banco quando o
-# operador escolhe um resultado (`materializar_*`) — um write, no clique.
+# operador escolhe um resultado (`materializar_paciente`) — um write, no clique.
+#
+# Alunos nao usam mais esse padrao: a fonte de dados de alunos e o Eduq (ver
+# gestao_lab.services.eduq_lab_sync), que nao oferece busca por nome — so
+# listagem por turma. O Dental Office nunca teve informacao real de alunos.
 
 
 def procurar_pacientes(
@@ -246,23 +208,6 @@ def procurar_pacientes(
             normalizar_paciente(item) for item in (resposta.get("results") or [])
         )
         if paciente
-    ]
-    return itens, int(resposta.get("total_pages") or 1)
-
-
-def procurar_alunos(
-    q: str, user_group: int, page: int = 1
-) -> tuple[list[AlunoLabDental], int]:
-    """Procura alunos no Dental Office sem gravar nada."""
-
-    client = DentalClient()
-    resposta = client.listar_usuarios(user_group=user_group, page=page, q=q)
-    itens = [
-        aluno
-        for aluno in (
-            normalizar_aluno_lab(item) for item in (resposta.get("results") or [])
-        )
-        if aluno
     ]
     return itens, int(resposta.get("total_pages") or 1)
 
@@ -297,38 +242,6 @@ def materializar_paciente(id_dental: str, clinic_id: int) -> Paciente | None:
 
     obj, _ = Paciente.objects.update_or_create(
         id_dental=str(paciente.id), defaults=defaults
-    )
-    return obj
-
-
-def materializar_aluno(
-    id_dental: str, nome_hint: str, user_group: int
-) -> AlunoLab | None:
-    """Garante um AlunoLab local para o id informado, criando se ainda nao existe.
-
-    A API nao expoe um GET /users/{id}, entao a busca por nome e refeita e o
-    registro e localizado pelo id — ``nome_hint`` serve apenas como filtro da
-    consulta; os dados gravados vem sempre da resposta da API.
-    """
-
-    existente = AlunoLab.objects.filter(id_dental=str(id_dental)).first()
-    if existente:
-        return existente
-
-    itens, _ = procurar_alunos(q=nome_hint, user_group=user_group)
-    alvo = next((aluno for aluno in itens if str(aluno.id) == str(id_dental)), None)
-    if not alvo:
-        return None
-
-    obj, _ = AlunoLab.objects.update_or_create(
-        id_dental=str(alvo.id),
-        defaults={
-            "nome": alvo.nome,
-            "celular": alvo.celular,
-            "ativo": alvo.ativo,
-            "origem": OrigemDados.DENTAL,
-            "ultima_sincronizacao": timezone.now(),
-        },
     )
     return obj
 
@@ -374,56 +287,19 @@ def buscar_e_importar_pacientes(q: str, clinic_id: int) -> ResultadoSync:
     return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados}
 
 
-def buscar_e_importar_alunos(q: str, user_group: int) -> ResultadoSync:
-    """Busca alunos no Dental Office pelo nome e faz upsert de todos os resultados.
-
-    Percorre **todas** as páginas retornadas pela API para o filtro de
-    busca (ver :func:`listar_todas_paginas`) — mesma correção aplicada a
-    :func:`buscar_e_importar_pacientes`.
-    """
-    client = DentalClient()
-    criados = atualizados = ignorados = 0
-    agora = timezone.now()
-
-    itens = listar_todas_paginas(
-        lambda page: client.listar_usuarios(user_group=user_group, page=page, q=q),
-        contexto="alunos:busca",
-    )
-
-    for item in itens:
-        aluno = normalizar_aluno_lab(item)
-        if not aluno:
-            ignorados += 1
-            continue
-        _, criado = AlunoLab.objects.update_or_create(
-            id_dental=str(aluno.id),
-            defaults={
-                "nome": aluno.nome,
-                "celular": aluno.celular,
-                "ativo": aluno.ativo,
-                "origem": OrigemDados.DENTAL,
-                "ultima_sincronizacao": agora,
-            },
-        )
-        if criado:
-            criados += 1
-        else:
-            atualizados += 1
-
-    return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados}
-
-
 def executar_sync_e_registrar(
     clinic_id: int,
-    user_group: int,
     disparado_por: str = "",
     tipo: str = "COMPLETA",
 ) -> object:
-    """Executa a sincronização completa e persiste o resultado em RegistroSync.
+    """Executa a sincronização de pacientes e persiste o resultado em RegistroSync.
 
     Registra início, fim, duração e resultado (sucesso/erro) para que o
     histórico fique disponível na interface e para diagnóstico de falhas
-    na sincronização agendada.
+    na sincronização agendada. Só sincroniza pacientes — alunos são
+    sincronizados do Eduq, num fluxo separado (ver
+    gestao_lab.services.eduq_lab_sync), já que as duas fontes de dados são
+    independentes uma da outra.
     """
     from gestao_lab.models import RegistroSync
 
@@ -432,11 +308,8 @@ def executar_sync_e_registrar(
 
     try:
         rp = sincronizar_pacientes(clinic_id=clinic_id)
-        ra = sincronizar_alunos(user_group=user_group)
         registro.pacientes_criados = rp["criados"]
         registro.pacientes_atualizados = rp["atualizados"]
-        registro.alunos_criados = ra["criados"]
-        registro.alunos_atualizados = ra["atualizados"]
         registro.sucesso = True
     except Exception as exc:
         registro.erro = str(exc)

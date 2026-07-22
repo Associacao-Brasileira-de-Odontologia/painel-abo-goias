@@ -19,6 +19,7 @@ from gestao_cme.models import ModeloBase, NomeNormalizadoMixin
 class OrigemDados(models.TextChoices):
     MANUAL = "MANUAL", "Manual"
     DENTAL = "DENTAL", "Dental Office"
+    EDUQ = "EDUQ", "Eduq"
 
 
 class Equipe(ModeloBase):
@@ -69,20 +70,58 @@ class Laboratorio(ModeloBase):
         return self.nome
 
 
-class AlunoLab(NomeNormalizadoMixin, ModeloBase):
-    """Aluno sincronizado do Dental Office para uso nos pedidos de laboratorio.
+class TurmaLab(NomeNormalizadoMixin, ModeloBase):
+    """Turma sincronizada do Eduq — agrupa os alunos para fins de sincronizacao.
 
-    Contem apenas os dados necessarios para o fluxo de pedidos: nome e celular.
-    O campo id_dental garante rastreabilidade com o sistema de origem.
+    O Eduq nao oferece busca de aluno por nome, so listagem por turma (ver
+    gestao_cme.integrations.eduq.EduqClient.listar_alunos) — por isso o
+    laboratorio precisa da mesma nocao de turma que o gestao_cme ja usa, numa
+    tabela propria (nao compartilhada entre os dois apps).
+    """
+
+    nome = models.CharField(max_length=150)
+    codigo = models.CharField(max_length=50, unique=True)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.EDUQ,
+    )
+    ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name = "turma (lab)"
+        verbose_name_plural = "turmas (lab)"
+
+    def __str__(self) -> str:
+        return self.nome
+
+
+class AlunoLab(NomeNormalizadoMixin, ModeloBase):
+    """Aluno sincronizado do Eduq para uso nos pedidos de laboratorio.
+
+    Contem apenas os dados necessarios para o fluxo de pedidos: nome, celular
+    e a turma. O campo matricula garante rastreabilidade com o sistema de
+    origem (Eduq) — mesmo papel que o id_dental tinha antes da correcao que
+    trocou a fonte de dados de alunos do Dental Office para o Eduq (o Dental
+    nunca teve informacao real de alunos; quem tem essa informacao e o Eduq,
+    mesma fonte ja usada pelo gestao_cme).
     """
 
     nome = models.CharField(max_length=150)
     celular = models.CharField(max_length=20, blank=True)
-    id_dental = models.CharField(max_length=50, unique=True)
+    matricula = models.CharField(max_length=50, unique=True)
+    turma = models.ForeignKey(
+        TurmaLab,
+        on_delete=models.PROTECT,
+        related_name="alunos",
+        null=True,
+        blank=True,
+    )
     origem = models.CharField(
         max_length=20,
         choices=OrigemDados.choices,
-        default=OrigemDados.DENTAL,
+        default=OrigemDados.EDUQ,
     )
     ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
 

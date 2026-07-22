@@ -1,14 +1,12 @@
 {% comment %}
-Seção de sincronização com o Dental Office na sidebar de Alunos (único uso
-atual deste partial — Pacientes usa busca ao vivo + importação pontual, ver
-item 9). Aciona só a rotina de alunos (lab_sincronizar_alunos), mais leve que
-a sincronização completa (lab_sincronizar, que também varre pacientes e é
-redundante aqui — mesmo princípio já aplicado no CME, "cada botão sincroniza
-exatamente o que a tela usa").
+Seção de sincronização com o Eduq na sidebar de Alunos (único uso atual
+deste partial — Pacientes usa busca ao vivo + importação pontual, ver
+item 9). Sincroniza todas as turmas e alunos (lab_sincronizar_alunos) —
+mesmo conceito de "Sincronizar alunos e turmas" do gestao_cme (R2-1).
 Espera no contexto: ultima_sync e historico_sync (renderizado pelo include).
 {% endcomment %}
 <div class="sidebar-section">
-    <p class="section-label">Atualização dos alunos</p>
+    <p class="section-label">Atualização dos alunos e turmas</p>
     {% if ultima_sync %}
         <p class="panel-copy">Última atualização: <strong>{{ ultima_sync|date:"d/m/Y H:i" }}</strong></p>
     {% else %}
@@ -17,7 +15,7 @@ Espera no contexto: ultima_sync e historico_sync (renderizado pelo include).
     <form class="sync-form" method="post" action="{% url 'lab_sincronizar_alunos' %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button class="button secondary" type="submit">Atualizar alunos</button>
+        <button class="button secondary" type="submit">Sincronizar alunos e turmas</button>
     </form>
 </div>
 
