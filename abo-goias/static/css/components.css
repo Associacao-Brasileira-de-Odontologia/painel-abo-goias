@@ -1401,6 +1401,31 @@ tbody tr.row-entregue-pendente > td:first-child {
     color: var(--info-text);
 }
 
+/* Selo de origem dos dados (No sistema / Dental Office) — mesmo padrão do
+   selo de gestao_contratos (contratos.css), sem o escopo `body.gestao-*`
+   para ficar disponível em qualquer app que precise (ex.: Pacientes do
+   gestao_lab, listagem unificada local + Dental Office). */
+.badge-origin {
+    display: block;
+    width: fit-content;
+    margin-top: 3px;
+    min-height: auto;
+    padding: 1px 7px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.badge-local {
+    background: var(--blue-soft);
+    color: var(--info-text);
+}
+
+.badge-dental {
+    background: var(--warn-bg);
+    color: var(--warn-text);
+}
+
 .date-overdue {
     color: var(--danger-text);
 }

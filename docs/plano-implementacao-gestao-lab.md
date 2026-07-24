@@ -7,7 +7,7 @@
 > implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
 > no CME).
 > **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código;
-> itens 7, 6/8, 3+2 e 1 implementados — ver §4.
+> itens 7, 6/8, 3+2, 1 e 9 implementados — ver §4.
 
 ---
 
@@ -163,19 +163,30 @@ está. As ocorrências de "devolução" em `gestao_cme` (Empréstimos) também f
 verificadas e são de um processo diferente (devolução de kit emprestado, que existe de
 fato no CME) — fora do escopo deste item.
 
-### Item 9 · Busca de Pacientes no padrão de Gestão de Contratos
+### Item 9 · Busca de Pacientes no padrão de Gestão de Contratos → ✅ **Implementado**
 
-Vou seguir exatamente `gestao_contratos/views.py::contratos` e
-`contratos.html` como referência:
+Segui exatamente `gestao_contratos/views.py::contratos` e `contratos.html` como
+referência:
 - Uma única tabela (`pacientes_unificados`), com selo de origem por linha ("No sistema"
-  / "Dental Office") em vez de duas tabelas separadas.
+  / "Dental Office") em vez de duas tabelas separadas. Os novos selos reusam classes
+  compartilhadas (`.badge-origin`/`.badge-local`/`.badge-dental`, adicionadas a
+  `static/css/components.css` sem o escopo `body.gestao-contratos` que a versão
+  original tinha, para ficarem disponíveis em qualquer app).
 - Resultados do Dental Office ainda não importados aparecem só na 1ª página, com uma
-  ação **"Importar"** por linha (chamando `materializar_paciente`, já existente no
-  serviço de sincronização) — isso também fecha o achado **U-05** (hoje os resultados do
-  Dental Office são só leitura).
-- Colunas adaptadas ao que a página de Pacientes do laboratório já mostra hoje: Paciente
-  (+ selo de origem), Celular, Pedido (aberto/sem — só para quem já está no sistema),
-  Previsão de retorno (idem), Atualização (idem), Ação.
+  ação **"Importar"** por linha (`views.importar_paciente_dental`, POST, nova rota
+  `pacientes/<id_dental>/importar/`), chamando `materializar_paciente` (já existente no
+  serviço de sincronização, mesma função usada pelo autocomplete de pedido/moldagem) —
+  isso também fecha o achado **U-05** (antes os resultados do Dental Office eram só
+  leitura).
+- Colunas mantidas exatamente como a página já mostrava: Paciente (+ selo de origem),
+  Celular, Pedido (aberto/sem — "—" para quem só existe no Dental Office), Previsão de
+  retorno (idem), Atualização (idem), Ação ("Importar" ou "—").
+- 7 novos testes (listagem unificada sem duplicar quem já é local, badges de origem
+  corretos, e a view de importação — sucesso, sem `DENTAL_CLIENT_ID`, erro da API,
+  método não permitido). Verificação visual feita no navegador (Playwright): tabela
+  única renderiza corretamente, e a degradação (mensagem de erro em vez de tabela
+  quebrada) funciona quando o Dental Office está inacessível. Suíte completa
+  (665 testes) verde.
 
 ### Item 10 · Busca de Alunos no padrão do CME (Alunos por turma)
 
@@ -221,7 +232,8 @@ Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente r
 6. ✅ **Item 1** — **Implementado**. Período estendido (com seletor de campo em
    Acompanhamento/Faturamento) às 4 páginas, reaproveitando o widget já ajustado no
    item 3.
-7. **Item 9** — Busca unificada de Pacientes (Alta).
+7. ✅ **Item 9** — **Implementado**. Busca unificada de Pacientes (tabela única, selo de
+   origem, ação "Importar" para quem só existe no Dental Office).
 8. **Item 10** — Sincronização de Alunos (Alta).
 9. **Item 11** — Mini-menu para os botões secundários (Alta, mas é o que mais toca a navegação — deixo por último para não reordenar a sidebar antes das outras mudanças de conteúdo de cada página estarem prontas).
 
@@ -229,4 +241,4 @@ Cada item segue o fluxo já estabelecido: implementar, rodar a suíte completa (
 partials/testes de `gestao_lab` também tocam `paginacao.html` e o design system
 compartilhado), commitar, enviar e aguardar sua aprovação antes do próximo.
 
-Pronto para seguir com o item 9 (ou outro, se preferir mudar a ordem).
+Pronto para seguir com o item 10 (ou outro, se preferir mudar a ordem).
