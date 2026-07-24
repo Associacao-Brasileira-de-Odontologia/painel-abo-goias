@@ -7,7 +7,7 @@
 > implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
 > no CME).
 > **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código;
-> itens 7 e 6/8 implementados — ver §4.
+> itens 7, 6/8 e 3+2 implementados — ver §4.
 
 ---
 
@@ -79,17 +79,27 @@ Ou seja: o "seletor de campo" faz sentido em **Acompanhamento** e **Faturamento*
 Visão Geral e Moldagens seria um controle com uma única opção, então proponho um filtro
 simples ali (mesmo padrão visual, sem a complexidade do seletor).
 
-### Item 2 · "Buscar"/"Limpar tudo" no Acompanhamento
+### Item 2 · "Buscar"/"Limpar tudo" no Acompanhamento → ✅ **Implementado**
 
 Mesma correção já aplicada no CME (mover "Limpar tudo" para dentro do `.filter-bar`,
-lado a lado com "Buscar").
+lado a lado com "Buscar"). Ao verificar todas as páginas de `gestao_lab` que usam
+`.filter-bar` (pedido explícito ao iniciar este item), encontrei o mesmo defeito em
+**Moldagens** e **Pacientes** — corrigido nas três junto (Faturamento já tinha sido
+corrigido no item 6/8). Alunos, Laboratórios e Equipes só têm um campo de busca sem
+outro filtro, então não têm "Limpar tudo" — nada para corrigir ali.
 
-### Item 3 · Padrão de filtro de período do CME no Acompanhamento
+### Item 3 · Padrão de filtro de período do CME no Acompanhamento → ✅ **Implementado**
 
-Reusar o mesmo componente `partials/filtro_periodo.html` do CME (ou uma cópia adaptada em
-`gestao_lab`) — `<details>` colapsável, `<input type="date">` ISO, `periodo_ativo`. Isso
-também resolve o item 1 para o Acompanhamento (o seletor de campo entra como mais um
-controle dentro do mesmo widget colapsável).
+Reusei o componente `partials/filtro_periodo.html` do CME **sem duplicar código**:
+promovi o arquivo de `gestao_cme/templates/gestao_cme/partials/` para o diretório
+compartilhado `templates/partials/` (os três includes existentes no CME —
+`home.html`/`dashboard_cme.html`/`emprestimos.html` — foram atualizados para o novo
+caminho) e passei a incluí-lo também em `acompanhamento_pedidos.html`. O filtro de
+período do Acompanhamento deixou de ser dois campos de texto `dd/mm/aaaa` e virou
+`<input type="date">` (ISO) dentro do mesmo painel colapsável, com `periodo_ativo`
+calculado a partir da URL antes do preenchimento do padrão "todo o histórico" (mesmo
+cuidado do CME). **Não inclui o seletor de campo de data** — isso continua sendo escopo
+do item 1 (aqui só troquei o formato/UI do filtro por `criado_em`, que já existia).
 
 ### Item 4 · Status → ✅ **Implementado** (commit `a4077e5`, branch `claude/gestao-pedidos`)
 
@@ -188,7 +198,10 @@ Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente r
    o status `A_CONFIRMAR` removido no item 4).
 4. ✅ **Item 6/8** — **Implementado**. Filtros por Fat. paciente/Fat. laboratório na fila
    de Faturamento, combináveis com a busca; suíte de testes nova para essa view.
-5. **Item 3 + item 2** — Padronizar o filtro de período do Acompanhamento e alinhar Buscar/Limpar tudo (mesma área de tela, faz sentido em sequência).
+5. ✅ **Item 3 + item 2** — **Implementados**. Filtro de período do Acompanhamento no
+   padrão do CME (widget promovido para `templates/partials/`, reusado sem duplicação);
+   "Buscar"/"Limpar tudo" alinhados no Acompanhamento e, ao verificar todas as páginas
+   com busca (pedido explícito), também em Moldagens e Pacientes.
 6. **Item 1** — Estender período (com seletor de campo) às demais páginas, reaproveitando o widget já ajustado no item 3.
 7. **Item 9** — Busca unificada de Pacientes (Alta).
 8. **Item 10** — Sincronização de Alunos (Alta).

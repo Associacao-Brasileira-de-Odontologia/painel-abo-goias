@@ -160,7 +160,8 @@ flowchart LR
 
 ### UC-02 · Consultar o acompanhamento de pedidos
 
-> **Atualizado em 2026-07-21** — status reformulado (ver UC-01, §5 regra 1).
+> **Atualizado em 2026-07-21** — status reformulado (ver UC-01, §5 regra 1); filtro de
+> período e alinhamento de botões padronizados com o CME (itens 2 e 3).
 
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.acompanhamento_pedidos` → `/laboratorio/pedidos/`
@@ -186,15 +187,18 @@ flowchart LR
   (`EM_DIA`/`ATRASADO`/`ENTREGUE_NAO_FATURADO`); `CONCLUIDO` não tem aba própria — só
   aparece na aba "Todos" ou por busca textual (mesmo critério de antes da reforma, só
   trocando a categoria do meio).
-- **Achado de usabilidade (U-01):** o filtro de período usa dois campos de **texto livre**
-  (`placeholder="dd/mm/aaaa"`, `pattern="\d{2}/\d{2}/\d{4}"`), não um `<input type="date">`
-  com calendário nativo — o CME já migrou esse mesmo padrão de filtro para ISO com
-  calendário nativo (rodada de 2026-07-20, item 8/11). Ver U-01 em §6.1.
-- **Achado de usabilidade (U-02):** "Limpar tudo" fica dentro do bloco de chips
-  (`.selection-summary`), **fora** do `<form class="filter-bar">` — quando a barra de
-  filtros quebra linha (telas estreitas, ou com os dois campos de data + busca), o botão
-  fica desalinhado do "Buscar", exatamente o defeito que o CME identificou e corrigiu em
-  sua própria listagem (rodada de 2026-07-20, item 13). Ver U-02 em §6.1.
+- **Filtro de período (U-01, resolvido):** deixou de ser dois campos de texto livre
+  `dd/mm/aaaa` e passou a reusar o mesmo widget colapsável do CME
+  (`partials/filtro_periodo.html`, agora promovido para `templates/partials/` — antes
+  vivia só em `gestao_cme/templates/gestao_cme/partials/` — e reusado tal e qual, sem
+  nenhuma duplicação de código entre os dois apps). Campos `<input type="date">` (ISO),
+  painel só expande quando há filtro ativo (`periodo_ativo`, calculado a partir do que
+  veio na URL **antes** do preenchimento do padrão "todo o histórico" — mesmo cuidado já
+  aplicado no CME, para o painel não aparecer sempre "ativo").
+- **"Buscar"/"Limpar tudo" (U-02, resolvido):** os dois ficam agora dentro do mesmo
+  `<form class="filter-bar">`, lado a lado (`.filter-actions`), em vez de "Limpar tudo"
+  ficar solto no bloco de chips abaixo — mesmo padrão já usado em todo o CME e nas
+  demais listagens do laboratório (Moldagens, Pacientes, Faturamento).
 - **Pós-condição:** nenhuma (somente leitura, exceto pelas ações de linha).
 
 ### UC-03 · Registrar novo pedido de material
@@ -354,6 +358,8 @@ flowchart LR
   Ver U-03 em §6.1.
 - **Achado de usabilidade (U-04, mesmo de UC-08):** também não há edição de moldagem
   (trocar paciente/aluno) pela interface — só toggles, conversão e exclusão.
+- **"Buscar"/"Limpar tudo" (U-02, resolvido em 2026-07-21):** mesma correção de UC-02 —
+  os dois ficam lado a lado dentro do `<form class="filter-bar">`.
 
 ### UC-11 · Converter moldagem em pedido
 
@@ -466,6 +472,8 @@ flowchart LR
   resultados aparece sempre que `total_abertos > 0`, mesmo quando o filtro
   `pedido=aberto` já está selecionado (nesse caso o número deixa de acrescentar
   informação nova, pois já é o total filtrado).
+- **"Buscar"/"Limpar tudo" (U-02, resolvido em 2026-07-21):** mesma correção de UC-02 —
+  os dois ficam lado a lado dentro do `<form class="filter-bar">`.
 - **Pós-condição:** nenhuma (somente leitura).
 
 ### UC-18 · Buscar paciente/aluno via autocomplete *(caso de uso incluído / componente compartilhado)*
@@ -634,8 +642,8 @@ flowchart LR
 
 | ID | Caso de uso | Problema | Impacto | Sugestão | Status |
 |---|---|---|---|---|---|
-| U-01 | UC-02 | Filtro de período do Acompanhamento usa dois campos de texto livre `dd/mm/aaaa` em vez de `<input type="date">` com calendário nativo | Mais digitação, mais chance de erro de formato, inconsistente com o padrão já adotado no CME | Migrar para `<input type="date">` (ISO), como já feito no CME (item 8/11 da rodada de 2026-07-20) | Em aberto |
-| U-02 | UC-02 | "Limpar tudo" fica fora da `<form class="filter-bar">`, podendo ficar desalinhado de "Buscar" quando a barra quebra linha | Mesmo defeito visual já identificado e corrigido no CME (item 13) | Mover "Limpar tudo" para dentro do `.filter-bar`, ao lado de "Buscar" | Em aberto |
+| U-01 | UC-02 | Filtro de período do Acompanhamento usa dois campos de texto livre `dd/mm/aaaa` em vez de `<input type="date">` com calendário nativo | Mais digitação, mais chance de erro de formato, inconsistente com o padrão já adotado no CME | Migrar para `<input type="date">` (ISO), como já feito no CME (item 8/11 da rodada de 2026-07-20) | ✅ **Resolvido em 2026-07-21** — reusa `partials/filtro_periodo.html` do CME (promovido para `templates/partials/`), ver UC-02 |
+| U-02 | UC-02 | "Limpar tudo" fica fora da `<form class="filter-bar">`, podendo ficar desalinhado de "Buscar" quando a barra quebra linha | Mesmo defeito visual já identificado e corrigido no CME (item 13) | Mover "Limpar tudo" para dentro do `.filter-bar`, ao lado de "Buscar" | ✅ **Resolvido em 2026-07-21** — corrigido em Acompanhamento (UC-02), Moldagens (UC-10), Pacientes (UC-17) e Faturamento (UC-09, junto do item 6/8); Alunos/Laboratórios/Equipes não tinham "Limpar tudo" (só busca, sem outro filtro) — nada a corrigir ali |
 | U-03 | UC-10 / UC-17 | Rótulos de contagem "N não convertida(s)" (Moldagens) e "N com pedido aberto" (Pacientes) aparecem sempre que a contagem é > 0, mesmo quando o filtro correspondente já está selecionado | Rótulo redundante quando o filtro já está ativo; inconsistente com o padrão já adotado no CME | Gatear a exibição do rótulo por `filtro == "..."`/`pedido_filtro == "aberto"`, como já feito no CME (R2-2) | Em aberto |
 | U-04 | UC-08 / UC-10 | Não há edição de `PedidoMaterial`/`Moldagem` (paciente, aluno, laboratório, equipe, previsão, descrição) pela interface operacional — só criação, toggles e exclusão. Corrigir um erro exige excluir e recriar, perdendo envio/entrega/faturamento já preenchidos | Fricção operacional e risco de perda de histórico por um erro de cadastro simples | Tela de edição restrita a esses campos, mesmo padrão do CME para `editar_emprestimo` (UC-21 de `casos-de-uso-gestao-cme.md`) | Em aberto |
 | U-05 | UC-17 | Resultados "Encontrados no Dental Office" na tela de Pacientes são somente leitura — não há ação para importar dali | Operador precisa ir a outra tela (pedido/moldagem) para de fato trazer o paciente para a base local | Adicionar um botão "Importar" que chama a mesma `materializar_paciente` já usada pelo autocomplete | Em aberto — já citado como possível próximo passo em `melhorias-gestao-lab-2026-07.md` (item 4) |
@@ -681,8 +689,9 @@ flowchart LR
 5. **Remover as views órfãs de busca direcionada (S-02) — remover já, ou manter
    registrado como pendência técnica sem urgência (mesma decisão tomada no CME antes de
    uma limpeza dedicada)?**
-6. **Padronizar o filtro de período do Acompanhamento (U-01) com o widget colapsável já
-   usado no CME — replicar por consistência entre módulos, ou não é prioridade agora?**
+6. ~~Padronizar o filtro de período do Acompanhamento (U-01) com o widget colapsável já
+   usado no CME~~ — **decidido e implementado em 2026-07-21**: sim, replicar (item 3).
+   Ver UC-02.
 7. **Padronizar os cadastros de Laboratórios/Equipes com o mini-menu de navegação lateral
    do CME (U-06) — replicar por consistência, ou manter o padrão atual (botão no topo da
    página)?**

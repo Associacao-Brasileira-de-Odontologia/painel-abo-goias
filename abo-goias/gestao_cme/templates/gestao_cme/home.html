@@ -31,7 +31,7 @@
         deixava a barra grande demais — virou painel expansível (ver
         partials/filtro_periodo.html), igual ao ajuste feito em Empréstimos.
         {% endcomment %}
-        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="mov" %}
+        {% include "partials/filtro_periodo.html" with id_prefix="mov" %}
         <div class="filter-actions">
             <button class="button primary" type="submit">Buscar</button>
             {% if busca or status_atual or data_inicio_str or data_fim_str %}

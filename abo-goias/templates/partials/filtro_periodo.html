@@ -1,10 +1,14 @@
 {% comment %}
 Filtro de período compacto — expansível (details/summary), para não ocupar
 espaço fixo na barra de filtros nem sobrepor os componentes abaixo dela
-(ajuste de 2026-07 sobre o item 11 da avaliação visual: os campos De/Até
+(ajuste de 2026-07 sobre o item 11 da avaliação visual do CME: os campos De/Até
 sempre visíveis ficavam grandes demais e "poluíam" a tela). Os campos
 continuam dentro do <form> GET já existente — funcionam mesmo com o painel
 fechado — e o painel abre sozinho quando já há um recorte de período ativo.
+
+Partial compartilhado entre gestao_cme e gestao_lab (promovido para
+templates/partials/ em 2026-07 para reuso — antes vivia só em
+gestao_cme/templates/gestao_cme/partials/).
 
 Parâmetros:
   id_prefix     — sufixo único para os ids dos campos (evita colisão entre
