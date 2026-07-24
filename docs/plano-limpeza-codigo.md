@@ -394,11 +394,19 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 | **6** | Extrair lógica de consulta das views mais extensas (`home`, `cme_dashboard`, `pacientes`, `acompanhamento_pedidos`) para `services/` em cada app | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
 | **7** | Decidir e implementar o destino da agregação cross-app do Portal | Médio — depende de decisão de arquitetura (§11) | Sim |
 | **8** | Normalizar encoding (remover BOM dos 12 arquivos) | Muito baixo, cosmético | Sim |
-| **9** *(opcional, sob demanda)* | Auditoria visual dedicada de padronização de front-end (screenshots) | — | — |
+| **9** | ✅ **Concluída** — Auditoria visual dedicada de padronização de front-end (screenshots), ver `avaliacao-visual-padronizacao-frontend.md` | — | — |
 | **10** *(opcional, sob demanda)* | Auditoria de performance com contagem de queries nas listagens ainda não verificadas | — | — |
 
-Recomendo começar pela **Etapa 1** (redirect inseguro) — é o item de maior risco real
+A Etapa 9 encontrou 5 achados (nenhum bloqueante): o sistema de cor por aplicação
+("wayfinding") só está implementado em `gestao_lab`; o rótulo acima do título diverge em
+2 das 4 apps; um texto do stepper de Contratos aparece truncado no desktop; tabelas de
+listagem não se adaptam bem a telas estreitas (achado comum, não uma inconsistência); e a
+navegação lateral agrupa itens por seção só no Laboratório. Detalhes e evidências em
+`avaliacao-visual-padronizacao-frontend.md`.
+
+Recomendo seguir agora pela **Etapa 1** (redirect inseguro) — é o item de maior risco real
 (segurança, ativo em produção) e menor esforço de correção, cobrindo de uma vez a
 duplicação mais espalhada do projeto.
 
-Quer que eu comece por ela, ou prefere ajustar a ordem/escopo antes?
+Quer que eu comece por ela, ou prefere resolver primeiro alguma das pendências de decisão
+da Etapa 9 (achados 1, 2, 4 e 5)?
