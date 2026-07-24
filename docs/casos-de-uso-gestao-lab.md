@@ -132,27 +132,35 @@ flowchart LR
 
 ### UC-01 · Consultar a Visão Geral
 
+> **Atualizado em 2026-07-21** — status reformulado para as 4 categorias reais do
+> negócio (ver §5, regra 1, e `plano-correcao-status-tipos-gestao-lab.md`).
+
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.dashboard` → `/laboratorio/`
 - **Fluxo principal:**
   1. Usuário acessa a Visão Geral.
-  2. Sistema calcula 4 métricas sobre **todo o histórico** (sem filtro de período,
-     diferente do CME): **Em dia**, **A confirmar**, **Atrasado**, **Pendentes de
-     faturamento** (entregues sem as duas flags de faturamento).
+  2. Sistema calcula as 4 métricas oficiais sobre **todo o histórico** (sem filtro de
+     período, diferente do CME): **Em dia**, **Atrasado**, **Entregue — não faturado**,
+     **Concluídos** — as mesmas 4 categorias de `PedidoMaterial.status`.
   3. Lista até 5 "próximas entregas" (pedidos não entregues, ordenados por
      `previsao_entrega`) e até 6 "pedidos recentes" (ordenados por `criado_em`).
-  4. Cada card de métrica é um link para o Acompanhamento (UC-02) ou Faturamento (UC-09)
-     já filtrado.
+  4. Cada card de métrica é um link: Em dia/Atrasado/Concluídos abrem o Acompanhamento
+     (UC-02) já filtrado por status; "Entregue — não faturado" abre a fila de
+     Faturamento (UC-09), que contém exatamente esses pedidos.
 - **Pós-condição:** nenhuma (somente leitura).
-- **Observação:** ao contrário do CME (`linhas_de_pacote()`), aqui não há uma função
-  única compartilhada entre o dashboard e o acompanhamento para montar as métricas — cada
-  view recalcula as contagens de forma independente (`dashboard` e
-  `acompanhamento_pedidos` têm blocos de `.count()` quase idênticos, mas não a mesma
-  fonte). Hoje os números não divergem porque a lógica é simples (`status` é sempre
-  derivado do mesmo `calcular_status()`), mas qualquer evolução futura da regra de status
-  precisaria ser replicada nos dois lugares — risco menor, registrado em S-05.
+- **Fonte única de verdade:** as 4 métricas vêm diretamente de
+  `qs.filter(status=...)` — mesmo campo `status` usado pelo Acompanhamento (UC-02), pelo
+  filtro de status e pelo Django Admin. O achado **S-05** (métricas duplicadas entre
+  Visão Geral e Acompanhamento) está **resolvido**: a métrica de "entregue e não
+  faturado" deixou de ser uma consulta ad-hoc paralela (`entregue=True,
+  exclude(faturado_paciente=True, faturado_lab=True)`) e passou a contar diretamente por
+  `status=ENTREGUE_NAO_FATURADO` — o mesmo ajuste foi replicado no Portal do `gestao_cme`
+  (`views.portal`), que fazia o mesmo cálculo cruzado para o card "pedidos de lab
+  aguardando faturamento".
 
 ### UC-02 · Consultar o acompanhamento de pedidos
+
+> **Atualizado em 2026-07-21** — status reformulado (ver UC-01, §5 regra 1).
 
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.acompanhamento_pedidos` → `/laboratorio/pedidos/`
@@ -160,10 +168,10 @@ flowchart LR
   1. Lista **todos** os pedidos (não só os em aberto — decisão de negócio já validada,
      ver `melhorias-gestao-lab-2026-07.md` item 1+9: um pedido concluído precisa
      continuar aparecendo, senão a coluna "Faturado" nunca teria conteúdo).
-  2. Segmentação por status em abas com contagem (`Todos`/`Em dia`/`A confirmar`/
-     `Atrasados`) — os números aparecem sempre, é a natureza de uma navegação por abas
-     (diferente do padrão "rótulo só com filtro ativo" do CME, que se aplica a um resumo
-     de resultados, não a uma navegação; ver §5, regra 6).
+  2. Segmentação por status em abas com contagem (`Todos`/`Em dia`/`Atrasados`/`Entregue
+     — não faturado`) — os números aparecem sempre, é a natureza de uma navegação por
+     abas (diferente do padrão "rótulo só com filtro ativo" do CME, que se aplica a um
+     resumo de resultados, não a uma navegação; ver §5, regra 6).
   3. Filtros adicionais: busca textual (paciente, aluno, laboratório, descrição — todos
      acento-insensível via `nome_normalizado`, exceto laboratório/descrição que usam
      `icontains` puro) e período de registro (`criado_em`), com padrão "1º registro →
@@ -174,9 +182,10 @@ flowchart LR
   5. Ações por linha: registrar envio (UC-05) ou entrega (UC-06) conforme a etapa atual,
      WhatsApp direto ao laboratório (se tiver número cadastrado), ver detalhe (UC-04),
      excluir (UC-08).
-- **Regra de negócio:** filtro de status usa os 3 valores operacionais
-  (`EM_DIA`/`A_CONFIRMAR`/`ATRASADO`); `CONCLUIDO` não tem aba própria — só aparece na
-  aba "Todos" ou por busca textual.
+- **Regra de negócio:** filtro de status cobre as 3 categorias "em aberto"
+  (`EM_DIA`/`ATRASADO`/`ENTREGUE_NAO_FATURADO`); `CONCLUIDO` não tem aba própria — só
+  aparece na aba "Todos" ou por busca textual (mesmo critério de antes da reforma, só
+  trocando a categoria do meio).
 - **Achado de usabilidade (U-01):** o filtro de período usa dois campos de **texto livre**
   (`placeholder="dd/mm/aaaa"`, `pattern="\d{2}/\d{2}/\d{4}"`), não um `<input type="date">`
   com calendário nativo — o CME já migrou esse mesmo padrão de filtro para ISO com
@@ -249,6 +258,8 @@ flowchart LR
 
 ### UC-07 · Atualizar faturamento de um pedido
 
+> **Atualizado em 2026-07-21** — status reformulado (ver UC-01, §5 regra 1).
+
 - **Ator primário:** Coordenador.
 - **Views/rotas:**
   - `views.atualizar_faturamento` (POST) → `/laboratorio/pedidos/<pk>/faturamento/` —
@@ -260,7 +271,8 @@ flowchart LR
 - **Fluxo principal:** ao marcar as duas flags (`faturado_paciente` e `faturado_lab`)
   como verdadeiras, o `save()` do modelo grava `data_faturamento = hoje` e recalcula
   `status` para `CONCLUIDO`; desfazer qualquer uma delas limpa `data_faturamento` e volta
-  o status ao que corresponder (`EM_DIA`/`A_CONFIRMAR`/`ATRASADO`).
+  o status para `ENTREGUE_NAO_FATURADO` (o pedido continua entregue — "atrasado"/"em dia"
+  só se aplicam a pedidos ainda não entregues).
 - **Regra de negócio:** `data_faturamento` é **derivada**, nunca editável diretamente —
   mesmo padrão de campo calculado já usado para `status` (ver `models.py::save`).
 - **Mesmo achado de S-01** nos três toggles (redirecionamento via `next` não validado).
@@ -292,7 +304,8 @@ flowchart LR
 - **Fluxo principal:**
   1. Lista pedidos **entregues** e **não totalmente faturados** (`entregue=True`,
      excluindo os que já têm as duas flags), ordenados pela data de entrega mais antiga
-     primeiro (fila FIFO).
+     primeiro (fila FIFO) — exatamente os pedidos com
+     `status=ENTREGUE_NAO_FATURADO` (ver UC-01, §5 regra 1).
   2. Cada linha permite alternar as duas flags de faturamento inline (checkbox-like
      `.toggle-check`, sem sair da tela) e ir ao detalhe para preencher nota fiscal e
      vencimento (UC-07 completo).
@@ -301,6 +314,14 @@ flowchart LR
 - **Pós-condição:** nenhuma própria (leitura + toggles de UC-07).
 
 ### UC-10 · Gerenciar moldagens
+
+> **Decisão de negócio confirmada em 2026-07-21** (ver
+> `plano-correcao-status-tipos-gestao-lab.md`, Ponto 2): `Moldagem` **não** representa
+> um "tipo de serviço" — é só o mecanismo de pré-registro específico do fluxo de
+> moldagem (aluno registra → depois encaminha para virar `PedidoMaterial`). Outros tipos
+> de material (aparelhos etc.) são pedidos diretamente, sem etapa prévia equivalente, e
+> `PedidoMaterial.descricao_servico` **permanece texto livre** — não haverá campo
+> estruturado de tipo/categoria. Nenhuma mudança de código para este ponto.
 
 - **Ator primário:** Coordenador.
 - **Views/rotas:** `views.moldagens` (listar, `/laboratorio/moldagens/`),
@@ -531,12 +552,30 @@ flowchart LR
 
 ## 5. Regras de negócio transversais
 
-1. **Status derivado automaticamente** — `PedidoMaterial.status` nunca é definido
-   diretamente por um formulário (`editable=False`); é sempre recalculado em `save()`
-   por `calcular_status()`, a partir de `entregue`, `faturado_paciente`, `faturado_lab` e
-   a comparação de `previsao_entrega` com a data de hoje. Mesmo padrão do CME
-   (`Movimentacao`/`Kit.quantidade` calculados), mas aqui **sem** uma função única
-   compartilhada entre a Visão Geral e o Acompanhamento (ver observação em UC-01).
+1. **Status derivado automaticamente — 4 categorias exatas** *(reformulado em
+   2026-07-21)* — `PedidoMaterial.status` nunca é definido diretamente por um
+   formulário (`editable=False`); é sempre recalculado em `save()` por
+   `calcular_status()`:
+   ```python
+   def calcular_status(self) -> str:
+       if self.entregue:
+           if self.faturado_paciente and self.faturado_lab:
+               return self.Status.CONCLUIDO
+           return self.Status.ENTREGUE_NAO_FATURADO
+       if date.today() > self.previsao_entrega:
+           return self.Status.ATRASADO
+       return self.Status.EM_DIA
+   ```
+   As 4 categorias são mutuamente exclusivas e cobrem todo pedido: **Em dia** (não
+   entregue, dentro do prazo — inclui tanto "ainda não enviado" quanto "enviado,
+   aguardando devolução", que antes da reforma era um status próprio, `A_CONFIRMAR`, hoje
+   fundido aqui), **Atrasado** (não entregue, prazo vencido), **Entregue — não faturado**
+   (entregue, falta faturar de um lado ou dos dois — categoria nova; antes da reforma
+   esse caso caía silenciosamente em "Em dia" por não ter valor próprio, um bug real
+   corrigido nesta rodada) e **Concluído** (entregue e faturado dos dois lados). Mesmo
+   padrão do CME (`Movimentacao`/`Kit.quantidade` calculados); aqui a Visão Geral e o
+   Acompanhamento **já compartilham a mesma fonte** (o campo `status`), sem consulta
+   paralela — ver S-05 em §6.2 (resolvido).
 2. **`data_faturamento` derivada das duas flags** — preenchida quando
    `faturado_paciente` **e** `faturado_lab` ficam verdadeiras; limpa se qualquer uma for
    desfeita. Backfill histórico (migration `0009`) usou `atualizado_em` como aproximação
@@ -600,7 +639,7 @@ flowchart LR
 | S-02 | Busca direcionada (UC-18, legado) | `views.buscar_paciente_dental`/`buscar_aluno_dental` (rotas `lab_buscar_paciente`/`lab_buscar_aluno`) ficaram **órfãs** — nenhum template as chama desde que `partials/busca_dental.html` foi removido (`melhorias-gestao-lab-2026-07.md`, item 2+3); ainda existem testes cobrindo `lab_buscar_paciente`, mas não há nenhum ponto de entrada na UI atual | Remover a view/rota morta numa limpeza futura (mesmo tipo de achado já resolvido no CME — ver S-10, resolvido, em `casos-de-uso-gestao-cme.md`) | Em aberto |
 | S-03 | Permissões (todas as UCs) | Não existe **nenhuma** distinção de permissão por grupo/papel no módulo — qualquer usuário autenticado pode excluir pedidos/moldagens, editar laboratórios/equipes e disparar sincronizações completas. Diferente do CME (que já tem `permissoes.py` com grupos definidos, mesmo que não aplicados), aqui não há sequer essa infraestrutura pronta | Definir se o módulo deve reusar os grupos do CME (`recepcao`/`coordenacao`/`gestao`, em `gestao_cme/permissoes.py`) ou criar um esquema próprio, e então aplicar aos pontos sensíveis (exclusões, sincronização) | Em aberto — mesma decisão pendente do CME (S-02 lá), agora estendida a este módulo |
 | S-04 | Sincronização Dental (UC-19) | O botão manual "Atualizar lista" roda a sincronização completa **de forma síncrona no request** — pode ser lenta com uma base grande de pacientes | Mover para tarefa assíncrona (Celery, já usada para a versão agendada) com feedback de progresso, ou aceitar o comportamento atual já que a rotina diária (04:30) cobre o caso comum | Em aberto |
-| S-05 | Métricas duplicadas (UC-01 / UC-02) | Visão Geral e Acompanhamento recalculam as mesmas contagens de status de forma independente, sem uma função única compartilhada (diferente de `linhas_de_pacote()` no CME) | Extrair um helper único (`metricas_pedidos()`) reusado pelas duas views, para eliminar o risco de divergência se a regra de status evoluir | Em aberto |
+| S-05 | Métricas duplicadas (UC-01 / UC-02) | Visão Geral e Acompanhamento recalculavam as mesmas contagens de status de forma independente, sem uma função única compartilhada (diferente de `linhas_de_pacote()` no CME) — e a Visão Geral tinha uma consulta ad-hoc própria (`entregue=True, exclude(...)`) para "pendentes de faturamento", divergente do campo `status` | Extrair um helper único (`metricas_pedidos()`) reusado pelas duas views | ✅ **Resolvido em 2026-07-21** — junto da reforma de status (item 4): as duas views já contam direto por `status=...` (mesmo campo, mesma fonte); a consulta ad-hoc de "pendentes de faturamento" foi substituída por `status=ENTREGUE_NAO_FATURADO` (também no Portal do CME, que tinha o mesmo cálculo cruzado). Não foi extraído um helper único formal (`metricas_pedidos()`) — cada view ainda monta seu próprio dict — mas a fonte dos números agora é sempre `status`, eliminando o risco de divergência |
 | S-06 | Testes de segurança | Não há teste de regressão para o achado S-01 (open redirect) | Ao corrigir S-01, adicionar teste que tenta redirecionar para um host externo (`next=https://evil.example/` e `next=//evil.example/`) e confirma que o destino final é sempre local | Em aberto |
 
 ---
