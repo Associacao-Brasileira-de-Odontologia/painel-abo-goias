@@ -9,36 +9,46 @@
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% comment %}
-Sem sidebar_extra aqui de propósito: "Registrar pedido" e "Acompanhamento" já
-estão no menu lateral (Ações rápidas / navegação principal) — este bloco
-duplicava os mesmos dois botões logo abaixo.
+Sem sidebar_extra aqui de propósito: "Registrar pedido" já está nas Ações
+rápidas do menu lateral (partials/menu.html) — um bloco extra aqui duplicaria
+o mesmo botão.
 {% endcomment %}
 
 {% block panel_title %}Visão geral do laboratório{% endblock %}
 
 {% block panel %}
+    {% comment %}
+    Filtro de período no topo — recorta os pedidos por data de registro
+    (criado_em) e reflete nas métricas e nos links dos KPIs abaixo. Mesmo
+    widget colapsável do CME (partials/filtro_periodo.html).
+    {% endcomment %}
+    {% url 'lab_dashboard' as url_limpar_periodo %}
+    <form class="filter-bar" method="get">
+        {% include "partials/filtro_periodo.html" with id_prefix="dash" url_limpar=url_limpar_periodo %}
+    </form>
+
     <div class="kpi-section">
-        <p class="section-label">Pedidos em andamento</p>
+        <p class="section-label">Pedidos por status{% if periodo_ativo %} no período{% endif %}</p>
         <div class="kpi-grid">
-            <a class="metric-card metric-success" href="{% url 'lab_pedidos' %}?status=EM_DIA" title="Ver pedidos em dia">
+            <a class="metric-card metric-success" href="{% url 'lab_pedidos' %}?status=EM_DIA{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos em dia">
                 <span class="metric-label">Em dia</span>
                 <strong>{{ metricas.em_dia }}</strong>
                 <span class="metric-secondary">dentro do prazo</span>
             </a>
-            <a class="metric-card metric-warn" href="{% url 'lab_pedidos' %}?status=A_CONFIRMAR" title="Ver pedidos a confirmar">
-                <span class="metric-label">A confirmar</span>
-                <strong>{{ metricas.a_confirmar }}</strong>
-                <span class="metric-secondary">aguardando devolução</span>
-            </a>
-            <a class="metric-card danger-metric" href="{% url 'lab_pedidos' %}?status=ATRASADO" title="Ver pedidos atrasados">
+            <a class="metric-card danger-metric" href="{% url 'lab_pedidos' %}?status=ATRASADO{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos atrasados">
                 <span class="metric-label">Atrasados</span>
                 <strong>{{ metricas.atrasado }}</strong>
                 <span class="metric-secondary">fora do prazo</span>
             </a>
-            <a class="metric-card metric-neutral" href="{% url 'lab_pedidos_faturamento' %}" title="Ver pedidos aguardando faturamento">
-                <span class="metric-label">Faturamento</span>
-                <strong>{{ metricas.pendentes_faturamento }}</strong>
-                <span class="metric-secondary">pendentes</span>
+            <a class="metric-card metric-warn" href="{% url 'lab_pedidos_faturamento' %}?{{ filtro_datas_qs }}" title="Ver pedidos entregues aguardando faturamento">
+                <span class="metric-label">Entregue — não faturado</span>
+                <strong>{{ metricas.entregue_nao_faturado }}</strong>
+                <span class="metric-secondary">falta faturar</span>
+            </a>
+            <a class="metric-card metric-neutral" href="{% url 'lab_pedidos' %}?status=CONCLUIDO{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos concluídos">
+                <span class="metric-label">Concluídos</span>
+                <strong>{{ metricas.concluidos }}</strong>
+                <span class="metric-secondary">entregues e faturados</span>
             </a>
         </div>
     </div>

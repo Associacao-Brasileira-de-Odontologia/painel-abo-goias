@@ -1,5 +1,6 @@
 .identifier-flow {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 22px;
 }
 
@@ -279,6 +280,62 @@
     margin: 8px 0 0 4px;
     color: var(--muted);
     font-size: 0.82rem;
+}
+
+/* Botão "v" que abre/fecha a lista de turmas — mesmo mecanismo genérico dos
+   submenus da barra lateral (data-side-toggle, ver app.js), só que ancorado
+   dentro do campo de busca em vez de numa linha do menu. Posicionado como
+   absolute (a exemplo do ícone da lupa) para não alterar a altura de
+   .search-control — foi justamente essa altura extra, quando o spinner
+   morava dentro do mesmo bloco, que desalinhava o ícone da lupa antes. */
+.turma-search-control input[type="search"] {
+    padding-right: 44px;
+}
+
+.turma-toggle {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.16s ease, color 0.16s ease;
+}
+
+.turma-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+}
+
+.turma-toggle-chevron {
+    width: 18px;
+    height: 18px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.18s ease;
+}
+
+/* Reaproveitado também pelo botão "Ver alunos" (fluxo de detalhe da turma,
+   ver _turma_alunos.html) — a chave é o atributo data-side-toggle, não a
+   classe .turma-toggle, que é específica do posicionamento no campo de busca. */
+[data-side-toggle][aria-expanded="true"] .turma-toggle-chevron {
+    transform: rotate(180deg);
+}
+
+.turma-alunos-toggle {
+    margin-bottom: 14px;
 }
 
 .turma-results-wrap {

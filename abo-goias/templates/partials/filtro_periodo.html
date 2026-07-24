@@ -1,10 +1,14 @@
 {% comment %}
 Filtro de período compacto — expansível (details/summary), para não ocupar
 espaço fixo na barra de filtros nem sobrepor os componentes abaixo dela
-(ajuste de 2026-07 sobre o item 11 da avaliação visual: os campos De/Até
+(ajuste de 2026-07 sobre o item 11 da avaliação visual do CME: os campos De/Até
 sempre visíveis ficavam grandes demais e "poluíam" a tela). Os campos
 continuam dentro do <form> GET já existente — funcionam mesmo com o painel
 fechado — e o painel abre sozinho quando já há um recorte de período ativo.
+
+Partial compartilhado entre gestao_cme e gestao_lab (promovido para
+templates/partials/ em 2026-07 para reuso — antes vivia só em
+gestao_cme/templates/gestao_cme/partials/).
 
 Parâmetros:
   id_prefix     — sufixo único para os ids dos campos (evita colisão entre
@@ -19,6 +23,13 @@ Parâmetros:
                   do painel (só a Visão Geral usa — seu formulário não tem
                   outros filtros para preservar; Movimentações/Empréstimos já
                   têm um chip removível próprio para isso)
+  campo_data_opcoes — opcional; lista de tuplas (valor, rótulo). Quando
+                  informado, mostra um <select name="campo_data"> para o
+                  usuário escolher a qual campo de data o período se aplica
+                  (páginas com mais de uma data, como Acompanhamento e
+                  Faturamento). Páginas com um único campo de data (Visão
+                  Geral, Moldagens) não passam este parâmetro.
+  campo_data_atual — valor selecionado do seletor acima
 {% endcomment %}
 <details class="filter-period"{% if periodo_ativo %} open{% endif %}>
     <summary>
@@ -26,6 +37,16 @@ Parâmetros:
         {% if periodo_ativo %}<span class="filter-period-dot" aria-hidden="true"></span>{% endif %}
     </summary>
     <div class="dropdown-panel filter-period-panel">
+        {% if campo_data_opcoes %}
+            <div class="field">
+                <label for="campo_data_{{ id_prefix }}">Campo</label>
+                <select id="campo_data_{{ id_prefix }}" name="campo_data">
+                    {% for valor, rotulo in campo_data_opcoes %}
+                        <option value="{{ valor }}" {% if campo_data_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endif %}
         <div class="field">
             <label for="data_inicio_{{ id_prefix }}">De</label>
             <input type="date" id="data_inicio_{{ id_prefix }}" name="data_inicio" value="{{ data_inicio_str }}">

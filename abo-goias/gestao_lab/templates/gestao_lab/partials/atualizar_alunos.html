@@ -1,19 +1,18 @@
 {% comment %}
 Botão explícito de "Atualizar alunos" na sidebar dos formulários de pedido e
-moldagem. Substitui os antigos campos de busca de paciente/aluno no menu
-(partials/busca_dental.html): o próprio corpo do formulário já tem o
-autocomplete que busca na base local + Dental Office e materializa o escolhido
-no clique, então a busca na sidebar era redundante. O que faltava era só um
-jeito de trazer um aluno recém-cadastrado para o seletor — este botão faz isso.
+moldagem. O autocomplete de aluno no corpo do formulário busca só na base
+local (o Eduq não permite busca por nome) — este botão sincroniza turmas e
+alunos com o Eduq para trazer alunos/turmas recém-cadastrados para o
+seletor.
 
 Espera no include: `sync_next` — a URL para onde voltar após sincronizar.
 {% endcomment %}
 <div class="sidebar-section">
     <p class="section-label">Aluno não aparece?</p>
-    <p class="panel-copy">Atualize a lista de alunos com o Dental Office e tente buscar de novo.</p>
+    <p class="panel-copy">Sincronize alunos e turmas com o Eduq e tente buscar de novo.</p>
     <form class="sync-form js-loading-submit" method="post" action="{% url 'lab_sincronizar_alunos' %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ sync_next }}">
-        <button class="button secondary" type="submit">Atualizar alunos</button>
+        <button class="button secondary" type="submit">Sincronizar alunos e turmas</button>
     </form>
 </div>

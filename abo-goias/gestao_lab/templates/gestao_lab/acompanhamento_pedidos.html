@@ -27,15 +27,15 @@ redundante.
             Em dia
             <span class="seg-count">{{ metricas.em_dia }}</span>
         </a>
-        <a class="seg-a-confirmar {% if status_filtro == 'A_CONFIRMAR' %}active{% endif %}"
-           href="?status=A_CONFIRMAR{% if busca %}&amp;q={{ busca|urlencode }}{% endif %}">
-            A confirmar
-            <span class="seg-count">{{ metricas.a_confirmar }}</span>
-        </a>
         <a class="seg-atrasado {% if status_filtro == 'ATRASADO' %}active{% endif %}"
            href="?status=ATRASADO{% if busca %}&amp;q={{ busca|urlencode }}{% endif %}">
             Atrasados
             <span class="seg-count">{{ metricas.atrasado }}</span>
+        </a>
+        <a class="seg-entregue-pendente {% if status_filtro == 'ENTREGUE_NAO_FATURADO' %}active{% endif %}"
+           href="?status=ENTREGUE_NAO_FATURADO{% if busca %}&amp;q={{ busca|urlencode }}{% endif %}">
+            Entregue — não faturado
+            <span class="seg-count">{{ metricas.entregue_nao_faturado }}</span>
         </a>
     </nav>
 
@@ -47,39 +47,40 @@ redundante.
             <input id="results-q-pedidos" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por paciente, aluno, laboratório ou descrição..." aria-label="Buscar na listagem">
         </div>
         {% comment %}
-        Filtro de período (mesmo comportamento do CME) — recorta pela data de
-        registro do pedido. Default preenchido pela view: 1º registro → hoje.
+        Filtro de período — mesmo widget colapsável do CME
+        (partials/filtro_periodo.html, promovido para reuso entre apps).
+        Acompanhamento tem várias datas (registro, previsão, entrega,
+        faturamento), então o widget ganha um seletor de campo.
         {% endcomment %}
-        <input type="text" name="data_inicio" value="{{ data_inicio_str }}"
-               placeholder="dd/mm/aaaa" maxlength="10" pattern="\d{2}/\d{2}/\d{4}"
-               aria-label="Data inicial (registro do pedido)">
-        <input type="text" name="data_fim" value="{{ data_fim_str }}"
-               placeholder="dd/mm/aaaa" maxlength="10" pattern="\d{2}/\d{2}/\d{4}"
-               aria-label="Data final (registro do pedido)">
-        <button class="button primary" type="submit">Buscar</button>
+        {% include "partials/filtro_periodo.html" with id_prefix="ped" campo_data_opcoes=campo_data_opcoes campo_data_atual=campo_data %}
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_filtro or periodo_ativo %}
+                <a class="button secondary compact-button" href="{% url 'lab_pedidos' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
-    {% if busca or data_inicio_str or data_fim_str %}
+    {% if busca or periodo_ativo %}
         <div class="selection-summary">
             {% if busca %}
                 <a class="info-chip info-chip--removable"
-                   href="?{% if status_filtro %}status={{ status_filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}{% endif %}"
+                   href="?{% if status_filtro %}status={{ status_filtro }}&{% endif %}{% if data_inicio_str %}data_inicio={{ data_inicio_str|urlencode }}&{% endif %}{% if data_fim_str %}data_fim={{ data_fim_str|urlencode }}&{% endif %}campo_data={{ campo_data }}"
                    title="Remover busca">
                     <span>Busca</span>
                     <strong>{{ busca }}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            {% if data_inicio_str or data_fim_str %}
+            {% if periodo_ativo %}
                 <a class="info-chip info-chip--removable"
                    href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if status_filtro %}status={{ status_filtro }}{% endif %}"
                    title="Remover filtro de período">
-                    <span>Período (registro)</span>
-                    <strong>{% if data_inicio_str %}{{ data_inicio_str }}{% else %}início{% endif %} → {% if data_fim_str %}{{ data_fim_str }}{% else %}hoje{% endif %}</strong>
+                    <span>Período ({{ campo_data_label|lower }})</span>
+                    <strong>{% if data_inicio %}{{ data_inicio|date:"d/m/Y" }}{% else %}início{% endif %} → {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje{% endif %}</strong>
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'lab_pedidos' %}">Limpar tudo</a>
         </div>
     {% endif %}
 

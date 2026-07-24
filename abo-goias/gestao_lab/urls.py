@@ -65,10 +65,15 @@ urlpatterns = [
     path("equipes/", views.equipes, name="lab_equipes"),
     path("equipes/nova/", views.criar_equipe, name="lab_criar_equipe"),
     path("equipes/<int:pk>/editar/", views.editar_equipe, name="lab_editar_equipe"),
-    # Alunos (Dental Office)
+    # Alunos (Eduq)
     path("alunos/", views.alunos_lab, name="lab_alunos"),
     # Pacientes (Dental Office)
     path("pacientes/", views.pacientes, name="lab_pacientes"),
+    path(
+        "pacientes/<str:id_dental>/importar/",
+        views.importar_paciente_dental,
+        name="lab_importar_paciente",
+    ),
     # Sincronização Dental Office
     path("pedidos/<int:pk>/excluir/", views.excluir_pedido, name="lab_excluir_pedido"),
     path(
@@ -83,15 +88,19 @@ urlpatterns = [
         views.materializar,
         name="lab_materializar",
     ),
+    path(
+        "sincronizar-turma-aluno-busca/",
+        views.sincronizar_turma_aluno_busca,
+        name="lab_sincronizar_turma_aluno_busca",
+    ),
     path("sincronizar/", views.sincronizar_dental, name="lab_sincronizar"),
     path(
         "sincronizar-alunos/",
-        views.sincronizar_alunos_dental,
+        views.sincronizar_alunos_eduq,
         name="lab_sincronizar_alunos",
     ),
     # Busca direcionada Dental Office (importação pontual)
     path("buscar-paciente/", views.buscar_paciente_dental, name="lab_buscar_paciente"),
-    path("buscar-aluno/", views.buscar_aluno_dental, name="lab_buscar_aluno"),
     # Sincronização agendada — autenticada por token (Railway Cron)
     path(
         "sincronizar-agendado/",

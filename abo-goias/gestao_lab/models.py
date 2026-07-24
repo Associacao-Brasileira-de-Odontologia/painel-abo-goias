@@ -19,6 +19,7 @@ from gestao_cme.models import ModeloBase, NomeNormalizadoMixin
 class OrigemDados(models.TextChoices):
     MANUAL = "MANUAL", "Manual"
     DENTAL = "DENTAL", "Dental Office"
+    EDUQ = "EDUQ", "Eduq"
 
 
 class Equipe(ModeloBase):
@@ -69,20 +70,58 @@ class Laboratorio(ModeloBase):
         return self.nome
 
 
-class AlunoLab(NomeNormalizadoMixin, ModeloBase):
-    """Aluno sincronizado do Dental Office para uso nos pedidos de laboratorio.
+class TurmaLab(NomeNormalizadoMixin, ModeloBase):
+    """Turma sincronizada do Eduq — agrupa os alunos para fins de sincronizacao.
 
-    Contem apenas os dados necessarios para o fluxo de pedidos: nome e celular.
-    O campo id_dental garante rastreabilidade com o sistema de origem.
+    O Eduq nao oferece busca de aluno por nome, so listagem por turma (ver
+    gestao_cme.integrations.eduq.EduqClient.listar_alunos) — por isso o
+    laboratorio precisa da mesma nocao de turma que o gestao_cme ja usa, numa
+    tabela propria (nao compartilhada entre os dois apps).
+    """
+
+    nome = models.CharField(max_length=150)
+    codigo = models.CharField(max_length=50, unique=True)
+    origem = models.CharField(
+        max_length=20,
+        choices=OrigemDados.choices,
+        default=OrigemDados.EDUQ,
+    )
+    ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name = "turma (lab)"
+        verbose_name_plural = "turmas (lab)"
+
+    def __str__(self) -> str:
+        return self.nome
+
+
+class AlunoLab(NomeNormalizadoMixin, ModeloBase):
+    """Aluno sincronizado do Eduq para uso nos pedidos de laboratorio.
+
+    Contem apenas os dados necessarios para o fluxo de pedidos: nome, celular
+    e a turma. O campo matricula garante rastreabilidade com o sistema de
+    origem (Eduq) — mesmo papel que o id_dental tinha antes da correcao que
+    trocou a fonte de dados de alunos do Dental Office para o Eduq (o Dental
+    nunca teve informacao real de alunos; quem tem essa informacao e o Eduq,
+    mesma fonte ja usada pelo gestao_cme).
     """
 
     nome = models.CharField(max_length=150)
     celular = models.CharField(max_length=20, blank=True)
-    id_dental = models.CharField(max_length=50, unique=True)
+    matricula = models.CharField(max_length=50, unique=True)
+    turma = models.ForeignKey(
+        TurmaLab,
+        on_delete=models.PROTECT,
+        related_name="alunos",
+        null=True,
+        blank=True,
+    )
     origem = models.CharField(
         max_length=20,
         choices=OrigemDados.choices,
-        default=OrigemDados.DENTAL,
+        default=OrigemDados.EDUQ,
     )
     ultima_sincronizacao = models.DateTimeField(null=True, blank=True)
 
@@ -171,20 +210,21 @@ class PedidoMaterial(ModeloBase):
     """Pedido de servico de material enviado a um laboratorio externo.
 
     Registra o ciclo completo: desde a abertura do pedido, envio ao laboratorio,
-    devolucao do material finalizado e encerramento financeiro. O status e
-    calculado automaticamente com base nos campos de data e entrega.
+    entrega do material finalizado e encerramento financeiro. O status e
+    calculado automaticamente com base nos campos de entrega e faturamento.
 
-    Fluxo de status:
-        EM_DIA      -> pedido aberto, material nao enviado, dentro do prazo
-        A_CONFIRMAR -> material enviado ao lab, aguardando devolucao, no prazo
-        ATRASADO    -> prazo de entrega vencido sem devolucao registrada
-        CONCLUIDO   -> material devolvido e faturamento completo
+    Fluxo de status (4 categorias, mutuamente exclusivas):
+        EM_DIA                 -> nao entregue, dentro do prazo
+        ATRASADO                -> nao entregue, prazo de entrega vencido
+        ENTREGUE_NAO_FATURADO   -> material ja entregue, faturamento incompleto
+                                    (falta o lado do paciente e/ou do laboratorio)
+        CONCLUIDO               -> material entregue e faturamento completo
     """
 
     class Status(models.TextChoices):
         EM_DIA = "EM_DIA", "Em dia"
-        A_CONFIRMAR = "A_CONFIRMAR", "A confirmar"
         ATRASADO = "ATRASADO", "Atrasado"
+        ENTREGUE_NAO_FATURADO = "ENTREGUE_NAO_FATURADO", "Entregue — não faturado"
         CONCLUIDO = "CONCLUIDO", "Concluido"
 
     paciente = models.ForeignKey(
@@ -243,7 +283,7 @@ class PedidoMaterial(ModeloBase):
     )
 
     status = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=Status.choices,
         default=Status.EM_DIA,
         editable=False,
@@ -258,13 +298,12 @@ class PedidoMaterial(ModeloBase):
         return f"Pedido #{self.pk} - {self.paciente} ({self.laboratorio})"
 
     def calcular_status(self) -> str:
-        hoje = date.today()
-        if self.entregue and self.faturado_paciente and self.faturado_lab:
-            return self.Status.CONCLUIDO
-        if not self.entregue and hoje > self.previsao_entrega:
+        if self.entregue:
+            if self.faturado_paciente and self.faturado_lab:
+                return self.Status.CONCLUIDO
+            return self.Status.ENTREGUE_NAO_FATURADO
+        if date.today() > self.previsao_entrega:
             return self.Status.ATRASADO
-        if self.data_envio and not self.entregue:
-            return self.Status.A_CONFIRMAR
         return self.Status.EM_DIA
 
     def save(self, *args, **kwargs):

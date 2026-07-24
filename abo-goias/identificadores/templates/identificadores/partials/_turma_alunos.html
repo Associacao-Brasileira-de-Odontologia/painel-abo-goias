@@ -28,7 +28,14 @@
     {% endif %}
 
     {% if alunos %}
-        <div class="table-wrap data-table-wrap">
+        <button type="button" class="button secondary compact-button turma-alunos-toggle" data-side-toggle
+                aria-expanded="false" aria-controls="turma-alunos-lista"
+                aria-label="Mostrar alunos da turma">
+            <svg class="turma-toggle-chevron" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron"></use></svg>
+            Ver alunos
+        </button>
+
+        <div id="turma-alunos-lista" class="table-wrap data-table-wrap" hidden>
             <table class="data-table">
                 <thead>
                     <tr><th>Aluno</th><th>Matrícula</th><th>Cidade / UF</th></tr>

@@ -29,7 +29,7 @@ navegação lateral (ver partials/side_link_group.html).
         deixava a barra grande demais — virou painel expansível (ver
         partials/filtro_periodo.html), igual ao ajuste feito em Movimentações.
         {% endcomment %}
-        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="emp" %}
+        {% include "partials/filtro_periodo.html" with id_prefix="emp" %}
         <div class="filter-actions">
             <button class="button primary" type="submit">Buscar</button>
             {% if busca or status_filtro or data_inicio_str or data_fim_str %}
