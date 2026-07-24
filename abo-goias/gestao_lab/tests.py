@@ -239,7 +239,12 @@ class PedidoMaterialStatusTests(TestCase):
         )
         self.assertEqual(pedido.status, PedidoMaterial.Status.ATRASADO)
 
-    def test_status_a_confirmar_quando_enviado_mas_nao_entregue(self) -> None:
+    def test_status_em_dia_quando_enviado_mas_nao_entregue_dentro_do_prazo(
+        self,
+    ) -> None:
+        # "Enviado, aguardando devolução, dentro do prazo" nao e mais uma
+        # categoria propria de status (era A_CONFIRMAR) — conta como "Em dia",
+        # que cobre qualquer pedido nao entregue dentro do prazo.
         pedido = _pedido(
             self.pac,
             self.aluno,
@@ -249,7 +254,7 @@ class PedidoMaterialStatusTests(TestCase):
             data_envio=date.today(),
             entregue=False,
         )
-        self.assertEqual(pedido.status, PedidoMaterial.Status.A_CONFIRMAR)
+        self.assertEqual(pedido.status, PedidoMaterial.Status.EM_DIA)
 
     def test_status_concluido_quando_entregue_e_faturado(self) -> None:
         pedido = _pedido(
@@ -264,7 +269,7 @@ class PedidoMaterialStatusTests(TestCase):
         )
         self.assertEqual(pedido.status, PedidoMaterial.Status.CONCLUIDO)
 
-    def test_status_nao_concluido_quando_entregue_mas_faturamento_incompleto(
+    def test_status_entregue_nao_faturado_quando_faturamento_incompleto(
         self,
     ) -> None:
         pedido = _pedido(
@@ -277,7 +282,23 @@ class PedidoMaterialStatusTests(TestCase):
             faturado_paciente=True,
             faturado_lab=False,
         )
-        self.assertNotEqual(pedido.status, PedidoMaterial.Status.CONCLUIDO)
+        self.assertEqual(pedido.status, PedidoMaterial.Status.ENTREGUE_NAO_FATURADO)
+
+    def test_status_entregue_nao_faturado_mesmo_com_prazo_vencido(self) -> None:
+        # Um pedido entregue nunca deve ser classificado como ATRASADO, mesmo
+        # que a entrega tenha acontecido depois do prazo — "atrasado" so se
+        # aplica a pedidos ainda nao entregues.
+        pedido = _pedido(
+            self.pac,
+            self.aluno,
+            self.lab,
+            self.equipe,
+            previsao_entrega=date.today() - timedelta(days=3),
+            entregue=True,
+            faturado_paciente=False,
+            faturado_lab=False,
+        )
+        self.assertEqual(pedido.status, PedidoMaterial.Status.ENTREGUE_NAO_FATURADO)
 
     def test_str_inclui_numero_paciente_e_lab(self) -> None:
         pedido = _pedido(self.pac, self.aluno, self.lab, self.equipe)
@@ -398,6 +419,38 @@ class DashboardLabTests(TestCase):
         self.assertEqual(metricas["em_dia"], 1)
         self.assertEqual(metricas["atrasado"], 1)
 
+    def test_metricas_contam_entregue_nao_faturado_e_concluidos(self) -> None:
+        pac = _paciente(id_dental="13")
+        aluno = _aluno(id_dental="23")
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            previsao_entrega=date.today() + timedelta(days=3),
+            entregue=True,
+            faturado_paciente=True,
+            faturado_lab=False,
+        )
+        _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            previsao_entrega=date.today() + timedelta(days=3),
+            entregue=True,
+            faturado_paciente=True,
+            faturado_lab=True,
+        )
+
+        response = self.client.get(reverse("lab_dashboard"))
+
+        metricas = response.context["metricas"]
+        self.assertEqual(metricas["entregue_nao_faturado"], 1)
+        self.assertEqual(metricas["concluidos"], 1)
+
 
 # ---------------------------------------------------------------------------
 # Testes de Views — acompanhamento de pedidos
@@ -453,6 +506,28 @@ class AcompanhamentoPedidosTests(TestCase):
         response = self.client.get(reverse("lab_pedidos"), {"q": "Paciente Teste"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Paciente Teste")
+
+    def test_filtra_por_status_entregue_nao_faturado(self) -> None:
+        pedido_entregue = _pedido(
+            self.pedido_em_dia.paciente,
+            self.pedido_em_dia.aluno,
+            self.pedido_em_dia.laboratorio,
+            self.pedido_em_dia.equipe,
+            previsao_entrega=date.today() + timedelta(days=5),
+            entregue=True,
+            faturado_paciente=False,
+            faturado_lab=False,
+        )
+
+        response = self.client.get(
+            reverse("lab_pedidos"),
+            {"status": PedidoMaterial.Status.ENTREGUE_NAO_FATURADO},
+        )
+
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(pedido_entregue, pedidos)
+        self.assertNotIn(self.pedido_em_dia, pedidos)
+        self.assertNotIn(self.pedido_atrasado, pedidos)
 
 
 # ---------------------------------------------------------------------------

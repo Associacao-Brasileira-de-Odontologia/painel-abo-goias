@@ -171,20 +171,21 @@ class PedidoMaterial(ModeloBase):
     """Pedido de servico de material enviado a um laboratorio externo.
 
     Registra o ciclo completo: desde a abertura do pedido, envio ao laboratorio,
-    devolucao do material finalizado e encerramento financeiro. O status e
-    calculado automaticamente com base nos campos de data e entrega.
+    entrega do material finalizado e encerramento financeiro. O status e
+    calculado automaticamente com base nos campos de entrega e faturamento.
 
-    Fluxo de status:
-        EM_DIA      -> pedido aberto, material nao enviado, dentro do prazo
-        A_CONFIRMAR -> material enviado ao lab, aguardando devolucao, no prazo
-        ATRASADO    -> prazo de entrega vencido sem devolucao registrada
-        CONCLUIDO   -> material devolvido e faturamento completo
+    Fluxo de status (4 categorias, mutuamente exclusivas):
+        EM_DIA                 -> nao entregue, dentro do prazo
+        ATRASADO                -> nao entregue, prazo de entrega vencido
+        ENTREGUE_NAO_FATURADO   -> material ja entregue, faturamento incompleto
+                                    (falta o lado do paciente e/ou do laboratorio)
+        CONCLUIDO               -> material entregue e faturamento completo
     """
 
     class Status(models.TextChoices):
         EM_DIA = "EM_DIA", "Em dia"
-        A_CONFIRMAR = "A_CONFIRMAR", "A confirmar"
         ATRASADO = "ATRASADO", "Atrasado"
+        ENTREGUE_NAO_FATURADO = "ENTREGUE_NAO_FATURADO", "Entregue — não faturado"
         CONCLUIDO = "CONCLUIDO", "Concluido"
 
     paciente = models.ForeignKey(
@@ -243,7 +244,7 @@ class PedidoMaterial(ModeloBase):
     )
 
     status = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=Status.choices,
         default=Status.EM_DIA,
         editable=False,
@@ -258,13 +259,12 @@ class PedidoMaterial(ModeloBase):
         return f"Pedido #{self.pk} - {self.paciente} ({self.laboratorio})"
 
     def calcular_status(self) -> str:
-        hoje = date.today()
-        if self.entregue and self.faturado_paciente and self.faturado_lab:
-            return self.Status.CONCLUIDO
-        if not self.entregue and hoje > self.previsao_entrega:
+        if self.entregue:
+            if self.faturado_paciente and self.faturado_lab:
+                return self.Status.CONCLUIDO
+            return self.Status.ENTREGUE_NAO_FATURADO
+        if date.today() > self.previsao_entrega:
             return self.Status.ATRASADO
-        if self.data_envio and not self.entregue:
-            return self.Status.A_CONFIRMAR
         return self.Status.EM_DIA
 
     def save(self, *args, **kwargs):

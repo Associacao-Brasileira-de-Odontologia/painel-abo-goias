@@ -27,15 +27,15 @@ redundante.
             Em dia
             <span class="seg-count">{{ metricas.em_dia }}</span>
         </a>
-        <a class="seg-a-confirmar {% if status_filtro == 'A_CONFIRMAR' %}active{% endif %}"
-           href="?status=A_CONFIRMAR{% if busca %}&amp;q={{ busca|urlencode }}{% endif %}">
-            A confirmar
-            <span class="seg-count">{{ metricas.a_confirmar }}</span>
-        </a>
         <a class="seg-atrasado {% if status_filtro == 'ATRASADO' %}active{% endif %}"
            href="?status=ATRASADO{% if busca %}&amp;q={{ busca|urlencode }}{% endif %}">
             Atrasados
             <span class="seg-count">{{ metricas.atrasado }}</span>
+        </a>
+        <a class="seg-entregue-pendente {% if status_filtro == 'ENTREGUE_NAO_FATURADO' %}active{% endif %}"
+           href="?status=ENTREGUE_NAO_FATURADO{% if busca %}&amp;q={{ busca|urlencode }}{% endif %}">
+            Entregue — não faturado
+            <span class="seg-count">{{ metricas.entregue_nao_faturado }}</span>
         </a>
     </nav>
 

@@ -128,11 +128,9 @@ def portal(request: HttpRequest) -> HttpResponse:
     lab_pedidos_ativos = PedidoMaterial.objects.exclude(
         status=PedidoMaterial.Status.CONCLUIDO
     ).count()
-    lab_faturamento_pendente = (
-        PedidoMaterial.objects.filter(entregue=True)
-        .exclude(faturado_paciente=True, faturado_lab=True)
-        .count()
-    )
+    lab_faturamento_pendente = PedidoMaterial.objects.filter(
+        status=PedidoMaterial.Status.ENTREGUE_NAO_FATURADO
+    ).count()
     lab_moldagens_pendentes = Moldagem.objects.filter(
         ativo=True, pedido_material=None
     ).count()
