@@ -1,7 +1,7 @@
 # Jornada do Usuário — Gestão de CME
 
 > Aplicação: `gestao_cme` (Central de Material e Esterilização). Documento
-> complementar ao catálogo técnico de casos de uso (`docs/casos-de-uso-gestao-cme.md`)
+> complementar à documentação técnica (`docs/documentacao-gestao-cme.md`)
 > — aqui o foco é contar a experiência de quem usa o sistema no dia a dia, do início ao
 > fim de cada fluxo.
 

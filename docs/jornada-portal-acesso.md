@@ -1,8 +1,8 @@
 # Jornada do Usuário — Portal e Acesso
 
 > Aplicação: `contas` (autenticação e solicitação de acesso) + `gestao_cme.views.portal`
-> (tela inicial). Documento complementar aos casos de uso técnicos já existentes
-> (`docs/auditoria-portal-contas-mensageria.md`) — aqui o foco é contar a experiência do
+> (tela inicial). Documento complementar à documentação técnica já existente
+> (`docs/documentacao-portal-contas.md`) — aqui o foco é contar a experiência do
 > usuário do começo ao fim, não listar telas e regras.
 
 ## Quem é o usuário
