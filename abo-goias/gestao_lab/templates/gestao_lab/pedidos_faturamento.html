@@ -15,18 +15,53 @@
         <div class="search-control">
             <input id="results-q-fat" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por paciente, aluno ou laboratório..." aria-label="Buscar na listagem">
         </div>
-        <button class="button primary" type="submit">Buscar</button>
+        <select name="faturado_paciente" aria-label="Filtrar por faturamento do paciente" onchange="this.form.submit()">
+            <option value="">Fat. paciente — todos</option>
+            <option value="sim" {% if faturado_paciente_filtro == "sim" %}selected{% endif %}>Faturado pelo paciente</option>
+            <option value="nao" {% if faturado_paciente_filtro == "nao" %}selected{% endif %}>Não faturado pelo paciente</option>
+        </select>
+        <select name="faturado_lab" aria-label="Filtrar por faturamento do laboratório" onchange="this.form.submit()">
+            <option value="">Fat. laboratório — todos</option>
+            <option value="sim" {% if faturado_lab_filtro == "sim" %}selected{% endif %}>Faturado pelo laboratório</option>
+            <option value="nao" {% if faturado_lab_filtro == "nao" %}selected{% endif %}>Não faturado pelo laboratório</option>
+        </select>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or faturado_paciente_filtro or faturado_lab_filtro %}
+                <a class="button secondary compact-button" href="{% url 'lab_pedidos_faturamento' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
-    {% if busca %}
+    {% if busca or faturado_paciente_filtro or faturado_lab_filtro %}
         <div class="selection-summary">
-            <a class="info-chip info-chip--removable"
-               href="{% url 'lab_pedidos_faturamento' %}"
-               title="Remover busca">
-                <span>Busca</span>
-                <strong>{{ busca }}</strong>
-                <span class="chip-x" aria-hidden="true">×</span>
-            </a>
+            {% if busca %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if faturado_paciente_filtro %}faturado_paciente={{ faturado_paciente_filtro }}&{% endif %}{% if faturado_lab_filtro %}faturado_lab={{ faturado_lab_filtro }}{% endif %}"
+                   title="Remover busca">
+                    <span>Busca</span>
+                    <strong>{{ busca }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if faturado_paciente_filtro %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if faturado_lab_filtro %}faturado_lab={{ faturado_lab_filtro }}{% endif %}"
+                   title="Remover filtro de faturamento do paciente">
+                    <span>Fat. paciente</span>
+                    <strong>{% if faturado_paciente_filtro == "sim" %}Faturado{% else %}Não faturado{% endif %}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if faturado_lab_filtro %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}&{% endif %}{% if faturado_paciente_filtro %}faturado_paciente={{ faturado_paciente_filtro }}{% endif %}"
+                   title="Remover filtro de faturamento do laboratório">
+                    <span>Fat. laboratório</span>
+                    <strong>{% if faturado_lab_filtro == "sim" %}Faturado{% else %}Não faturado{% endif %}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
         </div>
     {% endif %}
 
@@ -106,8 +141,13 @@
                     <tr class="empty-row">
                         <td colspan="9">
                             <div class="empty-state">
-                                <strong>Nenhum pedido com faturamento pendente.</strong>
-                                <p>Todos os pedidos entregues já têm informações financeiras completas.</p>
+                                {% if busca or faturado_paciente_filtro or faturado_lab_filtro %}
+                                    <strong>Nenhum pedido encontrado para esses filtros.</strong>
+                                    <p>Revise os filtros ou <a href="{% url 'lab_pedidos_faturamento' %}">limpe tudo</a> para ver a fila completa.</p>
+                                {% else %}
+                                    <strong>Nenhum pedido com faturamento pendente.</strong>
+                                    <p>Todos os pedidos entregues já têm informações financeiras completas.</p>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

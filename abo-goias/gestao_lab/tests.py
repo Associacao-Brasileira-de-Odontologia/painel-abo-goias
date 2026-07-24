@@ -531,6 +531,97 @@ class AcompanhamentoPedidosTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Testes de Views — fila de faturamento
+# ---------------------------------------------------------------------------
+
+
+class PedidosFaturamentoViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+        pac = _paciente(id_dental="14")
+        aluno = _aluno(id_dental="24")
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        self.pendente_dos_dois_lados = _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            entregue=True,
+            faturado_paciente=False,
+            faturado_lab=False,
+        )
+        self.faturado_so_paciente = _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            entregue=True,
+            faturado_paciente=True,
+            faturado_lab=False,
+        )
+        self.faturado_so_lab = _pedido(
+            pac,
+            aluno,
+            lab,
+            equipe,
+            entregue=True,
+            faturado_paciente=False,
+            faturado_lab=True,
+        )
+
+    def test_retorna_200_e_template_correto(self) -> None:
+        response = self.client.get(reverse("lab_pedidos_faturamento"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "gestao_lab/pedidos_faturamento.html")
+
+    def test_lista_todos_os_pendentes_sem_filtro(self) -> None:
+        response = self.client.get(reverse("lab_pedidos_faturamento"))
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(self.pendente_dos_dois_lados, pedidos)
+        self.assertIn(self.faturado_so_paciente, pedidos)
+        self.assertIn(self.faturado_so_lab, pedidos)
+
+    def test_filtra_por_faturado_paciente_sim(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos_faturamento"), {"faturado_paciente": "sim"}
+        )
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(self.faturado_so_paciente, pedidos)
+        self.assertNotIn(self.pendente_dos_dois_lados, pedidos)
+        self.assertNotIn(self.faturado_so_lab, pedidos)
+
+    def test_filtra_por_faturado_paciente_nao(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos_faturamento"), {"faturado_paciente": "nao"}
+        )
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(self.pendente_dos_dois_lados, pedidos)
+        self.assertIn(self.faturado_so_lab, pedidos)
+        self.assertNotIn(self.faturado_so_paciente, pedidos)
+
+    def test_filtra_por_faturado_lab_sim(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos_faturamento"), {"faturado_lab": "sim"}
+        )
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(self.faturado_so_lab, pedidos)
+        self.assertNotIn(self.pendente_dos_dois_lados, pedidos)
+        self.assertNotIn(self.faturado_so_paciente, pedidos)
+
+    def test_combina_os_dois_filtros(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos_faturamento"),
+            {"faturado_paciente": "nao", "faturado_lab": "nao"},
+        )
+        pedidos = list(response.context["pedidos"])
+        self.assertIn(self.pendente_dos_dois_lados, pedidos)
+        self.assertNotIn(self.faturado_so_paciente, pedidos)
+        self.assertNotIn(self.faturado_so_lab, pedidos)
+
+
+# ---------------------------------------------------------------------------
 # Testes de Views — moldagens
 # ---------------------------------------------------------------------------
 
