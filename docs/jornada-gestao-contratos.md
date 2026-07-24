@@ -1,7 +1,7 @@
 # Jornada do Usuário — Gerador de Contratos
 
-> Aplicação: `gestao_contratos`. Documento complementar ao registro técnico
-> (`docs/auditoria-gestao-contratos.md`) e ao `docs/Ferramentas-Painel-ABO-Goias.docx`
+> Aplicação: `gestao_contratos`. Documento complementar à documentação técnica
+> (`docs/documentacao-gestao-contratos.md`) e ao `docs/Ferramentas-Painel-ABO-Goias.docx`
 > (que detalha a base jurídica da assinatura) — aqui o foco é contar a experiência de
 > quem usa o sistema, do início ao fim de cada fluxo.
 

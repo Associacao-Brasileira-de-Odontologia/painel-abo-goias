@@ -1,7 +1,7 @@
 # Jornada do Usuário — Gestão de Laboratório
 
-> Aplicação: `gestao_lab`. Documento complementar ao catálogo técnico de casos de uso
-> (`docs/casos-de-uso-gestao-lab.md`) — aqui o foco é contar a experiência de quem usa
+> Aplicação: `gestao_lab`. Documento complementar à documentação técnica
+> (`docs/documentacao-gestao-lab.md`) — aqui o foco é contar a experiência de quem usa
 > o sistema no dia a dia, do início ao fim de cada fluxo.
 
 ## Quem é o usuário

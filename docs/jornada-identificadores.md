@@ -1,7 +1,7 @@
 # Jornada do Usuário — Gerador de Identificadores de Bancada
 
-> Aplicação: `identificadores`. Documento complementar ao registro técnico
-> (`docs/auditoria-identificadores.md`) — aqui o foco é contar a experiência de quem usa
+> Aplicação: `identificadores`. Documento complementar à documentação técnica
+> (`docs/documentacao-identificadores.md`) — aqui o foco é contar a experiência de quem usa
 > o sistema, do início ao fim do fluxo.
 
 ## Quem é o usuário
