@@ -2,22 +2,22 @@
 Navegação lateral da Gestão de Laboratório. O item ativo é resolvido
 automaticamente a partir da rota atual (ver partials/side_link.html) — basta
 incluir este partial sem parâmetros.
+
+Botões secundários de cadastro (Registrar pedido, Nova moldagem, Novo
+laboratório, Nova equipe) vivem nos mini-menus abaixo (side_link_group.html),
+mesmo padrão do CME — não duplicam mais em "Ações rápidas" nem em
+panel_actions das respectivas páginas (item 11 do plano de 2026-07).
 {% endcomment %}
 <nav class="side-nav" aria-label="Navegação do laboratório">
     <p class="side-nav-label">Operação</p>
     {% include "partials/side_link.html" with url_name="lab_dashboard" icon="dashboard" label="Visão Geral" %}
-    {% include "partials/side_link.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" match="lab_detalhe_pedido" %}
-    {% include "partials/side_link.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" match="lab_criar_moldagem" %}
+    {% include "partials/side_link_group.html" with url_name="lab_pedidos" icon="lista" label="Acompanhamento" match="lab_detalhe_pedido lab_criar_pedido" action1_label="Registrar pedido" action1_url_name="lab_criar_pedido" %}
+    {% include "partials/side_link_group.html" with url_name="lab_moldagens" icon="moldagem" label="Moldagens" match="lab_criar_moldagem" action1_label="Nova moldagem" action1_url_name="lab_criar_moldagem" %}
     {% include "partials/side_link.html" with url_name="lab_pedidos_faturamento" icon="emprestimo" label="Faturamento" %}
 
-    <div class="side-quick-actions">
-        <p class="section-label">Ações rápidas</p>
-        <a class="button primary" href="{% url 'lab_criar_pedido' %}">Registrar pedido</a>
-    </div>
-
     <p class="side-nav-label">Cadastros</p>
-    {% include "partials/side_link.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" match="lab_criar_laboratorio lab_editar_laboratorio" %}
-    {% include "partials/side_link.html" with url_name="lab_equipes" icon="usuarios" label="Equipes" match="lab_criar_equipe lab_editar_equipe" %}
+    {% include "partials/side_link_group.html" with url_name="lab_laboratorios" icon="laboratorio" label="Laboratórios" match="lab_criar_laboratorio lab_editar_laboratorio" action1_label="Novo laboratório" action1_url_name="lab_criar_laboratorio" %}
+    {% include "partials/side_link_group.html" with url_name="lab_equipes" icon="usuarios" label="Equipes" match="lab_criar_equipe lab_editar_equipe" action1_label="Nova equipe" action1_url_name="lab_criar_equipe" %}
 
     <p class="side-nav-label">Pessoas</p>
     {% include "partials/side_link.html" with url_name="lab_pacientes" icon="paciente" label="Pacientes" %}

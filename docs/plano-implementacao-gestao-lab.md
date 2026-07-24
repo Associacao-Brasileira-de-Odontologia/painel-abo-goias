@@ -6,8 +6,8 @@
 > duas confirmações pendentes e propõe a sequência de implementação (um item por vez:
 > implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
 > no CME).
-> **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código;
-> itens 7, 6/8, 3+2, 1, 9 e 10 implementados — ver §4.
+> **Progresso:** todos os 11 itens concluídos. Item 4 implementado (commit `a4077e5`);
+> item 5 fechado sem código; itens 7, 6/8, 3+2, 1, 9, 10 e 11 implementados — ver §4.
 
 ---
 
@@ -209,17 +209,32 @@ execução. 1 novo teste (`test_botao_de_sincronizacao_aciona_apenas_alunos`), s
 `gestao_lab` (158 testes) verde — não precisou da suíte completa por não tocar nenhum
 partial/CSS compartilhado entre apps.
 
-### Item 11 · Botões secundários no menu
+### Item 11 · Botões secundários no menu → ✅ **Implementado**
 
-Reproduzir `partials/side_link_group.html` do CME para os itens que hoje têm um botão de
+Reproduzi `partials/side_link_group.html` do CME para os itens que tinham um botão de
 cadastro separado da navegação:
 
-| Item do menu | Botão secundário a mover para o mini-menu |
+| Item do menu | Botão secundário movido para o mini-menu |
 |---|---|
-| Acompanhamento | "Registrar pedido" (hoje é um bloco à parte, "Ações rápidas", na sidebar) |
-| Moldagens | "Nova moldagem" (hoje em `panel_actions`, topo da página) |
-| Laboratórios | "Novo laboratório" (hoje em `panel_actions`) |
-| Equipes | "Nova equipe" (hoje em `panel_actions`) |
+| Acompanhamento | "Registrar pedido" (era um bloco à parte, "Ações rápidas", na sidebar) |
+| Moldagens | "Nova moldagem" (era em `panel_actions`, topo da página) |
+| Laboratórios | "Novo laboratório" (era em `panel_actions`) |
+| Equipes | "Nova equipe" (era em `panel_actions`) |
+
+**Implementação:** `gestao_lab/templates/gestao_lab/partials/menu.html` trocou os 4
+`side_link.html` desses itens por `side_link_group.html` (mesma `match` já usada antes,
+mais o `action1_label`/`action1_url_name` de cada cadastro) e removeu o bloco
+"Ações rápidas" (que só continha "Registrar pedido"). Cada uma das 4 páginas teve seu
+`panel_actions`/bloco de botão removido, substituído por um comentário apontando para o
+mini-menu (mesmo padrão dos templates do CME, ex.: `materiais.html`). Não precisou de
+nenhuma mudança em CSS/JS — `side_link_group.html`, `side_link.html` e o JS de
+abrir/fechar submenu (`static/js/app.js`) já são compartilhados e genéricos, sem nenhum
+código específico do CME. 5 novos testes (`MiniMenuBotoesSecundariosTests`) cobrindo os 4
+botões e a expansão automática do mini-menu na página de criação; suíte `gestao_lab`
+(163 testes) verde — não precisou da suíte completa por não tocar nenhum partial/CSS
+compartilhado entre apps (só o `menu.html` específico do laboratório, que reusa os
+partials/CSS/JS já existentes sem modificá-los). Verificação visual no navegador
+(Playwright) confirmando os 4 mini-menus e a expansão automática.
 
 ---
 
@@ -247,10 +262,10 @@ Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente r
    origem, ação "Importar" para quem só existe no Dental Office).
 8. ✅ **Item 10** — **Implementado**. Botão de sincronização de Alunos trocado da rotina
    completa para a rotina só-alunos, mais rápida.
-9. **Item 11** — Mini-menu para os botões secundários (Alta, mas é o que mais toca a navegação — deixo por último para não reordenar a sidebar antes das outras mudanças de conteúdo de cada página estarem prontas).
+9. ✅ **Item 11** — **Implementado**. Botões secundários (Registrar pedido, Nova
+   moldagem, Novo laboratório, Nova equipe) movidos para mini-menus na navegação
+   lateral, mesmo padrão do CME.
 
-Cada item segue o fluxo já estabelecido: implementar, rodar a suíte (completa quando o
-item toca partials/CSS compartilhados entre apps, só `gestao_lab` quando não toca),
-commitar, enviar e aguardar sua aprovação antes do próximo.
-
-Pronto para seguir com o item 11 (o último da lista original), ou outro que preferir.
+Os 11 itens da lista original estão implementados. Cada um seguiu o fluxo já
+estabelecido: implementar, rodar a suíte (completa quando o item tocava partials/CSS
+compartilhados entre apps, só `gestao_lab` quando não tocava), commitar e enviar.

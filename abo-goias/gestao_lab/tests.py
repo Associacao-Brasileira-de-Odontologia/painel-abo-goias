@@ -925,6 +925,56 @@ class EquipesViewTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Testes de Views — mini-menu com botões secundários (item 11)
+# ---------------------------------------------------------------------------
+
+
+class MiniMenuBotoesSecundariosTests(TestCase):
+    """Botões de cadastro movidos do topo da página para o mini-menu lateral,
+    mesmo padrão de gestao_cme/partials/side_link_group.html."""
+
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    def test_acompanhamento_tem_registrar_pedido_no_mini_menu_e_nao_no_topo(
+        self,
+    ) -> None:
+        response = self.client.get(reverse("lab_pedidos"))
+        self.assertContains(response, reverse("lab_criar_pedido"))
+        self.assertContains(response, "Registrar pedido")
+        self.assertNotContains(response, "topbar-actions")
+        self.assertNotContains(response, "side-quick-actions")
+
+    def test_moldagens_tem_nova_moldagem_no_mini_menu_e_nao_no_topo(self) -> None:
+        response = self.client.get(reverse("lab_moldagens"))
+        self.assertContains(response, reverse("lab_criar_moldagem"))
+        self.assertContains(response, "Nova moldagem")
+        self.assertNotContains(response, "topbar-actions")
+
+    def test_laboratorios_tem_novo_laboratorio_no_mini_menu_e_nao_no_topo(
+        self,
+    ) -> None:
+        response = self.client.get(reverse("lab_laboratorios"))
+        self.assertContains(response, reverse("lab_criar_laboratorio"))
+        self.assertContains(response, "Novo laboratório")
+        self.assertNotContains(response, "topbar-actions")
+
+    def test_equipes_tem_nova_equipe_no_mini_menu_e_nao_no_topo(self) -> None:
+        response = self.client.get(reverse("lab_equipes"))
+        self.assertContains(response, reverse("lab_criar_equipe"))
+        self.assertContains(response, "Nova equipe")
+        self.assertNotContains(response, "topbar-actions")
+
+    def test_mini_menu_expande_automaticamente_na_pagina_de_criacao(self) -> None:
+        # side_link_group marca o submenu como aberto (sem `hidden`) quando a
+        # rota atual bate com `match` — aqui, a própria página de criação.
+        response = self.client.get(reverse("lab_criar_moldagem"))
+        self.assertContains(response, 'id="side-submenu-lab_moldagens"')
+        self.assertNotContains(response, 'id="side-submenu-lab_moldagens" hidden')
+
+
+# ---------------------------------------------------------------------------
 # Testes de Views — pacientes e alunos
 # ---------------------------------------------------------------------------
 
