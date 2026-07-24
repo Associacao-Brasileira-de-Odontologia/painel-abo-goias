@@ -7,7 +7,7 @@
 > implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
 > no CME).
 > **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código;
-> itens 7, 6/8, 3+2, 1 e 9 implementados — ver §4.
+> itens 7, 6/8, 3+2, 1, 9 e 10 implementados — ver §4.
 
 ---
 
@@ -188,15 +188,26 @@ referência:
   quebrada) funciona quando o Dental Office está inacessível. Suíte completa
   (665 testes) verde.
 
-### Item 10 · Busca de Alunos no padrão do CME (Alunos por turma)
+### Item 10 · Busca de Alunos no padrão do CME (Alunos por turma) → ✅ **Implementado**
 
-A busca em si **já é** local-only com `nome_normalizado`/`icontains`, igual ao CME — o
-que diverge é o **botão de sincronização**: hoje a página de Alunos usa o botão
-"Atualizar lista" que aciona `lab_sincronizar` (sincronização **completa**, pacientes **e**
-alunos — mais lenta do que essa tela precisa). O CME já resolveu esse tipo de imprecisão
-(cada botão sincroniza exatamente o que a tela usa). Proposta: trocar, só nesta página,
-para `lab_sincronizar_alunos` (a rotina já existente, mais leve, só alunos) — mantendo
-"Atualizar lista" (ou renomeando para "Atualizar alunos", mais preciso).
+A busca em si **já era** local-only com `nome_normalizado`/`icontains`, igual ao CME — o
+que divergia era o **botão de sincronização**: a página de Alunos usava o botão
+"Atualizar lista" que acionava `lab_sincronizar` (sincronização **completa**, pacientes
+**e** alunos — mais lenta do que essa tela precisa). O CME já resolveu esse tipo de
+imprecisão (cada botão sincroniza exatamente o que a tela usa).
+
+**Implementação:** `partials/sync_dental.html` (usado só pela página de Alunos — a
+página de Pacientes já não o usava desde o item 9) passou a apontar para
+`lab_sincronizar_alunos` em vez de `lab_sincronizar`, com o botão renomeado de
+"Atualizar lista" para "Atualizar alunos" (mesmo texto já usado no botão equivalente dos
+formulários de pedido/moldagem, `partials/atualizar_alunos.html`). Como consequência, a
+sincronização completa (`lab_sincronizar`/UC-19) deixou de ter qualquer gatilho manual na
+interface — continua acionável pela tarefa agendada do Celery Beat (04:30 diária) e pelo
+endpoint de cron externo (UC-21); isso também mitiga o achado sistêmico **S-04** (risco
+de lentidão do botão manual síncrono), já que não há mais botão que dispare essa
+execução. 1 novo teste (`test_botao_de_sincronizacao_aciona_apenas_alunos`), suíte
+`gestao_lab` (158 testes) verde — não precisou da suíte completa por não tocar nenhum
+partial/CSS compartilhado entre apps.
 
 ### Item 11 · Botões secundários no menu
 
@@ -234,11 +245,12 @@ Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente r
    item 3.
 7. ✅ **Item 9** — **Implementado**. Busca unificada de Pacientes (tabela única, selo de
    origem, ação "Importar" para quem só existe no Dental Office).
-8. **Item 10** — Sincronização de Alunos (Alta).
+8. ✅ **Item 10** — **Implementado**. Botão de sincronização de Alunos trocado da rotina
+   completa para a rotina só-alunos, mais rápida.
 9. **Item 11** — Mini-menu para os botões secundários (Alta, mas é o que mais toca a navegação — deixo por último para não reordenar a sidebar antes das outras mudanças de conteúdo de cada página estarem prontas).
 
-Cada item segue o fluxo já estabelecido: implementar, rodar a suíte completa (os
-partials/testes de `gestao_lab` também tocam `paginacao.html` e o design system
-compartilhado), commitar, enviar e aguardar sua aprovação antes do próximo.
+Cada item segue o fluxo já estabelecido: implementar, rodar a suíte (completa quando o
+item toca partials/CSS compartilhados entre apps, só `gestao_lab` quando não toca),
+commitar, enviar e aguardar sua aprovação antes do próximo.
 
-Pronto para seguir com o item 10 (ou outro, se preferir mudar a ordem).
+Pronto para seguir com o item 11 (o último da lista original), ou outro que preferir.

@@ -76,7 +76,6 @@ Módulos internos do app (rotas em `gestao_lab/urls.py`, todas sob o prefixo
 ```mermaid
 flowchart LR
     Coord(("Coordenador"))
-    Super(("Superusuário"))
     Dental[["Sistema Dental Office"]]
     Beat[["Celery Beat"]]
     Cron[["Cron externo"]]
@@ -105,8 +104,7 @@ flowchart LR
         UC21(("UC-21 Sincronização agendada por token"))
     end
 
-    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC08 & UC09 & UC10 & UC11 & UC12 & UC13 & UC14 & UC15 & UC16 & UC17 & UC19 & UC20
-    Super --> UC19
+    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC08 & UC09 & UC10 & UC11 & UC12 & UC13 & UC14 & UC15 & UC16 & UC17 & UC20
     Beat --> UC19
     Cron --> UC21
     UC19 --> Dental
@@ -123,8 +121,10 @@ flowchart LR
 > Nota sobre o diagrama: o Celery Beat aciona apenas `sincronizar_dental_task` (UC-19),
 > que já cobre pacientes **e** alunos numa única rotina — por isso só há uma seta
 > `Beat --> UC19`. UC-20 (atualizar somente alunos) é acionada **apenas manualmente**,
-> pelo coordenador, a partir dos formulários de pedido/moldagem — não tem gatilho
-> automático próprio.
+> pelo coordenador, a partir dos formulários de pedido/moldagem **e** da própria listagem
+> de Alunos (UC-16) — não tem gatilho automático próprio. Desde 2026-07-21 (item 10),
+> `Coord` não tem mais seta direta para UC-19: a sincronização completa deixou de ter
+> qualquer gatilho manual na interface, só rodando pela tarefa agendada.
 
 ---
 
@@ -457,16 +457,26 @@ flowchart LR
 
 ### UC-16 · Consultar alunos sincronizados
 
+> **Atualizado em 2026-07-21** — botão de sincronização trocado de UC-19
+> (completa) para UC-20 (só alunos) — item 10 do plano.
+
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.alunos_lab` → `/laboratorio/alunos/`
 - **Fluxo principal:**
   1. Lista `AlunoLab` ativos, com busca por nome/celular.
   2. Mostra a data da última sincronização (agregada, `Max(ultima_sincronizacao)`) e o
-     histórico dos 5 últimos `RegistroSync` (compartilhado com UC-17 — é o mesmo modelo
-     de auditoria para as duas sincronizações).
-  3. Botão "Atualizar lista" (`partials/sync_dental.html`) dispara UC-19 (sincronização
-     completa), com `next` de volta para esta tela.
-- **Pós-condição:** nenhuma própria (leitura + efeito de UC-19).
+     histórico dos 5 últimos `RegistroSync` (compartilhado com UC-17, mesmo modelo de
+     auditoria — na prática, hoje só a sincronização agendada (UC-19, Celery Beat) grava
+     ali, já que nem Alunos nem Pacientes disparam mais a sincronização completa
+     manualmente).
+  3. Botão "Atualizar alunos" (`partials/sync_dental.html`) dispara **UC-20**
+     (`lab_sincronizar_alunos`), com `next` de volta para esta tela — antes disparava a
+     sincronização completa (UC-19, `lab_sincronizar`), que também varria pacientes sem
+     necessidade nesta tela (mesmo princípio já aplicado no CME: "cada botão sincroniza
+     exatamente o que a tela usa"). Como consequência, a sincronização completa
+     (`lab_sincronizar`) deixou de ter qualquer botão na interface — continua acionável
+     apenas pela tarefa agendada (UC-19) ou diretamente pela rota.
+- **Pós-condição:** nenhuma própria (leitura + efeito de UC-20).
 
 ### UC-17 · Consultar pacientes sincronizados (com busca ao vivo)
 
@@ -536,11 +546,18 @@ flowchart LR
 
 ### UC-19 · Sincronizar com o Dental Office
 
-- **Ator primário:** Coordenador / Superusuário (acionamento manual); **Celery Beat**
-  (acionamento automático diário às 04:30).
+> **Atualizado em 2026-07-21** — a sincronização completa deixou de ter botão na
+> interface (item 10): Alunos passou a usar UC-20 (só alunos, ver UC-16) e
+> Pacientes já usava busca ao vivo + importação pontual desde o item 9 (ver UC-17).
+> Continua acionável pela tarefa agendada (Celery Beat) e pelo endpoint de cron
+> externo (UC-21).
+
+- **Ator primário:** **Celery Beat** (acionamento automático diário às 04:30); a rota
+  continua exposta e testada, mas **sem nenhum botão na interface** desde o item 10.
 - **Views/rotas:**
-  - `views.sincronizar_dental` (POST) → `/laboratorio/sincronizar/` — botão "Atualizar
-    lista" em Alunos (UC-16) e, historicamente, também disponível a partir de Pacientes.
+  - `views.sincronizar_dental` (POST) → `/laboratorio/sincronizar/` — sem ponto de
+    entrada na UI atual (ver observação acima); permanece coberta por
+    `SincronizarDentalViewTests` para não perder a cobertura de regressão da rota.
   - `gestao_lab/tasks.py::sincronizar_dental_task` (Celery Beat, 04:30 diária).
 - **Fluxo principal:** chama `services.dental_sync.executar_sync_e_registrar`, que busca
   **todas as páginas** de `/customers` e `/users` (grupo de alunos), faz
@@ -553,10 +570,10 @@ flowchart LR
   vulnerável a uma URL "protocol-relative" (`//host-externo/...`), que também começa com
   `/` e é tratada pelo navegador como redirecionamento para outro domínio. Ver S-01 em
   §6.2 para o detalhamento e a correção recomendada (comum a todas as views afetadas).
-- **Risco sistêmico:** roda **de forma síncrona no request** quando acionada manualmente —
-  pode ser lenta com uma base grande de pacientes (a auditoria original já registrava isso
-  como candidato a mover para fila assíncrona; hoje já existe a tarefa agendada do Celery
-  Beat, mas o botão manual continua síncrono).
+- **Risco sistêmico:** a view roda **de forma síncrona no request** — pode ser lenta com
+  uma base grande de pacientes (a auditoria original já registrava isso como candidato a
+  mover para fila assíncrona). Hoje o risco só se materializa se algo chamar a rota
+  diretamente (não há mais botão na UI que dispare essa execução síncrona).
 - **Observação operacional:** se um cron externo continuar chamando
   `/laboratorio/sincronizar-agendado/` (UC-21) além do Celery Beat, a base sincroniza em
   duplicidade — sem quebrar nada, mas sem necessidade (mesmo aviso já registrado em
@@ -564,13 +581,18 @@ flowchart LR
 
 ### UC-20 · Atualizar somente a lista de alunos
 
+> **Atualizado em 2026-07-21** — passou a ser usada também pela listagem de Alunos
+> (UC-16), não só pelos formulários de pedido/moldagem (item 10).
+
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.sincronizar_alunos_dental` (POST) →
   `/laboratorio/sincronizar-alunos/`
 - **Fluxo principal:** chama `services.dental_sync.sincronizar_alunos` (só o endpoint
   `/users`, não `/customers`) — mais rápida que a sincronização completa (UC-19). Botão
-  "Atualizar alunos" (`partials/atualizar_alunos.html`) disponível nos formulários de
-  pedido (UC-03) e moldagem (UC-10).
+  "Atualizar alunos" disponível em três pontos, todos com a mesma ação de fundo: nos
+  formulários de pedido (UC-03) e moldagem (UC-10) via `partials/atualizar_alunos.html`,
+  e na listagem de Alunos (UC-16) via `partials/sync_dental.html` — substituindo ali o
+  antigo botão "Atualizar lista" que disparava a sincronização completa (UC-19).
 - **Regra de negócio:** decisão de negócio já validada
   (`melhorias-gestao-lab-2026-07.md`, item 2+3) — antes havia campos de busca completos
   na barra lateral desses formulários (`busca_dental.html`), removidos por serem
@@ -688,7 +710,7 @@ flowchart LR
 | S-01 | Redirecionamento pós-ação (UC-05, UC-06, UC-07, UC-12) | `marcar_envio`, `marcar_entrega`, `atualizar_faturamento`, `alternar_faturado_paciente`, `alternar_faturado_lab`, `alternar_faturado_moldagem` e `alternar_entregue_moldagem` usam `redirect(request.POST.get("next") or "<view>")` **sem validar** que `next` é um caminho local — o helper `redirect()` do Django, quando o valor não casa com nenhuma URL nomeada, devolve a string como veio se ela contiver `/` ou `.`, permitindo redirecionar para um domínio externo (**open redirect**). Views mais cuidadosas do mesmo módulo (`excluir_pedido`, `excluir_moldagem`, `sincronizar_dental`, `sincronizar_alunos_dental`) checam `next_url.startswith("/")`, o que já bloqueia URLs absolutas com `http(s)://`, mas **não** bloqueia URLs "protocol-relative" (`//host-externo/...`), que também começam com `/` e o navegador interpreta como redirecionamento para outro host | Usar `django.utils.http.url_has_allowed_host_and_scheme` (o mesmo helper que o `LoginView` do Django usa para validar `?next=`) em **todas** as views que recebem `next` do cliente, com uma função utilitária única para não repetir a checagem em 11 pontos diferentes | Em aberto — ver §7 (decisão de segurança, prioridade sugerida: alta) |
 | S-02 | Busca direcionada (UC-18, legado) | `views.buscar_paciente_dental`/`buscar_aluno_dental` (rotas `lab_buscar_paciente`/`lab_buscar_aluno`) ficaram **órfãs** — nenhum template as chama desde que `partials/busca_dental.html` foi removido (`melhorias-gestao-lab-2026-07.md`, item 2+3); ainda existem testes cobrindo `lab_buscar_paciente`, mas não há nenhum ponto de entrada na UI atual | Remover a view/rota morta numa limpeza futura (mesmo tipo de achado já resolvido no CME — ver S-10, resolvido, em `casos-de-uso-gestao-cme.md`) | Em aberto |
 | S-03 | Permissões (todas as UCs) | Não existe **nenhuma** distinção de permissão por grupo/papel no módulo — qualquer usuário autenticado pode excluir pedidos/moldagens, editar laboratórios/equipes e disparar sincronizações completas. Diferente do CME (que já tem `permissoes.py` com grupos definidos, mesmo que não aplicados), aqui não há sequer essa infraestrutura pronta | Definir se o módulo deve reusar os grupos do CME (`recepcao`/`coordenacao`/`gestao`, em `gestao_cme/permissoes.py`) ou criar um esquema próprio, e então aplicar aos pontos sensíveis (exclusões, sincronização) | Em aberto — mesma decisão pendente do CME (S-02 lá), agora estendida a este módulo |
-| S-04 | Sincronização Dental (UC-19) | O botão manual "Atualizar lista" roda a sincronização completa **de forma síncrona no request** — pode ser lenta com uma base grande de pacientes | Mover para tarefa assíncrona (Celery, já usada para a versão agendada) com feedback de progresso, ou aceitar o comportamento atual já que a rotina diária (04:30) cobre o caso comum | Em aberto |
+| S-04 | Sincronização Dental (UC-19) | O botão manual "Atualizar lista" rodava a sincronização completa **de forma síncrona no request** — podia ser lenta com uma base grande de pacientes | Mover para tarefa assíncrona (Celery, já usada para a versão agendada) com feedback de progresso, ou aceitar o comportamento atual já que a rotina diária (04:30) cobre o caso comum | ✅ **Mitigado em 2026-07-21** (item 10) — o botão manual que disparava essa execução síncrona foi removido (Alunos passou a usar UC-20, mais rápida); a view `sincronizar_dental` continua existindo (rota + tarefa agendada), mas sem gatilho manual na UI, então o risco de lentidão perceptível pelo usuário deixou de se materializar na prática |
 | S-05 | Métricas duplicadas (UC-01 / UC-02) | Visão Geral e Acompanhamento recalculavam as mesmas contagens de status de forma independente, sem uma função única compartilhada (diferente de `linhas_de_pacote()` no CME) — e a Visão Geral tinha uma consulta ad-hoc própria (`entregue=True, exclude(...)`) para "pendentes de faturamento", divergente do campo `status` | Extrair um helper único (`metricas_pedidos()`) reusado pelas duas views | ✅ **Resolvido em 2026-07-21** — junto da reforma de status (item 4): as duas views já contam direto por `status=...` (mesmo campo, mesma fonte); a consulta ad-hoc de "pendentes de faturamento" foi substituída por `status=ENTREGUE_NAO_FATURADO` (também no Portal do CME, que tinha o mesmo cálculo cruzado). Não foi extraído um helper único formal (`metricas_pedidos()`) — cada view ainda monta seu próprio dict — mas a fonte dos números agora é sempre `status`, eliminando o risco de divergência |
 | S-06 | Testes de segurança | Não há teste de regressão para o achado S-01 (open redirect) | Ao corrigir S-01, adicionar teste que tenta redirecionar para um host externo (`next=https://evil.example/` e `next=//evil.example/`) e confirma que o destino final é sempre local | Em aberto |
 
@@ -751,11 +773,11 @@ flowchart LR
 | UC-13 | `excluir_moldagem` | ação em `moldagens.html` |
 | UC-14 | `laboratorios`, `criar_laboratorio`, `editar_laboratorio` | `laboratorios.html`, `form_laboratorio.html` |
 | UC-15 | `equipes`, `criar_equipe`, `editar_equipe` | `equipes.html`, `form_equipe.html` |
-| UC-16 | `alunos_lab` | `alunos.html` |
+| UC-16 | `alunos_lab` | `alunos.html`, `partials/sync_dental.html` |
 | UC-17 | `pacientes`, `importar_paciente_dental` | `pacientes.html` |
 | UC-18 | `buscar_pacientes`, `buscar_alunos_lab`, `materializar` | `partials/_ac_field.html`, `partials/_ac_results.html` |
-| UC-19 | `sincronizar_dental`, `tasks.sincronizar_dental_task` | `partials/sync_dental.html` |
-| UC-20 | `sincronizar_alunos_dental` | `partials/atualizar_alunos.html` |
+| UC-19 | `sincronizar_dental`, `tasks.sincronizar_dental_task` | — (sem botão na UI desde o item 10; rota + tarefa agendada) |
+| UC-20 | `sincronizar_alunos_dental` | `partials/atualizar_alunos.html`, `partials/sync_dental.html` |
 | UC-21 | `sincronizar_agendado` | — (endpoint JSON, sem template) |
 | *(órfã, S-02)* | `buscar_paciente_dental`, `buscar_aluno_dental` | — (sem template atual) |
 

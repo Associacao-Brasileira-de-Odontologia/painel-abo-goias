@@ -1367,11 +1367,13 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
 def sincronizar_alunos_dental(request: HttpRequest) -> HttpResponse:
     """Atualiza somente a lista de alunos com o Dental Office.
 
-    Usada pelos formulários de pedido e moldagem: um botão explícito de
-    "Atualizar alunos", em vez dos antigos campos de busca na sidebar. É mais
-    leve que ``sincronizar_dental`` (que também varre os pacientes), então serve
-    bem ao caso em que o operador só precisa que um aluno recém-cadastrado
-    apareça no seletor.
+    Usada pelos formulários de pedido e moldagem (botão "Atualizar alunos", em
+    vez dos antigos campos de busca na sidebar) e, desde o item 10 do plano de
+    2026-07, também pela própria listagem de Alunos — substituindo o botão
+    "Atualizar lista" de lá, que antes acionava ``sincronizar_dental`` (mais
+    lenta, pois também varre pacientes sem necessidade nesta tela). É mais
+    leve que ``sincronizar_dental``, então serve bem ao caso em que o operador
+    só precisa que um aluno recém-cadastrado apareça na lista/seletor.
     """
 
     from django.conf import settings

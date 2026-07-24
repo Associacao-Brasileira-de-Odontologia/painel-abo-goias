@@ -1084,6 +1084,15 @@ class AlunosLabViewTests(TestCase):
         self.assertContains(response, "Aluno Ativo")
         self.assertNotContains(response, "Aluno Inativo")
 
+    def test_botao_de_sincronizacao_aciona_apenas_alunos(self) -> None:
+        # Item 10: a tela de Alunos so precisa sincronizar alunos — usar a
+        # rotina completa (lab_sincronizar) tambem varreria pacientes sem
+        # necessidade, mais lento do que essa tela exige.
+        response = self.client.get(reverse("lab_alunos"))
+        self.assertContains(response, reverse("lab_sincronizar_alunos"))
+        self.assertNotContains(response, reverse("lab_sincronizar"))
+        self.assertContains(response, "Atualizar alunos")
+
 
 # ---------------------------------------------------------------------------
 # Testes de integração — Dental Office (views com mock)
