@@ -44,6 +44,7 @@ from .models import (
     Paciente,
     PedidoMaterial,
     RegistroSync,
+    TurmaLab,
 )
 
 logger = logging.getLogger(__name__)
@@ -939,15 +940,6 @@ def _pacientes_locais(q: str):
     return itens
 
 
-def _alunos_locais(q: str):
-    itens = AlunoLab.objects.filter(ativo=True).order_by("nome")
-    if q:
-        itens = itens.filter(
-            Q(nome_normalizado__icontains=normalizar_texto(q)) | Q(celular__icontains=q)
-        )
-    return itens
-
-
 _LIMITE_RESULTADOS = 20
 
 
@@ -958,7 +950,8 @@ def _unificar(locais, remotos, limite: int = 20) -> list[dict]:
     registro local em favor de um remoto: uma pagina cheia da API tem nomes que
     vem antes no alfabeto e escondia quem ja estava cadastrado. Os remotos so
     preenchem as vagas que sobram, e vao sem ``pk`` — sinal de que precisam ser
-    gravados no clique.
+    gravados no clique. Usado só para pacientes (Dental Office ainda oferece
+    busca por nome); alunos usam ``buscar_alunos_lab``, que é local-only.
     """
 
     vistos = {str(obj.id_dental) for obj in locais}
@@ -994,8 +987,9 @@ def _unificar(locais, remotos, limite: int = 20) -> list[dict]:
     return itens
 
 
-def _buscar_unificado(request: HttpRequest, tipo: str) -> HttpResponse:
-    """Fragmento HTMX do autocomplete de paciente/aluno.
+@login_required
+def buscar_pacientes(request: HttpRequest) -> HttpResponse:
+    """Fragmento HTMX do autocomplete de paciente (base local + Dental Office).
 
     Mostra numa lista so o que ja esta no banco e o que a busca no Dental Office
     devolve (primeira pagina, sem gravar) — o operador nao precisa saber de onde
@@ -1005,34 +999,27 @@ def _buscar_unificado(request: HttpRequest, tipo: str) -> HttpResponse:
 
     from django.conf import settings
     from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import procurar_alunos, procurar_pacientes
+    from gestao_lab.services.dental_sync import procurar_pacientes
 
     q = request.GET.get("q", "").strip()
     if not q:
         return render(request, "gestao_lab/partials/_ac_results.html", {"busca": ""})
 
-    e_paciente = tipo == "paciente"
-    locais = list(
-        (_pacientes_locais(q) if e_paciente else _alunos_locais(q))[:_LIMITE_RESULTADOS]
-    )
+    locais = list(_pacientes_locais(q)[:_LIMITE_RESULTADOS])
 
     remotos: list = []
     parcial = False
     ha_mais = False
 
     try:
-        if e_paciente:
-            clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
-            if not clinic_id:
-                raise DentalAPIError("clinic_id não configurado")
-            remotos, total_paginas = procurar_pacientes(q=q, clinic_id=clinic_id)
-        else:
-            user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
-            remotos, total_paginas = procurar_alunos(q=q, user_group=user_group)
+        clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+        if not clinic_id:
+            raise DentalAPIError("clinic_id não configurado")
+        remotos, total_paginas = procurar_pacientes(q=q, clinic_id=clinic_id)
         ha_mais = total_paginas > 1
     except DentalAPIError as exc:
         # Degradacao suave: sem a API a busca ainda vale para quem ja esta no banco.
-        logger.warning("autocomplete %s: busca externa indisponivel (%s)", tipo, exc)
+        logger.warning("autocomplete paciente: busca externa indisponivel (%s)", exc)
         parcial = True
 
     itens = _unificar(locais, remotos, limite=_LIMITE_RESULTADOS)
@@ -1051,55 +1038,75 @@ def _buscar_unificado(request: HttpRequest, tipo: str) -> HttpResponse:
 
 
 @login_required
-def buscar_pacientes(request: HttpRequest) -> HttpResponse:
-    """Autocomplete de paciente (base local + Dental Office, sem gravar)."""
-
-    return _buscar_unificado(request, "paciente")
-
-
-@login_required
 def buscar_alunos_lab(request: HttpRequest) -> HttpResponse:
-    """Autocomplete de aluno (base local + Dental Office, sem gravar)."""
+    """Fragmento HTMX do autocomplete de aluno — busca só na base local.
 
-    return _buscar_unificado(request, "aluno")
+    Diferente de ``buscar_pacientes``: o Eduq (fonte de dados de AlunoLab) não
+    oferece busca de aluno por nome, só ``listar_alunos`` por turma — não há
+    o que consultar ao vivo nem o que materializar no clique (mesmo padrão de
+    ``gestao_cme.views.buscar_alunos``). Quando a busca não encontra ninguém,
+    oferece um seletor com as turmas conhecidas para sincronizar sob demanda
+    (ver ``sincronizar_turma_aluno_busca``).
+    """
+
+    q = request.GET.get("q", "").strip()
+    alunos = (
+        AlunoLab.objects.filter(ativo=True).select_related("turma").order_by("nome")
+    )
+    if q:
+        alunos = alunos.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(q))
+            | Q(matricula__icontains=q)
+        )
+
+    encontrados = list(alunos[: _LIMITE_RESULTADOS + 1])
+    ha_mais = len(encontrados) > _LIMITE_RESULTADOS
+
+    turmas_para_sincronizar = None
+    if q and not encontrados:
+        turmas_para_sincronizar = TurmaLab.objects.order_by("nome")
+
+    return render(
+        request,
+        "gestao_lab/partials/_ac_results_aluno.html",
+        {
+            "alunos": encontrados[:_LIMITE_RESULTADOS],
+            "busca": q,
+            "ha_mais": ha_mais,
+            "turmas_para_sincronizar": turmas_para_sincronizar,
+            "origem_busca": request.headers.get("HX-Current-URL", ""),
+        },
+    )
 
 
 @login_required
 @require_POST
 def materializar(request: HttpRequest, tipo: str) -> JsonResponse:
-    """Grava o registro escolhido no autocomplete e devolve o pk para o formulario.
+    """Grava o paciente escolhido no autocomplete e devolve o pk para o formulario.
 
     E aqui — e so aqui — que um resultado vindo da API vira registro local: um
     write, do item que o operador realmente escolheu, em vez de importar a busca
-    inteira. Para itens que ja existiam, resolve direto no banco.
+    inteira. Para itens que ja existiam, resolve direto no banco. Só serve
+    paciente — o autocomplete de aluno é local-only (ver ``buscar_alunos_lab``),
+    então nunca tem um resultado sem pk para materializar.
     """
 
     from django.conf import settings
     from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import (
-        materializar_aluno,
-        materializar_paciente,
-    )
+    from gestao_lab.services.dental_sync import materializar_paciente
 
     id_dental = request.POST.get("id_dental", "").strip()
-    nome_hint = request.POST.get("nome", "").strip()
-    if tipo not in {"paciente", "aluno"} or not id_dental:
+    if tipo != "paciente" or not id_dental:
         return JsonResponse({"erro": "Requisição inválida."}, status=400)
 
     try:
-        if tipo == "paciente":
-            clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
-            if not clinic_id:
-                return JsonResponse(
-                    {"erro": "A busca não está configurada. Avise o suporte técnico."},
-                    status=503,
-                )
-            obj = materializar_paciente(id_dental=id_dental, clinic_id=clinic_id)
-        else:
-            user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
-            obj = materializar_aluno(
-                id_dental=id_dental, nome_hint=nome_hint, user_group=user_group
+        clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
+        if not clinic_id:
+            return JsonResponse(
+                {"erro": "A busca não está configurada. Avise o suporte técnico."},
+                status=503,
             )
+        obj = materializar_paciente(id_dental=id_dental, clinic_id=clinic_id)
     except DentalAPIError as exc:
         logger.warning("materializar %s %s: %s", tipo, id_dental, exc)
         return JsonResponse(
@@ -1113,21 +1120,74 @@ def materializar(request: HttpRequest, tipo: str) -> JsonResponse:
     return JsonResponse({"pk": obj.pk, "nome": obj.nome})
 
 
+@login_required
+@require_POST
+def sincronizar_turma_aluno_busca(request: HttpRequest) -> HttpResponse:
+    """Sincroniza a turma escolhida a partir do estado vazio da busca de aluno.
+
+    Decisão de negócio: como o Eduq não oferece busca de aluno por nome (só
+    ``listar_alunos`` por turma), quando a busca de autocomplete não encontra
+    ninguém a saída é sincronizar a turma do aluno sob demanda, ali mesmo —
+    mesmo padrão de ``gestao_cme.views.sincronizar_turma_busca``.
+    """
+
+    from gestao_lab.services.eduq_lab_sync import EduqAPIError, sincronizar_turma_eduq
+
+    turma_id = request.POST.get("turma_id", "").strip()
+    next_url = request.POST.get("next", "")
+    destino = next_url if next_url.startswith("/") else reverse("lab_alunos")
+
+    if not turma_id.isdigit():
+        messages.error(request, "Selecione uma turma para sincronizar.")
+        return redirect(destino)
+
+    try:
+        turma = TurmaLab.objects.get(pk=turma_id)
+    except TurmaLab.DoesNotExist:
+        messages.error(request, "Turma não encontrada.")
+        return redirect(destino)
+
+    try:
+        resultado = sincronizar_turma_eduq(turma.codigo)
+    except EduqAPIError as exc:
+        messages.error(
+            request, f"Não foi possível sincronizar alunos de {turma.nome}: {exc}"
+        )
+    else:
+        messages.success(
+            request,
+            f"Alunos de {turma.nome} sincronizados: "
+            f"{resultado['alunos_criados']} criado(s), "
+            f"{resultado['alunos_atualizados']} atualizado(s).",
+        )
+
+    return redirect(destino)
+
+
 # ---------------------------------------------------------------------------
-# Alunos e pacientes (Dental Office)
+# Alunos (Eduq) e pacientes (Dental Office)
 # ---------------------------------------------------------------------------
 
 
 @login_required
 def alunos_lab(request: HttpRequest) -> HttpResponse:
+    """Lista alunos sincronizados do Eduq (base local — ver eduq_lab_sync).
+
+    A busca por nome/matrícula já cobre o nome da turma (mesmo padrão do
+    gestao_cme após a rodada 2 de melhorias — R2-1: um filtro de turma
+    dedicado seria redundante com a busca textual).
+    """
+
     from django.db.models import Max
 
-    qs = AlunoLab.objects.filter(ativo=True).order_by("nome")
+    qs = AlunoLab.objects.filter(ativo=True).select_related("turma").order_by("nome")
     busca = request.GET.get("q", "").strip()
     if busca:
         qs = qs.filter(
             Q(nome_normalizado__icontains=normalizar_texto(busca))
             | Q(celular__icontains=busca)
+            | Q(matricula__icontains=busca)
+            | Q(turma__nome__icontains=busca)
         )
 
     total = AlunoLab.objects.filter(ativo=True).count()
@@ -1319,14 +1379,18 @@ def importar_paciente_dental(request: HttpRequest, id_dental: str) -> HttpRespon
 @login_required
 @require_POST
 def sincronizar_dental(request: HttpRequest) -> HttpResponse:
+    """Atualiza a lista de pacientes com o Dental Office.
+
+    Só sincroniza pacientes — alunos vêm do Eduq, num fluxo independente (ver
+    ``sincronizar_alunos_eduq``).
+    """
+
     from django.conf import settings
     from gestao_lab.integrations.dental import DentalAPIError
     from gestao_lab.services.dental_sync import executar_sync_e_registrar
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
-    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
 
-    # Volta para a listagem de origem (alunos ou pacientes), quando informada.
     next_url = request.POST.get("next", "")
     destino = (
         HttpResponseRedirect(next_url)
@@ -1344,7 +1408,6 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
     try:
         registro = executar_sync_e_registrar(
             clinic_id=clinic_id,
-            user_group=user_group,
             disparado_por=request.user.username,
             tipo=RegistroSync.Tipo.COMPLETA,
         )
@@ -1352,9 +1415,7 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
             request,
             f"Sincronização concluída em {registro.duracao_segundos}s — "
             f"Pacientes: {registro.pacientes_criados} criado(s), "
-            f"{registro.pacientes_atualizados} atualizado(s). "
-            f"Alunos: {registro.alunos_criados} criado(s), "
-            f"{registro.alunos_atualizados} atualizado(s).",
+            f"{registro.pacientes_atualizados} atualizado(s).",
         )
     except DentalAPIError as exc:
         messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
@@ -1364,23 +1425,20 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
-def sincronizar_alunos_dental(request: HttpRequest) -> HttpResponse:
-    """Atualiza somente a lista de alunos com o Dental Office.
+def sincronizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
+    """Atualiza todas as turmas e alunos com o Eduq.
 
-    Usada pelos formulários de pedido e moldagem (botão "Atualizar alunos", em
-    vez dos antigos campos de busca na sidebar) e, desde o item 10 do plano de
-    2026-07, também pela própria listagem de Alunos — substituindo o botão
-    "Atualizar lista" de lá, que antes acionava ``sincronizar_dental`` (mais
-    lenta, pois também varre pacientes sem necessidade nesta tela). É mais
-    leve que ``sincronizar_dental``, então serve bem ao caso em que o operador
-    só precisa que um aluno recém-cadastrado apareça na lista/seletor.
+    Usada pela listagem de Alunos (botão "Sincronizar alunos e turmas") e
+    pelos formulários de pedido/moldagem (botão "Atualizar alunos", quando um
+    aluno recém-matriculado ainda não aparece no seletor) — mesmo conceito de
+    ``gestao_cme.views.atualizar_alunos_eduq``, numa base própria do
+    laboratório.
     """
 
-    from django.conf import settings
-    from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import sincronizar_alunos
-
-    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
+    from gestao_lab.services.eduq_lab_sync import (
+        EduqAPIError,
+        executar_sync_alunos_e_registrar,
+    )
 
     next_url = request.POST.get("next", "")
     destino = (
@@ -1390,15 +1448,18 @@ def sincronizar_alunos_dental(request: HttpRequest) -> HttpResponse:
     )
 
     try:
-        resultado = sincronizar_alunos(user_group=user_group)
-    except DentalAPIError as exc:
+        registro = executar_sync_alunos_e_registrar(
+            disparado_por=request.user.username,
+            tipo=RegistroSync.Tipo.COMPLETA,
+        )
+    except EduqAPIError as exc:
         messages.error(request, f"Não foi possível atualizar os alunos agora: {exc}")
     else:
         messages.success(
             request,
-            "Lista de alunos atualizada: "
-            f"{resultado['criados']} novo(s), "
-            f"{resultado['atualizados']} atualizado(s).",
+            "Alunos e turmas atualizados: "
+            f"{registro.alunos_criados} novo(s), "
+            f"{registro.alunos_atualizados} atualizado(s).",
         )
 
     return destino
@@ -1456,43 +1517,6 @@ def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
     return redirect(next_name)
 
 
-@login_required
-def buscar_aluno_dental(request: HttpRequest) -> HttpResponse:
-    from django.conf import settings
-    from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import buscar_e_importar_alunos
-
-    q = request.GET.get("q", "").strip()
-    next_name = request.GET.get("next", "lab_criar_pedido")
-    if next_name not in _DESTINOS_VALIDOS:
-        next_name = "lab_criar_pedido"
-
-    if not q:
-        messages.warning(request, "Informe um nome para buscar o aluno.")
-        return redirect(next_name)
-
-    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
-
-    try:
-        resultado = buscar_e_importar_alunos(q=q, user_group=user_group)
-        total = resultado["criados"] + resultado["atualizados"]
-        if total == 0:
-            messages.warning(
-                request,
-                f'Nenhum aluno encontrado para "{q}" no Dental Office.',
-            )
-        else:
-            messages.success(
-                request,
-                f'{resultado["criados"]} novo(s) aluno(s) importado(s) para "{q}". '
-                "Selecione o aluno na lista abaixo.",
-            )
-    except DentalAPIError as exc:
-        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
-
-    return redirect(next_name)
-
-
 # ---------------------------------------------------------------------------
 # Sincronização agendada — endpoint com token (Railway Cron / GitHub Actions)
 # ---------------------------------------------------------------------------
@@ -1500,11 +1524,15 @@ def buscar_aluno_dental(request: HttpRequest) -> HttpResponse:
 
 @csrf_exempt
 def sincronizar_agendado(request: HttpRequest) -> JsonResponse:
-    """Endpoint de sincronização agendada autenticado por token secreto.
+    """Endpoint de sincronização agendada (pacientes/Dental) autenticado por token.
 
     Uso com Railway Cron ou qualquer serviço externo:
         POST /laboratorio/sincronizar-agendado/
         Header: X-Sync-Token: <DENTAL_SYNC_TOKEN>
+
+    Só sincroniza pacientes — alunos vêm do Eduq, sincronizados por uma tarefa
+    agendada separada (``tasks.sincronizar_eduq_lab_task``, sem endpoint HTTP
+    público equivalente).
 
     Retorna JSON com o resultado da sincronização.
     Requer DENTAL_SYNC_TOKEN configurado nas variáveis de ambiente.
@@ -1527,7 +1555,6 @@ def sincronizar_agendado(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"erro": "Token inválido ou ausente."}, status=403)
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
-    user_group = getattr(settings, "DENTAL_USER_GROUP_ALUNO", 8)
 
     if not clinic_id:
         return JsonResponse({"erro": "DENTAL_CLINIC_ID não configurado."}, status=500)
@@ -1535,7 +1562,6 @@ def sincronizar_agendado(request: HttpRequest) -> JsonResponse:
     try:
         registro = executar_sync_e_registrar(
             clinic_id=clinic_id,
-            user_group=user_group,
             disparado_por="cron",
             tipo=RegistroSync.Tipo.AGENDADA,
         )
@@ -1544,8 +1570,6 @@ def sincronizar_agendado(request: HttpRequest) -> JsonResponse:
                 "sucesso": True,
                 "pacientes_criados": registro.pacientes_criados,
                 "pacientes_atualizados": registro.pacientes_atualizados,
-                "alunos_criados": registro.alunos_criados,
-                "alunos_atualizados": registro.alunos_atualizados,
                 "duracao_segundos": registro.duracao_segundos,
             }
         )

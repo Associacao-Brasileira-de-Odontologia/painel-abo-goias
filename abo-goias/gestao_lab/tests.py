@@ -47,15 +47,21 @@ from gestao_lab.models import (
     Paciente,
     PedidoMaterial,
     RegistroSync,
+    TurmaLab,
 )
 from gestao_lab.services.cobranca import cobrar_laboratorios_atrasados
 from gestao_lab.services.dental_sync import (
-    buscar_e_importar_alunos,
     buscar_e_importar_pacientes,
     listar_todas_paginas,
 )
-from gestao_lab.tasks import cobrar_pedidos_atrasados_task, sincronizar_dental_task
+from gestao_lab.tasks import (
+    cobrar_pedidos_atrasados_task,
+    sincronizar_dental_task,
+    sincronizar_eduq_lab_task,
+)
 from mensageria import MessagingResult
+
+from gestao_cme.integrations.eduq import AlunoEduq, EduqAPIError, TurmaEduq
 
 User = get_user_model()
 
@@ -79,8 +85,14 @@ def _paciente(**kwargs) -> Paciente:
     return Paciente.objects.create(**defaults)
 
 
+def _turma(**kwargs) -> TurmaLab:
+    defaults = {"nome": "Turma A", "codigo": "T1"}
+    defaults.update(kwargs)
+    return TurmaLab.objects.create(**defaults)
+
+
 def _aluno(**kwargs) -> AlunoLab:
-    defaults = {"nome": "Aluno Teste", "id_dental": "200"}
+    defaults = {"nome": "Aluno Teste", "matricula": "200"}
     defaults.update(kwargs)
     return AlunoLab.objects.create(**defaults)
 
@@ -157,21 +169,46 @@ class LaboratorioModelTests(TestCase):
         self.assertEqual(lab.email, "")
 
 
-class AlunoLabModelTests(TestCase):
+class TurmaLabModelTests(TestCase):
     def test_str_retorna_nome(self) -> None:
-        aluno = AlunoLab.objects.create(nome="Ana Clara", id_dental="500")
-        self.assertEqual(str(aluno), "Ana Clara")
+        turma = TurmaLab.objects.create(nome="Turma 2026", codigo="T2026")
+        self.assertEqual(str(turma), "Turma 2026")
 
-    def test_id_dental_deve_ser_unico(self) -> None:
-        AlunoLab.objects.create(nome="Aluno 1", id_dental="duplicado")
+    def test_codigo_deve_ser_unico(self) -> None:
+        TurmaLab.objects.create(nome="Turma 1", codigo="duplicado")
         from django.db import IntegrityError, transaction
 
         with self.assertRaises(IntegrityError), transaction.atomic():
-            AlunoLab.objects.create(nome="Aluno 2", id_dental="duplicado")
+            TurmaLab.objects.create(nome="Turma 2", codigo="duplicado")
 
-    def test_origem_default_dental(self) -> None:
-        aluno = AlunoLab.objects.create(nome="Aluno Origem", id_dental="600")
-        self.assertEqual(aluno.origem, OrigemDados.DENTAL)
+    def test_origem_default_eduq(self) -> None:
+        turma = TurmaLab.objects.create(nome="Turma Origem", codigo="TO")
+        self.assertEqual(turma.origem, OrigemDados.EDUQ)
+
+
+class AlunoLabModelTests(TestCase):
+    def test_str_retorna_nome(self) -> None:
+        aluno = AlunoLab.objects.create(nome="Ana Clara", matricula="500")
+        self.assertEqual(str(aluno), "Ana Clara")
+
+    def test_matricula_deve_ser_unica(self) -> None:
+        AlunoLab.objects.create(nome="Aluno 1", matricula="duplicado")
+        from django.db import IntegrityError, transaction
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            AlunoLab.objects.create(nome="Aluno 2", matricula="duplicado")
+
+    def test_origem_default_eduq(self) -> None:
+        aluno = AlunoLab.objects.create(nome="Aluno Origem", matricula="600")
+        self.assertEqual(aluno.origem, OrigemDados.EDUQ)
+
+    def test_vinculo_com_turma(self) -> None:
+        turma = _turma(nome="Turma X", codigo="TX")
+        aluno = AlunoLab.objects.create(
+            nome="Aluno com Turma", matricula="601", turma=turma
+        )
+        self.assertEqual(aluno.turma, turma)
+        self.assertIn(aluno, turma.alunos.all())
 
 
 class PacienteModelTests(TestCase):
@@ -214,7 +251,7 @@ class PacienteModelTests(TestCase):
 class PedidoMaterialStatusTests(TestCase):
     def setUp(self) -> None:
         self.pac = _paciente(id_dental="10")
-        self.aluno = _aluno(id_dental="20")
+        self.aluno = _aluno(matricula="20")
         self.equipe = _equipe()
         self.lab = _laboratorio(equipe=self.equipe)
 
@@ -311,7 +348,7 @@ class PedidoMaterialStatusTests(TestCase):
 class MoldagemModelTests(TestCase):
     def setUp(self) -> None:
         self.pac = _paciente(id_dental="30")
-        self.aluno = _aluno(id_dental="40")
+        self.aluno = _aluno(matricula="40")
 
     def test_str_inclui_numero_paciente_e_aluno(self) -> None:
         moldagem = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
@@ -398,7 +435,7 @@ class DashboardLabTests(TestCase):
 
     def test_metricas_contam_pedidos_por_status(self) -> None:
         pac = _paciente(id_dental="11")
-        aluno = _aluno(id_dental="21")
+        aluno = _aluno(matricula="21")
         equipe = _equipe()
         lab = _laboratorio(equipe=equipe)
         _pedido(
@@ -421,7 +458,7 @@ class DashboardLabTests(TestCase):
 
     def test_metricas_contam_entregue_nao_faturado_e_concluidos(self) -> None:
         pac = _paciente(id_dental="13")
-        aluno = _aluno(id_dental="23")
+        aluno = _aluno(matricula="23")
         equipe = _equipe()
         lab = _laboratorio(equipe=equipe)
         _pedido(
@@ -463,7 +500,7 @@ class DashboardLabTests(TestCase):
 
     def test_filtra_metricas_por_periodo_de_registro(self) -> None:
         pac = _paciente(id_dental="15")
-        aluno = _aluno(id_dental="25")
+        aluno = _aluno(matricula="25")
         equipe = _equipe()
         lab = _laboratorio(equipe=equipe)
         pedido_antigo = _pedido(pac, aluno, lab, equipe)
@@ -492,7 +529,7 @@ class AcompanhamentoPedidosTests(TestCase):
         self.usuario = _usuario()
         self.client.force_login(self.usuario)
         pac = _paciente(id_dental="12")
-        aluno = _aluno(id_dental="22")
+        aluno = _aluno(matricula="22")
         equipe = _equipe()
         lab = _laboratorio(equipe=equipe)
         self.pedido_em_dia = _pedido(
@@ -668,7 +705,7 @@ class PedidosFaturamentoViewTests(TestCase):
         self.usuario = _usuario()
         self.client.force_login(self.usuario)
         pac = _paciente(id_dental="14")
-        aluno = _aluno(id_dental="24")
+        aluno = _aluno(matricula="24")
         equipe = _equipe()
         lab = _laboratorio(equipe=equipe)
         self.pendente_dos_dois_lados = _pedido(
@@ -798,7 +835,7 @@ class MoldagensViewTests(TestCase):
         self.usuario = _usuario()
         self.client.force_login(self.usuario)
         self.pac = _paciente(id_dental="13")
-        self.aluno = _aluno(id_dental="23")
+        self.aluno = _aluno(matricula="23")
 
     def test_retorna_200_e_template_correto(self) -> None:
         response = self.client.get(reverse("lab_moldagens"))
@@ -1143,11 +1180,19 @@ class AlunosLabViewTests(TestCase):
         self.assertTemplateUsed(response, "gestao_lab/alunos.html")
 
     def test_lista_alunos_ativos(self) -> None:
-        AlunoLab.objects.create(nome="Aluno Ativo", id_dental="400")
-        AlunoLab.objects.create(nome="Aluno Inativo", id_dental="401", ativo=False)
+        AlunoLab.objects.create(nome="Aluno Ativo", matricula="400")
+        AlunoLab.objects.create(nome="Aluno Inativo", matricula="401", ativo=False)
         response = self.client.get(reverse("lab_alunos"))
         self.assertContains(response, "Aluno Ativo")
         self.assertNotContains(response, "Aluno Inativo")
+
+    def test_busca_encontra_por_turma(self) -> None:
+        turma = _turma(nome="Turma Odonto 2026", codigo="ODT2026")
+        AlunoLab.objects.create(nome="Aluno da Turma", matricula="410", turma=turma)
+        AlunoLab.objects.create(nome="Aluno Sem Turma", matricula="411")
+        response = self.client.get(reverse("lab_alunos"), {"q": "Odonto"})
+        self.assertContains(response, "Aluno da Turma")
+        self.assertNotContains(response, "Aluno Sem Turma")
 
     def test_botao_de_sincronizacao_aciona_apenas_alunos(self) -> None:
         # Item 10: a tela de Alunos so precisa sincronizar alunos — usar a
@@ -1156,7 +1201,7 @@ class AlunosLabViewTests(TestCase):
         response = self.client.get(reverse("lab_alunos"))
         self.assertContains(response, reverse("lab_sincronizar_alunos"))
         self.assertNotContains(response, reverse("lab_sincronizar"))
-        self.assertContains(response, "Atualizar alunos")
+        self.assertContains(response, "Sincronizar alunos e turmas")
 
 
 # ---------------------------------------------------------------------------
@@ -1169,7 +1214,7 @@ class SincronizarDentalViewTests(TestCase):
         self.usuario = _usuario()
         self.client.force_login(self.usuario)
 
-    @override_settings(DENTAL_CLINIC_ID="clinic-test", DENTAL_USER_GROUP_ALUNO=8)
+    @override_settings(DENTAL_CLINIC_ID="clinic-test")
     @patch("gestao_lab.services.dental_sync.executar_sync_e_registrar")
     def test_sincronizacao_bem_sucedida_exibe_mensagem(
         self, mock_sync: MagicMock
@@ -1178,8 +1223,6 @@ class SincronizarDentalViewTests(TestCase):
             duracao_segundos=1.2,
             pacientes_criados=3,
             pacientes_atualizados=1,
-            alunos_criados=2,
-            alunos_atualizados=0,
         )
 
         response = self.client.post(reverse("lab_sincronizar"), follow=True)
@@ -1187,7 +1230,7 @@ class SincronizarDentalViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sincronização concluída")
 
-    @override_settings(DENTAL_CLINIC_ID="clinic-test", DENTAL_USER_GROUP_ALUNO=8)
+    @override_settings(DENTAL_CLINIC_ID="clinic-test")
     @patch("gestao_lab.services.dental_sync.executar_sync_e_registrar")
     def test_sincronizacao_com_erro_api_exibe_mensagem_erro(
         self, mock_sync: MagicMock
@@ -1243,6 +1286,203 @@ class SincronizarDentalViewTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Testes de serviço — eduq_lab_sync (upsert de TurmaLab/AlunoLab)
+# ---------------------------------------------------------------------------
+
+
+class EduqLabSyncServiceTests(TestCase):
+    @patch("gestao_lab.services.eduq_lab_sync.EduqClient")
+    def test_sincronizar_turma_eduq_cria_turma_e_alunos(
+        self, MockClient: MagicMock
+    ) -> None:
+        mock_client = MockClient.return_value
+        mock_client.listar_turmas.return_value = [
+            TurmaEduq(codigo="T100", nome="Turma 100", ativo=True),
+        ]
+        mock_client.listar_alunos.return_value = [
+            AlunoEduq(matricula="M1", nome="Aluno Um", turma_codigo="T100"),
+            AlunoEduq(matricula="M2", nome="Aluno Dois", turma_codigo="T100"),
+        ]
+
+        from gestao_lab.services.eduq_lab_sync import sincronizar_turma_eduq
+
+        resultado = sincronizar_turma_eduq("T100")
+
+        self.assertEqual(resultado["turmas_criadas"], 1)
+        self.assertEqual(resultado["alunos_criados"], 2)
+        turma = TurmaLab.objects.get(codigo="T100")
+        self.assertEqual(turma.nome, "Turma 100")
+        self.assertEqual(AlunoLab.objects.filter(turma=turma).count(), 2)
+
+    @patch("gestao_lab.services.eduq_lab_sync.EduqClient")
+    def test_sincronizar_turma_eduq_turma_inexistente_gera_erro(
+        self, MockClient: MagicMock
+    ) -> None:
+        MockClient.return_value.listar_turmas.return_value = []
+
+        from gestao_lab.services.eduq_lab_sync import (
+            EduqAPIError as ServiceEduqAPIError,
+        )
+        from gestao_lab.services.eduq_lab_sync import (
+            sincronizar_turma_eduq,
+        )
+
+        with self.assertRaises(ServiceEduqAPIError):
+            sincronizar_turma_eduq("INEXISTENTE")
+
+    @patch("gestao_lab.services.eduq_lab_sync.EduqClient")
+    def test_sincronizar_turma_eduq_atualiza_aluno_existente(
+        self, MockClient: MagicMock
+    ) -> None:
+        turma = _turma(nome="Turma Antiga", codigo="T200")
+        AlunoLab.objects.create(
+            nome="Nome Antigo", matricula="M3", turma=turma, celular=""
+        )
+
+        mock_client = MockClient.return_value
+        mock_client.listar_turmas.return_value = [
+            TurmaEduq(codigo="T200", nome="Turma Renomeada", ativo=True),
+        ]
+        mock_client.listar_alunos.return_value = [
+            AlunoEduq(
+                matricula="M3",
+                nome="Nome Novo",
+                telefone="62999998888",
+                turma_codigo="T200",
+            ),
+        ]
+
+        from gestao_lab.services.eduq_lab_sync import sincronizar_turma_eduq
+
+        resultado = sincronizar_turma_eduq("T200")
+
+        self.assertEqual(resultado["turmas_atualizadas"], 1)
+        self.assertEqual(resultado["alunos_atualizados"], 1)
+        aluno = AlunoLab.objects.get(matricula="M3")
+        self.assertEqual(aluno.nome, "Nome Novo")
+        self.assertEqual(aluno.celular, "62999998888")
+
+    @patch("gestao_lab.services.eduq_lab_sync.EduqClient")
+    def test_sincronizar_todas_turmas_eduq_percorre_cada_turma(
+        self, MockClient: MagicMock
+    ) -> None:
+        mock_client = MockClient.return_value
+        mock_client.listar_turmas.return_value = [
+            TurmaEduq(codigo="TA", nome="Turma A", ativo=True),
+            TurmaEduq(codigo="TB", nome="Turma B", ativo=True),
+        ]
+        mock_client.listar_alunos.side_effect = [
+            [AlunoEduq(matricula="A1", nome="Aluno A1", turma_codigo="TA")],
+            [AlunoEduq(matricula="B1", nome="Aluno B1", turma_codigo="TB")],
+        ]
+
+        from gestao_lab.services.eduq_lab_sync import sincronizar_todas_turmas_eduq
+
+        resultado = sincronizar_todas_turmas_eduq()
+
+        self.assertEqual(resultado["turmas_criadas"], 2)
+        self.assertEqual(resultado["alunos_criados"], 2)
+        self.assertEqual(TurmaLab.objects.count(), 2)
+        self.assertEqual(AlunoLab.objects.count(), 2)
+
+
+# ---------------------------------------------------------------------------
+# Testes de integração — Eduq (alunos/turmas, views com mock)
+# ---------------------------------------------------------------------------
+
+
+class SincronizarEduqLabViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+
+    @patch("gestao_lab.services.eduq_lab_sync.sincronizar_todas_turmas_eduq")
+    def test_sincronizacao_bem_sucedida_exibe_mensagem(
+        self, mock_sync: MagicMock
+    ) -> None:
+        mock_sync.return_value = {
+            "turmas_criadas": 1,
+            "turmas_atualizadas": 0,
+            "alunos_criados": 5,
+            "alunos_atualizados": 2,
+            "alunos_ignorados": 0,
+        }
+
+        response = self.client.post(reverse("lab_sincronizar_alunos"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Alunos e turmas atualizados")
+
+    @patch("gestao_lab.services.eduq_lab_sync.sincronizar_todas_turmas_eduq")
+    def test_sincronizacao_com_erro_exibe_mensagem_erro(
+        self, mock_sync: MagicMock
+    ) -> None:
+        mock_sync.side_effect = EduqAPIError("Configure as variaveis de ambiente")
+
+        response = self.client.post(reverse("lab_sincronizar_alunos"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Não foi possível atualizar os alunos")
+
+    def test_get_nao_permitido(self) -> None:
+        response = self.client.get(reverse("lab_sincronizar_alunos"))
+        self.assertEqual(response.status_code, 405)
+
+
+class SincronizarTurmaAlunoBuscaViewTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = _usuario()
+        self.client.force_login(self.usuario)
+        self.turma = _turma(nome="Turma Y", codigo="TY")
+
+    @patch("gestao_lab.services.eduq_lab_sync.sincronizar_turma_eduq")
+    def test_sincroniza_turma_escolhida(self, mock_sync: MagicMock) -> None:
+        mock_sync.return_value = {
+            "turmas_criadas": 0,
+            "turmas_atualizadas": 1,
+            "alunos_criados": 3,
+            "alunos_atualizados": 1,
+            "alunos_ignorados": 0,
+        }
+
+        response = self.client.post(
+            reverse("lab_sincronizar_turma_aluno_busca"),
+            {"turma_id": self.turma.pk},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Alunos de Turma Y sincronizados")
+        mock_sync.assert_called_once_with("TY")
+
+    def test_sem_turma_selecionada_mostra_erro(self) -> None:
+        response = self.client.post(
+            reverse("lab_sincronizar_turma_aluno_busca"), {}, follow=True
+        )
+        self.assertContains(response, "Selecione uma turma")
+
+    def test_turma_inexistente_mostra_erro(self) -> None:
+        response = self.client.post(
+            reverse("lab_sincronizar_turma_aluno_busca"),
+            {"turma_id": 999999},
+            follow=True,
+        )
+        self.assertContains(response, "Turma não encontrada")
+
+    @patch("gestao_lab.services.eduq_lab_sync.sincronizar_turma_eduq")
+    def test_erro_da_api_mostra_mensagem(self, mock_sync: MagicMock) -> None:
+        mock_sync.side_effect = EduqAPIError("fora do ar")
+
+        response = self.client.post(
+            reverse("lab_sincronizar_turma_aluno_busca"),
+            {"turma_id": self.turma.pk},
+            follow=True,
+        )
+
+        self.assertContains(response, "Não foi possível sincronizar alunos")
+
+
+# ---------------------------------------------------------------------------
 # Testes de Formulários
 # ---------------------------------------------------------------------------
 
@@ -1250,7 +1490,7 @@ class SincronizarDentalViewTests(TestCase):
 class PedidoMaterialFormTests(TestCase):
     def setUp(self) -> None:
         self.pac = _paciente(id_dental="50")
-        self.aluno = _aluno(id_dental="60")
+        self.aluno = _aluno(matricula="60")
         self.equipe = _equipe()
         self.lab = _laboratorio(equipe=self.equipe)
 
@@ -1292,7 +1532,7 @@ class PedidoMaterialFormTests(TestCase):
 class MoldagemFormTests(TestCase):
     def test_form_valido(self) -> None:
         pac = _paciente(id_dental="70")
-        aluno = _aluno(id_dental="80")
+        aluno = _aluno(matricula="80")
         form = MoldagemForm(data={"paciente": pac.pk, "aluno": aluno.pk})
         self.assertTrue(form.is_valid(), form.errors)
 
@@ -1345,7 +1585,7 @@ class LaboratorioFormTests(TestCase):
 class CobrarLaboratoriosAtrasadosTests(TestCase):
     def setUp(self) -> None:
         self.pac = _paciente(id_dental="10")
-        self.aluno = _aluno(id_dental="20")
+        self.aluno = _aluno(matricula="20")
         self.equipe = _equipe()
 
     def test_sem_mensageria_configurada_nao_faz_nada(self) -> None:
@@ -1848,9 +2088,6 @@ class BuscarEImportarMultiplasPaginasTests(TestCase):
             "contacts_attributes": [],
         }
 
-    def _item_aluno(self, id_: int) -> dict:
-        return {"id": id_, "name": f"Aluno {id_}", "contacts_attributes": []}
-
     @patch("gestao_lab.services.dental_sync.DentalClient")
     def test_busca_de_pacientes_consolida_todas_as_paginas(
         self, MockClient: MagicMock
@@ -1885,25 +2122,6 @@ class BuscarEImportarMultiplasPaginasTests(TestCase):
         self.assertEqual(resultado["criados"], 1)
         mock_client.listar_pacientes.assert_called_once()
 
-    @patch("gestao_lab.services.dental_sync.DentalClient")
-    def test_busca_de_alunos_consolida_todas_as_paginas(
-        self, MockClient: MagicMock
-    ) -> None:
-        mock_client = MockClient.return_value
-        mock_client.listar_usuarios.side_effect = [
-            {
-                "results": [self._item_aluno(i) for i in range(1, 61)],
-                "total_pages": 2,
-            },
-            {"results": [self._item_aluno(61)], "total_pages": 2},
-        ]
-
-        resultado = buscar_e_importar_alunos(q="Aluno", user_group=8)
-
-        self.assertEqual(resultado["criados"], 61)
-        self.assertEqual(AlunoLab.objects.count(), 61)
-        self.assertEqual(mock_client.listar_usuarios.call_count, 2)
-
 
 # ---------------------------------------------------------------------------
 # Fase 3.3 — busca com seleção e exclusão de pedidos/moldagens
@@ -1911,19 +2129,16 @@ class BuscarEImportarMultiplasPaginasTests(TestCase):
 
 
 class SincronizacaoAgendadaDentalTests(TestCase):
-    """A rotina em segundo plano que mantem as listagens do lab em dia."""
+    """A rotina em segundo plano que mantem a listagem de pacientes em dia."""
 
-    @override_settings(DENTAL_CLINIC_ID=7, DENTAL_USER_GROUP_ALUNO=8)
-    @patch("gestao_lab.services.dental_sync.sincronizar_alunos")
+    @override_settings(DENTAL_CLINIC_ID=7)
     @patch("gestao_lab.services.dental_sync.sincronizar_pacientes")
-    def test_task_sincroniza_e_registra_no_historico(self, mock_pac, mock_alu) -> None:
+    def test_task_sincroniza_e_registra_no_historico(self, mock_pac) -> None:
         mock_pac.return_value = {"criados": 3, "atualizados": 10, "ignorados": 0}
-        mock_alu.return_value = {"criados": 1, "atualizados": 4, "ignorados": 0}
 
         resumo = sincronizar_dental_task()
 
         self.assertEqual(resumo["pacientes_criados"], 3)
-        self.assertEqual(resumo["alunos_atualizados"], 4)
 
         # a execucao automatica alimenta o mesmo historico exibido na interface
         registro = RegistroSync.objects.latest("criado_em")
@@ -1938,6 +2153,30 @@ class SincronizacaoAgendadaDentalTests(TestCase):
         mock_pac.assert_not_called()
 
 
+class SincronizacaoAgendadaEduqLabTests(TestCase):
+    """A rotina em segundo plano que mantem a listagem de alunos/turmas em dia."""
+
+    @patch("gestao_lab.services.eduq_lab_sync.sincronizar_todas_turmas_eduq")
+    def test_task_sincroniza_e_registra_no_historico(self, mock_sync) -> None:
+        mock_sync.return_value = {
+            "turmas_criadas": 1,
+            "turmas_atualizadas": 0,
+            "alunos_criados": 5,
+            "alunos_atualizados": 2,
+            "alunos_ignorados": 0,
+        }
+
+        resumo = sincronizar_eduq_lab_task()
+
+        self.assertEqual(resumo["alunos_criados"], 5)
+        self.assertEqual(resumo["alunos_atualizados"], 2)
+
+        registro = RegistroSync.objects.latest("criado_em")
+        self.assertEqual(registro.tipo, RegistroSync.Tipo.AGENDADA)
+        self.assertEqual(registro.disparado_por, "agendamento")
+        self.assertTrue(registro.sucesso)
+
+
 @override_settings(ALLOWED_HOSTS=["testserver"])
 class BuscaSelecaoLabTests(TestCase):
     """Autocomplete de paciente e aluno nos formulários de pedido/moldagem."""
@@ -1949,8 +2188,8 @@ class BuscaSelecaoLabTests(TestCase):
         self.client.force_login(self.usuario)
         self.pac = _paciente(nome="Maria Aparecida", id_dental="P1")
         _paciente(nome="Outro Paciente", id_dental="P2")
-        self.aluno = _aluno(nome="Joao Pedro", id_dental="A1", celular="62999")
-        _aluno(nome="Outro Aluno", id_dental="A2")
+        self.aluno = _aluno(nome="Joao Pedro", matricula="A1", celular="62999")
+        _aluno(nome="Outro Aluno", matricula="A2")
 
     @patch("gestao_lab.services.dental_sync.procurar_pacientes")
     def test_buscar_pacientes_filtra_por_nome(self, mock_procurar) -> None:
@@ -1960,13 +2199,30 @@ class BuscaSelecaoLabTests(TestCase):
         self.assertContains(response, "Maria Aparecida")
         self.assertNotContains(response, "Outro Paciente")
 
-    @patch("gestao_lab.services.dental_sync.procurar_alunos")
-    def test_buscar_alunos_lab_filtra_por_nome(self, mock_procurar) -> None:
-        mock_procurar.return_value = ([], 1)
+    def test_buscar_alunos_lab_filtra_por_nome(self) -> None:
+        # Busca de aluno é local-only (o Eduq não permite busca por nome) —
+        # sem mock de API nenhum, diferente de buscar_pacientes.
         response = self.client.get(reverse("lab_buscar_alunos_lab"), {"q": "Joao"})
 
         self.assertContains(response, "Joao Pedro")
         self.assertNotContains(response, "Outro Aluno")
+
+    def test_buscar_alunos_lab_sem_resultado_oferece_turmas(self) -> None:
+        turma = _turma(nome="Turma Z", codigo="TZ")
+        response = self.client.get(
+            reverse("lab_buscar_alunos_lab"), {"q": "Inexistente"}
+        )
+
+        self.assertContains(response, "Nenhum aluno encontrado")
+        self.assertContains(response, turma.nome)
+
+    def test_buscar_alunos_lab_resultado_nunca_tem_pk_vazio(self) -> None:
+        # Diferente de pacientes, todo resultado de aluno já tem pk — busca
+        # local-only não tem o caso "veio da API, precisa gravar no clique".
+        response = self.client.get(reverse("lab_buscar_alunos_lab"), {"q": "Joao"})
+        conteudo = response.content.decode()
+
+        self.assertNotIn('data-id=""', conteudo)
 
     def test_form_pedido_usa_autocomplete_e_nao_select(self) -> None:
         response = self.client.get(reverse("lab_criar_pedido"))
@@ -2126,7 +2382,7 @@ class ExclusaoLabTests(TestCase):
         )
         self.client.force_login(self.usuario)
         self.pac = _paciente(id_dental="P9")
-        self.aluno = _aluno(id_dental="A9")
+        self.aluno = _aluno(matricula="A9")
         self.equipe = _equipe()
         self.lab = _laboratorio(equipe=self.equipe)
 

@@ -1,0 +1,62 @@
+{% comment %}
+Resultados do autocomplete de aluno. Contexto: alunos, busca, ha_mais,
+turmas_para_sincronizar, origem_busca.
+
+Segue o mesmo contrato do autocomplete de paciente
+(gestao_lab/partials/_ac_results.html): itens são botões .ac-result com
+data-id/data-nome, consumidos pelo handler genérico [data-ac] em
+static/js/app.js.
+
+Aqui todo resultado sempre tem `data-id` (pk), porque a busca é só na base
+local — o Eduq não oferece consulta de aluno por nome (só listagem por
+turma), então não existe o caso "veio da API e precisa ser gravado no
+clique" que o autocomplete de paciente tem. Mesmo padrão de
+gestao_cme/partials/_aluno_results.html.
+{% endcomment %}
+
+{% if alunos %}
+    <ul class="search-results" role="listbox" aria-label="Resultados da busca de alunos">
+        {% for aluno in alunos %}
+            <li>
+                <button type="button" class="search-result ac-result"
+                        data-id="{{ aluno.pk }}" data-nome="{{ aluno.nome }}">
+                    <span class="search-result-main">
+                        <strong>{{ aluno.nome }}</strong>
+                        <span class="cell-muted">
+                            {{ aluno.matricula }}{% if aluno.turma %} · {{ aluno.turma.nome }}{% endif %}
+                        </span>
+                    </span>
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+    {% if ha_mais %}
+        <p class="help-text">Há mais resultados — refine a busca pelo nome completo ou pela matrícula.</p>
+    {% endif %}
+{% elif busca %}
+    <p class="help-text search-results-empty">
+        Nenhum aluno encontrado para &ldquo;{{ busca }}&rdquo;.
+    </p>
+    {% if turmas_para_sincronizar %}
+        <form method="post" action="{% url 'lab_sincronizar_turma_aluno_busca' %}" class="sync-turma-busca">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ origem_busca }}">
+            <label for="id_turma_busca_lab" class="field-hint">
+                Aluno ainda não sincronizado? O Eduq não permite buscar por nome — sincronize a turma dele:
+            </label>
+            <div class="sync-turma-busca-row">
+                <select id="id_turma_busca_lab" name="turma_id" required>
+                    <option value="">Selecione a turma do aluno...</option>
+                    {% for turma in turmas_para_sincronizar %}
+                        <option value="{{ turma.pk }}">{{ turma.nome }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button secondary compact-button">Sincronizar turma</button>
+            </div>
+        </form>
+    {% endif %}
+{% else %}
+    <p class="help-text search-results-empty">
+        Digite o nome ou a matrícula para buscar um aluno.
+    </p>
+{% endif %}

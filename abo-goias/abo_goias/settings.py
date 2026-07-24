@@ -473,12 +473,17 @@ CELERY_BEAT_SCHEDULE = {
     # Mantem a base local em dia sem ninguem precisar sincronizar na mao.
     # De madrugada (fora do horario de atendimento) e escalonadas: sao rotinas
     # longas, que percorrem todas as turmas do Eduq e todas as paginas do Dental
-    # Office — nao convem dispara-las juntas.
+    # Office — nao convem dispara-las juntas (nem as duas consultas ao Eduq,
+    # do CME e do laboratorio, uma sobre a outra).
     "atualizar-turmas-e-alunos-eduq": {
         "task": "gestao_cme.tasks.sincronizar_eduq_task",
         "schedule": crontab(hour=4, minute=0),
     },
-    "atualizar-pacientes-e-alunos-dental": {
+    "atualizar-turmas-e-alunos-eduq-lab": {
+        "task": "gestao_lab.tasks.sincronizar_eduq_lab_task",
+        "schedule": crontab(hour=4, minute=15),
+    },
+    "atualizar-pacientes-dental": {
         "task": "gestao_lab.tasks.sincronizar_dental_task",
         "schedule": crontab(hour=4, minute=30),
     },

@@ -5,7 +5,7 @@
 {% block header_eyebrow %}Gestão de laboratório{% endblock %}
 {% block header_title %}Alunos{% endblock %}
 
-{% block sidebar_copy %}Alunos disponíveis para os pedidos. Use "Atualizar alunos" para trazer novos cadastros.{% endblock %}
+{% block sidebar_copy %}Alunos disponíveis para os pedidos. Use "Sincronizar alunos e turmas" para trazer novos cadastros.{% endblock %}
 {% block sidebar_nav %}{% include "gestao_lab/partials/menu.html" %}{% endblock %}
 
 {% block sidebar_extra %}
@@ -16,7 +16,7 @@
         </div>
     </div>
 
-    {% include "gestao_lab/partials/sync_dental.html" %}
+    {% include "gestao_lab/partials/sync_eduq.html" %}
 {% endblock %}
 
 {% block panel_title %}Alunos cadastrados{% endblock %}
@@ -24,7 +24,7 @@
 {% block panel %}
     <form class="filter-bar" method="get">
         <div class="search-control">
-            <input id="results-q-alunos" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome ou celular..." aria-label="Buscar na listagem">
+            <input id="results-q-alunos" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por nome, matrícula ou turma..." aria-label="Buscar na listagem">
         </div>
         <button class="button primary" type="submit">Buscar</button>
     </form>
@@ -51,7 +51,8 @@
                 <tr>
                     <th>Aluno</th>
                     <th>Celular</th>
-                    <th>ID Dental</th>
+                    <th>Matrícula</th>
+                    <th>Turma</th>
                     <th>Última atualização</th>
                 </tr>
             </thead>
@@ -69,7 +70,14 @@
                             {% endif %}
                         </td>
                         <td>
-                            <span class="cell-muted mono">{{ aluno.id_dental }}</span>
+                            <span class="cell-muted mono">{{ aluno.matricula }}</span>
+                        </td>
+                        <td>
+                            {% if aluno.turma %}
+                                {{ aluno.turma.nome }}
+                            {% else %}
+                                <span class="cell-muted">—</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if aluno.ultima_sincronizacao %}
@@ -81,7 +89,7 @@
                     </tr>
                 {% empty %}
                     <tr class="empty-row">
-                        <td colspan="4">
+                        <td colspan="5">
                             <div class="empty-state">
                                 <strong>Nenhum aluno encontrado.</strong>
                                 <p>
@@ -90,7 +98,7 @@
                                         <a href="{% url 'lab_alunos' %}">limpe o filtro</a>.
                                     {% else %}
                                         Nenhum aluno na lista ainda. Use o botão
-                                        <strong>Atualizar alunos</strong> no painel lateral.
+                                        <strong>Sincronizar alunos e turmas</strong> no painel lateral.
                                     {% endif %}
                                 </p>
                             </div>

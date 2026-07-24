@@ -13,6 +13,14 @@
 > (`avaliacao-visual-gestao-cme.md`). Este documento **não implementa nenhuma mudança** —
 > pontos que exigem decisão de negócio estão marcados explicitamente na seção 7, sem
 > resolvê-los por suposição.
+>
+> **Atualizado em 2026-07-22** — correção de fonte de dados: a listagem de Alunos usava a
+> API do Dental Office, mas nenhum aluno de fato existe lá (o Dental é só clínico,
+> pacientes). Os dados reais de alunos vêm do **Eduq**, mesma fonte já usada pelo
+> `gestao_cme`. UC-16, UC-18, UC-19 e UC-20 foram reescritos; um novo `TurmaLab` e uma
+> nova UC-22 (sincronização de turma sob demanda) foram introduzidos. Ver §11 para o
+> histórico da migração, incluindo a remoção dos registros `AlunoLab` de origem Dental
+> (nenhum representava um aluno real) e dos `PedidoMaterial`/`Moldagem` vinculados a eles.
 
 ## 0. Documentos relacionados
 
@@ -30,13 +38,19 @@ O `gestao_lab` controla o fluxo de **pedidos de material odontológico enviados 
 laboratórios externos**: um aluno realiza uma moldagem do paciente, o material é
 encaminhado a um laboratório parceiro, o laboratório devolve a peça finalizada e, por
 fim, o pedido é faturado (ao paciente e ao laboratório). O módulo também sincroniza
-**pacientes e alunos do Dental Office** (sistema de gestão clínica da ABO Goiás) e
-gerencia os cadastros de apoio (laboratórios parceiros e equipes de coordenação).
+**pacientes do Dental Office** (sistema de gestão clínica da ABO Goiás) e **alunos e
+turmas do Eduq** (sistema acadêmico — desde 2026-07-22; antes usava o Dental Office, que
+nunca teve dado real de aluno, ver §11), e gerencia os cadastros de apoio (laboratórios
+parceiros e equipes de coordenação).
 
-Diferente do `gestao_cme` (que depende do Eduq só para turmas/alunos), aqui o Dental
-Office é a fonte de verdade de **pacientes** e **alunos**, e a aplicação já implementa um
-padrão de busca "ao vivo" (base local + API, sem gravar até o usuário escolher) que o CME
-não replicou por limitação da API do Eduq (ver UC-18).
+O Dental Office é a fonte de verdade de **pacientes**, com busca por nome/celular "ao
+vivo" (a aplicação consulta a API a cada tecla, sem gravar nada até o usuário escolher —
+ver UC-18, fluxo de paciente). **Alunos**, por outro lado, vêm do **Eduq** — a mesma fonte
+usada pelo `gestao_cme` — e herdam a mesma limitação de lá: o Eduq **não tem busca por
+nome**, só listagem de alunos por turma. Por isso a busca de aluno é **só local**
+(`AlunoLab` já sincronizado), com um botão de sincronizar a turma escolhida quando a busca
+não encontra ninguém (UC-18, fluxo de aluno, e UC-22) — mesmo padrão de UX já usado no CME
+para turmas/alunos.
 
 Módulos internos do app (rotas em `gestao_lab/urls.py`, todas sob o prefixo
 `/laboratorio/`):
@@ -51,7 +65,7 @@ Módulos internos do app (rotas em `gestao_lab/urls.py`, todas sob o prefixo
 | Moldagens | `/laboratorio/moldagens/` | Registro e acompanhamento de moldagens, com conversão em pedido |
 | Laboratórios | `/laboratorio/laboratorios/` | Cadastro de laboratórios parceiros |
 | Equipes | `/laboratorio/equipes/` | Cadastro de equipes de coordenação |
-| Alunos | `/laboratorio/alunos/` | Alunos sincronizados do Dental Office |
+| Alunos | `/laboratorio/alunos/` | Alunos e turmas sincronizados do Eduq |
 | Pacientes | `/laboratorio/pacientes/` | Pacientes sincronizados do Dental Office, com busca ao vivo |
 
 ---
@@ -62,8 +76,9 @@ Módulos internos do app (rotas em `gestao_lab/urls.py`, todas sob o prefixo
 |---|---|---|
 | **Coordenador (operador de laboratório)** | Humano, autenticado | Usuário do dia a dia: registra pedidos/moldagens, acompanha envios/entregas, fecha faturamento, gerencia laboratórios/equipes. **Sem distinção de permissão** — qualquer usuário autenticado tem acesso total, inclusive a exclusões irreversíveis (ver §6, S-03). Diferente do CME, **nenhum registro tem "dono"**: não existe equivalente a `emprestimos_visiveis` — todo coordenador vê e altera os pedidos de todos. |
 | **Superusuário / Administrador** | Humano, autenticado | Mesmo acesso operacional do coordenador nas telas do módulo; adicionalmente, é o único ator que pode **editar os campos principais de um pedido/moldagem já criado** (paciente, aluno, laboratório, equipe, previsão, descrição) — só possível pelo Django Admin, não pela interface operacional (ver U-04). |
-| **Sistema Dental Office** | Ator externo (API) | Fonte de verdade de pacientes e alunos. Suporta busca por nome/celular ao vivo (`GET /customers`, `GET /users`) e detalhe de paciente (`GET /customers/{id}`) — diferente do Eduq (CME), que só lista por turma. |
-| **Celery Beat (agendador)** | Ator de sistema | Dispara `sincronizar_dental_task` diariamente às 04:30 (escalonada 30min depois do Eduq) e `cobrar_pedidos_atrasados_task` às 09:00. |
+| **Sistema Dental Office** | Ator externo (API) | Fonte de verdade de **pacientes**. Suporta busca por nome/celular ao vivo (`GET /customers`) e detalhe de paciente (`GET /customers/{id}`). Desde 2026-07-22, não é mais consultado para alunos (ver §11). |
+| **Sistema Eduq** | Ator externo (API) | Fonte de verdade de **alunos e turmas** deste módulo (desde 2026-07-22) — mesmo `EduqClient` já usado pelo `gestao_cme` (`gestao_cme/integrations/eduq.py`), reaproveitado aqui só na camada de integração HTTP; as tabelas locais (`TurmaLab`/`AlunoLab`) são exclusivas do `gestao_lab`, sem FK para `gestao_cme.Turma`/`Aluno`. Só lista alunos por turma (`GET` por turma), sem busca por nome — por isso a busca de aluno (UC-18) é local, com sincronização de turma sob demanda (UC-22). |
+| **Celery Beat (agendador)** | Ator de sistema | Dispara `sincronizar_dental_task` (só pacientes) diariamente às 04:30, `sincronizar_eduq_lab_task` (turmas/alunos) às 04:15 e `cobrar_pedidos_atrasados_task` às 09:00 — os dois syncs diários ficam escalonados entre si (e com o sync do Eduq do próprio CME, às 04:00) para não bater na mesma API ao mesmo tempo. |
 | **Cron externo (Railway Cron ou similar)** | Ator de sistema, opcional | Pode acionar `/laboratorio/sincronizar-agendado/` via token (`X-Sync-Token`) — redundante com o Celery Beat se ambos estiverem ativos (ver observação em UC-19). |
 | **Paciente** | Ator passivo (sujeito do registro) | Não acessa o sistema; titular do pedido/moldagem. |
 | **Aluno de pós-graduação** | Ator passivo (sujeito do registro) | Não acessa o sistema; realiza a moldagem e é vinculado ao pedido. |
@@ -77,6 +92,7 @@ Módulos internos do app (rotas em `gestao_lab/urls.py`, todas sob o prefixo
 flowchart LR
     Coord(("Coordenador"))
     Dental[["Sistema Dental Office"]]
+    Eduq[["Sistema Eduq"]]
     Beat[["Celery Beat"]]
     Cron[["Cron externo"]]
 
@@ -96,21 +112,25 @@ flowchart LR
         UC13(("UC-13 Excluir moldagem"))
         UC14(("UC-14 Gerenciar laboratórios"))
         UC15(("UC-15 Gerenciar equipes"))
-        UC16(("UC-16 Consultar alunos"))
+        UC16(("UC-16 Consultar alunos/turmas"))
         UC17(("UC-17 Consultar pacientes"))
         UC18(("UC-18 Buscar paciente/aluno (autocomplete)"))
         UC19(("UC-19 Sincronizar com o Dental Office"))
-        UC20(("UC-20 Atualizar somente alunos"))
+        UC20(("UC-20 Sincronizar alunos e turmas (Eduq)"))
         UC21(("UC-21 Sincronização agendada por token"))
+        UC22(("UC-22 Sincronizar turma sob demanda"))
     end
 
-    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC08 & UC09 & UC10 & UC11 & UC12 & UC13 & UC14 & UC15 & UC16 & UC17 & UC20
+    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC08 & UC09 & UC10 & UC11 & UC12 & UC13 & UC14 & UC15 & UC16 & UC17 & UC20 & UC22
     Beat --> UC19
+    Beat --> UC20
     Cron --> UC21
     UC19 --> Dental
-    UC20 --> Dental
+    UC20 --> Eduq
     UC21 --> Dental
+    UC22 --> Eduq
     UC18 --> Dental
+    UC18 -.extend.-> UC22
     UC03 -.include.-> UC18
     UC10 -.include.-> UC18
     UC11 -.extend.-> UC10
@@ -118,13 +138,15 @@ flowchart LR
     UC07 -.include.-> UC17
 ```
 
-> Nota sobre o diagrama: o Celery Beat aciona apenas `sincronizar_dental_task` (UC-19),
-> que já cobre pacientes **e** alunos numa única rotina — por isso só há uma seta
-> `Beat --> UC19`. UC-20 (atualizar somente alunos) é acionada **apenas manualmente**,
-> pelo coordenador, a partir dos formulários de pedido/moldagem **e** da própria listagem
-> de Alunos (UC-16) — não tem gatilho automático próprio. Desde 2026-07-21 (item 10),
-> `Coord` não tem mais seta direta para UC-19: a sincronização completa deixou de ter
-> qualquer gatilho manual na interface, só rodando pela tarefa agendada.
+> Nota sobre o diagrama: desde 2026-07-22, pacientes e alunos usam fontes e rotinas
+> **independentes** — `Beat --> UC19` (pacientes, Dental, 04:30) e `Beat --> UC20`
+> (alunos/turmas, Eduq, 04:15) são setas separadas, sem sobreposição. UC-20 também é
+> acionável manualmente pelo coordenador (botão "Sincronizar alunos e turmas" na
+> listagem de Alunos, UC-16). UC-22 (sincronizar uma turma específica) só é acionada a
+> partir de uma busca de aluno sem resultado (UC-18) — por isso a seta é `-.extend.->`, não
+> uma inclusão direta do coordenador. Desde 2026-07-21 (item 10), `Coord` não tem seta
+> direta para UC-19: a sincronização completa de pacientes deixou de ter qualquer gatilho
+> manual na interface, só rodando pela tarefa agendada.
 
 ---
 
@@ -472,27 +494,29 @@ flowchart LR
 - **Pós-condição:** `Equipe` criada/atualizada. Mesma observação de UC-14 sobre ausência
   de exclusão pela interface (`Equipe` é `PROTECT` em `PedidoMaterial`).
 
-### UC-16 · Consultar alunos sincronizados
+### UC-16 · Consultar alunos e turmas sincronizados
 
+> **Atualizado em 2026-07-22** — fonte de dados trocada do Dental Office para o **Eduq**
+> (nenhum dado de aluno existia de fato no Dental — ver §11); modelo `AlunoLab` ganhou
+> `matricula` (era `id_dental`) e um FK para o novo `TurmaLab`; botão de sincronização
+> renomeado para "Sincronizar alunos e turmas" (UC-20).
+>
 > **Atualizado em 2026-07-21** — botão de sincronização trocado de UC-19
 > (completa) para UC-20 (só alunos) — item 10 do plano.
 
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.alunos_lab` → `/laboratorio/alunos/`
 - **Fluxo principal:**
-  1. Lista `AlunoLab` ativos, com busca por nome/celular.
-  2. Mostra a data da última sincronização (agregada, `Max(ultima_sincronizacao)`) e o
+  1. Lista `AlunoLab` ativos, com busca por nome, matrícula **ou nome da turma**
+     (`turma__nome__icontains` / `matricula__icontains`, além do `nome_normalizado` já
+     existente).
+  2. Colunas: Aluno, Celular, Matrícula, Turma, Última atualização.
+  3. Mostra a data da última sincronização (agregada, `Max(ultima_sincronizacao)`) e o
      histórico dos 5 últimos `RegistroSync` (compartilhado com UC-17, mesmo modelo de
-     auditoria — na prática, hoje só a sincronização agendada (UC-19, Celery Beat) grava
-     ali, já que nem Alunos nem Pacientes disparam mais a sincronização completa
-     manualmente).
-  3. Botão "Atualizar alunos" (`partials/sync_dental.html`) dispara **UC-20**
-     (`lab_sincronizar_alunos`), com `next` de volta para esta tela — antes disparava a
-     sincronização completa (UC-19, `lab_sincronizar`), que também varria pacientes sem
-     necessidade nesta tela (mesmo princípio já aplicado no CME: "cada botão sincroniza
-     exatamente o que a tela usa"). Como consequência, a sincronização completa
-     (`lab_sincronizar`) deixou de ter qualquer botão na interface — continua acionável
-     apenas pela tarefa agendada (UC-19) ou diretamente pela rota.
+     auditoria).
+  4. Botão "Sincronizar alunos e turmas" (`partials/sync_eduq.html`) dispara **UC-20**
+     (`lab_sincronizar_alunos`, agora apontando para `views.sincronizar_alunos_eduq`), com
+     `next` de volta para esta tela.
 - **Pós-condição:** nenhuma própria (leitura + efeito de UC-20).
 
 ### UC-17 · Consultar pacientes sincronizados (com busca ao vivo)
@@ -535,39 +559,61 @@ flowchart LR
 
 ### UC-18 · Buscar paciente/aluno via autocomplete *(caso de uso incluído / componente compartilhado)*
 
+> **Atualizado em 2026-07-22** — o fluxo de aluno deixou de consultar o Dental Office
+> "ao vivo" (nunca teve dado real de aluno) e passou a ser **só local**, com fallback de
+> sincronização de turma (UC-22) quando não encontra ninguém — mesmo padrão do CME. O
+> fluxo de paciente **não mudou** (continua consultando o Dental Office ao vivo). Os dois
+> fluxos agora divergem o bastante para serem descritos separadamente abaixo.
+
 - **Ator primário:** Coordenador (indiretamente, via UC-03 e UC-10).
 - **Views/rotas:**
-  - `views.buscar_pacientes` / `buscar_alunos_lab` (HTMX, GET) →
-    `/laboratorio/buscar-pacientes/` e `/buscar-alunos-lab/` — fragmento de resultados.
-  - `views.materializar` (POST) → `/laboratorio/selecionar/<tipo>/` — grava o escolhido.
-- **Fluxo principal:**
-  1. Componente HTMX dispara a cada digitação; a view (`_buscar_unificado`) consulta a
-     **base local** e, em paralelo, a **API do Dental Office** (1ª página), devolvendo
-     uma lista única, sem indicar a origem de cada item.
+  - `views.buscar_pacientes` (HTMX, GET) → `/laboratorio/buscar-pacientes/`.
+  - `views.buscar_alunos_lab` (HTMX, GET) → `/laboratorio/buscar-alunos-lab/`.
+  - `views.materializar` (POST) → `/laboratorio/selecionar/paciente/` — grava o paciente
+    escolhido (só paciente; aluno nunca precisa materializar, ver abaixo).
+  - `views.sincronizar_turma_aluno_busca` (POST) — ver UC-22.
+- **Fluxo principal — paciente (inalterado):**
+  1. Componente HTMX dispara a cada digitação; `buscar_pacientes` consulta a **base
+     local** e, em paralelo, a **API do Dental Office** (1ª página), devolvendo uma lista
+     única, sem indicar a origem de cada item.
   2. **Registros locais nunca perdem vaga para remotos**: o corte pelo limite (20 itens)
      preenche primeiro com o que já está no banco; os itens vindos da API só ocupam as
      vagas que sobrarem — corrige um bug já identificado e testado
      (`auditoria-gestao-lab.md`, seção "Busca unificada", bug do corte em 20 itens).
-  3. Ao escolher um item **sem pk** (veio só da API), o clique dispara `materializar`
-     — grava o registro localmente (um único `update_or_create`, usando sempre os dados
-     da resposta da API, nunca o que o navegador enviou) e devolve o pk recém-criado para
-     preencher o campo oculto do formulário. Itens que já têm pk resolvem sem ida à API.
+  3. Ao escolher um item **sem pk** (veio só da API), o clique dispara `materializar` —
+     grava o paciente localmente (`update_or_create`, sempre com os dados da resposta da
+     API, nunca o que o navegador enviou) e devolve o pk recém-criado para o campo oculto
+     do formulário. Itens que já têm pk resolvem sem ida à API.
   4. **Degradação suave:** se a API do Dental Office falhar, a busca ainda funciona só
      com a base local, com um aviso `parcial=True` no fragmento.
-- **Regra de negócio central:** diferente do CME (Eduq, sem endpoint de busca por nome —
-  UC-20 do CME precisa sincronizar a turma inteira antes de buscar), aqui a API do Dental
-  Office **tem** busca por nome/celular — por isso o autocomplete consulta a API "ao
-  vivo" a cada tecla, sem depender de sincronização prévia.
-- **Pós-condição:** nenhuma até o clique; um `Paciente`/`AlunoLab` criado ou reaproveitado
-  quando o operador escolhe um item vindo da API.
+- **Fluxo principal — aluno (reescrito em 2026-07-22):**
+  1. `buscar_alunos_lab` consulta **somente** a base local (`AlunoLab`, acento-insensível
+     por nome, mais matrícula/turma) — não há chamada ao Eduq nesta view, porque o Eduq
+     não tem endpoint de busca por nome (só listagem por turma).
+  2. Todo resultado já tem pk (é sempre um `AlunoLab` já sincronizado) — o clique nunca
+     precisa de `materializar` para aluno; o campo oculto é preenchido direto.
+  3. **Sem resultado:** o fragmento (`partials/_ac_results_aluno.html`) mostra "Nenhum
+     aluno encontrado para "X"." e um aviso de que o Eduq não permite buscar por nome,
+     com um `<select>` das turmas existentes no Eduq e um botão "Sincronizar turma" — ver
+     UC-22. Depois de sincronizar, o operador digita de novo e o aluno aparece.
+- **Regra de negócio central:** os dois fluxos têm limitações opostas nas APIs que
+  consultam — Dental Office tem busca por nome/celular (paciente busca "ao vivo"), Eduq
+  só lista por turma (aluno busca local + sincronização sob demanda) — por isso o mesmo
+  caso de uso (autocomplete) tem dois comportamentos de fundo bem diferentes.
+- **Pós-condição:** para paciente, nenhuma até o clique num item sem pk (cria/reaproveita
+  `Paciente`); para aluno, nenhuma (leitura local) — a única escrita possível no fluxo de
+  aluno é a sincronização de turma (UC-22), acionada à parte.
 
-### UC-19 · Sincronizar com o Dental Office
+### UC-19 · Sincronizar pacientes com o Dental Office
 
+> **Atualizado em 2026-07-22** — passou a sincronizar **só pacientes**; alunos saíram
+> completamente do escopo desta view/tarefa (nunca deveriam ter estado — ver §11) e
+> agora têm rotina própria (UC-20, fonte Eduq).
+>
 > **Atualizado em 2026-07-21** — a sincronização completa deixou de ter botão na
-> interface (item 10): Alunos passou a usar UC-20 (só alunos, ver UC-16) e
-> Pacientes já usava busca ao vivo + importação pontual desde o item 9 (ver UC-17).
-> Continua acionável pela tarefa agendada (Celery Beat) e pelo endpoint de cron
-> externo (UC-21).
+> interface (item 10): Pacientes já usava busca ao vivo + importação pontual desde o
+> item 9 (ver UC-17). Continua acionável pela tarefa agendada (Celery Beat) e pelo
+> endpoint de cron externo (UC-21).
 
 - **Ator primário:** **Celery Beat** (acionamento automático diário às 04:30); a rota
   continua exposta e testada, mas **sem nenhum botão na interface** desde o item 10.
@@ -577,9 +623,9 @@ flowchart LR
     `SincronizarDentalViewTests` para não perder a cobertura de regressão da rota.
   - `gestao_lab/tasks.py::sincronizar_dental_task` (Celery Beat, 04:30 diária).
 - **Fluxo principal:** chama `services.dental_sync.executar_sync_e_registrar`, que busca
-  **todas as páginas** de `/customers` e `/users` (grupo de alunos), faz
-  `update_or_create` em `Paciente`/`AlunoLab` e grava um `RegistroSync` com contadores,
-  duração e sucesso/erro — consultável no histórico das telas de Alunos/Pacientes.
+  **todas as páginas** de `/customers`, faz `update_or_create` em `Paciente` e grava um
+  `RegistroSync` com contadores, duração e sucesso/erro — consultável no histórico da
+  tela de Pacientes.
 - **Fluxo de exceção:** `DentalAPIError` → mensagem de erro; o `RegistroSync` grava
   `sucesso=False` e a mensagem de erro, mesmo em execuções automáticas.
 - **Achado sistêmico (S-01, mesmo de UC-05/06/07):** o redirecionamento por `next` aqui
@@ -596,26 +642,38 @@ flowchart LR
   duplicidade — sem quebrar nada, mas sem necessidade (mesmo aviso já registrado em
   `auditoria-gestao-lab.md`).
 
-### UC-20 · Atualizar somente a lista de alunos
+### UC-20 · Sincronizar alunos e turmas com o Eduq
 
-> **Atualizado em 2026-07-21** — passou a ser usada também pela listagem de Alunos
-> (UC-16), não só pelos formulários de pedido/moldagem (item 10).
+> **Reescrito em 2026-07-22** — antes chamava `dental_sync.sincronizar_alunos` (endpoint
+> `/users` do Dental Office, que nunca teve dado real de aluno). Agora chama o Eduq,
+> mesma fonte já usada pelo `gestao_cme`, e sincroniza **turmas e alunos juntos** (não só
+> alunos) — por isso o nome mudou de "Atualizar somente a lista de alunos" para
+> "Sincronizar alunos e turmas". A rota (`lab_sincronizar_alunos`) e o botão continuam
+> nos mesmos três pontos.
 
-- **Ator primário:** Coordenador.
-- **View/rota:** `views.sincronizar_alunos_dental` (POST) →
-  `/laboratorio/sincronizar-alunos/`
-- **Fluxo principal:** chama `services.dental_sync.sincronizar_alunos` (só o endpoint
-  `/users`, não `/customers`) — mais rápida que a sincronização completa (UC-19). Botão
-  "Atualizar alunos" disponível em três pontos, todos com a mesma ação de fundo: nos
-  formulários de pedido (UC-03) e moldagem (UC-10) via `partials/atualizar_alunos.html`,
-  e na listagem de Alunos (UC-16) via `partials/sync_dental.html` — substituindo ali o
-  antigo botão "Atualizar lista" que disparava a sincronização completa (UC-19).
-- **Regra de negócio:** decisão de negócio já validada
-  (`melhorias-gestao-lab-2026-07.md`, item 2+3) — antes havia campos de busca completos
-  na barra lateral desses formulários (`busca_dental.html`), removidos por serem
-  redundantes com o autocomplete do corpo do formulário (UC-18); o botão cobre apenas o
-  caso de um aluno **recém-cadastrado no Dental Office** ainda não aparecer no
-  autocomplete local.
+- **Ator primário:** Coordenador; também **Celery Beat** (acionamento automático diário
+  às 04:15, ver `tasks.sincronizar_eduq_lab_task`).
+- **Views/rotas:**
+  - `views.sincronizar_alunos_eduq` (POST) → `/laboratorio/sincronizar-alunos/` (mesma
+    rota de antes, `lab_sincronizar_alunos`).
+  - `gestao_lab/tasks.py::sincronizar_eduq_lab_task` (Celery Beat, 04:15 diária).
+- **Fluxo principal:** chama
+  `services.eduq_lab_sync.executar_sync_alunos_e_registrar`, que reaproveita o
+  `EduqClient` de `gestao_cme.integrations.eduq` para listar **todas as turmas** e, para
+  cada uma, seus alunos — fazendo `update_or_create` em `TurmaLab` e `AlunoLab` (por
+  `codigo`/`matricula`) e gravando um `RegistroSync` com contadores, duração e
+  sucesso/erro. Botão "Sincronizar alunos e turmas" disponível em três pontos, todos com
+  a mesma ação de fundo: nos formulários de pedido (UC-03) e moldagem (UC-10) via
+  `partials/atualizar_alunos.html`, e na listagem de Alunos (UC-16) via
+  `partials/sync_eduq.html`.
+- **Fluxo de exceção:** `EduqAPIError` → mensagem de erro; o `RegistroSync` grava
+  `sucesso=False` e a mensagem de erro.
+- **Regra de negócio:** diferente da versão anterior (Dental, endpoint dedicado só de
+  alunos), esta sincronização sempre grava turmas **e** alunos juntos, porque o Eduq só
+  lista alunos a partir de uma turma — não existe "sincronizar só alunos" nesta fonte.
+  O botão nos formulários de pedido/moldagem cobre o caso de um aluno **recém-matriculado
+  no Eduq** ainda não aparecer no autocomplete local (UC-18); para uma turma específica
+  ainda não sincronizada, ver UC-22 (mais rápido que sincronizar tudo).
 - **Mesmo achado de S-01** (redirecionamento via `next_url.startswith("/")`).
 
 ### UC-21 · Sincronização agendada por token *(endpoint de integração)*
@@ -635,7 +693,35 @@ flowchart LR
   token secreto; `@csrf_exempt` é necessário e seguro aqui porque a proteção real é o
   token, não o cookie de sessão.
 - **Observação:** ver UC-19 para o risco de duplicidade se o Celery Beat também estiver
-  ativo.
+  ativo. Só cobre pacientes (Dental) — não existe endpoint de cron equivalente para o
+  sync de alunos/turmas (Eduq); a rotina de alunos hoje só roda pelo Celery Beat (UC-20)
+  ou manualmente.
+
+### UC-22 · Sincronizar turma sob demanda *(fluxo estendido de UC-18)*
+
+> **Novo em 2026-07-22** — mesmo conceito do CME (turma sincronizada sob demanda a
+> partir de uma busca de aluno sem resultado), agora replicado no laboratório porque a
+> busca de aluno (UC-18) deixou de ter uma API com busca por nome.
+
+- **Ator primário:** Coordenador (sempre a partir de uma busca de aluno sem resultado,
+  UC-18).
+- **View/rota:** `views.sincronizar_turma_aluno_busca` (POST) →
+  `/laboratorio/sincronizar-turma-aluno-busca/`
+- **Fluxo principal:**
+  1. Quando `buscar_alunos_lab` (UC-18) não encontra ninguém, o fragmento mostra um
+     `<select>` com as turmas disponíveis no Eduq (`eduq_lab_sync.listar_turmas_eduq`,
+     sem gravar nada) e um botão "Sincronizar turma".
+  2. Ao escolher uma turma e confirmar, a view chama
+     `eduq_lab_sync.sincronizar_turma_eduq(codigo_turma)` — sincroniza **só aquela
+     turma** (mais rápido que UC-20, que sincroniza todas) e seus alunos.
+  3. Mensagem de sucesso com os contadores; o operador digita a busca de novo e o aluno
+     recém-sincronizado aparece.
+- **Fluxo de exceção:** turma inexistente no Eduq (código não encontrado na resposta da
+  API) ou `EduqAPIError` → mensagem de erro, nenhuma alteração.
+- **Regra de negócio:** existe **porque** o Eduq não tem busca por nome — sincronizar
+  uma turma inteira é o único jeito de "achar" um aluno que ainda não está na base local,
+  sem precisar rodar a sincronização completa (UC-20).
+- **Pós-condição:** `TurmaLab` e os `AlunoLab` daquela turma criados/atualizados.
 
 ---
 
@@ -676,10 +762,17 @@ flowchart LR
    `Moldagem` — nenhum desses cadastros pode ser excluído enquanto tiver pedidos ou
    moldagens vinculados (o Django recusa a exclusão; não há tratamento de
    `ProtectedError` com mensagem amigável na interface, diferente do CME — ver UC-14).
-   `Moldagem.pedido_material` é a única relação `SET_NULL` do módulo.
-4. **Origem do dado (`OrigemDados`)** — `Paciente` e `AlunoLab` carregam
-   `origem ∈ {MANUAL, DENTAL}` (só dois valores, sem `LEGADO`/`EXEMPLO` como no CME — não
-   há migração de dados legados nem fixture de exemplo neste módulo).
+   `Moldagem.pedido_material` é a única relação `SET_NULL` do módulo. Desde 2026-07-22,
+   `AlunoLab.turma` também é `PROTECT` em relação a `TurmaLab` — uma turma com alunos
+   vinculados não pode ser excluída (na prática, sem consequência hoje: não há exclusão
+   de `TurmaLab` pela interface nem pelo fluxo normal de uso).
+4. **Origem do dado (`OrigemDados`)** — `Paciente` carrega `origem ∈ {MANUAL, DENTAL}`;
+   `AlunoLab`/`TurmaLab` carregam `origem ∈ {MANUAL, EDUQ}` desde 2026-07-22 (era
+   `{MANUAL, DENTAL}` — trocado junto da migração de fonte de dados, ver §11). O enum
+   `OrigemDados` é compartilhado entre os dois usos; nenhum modelo usa os dois valores
+   "errados" para sua fonte (não há `Paciente` com origem `EDUQ` nem `AlunoLab` com
+   origem `DENTAL` — a migração `0011` apagou os registros que tinham essa combinação
+   inválida).
 5. **Busca acento-insensível** — mesmo mixin `NomeNormalizadoMixin` do CME, aplicado a
    `Paciente` e `AlunoLab`; porém as buscas por **laboratório** e **descrição do
    serviço** (Acompanhamento, UC-02) usam `icontains` puro, sem normalização — buscar
@@ -725,7 +818,7 @@ flowchart LR
 | ID | Área | Problema | Recomendação | Status |
 |---|---|---|---|---|
 | S-01 | Redirecionamento pós-ação (UC-05, UC-06, UC-07, UC-12) | `marcar_envio`, `marcar_entrega`, `atualizar_faturamento`, `alternar_faturado_paciente`, `alternar_faturado_lab`, `alternar_faturado_moldagem` e `alternar_entregue_moldagem` usam `redirect(request.POST.get("next") or "<view>")` **sem validar** que `next` é um caminho local — o helper `redirect()` do Django, quando o valor não casa com nenhuma URL nomeada, devolve a string como veio se ela contiver `/` ou `.`, permitindo redirecionar para um domínio externo (**open redirect**). Views mais cuidadosas do mesmo módulo (`excluir_pedido`, `excluir_moldagem`, `sincronizar_dental`, `sincronizar_alunos_dental`) checam `next_url.startswith("/")`, o que já bloqueia URLs absolutas com `http(s)://`, mas **não** bloqueia URLs "protocol-relative" (`//host-externo/...`), que também começam com `/` e o navegador interpreta como redirecionamento para outro host | Usar `django.utils.http.url_has_allowed_host_and_scheme` (o mesmo helper que o `LoginView` do Django usa para validar `?next=`) em **todas** as views que recebem `next` do cliente, com uma função utilitária única para não repetir a checagem em 11 pontos diferentes | Em aberto — ver §7 (decisão de segurança, prioridade sugerida: alta) |
-| S-02 | Busca direcionada (UC-18, legado) | `views.buscar_paciente_dental`/`buscar_aluno_dental` (rotas `lab_buscar_paciente`/`lab_buscar_aluno`) ficaram **órfãs** — nenhum template as chama desde que `partials/busca_dental.html` foi removido (`melhorias-gestao-lab-2026-07.md`, item 2+3); ainda existem testes cobrindo `lab_buscar_paciente`, mas não há nenhum ponto de entrada na UI atual | Remover a view/rota morta numa limpeza futura (mesmo tipo de achado já resolvido no CME — ver S-10, resolvido, em `casos-de-uso-gestao-cme.md`) | Em aberto |
+| S-02 | Busca direcionada (UC-18, legado) | `views.buscar_paciente_dental` (rota `lab_buscar_paciente`) ficou **órfã** — nenhum template a chama desde que `partials/busca_dental.html` foi removido (`melhorias-gestao-lab-2026-07.md`, item 2+3); ainda existem testes cobrindo a rota, mas não há nenhum ponto de entrada na UI atual | Remover a view/rota morta numa limpeza futura (mesmo tipo de achado já resolvido no CME — ver S-10, resolvido, em `casos-de-uso-gestao-cme.md`) | Em aberto — **`buscar_aluno_dental`/`lab_buscar_aluno`, a outra metade órfã, foi removida em 2026-07-22** junto da migração de Alunos para o Eduq (não fazia sentido manter uma rota de busca contra uma fonte de dados abandonada); só a parte de paciente segue pendente |
 | S-03 | Permissões (todas as UCs) | Não existe **nenhuma** distinção de permissão por grupo/papel no módulo — qualquer usuário autenticado pode excluir pedidos/moldagens, editar laboratórios/equipes e disparar sincronizações completas. Diferente do CME (que já tem `permissoes.py` com grupos definidos, mesmo que não aplicados), aqui não há sequer essa infraestrutura pronta | Definir se o módulo deve reusar os grupos do CME (`recepcao`/`coordenacao`/`gestao`, em `gestao_cme/permissoes.py`) ou criar um esquema próprio, e então aplicar aos pontos sensíveis (exclusões, sincronização) | Em aberto — mesma decisão pendente do CME (S-02 lá), agora estendida a este módulo |
 | S-04 | Sincronização Dental (UC-19) | O botão manual "Atualizar lista" rodava a sincronização completa **de forma síncrona no request** — podia ser lenta com uma base grande de pacientes | Mover para tarefa assíncrona (Celery, já usada para a versão agendada) com feedback de progresso, ou aceitar o comportamento atual já que a rotina diária (04:30) cobre o caso comum | ✅ **Mitigado em 2026-07-21** (item 10) — o botão manual que disparava essa execução síncrona foi removido (Alunos passou a usar UC-20, mais rápida); a view `sincronizar_dental` continua existindo (rota + tarefa agendada), mas sem gatilho manual na UI, então o risco de lentidão perceptível pelo usuário deixou de se materializar na prática |
 | S-05 | Métricas duplicadas (UC-01 / UC-02) | Visão Geral e Acompanhamento recalculavam as mesmas contagens de status de forma independente, sem uma função única compartilhada (diferente de `linhas_de_pacote()` no CME) — e a Visão Geral tinha uma consulta ad-hoc própria (`entregue=True, exclude(...)`) para "pendentes de faturamento", divergente do campo `status` | Extrair um helper único (`metricas_pedidos()`) reusado pelas duas views | ✅ **Resolvido em 2026-07-21** — junto da reforma de status (item 4): as duas views já contam direto por `status=...` (mesmo campo, mesma fonte); a consulta ad-hoc de "pendentes de faturamento" foi substituída por `status=ENTREGUE_NAO_FATURADO` (também no Portal do CME, que tinha o mesmo cálculo cruzado). Não foi extraído um helper único formal (`metricas_pedidos()`) — cada view ainda monta seu próprio dict — mas a fonte dos números agora é sempre `status`, eliminando o risco de divergência |
@@ -793,13 +886,14 @@ flowchart LR
 | UC-13 | `excluir_moldagem` | ação em `moldagens.html` |
 | UC-14 | `laboratorios`, `criar_laboratorio`, `editar_laboratorio` | `laboratorios.html`, `form_laboratorio.html` |
 | UC-15 | `equipes`, `criar_equipe`, `editar_equipe` | `equipes.html`, `form_equipe.html` |
-| UC-16 | `alunos_lab` | `alunos.html`, `partials/sync_dental.html` |
+| UC-16 | `alunos_lab` | `alunos.html`, `partials/sync_eduq.html` |
 | UC-17 | `pacientes`, `importar_paciente_dental` | `pacientes.html` |
-| UC-18 | `buscar_pacientes`, `buscar_alunos_lab`, `materializar` | `partials/_ac_field.html`, `partials/_ac_results.html` |
+| UC-18 | `buscar_pacientes`, `buscar_alunos_lab`, `materializar` | `partials/_ac_field.html`, `partials/_ac_results.html` (paciente), `partials/_ac_results_aluno.html` (aluno) |
 | UC-19 | `sincronizar_dental`, `tasks.sincronizar_dental_task` | — (sem botão na UI desde o item 10; rota + tarefa agendada) |
-| UC-20 | `sincronizar_alunos_dental` | `partials/atualizar_alunos.html`, `partials/sync_dental.html` |
+| UC-20 | `sincronizar_alunos_eduq`, `tasks.sincronizar_eduq_lab_task` | `partials/atualizar_alunos.html`, `partials/sync_eduq.html` |
 | UC-21 | `sincronizar_agendado` | — (endpoint JSON, sem template) |
-| *(órfã, S-02)* | `buscar_paciente_dental`, `buscar_aluno_dental` | — (sem template atual) |
+| UC-22 | `sincronizar_turma_aluno_busca` | ação em `partials/_ac_results_aluno.html` |
+| *(órfã, S-02)* | `buscar_paciente_dental` | — (sem template atual) |
 
 ---
 
@@ -813,10 +907,13 @@ flowchart LR
 | **Equipe** (`Equipe`) | Estrutura de coordenação responsável por um conjunto de laboratórios/pedidos |
 | **Status** (`PedidoMaterial.Status`) | `EM_DIA` / `ATRASADO` / `ENTREGUE_NAO_FATURADO` / `CONCLUIDO` — sempre calculado, nunca definido manualmente |
 | **Faturado (paciente / lab)** | Duas flags independentes; `data_faturamento` é derivada de ambas ficarem verdadeiras |
-| **Dental Office** | Sistema de gestão clínica externo, fonte de verdade de pacientes e alunos deste módulo |
-| **Materializar** | Ato de gravar localmente um paciente/aluno escolhido no autocomplete, cujo conteúdo veio da API (não do navegador) |
-| **RegistroSync** | Auditoria de cada execução de sincronização (manual, agendada ou por cron externo) com contadores e duração |
-| **Origem (`OrigemDados`)** | Proveniência de um registro: `MANUAL` ou `DENTAL` |
+| **Dental Office** | Sistema de gestão clínica externo, fonte de verdade de **pacientes** deste módulo |
+| **Eduq** | Sistema acadêmico externo, fonte de verdade de **alunos e turmas** deste módulo (desde 2026-07-22); mesma fonte já usada pelo `gestao_cme`. Só lista alunos por turma, sem busca por nome |
+| **Turma** (`TurmaLab`) | Turma do Eduq, sincronizada localmente; agrupa os `AlunoLab` que pertencem a ela. Tabela exclusiva do `gestao_lab` (não compartilhada com `gestao_cme.Turma`) |
+| **Matrícula** | Identificador do aluno no Eduq (`AlunoLab.matricula`, único); substituiu `id_dental` quando a fonte trocou de Dental para Eduq |
+| **Materializar** | Ato de gravar localmente um **paciente** escolhido no autocomplete, cujo conteúdo veio da API do Dental Office (não do navegador). Só se aplica a paciente — aluno nunca precisa materializar, pois a busca já é só local (ver UC-18) |
+| **RegistroSync** | Auditoria de cada execução de sincronização (manual, agendada ou por cron externo) com contadores e duração — compartilhada entre a sincronização de pacientes (Dental) e a de alunos/turmas (Eduq) |
+| **Origem (`OrigemDados`)** | Proveniência de um registro: `MANUAL`, `DENTAL` (só `Paciente`) ou `EDUQ` (só `AlunoLab`/`TurmaLab`, desde 2026-07-22) |
 | **Cobrança automática** | Mensagem via WhatsApp (Z-API) enviada uma vez por dia a laboratórios com pedidos atrasados, agregando todos num só envio |
 
 ---
@@ -835,3 +932,59 @@ flowchart LR
    CME em `avaliacao-visual-gestao-cme.md`), ela pode seguir exatamente o mesmo roteiro:
    ambiente local com dados sintéticos, Playwright autenticado, achados sempre
    confirmados no código/CSS antes de reportar.
+
+---
+
+## 11. Histórico — correção da fonte de dados de Alunos (2026-07-22)
+
+Este módulo sincronizava "alunos" a partir do endpoint `/users` do Dental Office — um
+sistema de gestão **clínica**, sem qualquer noção de matrícula, turma ou curso
+acadêmico. Nenhum registro de `AlunoLab` criado por essa rotina correspondia a um aluno
+real; o Dental Office nunca teve esse dado. Os alunos de fato existem no **Eduq**, o
+mesmo sistema acadêmico que o `gestao_cme` já integra para turmas/alunos de empréstimo de
+material.
+
+**Decisões de escopo (confirmadas antes da implementação):**
+
+- **Manter `AlunoLab` como tabela própria do `gestao_lab`** — não unificar com
+  `gestao_cme.Aluno`/`Turma` nem migrar `PedidoMaterial`/`Moldagem` para apontar para lá.
+  Só a **fonte de sincronização** mudou (Dental → Eduq); o modelo de dados do laboratório
+  continua independente do CME, reaproveitando apenas a camada de integração HTTP
+  (`gestao_cme.integrations.eduq.EduqClient`) — mesmo padrão já usado pelo app
+  `identificadores`.
+- **Apagar todos os registros de origem Dental** — nenhum representava um aluno real,
+  então não havia dado a preservar. Migração de dados (`0011_remover_alunos_dental`,
+  irreversível) apagou todo `AlunoLab` com `origem=DENTAL`.
+- **Apagar em cascata os `PedidoMaterial`/`Moldagem` vinculados a esses alunos** — como
+  `aluno` é `PROTECT` nas duas tabelas, os pedidos/moldagens que referenciavam um aluno
+  "fantasma" (dado inexistente) foram excluídos junto, sem exceção. Qualquer
+  laboratório/paciente/equipe válidos referenciados por esses registros não foram
+  afetados — só a linha do pedido/moldagem em si.
+
+**O que mudou no código:**
+
+- `AlunoLab.id_dental` → `AlunoLab.matricula` (renomeado, `RenameField`); `origem` passou
+  a aceitar `EDUQ` (mantendo `MANUAL`, sem mais `DENTAL` para este modelo).
+- Novo modelo `TurmaLab` (exclusivo do laboratório, sem FK para `gestao_cme.Turma`);
+  `AlunoLab.turma` (FK `PROTECT`, opcional).
+- Novo serviço `services/eduq_lab_sync.py`, reaproveitando `EduqClient`/`EduqAPIError`/
+  dataclasses de `gestao_cme.integrations.eduq` — sem cliente HTTP duplicado.
+- `integrations/dental.py` e `services/dental_sync.py` perderam todo o código específico
+  de aluno (`AlunoLabDental`, `listar_usuarios`, `sincronizar_alunos`,
+  `procurar_alunos`, `materializar_aluno`, `buscar_e_importar_alunos`) — o Dental Office
+  deixou de ser consultado para qualquer coisa relacionada a aluno.
+- Busca de aluno (UC-18) deixou de ser "ao vivo" contra uma API e passou a ser **só
+  local**, com sincronização de turma sob demanda (UC-22, nova) quando não encontra
+  ninguém — mesmo padrão de UX já validado no CME para a mesma limitação de API (Eduq
+  não busca por nome).
+- Celery Beat ganhou uma tarefa própria (`sincronizar_eduq_lab_task`, 04:15 diária),
+  escalonada entre o sync do Eduq do CME (04:00) e o sync de pacientes do Dental (04:30),
+  para as três rotinas não competirem pela mesma API ao mesmo tempo.
+- Rotas/views/testes órfãos do fluxo antigo de busca de aluno via Dental
+  (`buscar_aluno_dental`/`lab_buscar_aluno`) foram removidos por completo — não fazia
+  sentido preservar uma rota de busca contra uma fonte de dados abandonada (diferente de
+  `buscar_paciente_dental`, que segue órfão e registrado em S-02, pois o Dental Office
+  continua sendo a fonte real de pacientes).
+
+Ver UC-16, UC-18, UC-19, UC-20 e UC-22 para os casos de uso atualizados/novos, e §5
+(regras 3 e 4) para o impacto no modelo de dados.
