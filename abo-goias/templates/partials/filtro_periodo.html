@@ -23,6 +23,13 @@ Parâmetros:
                   do painel (só a Visão Geral usa — seu formulário não tem
                   outros filtros para preservar; Movimentações/Empréstimos já
                   têm um chip removível próprio para isso)
+  campo_data_opcoes — opcional; lista de tuplas (valor, rótulo). Quando
+                  informado, mostra um <select name="campo_data"> para o
+                  usuário escolher a qual campo de data o período se aplica
+                  (páginas com mais de uma data, como Acompanhamento e
+                  Faturamento). Páginas com um único campo de data (Visão
+                  Geral, Moldagens) não passam este parâmetro.
+  campo_data_atual — valor selecionado do seletor acima
 {% endcomment %}
 <details class="filter-period"{% if periodo_ativo %} open{% endif %}>
     <summary>
@@ -30,6 +37,16 @@ Parâmetros:
         {% if periodo_ativo %}<span class="filter-period-dot" aria-hidden="true"></span>{% endif %}
     </summary>
     <div class="dropdown-panel filter-period-panel">
+        {% if campo_data_opcoes %}
+            <div class="field">
+                <label for="campo_data_{{ id_prefix }}">Campo</label>
+                <select id="campo_data_{{ id_prefix }}" name="campo_data">
+                    {% for valor, rotulo in campo_data_opcoes %}
+                        <option value="{{ valor }}" {% if campo_data_atual == valor %}selected{% endif %}>{{ rotulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endif %}
         <div class="field">
             <label for="data_inicio_{{ id_prefix }}">De</label>
             <input type="date" id="data_inicio_{{ id_prefix }}" name="data_inicio" value="{{ data_inicio_str }}">

@@ -451,6 +451,36 @@ class DashboardLabTests(TestCase):
         self.assertEqual(metricas["entregue_nao_faturado"], 1)
         self.assertEqual(metricas["concluidos"], 1)
 
+    def test_periodo_ativo_falso_sem_filtro_explicito(self) -> None:
+        response = self.client.get(reverse("lab_dashboard"))
+        self.assertFalse(response.context["periodo_ativo"])
+
+    def test_periodo_ativo_verdadeiro_com_filtro_explicito(self) -> None:
+        response = self.client.get(
+            reverse("lab_dashboard"), {"data_inicio": "2026-01-01"}
+        )
+        self.assertTrue(response.context["periodo_ativo"])
+
+    def test_filtra_metricas_por_periodo_de_registro(self) -> None:
+        pac = _paciente(id_dental="15")
+        aluno = _aluno(id_dental="25")
+        equipe = _equipe()
+        lab = _laboratorio(equipe=equipe)
+        pedido_antigo = _pedido(pac, aluno, lab, equipe)
+        PedidoMaterial.objects.filter(pk=pedido_antigo.pk).update(
+            criado_em=timezone.make_aware(datetime(2020, 1, 15))
+        )
+        pedido_recente = _pedido(pac, aluno, lab, equipe)
+
+        response = self.client.get(
+            reverse("lab_dashboard"),
+            {"data_inicio": "2025-01-01", "data_fim": "2026-12-31"},
+        )
+
+        recentes_ids = [p.pk for p in response.context["recentes"]]
+        self.assertIn(pedido_recente.pk, recentes_ids)
+        self.assertNotIn(pedido_antigo.pk, recentes_ids)
+
 
 # ---------------------------------------------------------------------------
 # Testes de Views — acompanhamento de pedidos
@@ -562,6 +592,71 @@ class AcompanhamentoPedidosTests(TestCase):
         self.assertNotIn(pedido_antigo, pedidos)
         self.assertIn(self.pedido_em_dia, pedidos)
 
+    def test_campo_data_padrao_e_registro(self) -> None:
+        response = self.client.get(reverse("lab_pedidos"))
+        self.assertEqual(response.context["campo_data"], "registro")
+
+    def test_campo_data_invalido_cai_para_registro(self) -> None:
+        response = self.client.get(reverse("lab_pedidos"), {"campo_data": "xyz"})
+        self.assertEqual(response.context["campo_data"], "registro")
+
+    def test_filtra_por_campo_data_previsao(self) -> None:
+        pedido_previsao_fora = _pedido(
+            self.pedido_em_dia.paciente,
+            self.pedido_em_dia.aluno,
+            self.pedido_em_dia.laboratorio,
+            self.pedido_em_dia.equipe,
+            previsao_entrega=date(2020, 1, 15),
+        )
+
+        response = self.client.get(
+            reverse("lab_pedidos"),
+            {
+                "campo_data": "previsao",
+                "data_inicio": "2025-01-01",
+                "data_fim": "2026-12-31",
+            },
+        )
+
+        pedidos = list(response.context["pedidos"])
+        self.assertNotIn(pedido_previsao_fora, pedidos)
+        self.assertIn(self.pedido_em_dia, pedidos)
+
+    def test_filtra_por_campo_data_faturamento(self) -> None:
+        pedido_faturado_fora = _pedido(
+            self.pedido_em_dia.paciente,
+            self.pedido_em_dia.aluno,
+            self.pedido_em_dia.laboratorio,
+            self.pedido_em_dia.equipe,
+            entregue=True,
+            faturado_paciente=True,
+            faturado_lab=True,
+            data_faturamento=date(2020, 1, 15),
+        )
+        pedido_faturado_dentro = _pedido(
+            self.pedido_em_dia.paciente,
+            self.pedido_em_dia.aluno,
+            self.pedido_em_dia.laboratorio,
+            self.pedido_em_dia.equipe,
+            entregue=True,
+            faturado_paciente=True,
+            faturado_lab=True,
+            data_faturamento=date.today(),
+        )
+
+        response = self.client.get(
+            reverse("lab_pedidos"),
+            {
+                "campo_data": "faturamento",
+                "data_inicio": (date.today() - timedelta(days=1)).strftime("%Y-%m-%d"),
+                "data_fim": date.today().strftime("%Y-%m-%d"),
+            },
+        )
+
+        pedidos = list(response.context["pedidos"])
+        self.assertNotIn(pedido_faturado_fora, pedidos)
+        self.assertIn(pedido_faturado_dentro, pedidos)
+
 
 # ---------------------------------------------------------------------------
 # Testes de Views — fila de faturamento
@@ -653,6 +748,45 @@ class PedidosFaturamentoViewTests(TestCase):
         self.assertNotIn(self.faturado_so_paciente, pedidos)
         self.assertNotIn(self.faturado_so_lab, pedidos)
 
+    def test_periodo_ativo_falso_sem_filtro_explicito(self) -> None:
+        response = self.client.get(reverse("lab_pedidos_faturamento"))
+        self.assertFalse(response.context["periodo_ativo"])
+
+    def test_periodo_ativo_verdadeiro_com_filtro_explicito(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos_faturamento"), {"data_inicio": "2026-01-01"}
+        )
+        self.assertTrue(response.context["periodo_ativo"])
+
+    def test_campo_data_padrao_e_registro(self) -> None:
+        response = self.client.get(reverse("lab_pedidos_faturamento"))
+        self.assertEqual(response.context["campo_data"], "registro")
+
+    def test_campo_data_invalido_cai_para_registro(self) -> None:
+        response = self.client.get(
+            reverse("lab_pedidos_faturamento"), {"campo_data": "xyz"}
+        )
+        self.assertEqual(response.context["campo_data"], "registro")
+
+    def test_filtra_por_campo_data_vencimento(self) -> None:
+        self.faturado_so_paciente.data_vencimento = date(2020, 1, 15)
+        self.faturado_so_paciente.save(update_fields=["data_vencimento"])
+        self.faturado_so_lab.data_vencimento = date.today()
+        self.faturado_so_lab.save(update_fields=["data_vencimento"])
+
+        response = self.client.get(
+            reverse("lab_pedidos_faturamento"),
+            {
+                "campo_data": "vencimento",
+                "data_inicio": "2025-01-01",
+                "data_fim": "2026-12-31",
+            },
+        )
+
+        pedidos = list(response.context["pedidos"])
+        self.assertNotIn(self.faturado_so_paciente, pedidos)
+        self.assertIn(self.faturado_so_lab, pedidos)
+
 
 # ---------------------------------------------------------------------------
 # Testes de Views — moldagens
@@ -689,6 +823,32 @@ class MoldagensViewTests(TestCase):
         ids = [m.pk for m in response.context["moldagens"]]
         self.assertIn(moldagem_convertida.pk, ids)
         self.assertNotIn(moldagem_simples.pk, ids)
+
+    def test_periodo_ativo_falso_sem_filtro_explicito(self) -> None:
+        response = self.client.get(reverse("lab_moldagens"))
+        self.assertFalse(response.context["periodo_ativo"])
+
+    def test_periodo_ativo_verdadeiro_com_filtro_explicito(self) -> None:
+        response = self.client.get(
+            reverse("lab_moldagens"), {"data_inicio": "2026-01-01"}
+        )
+        self.assertTrue(response.context["periodo_ativo"])
+
+    def test_filtra_por_periodo_de_registro(self) -> None:
+        moldagem_antiga = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+        Moldagem.objects.filter(pk=moldagem_antiga.pk).update(
+            criado_em=timezone.make_aware(datetime(2020, 1, 15))
+        )
+        moldagem_recente = Moldagem.objects.create(paciente=self.pac, aluno=self.aluno)
+
+        response = self.client.get(
+            reverse("lab_moldagens"),
+            {"data_inicio": "2025-01-01", "data_fim": "2026-12-31"},
+        )
+
+        ids = [m.pk for m in response.context["moldagens"]]
+        self.assertNotIn(moldagem_antiga.pk, ids)
+        self.assertIn(moldagem_recente.pk, ids)
 
 
 # ---------------------------------------------------------------------------

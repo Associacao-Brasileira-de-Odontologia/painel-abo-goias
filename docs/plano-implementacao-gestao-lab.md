@@ -7,7 +7,7 @@
 > implementar, testar, commitar, enviar, aguardar aprovação — mesma disciplina já usada
 > no CME).
 > **Progresso:** item 4 implementado (commit `a4077e5`); item 5 fechado sem código;
-> itens 7, 6/8 e 3+2 implementados — ver §4.
+> itens 7, 6/8, 3+2 e 1 implementados — ver §4.
 
 ---
 
@@ -63,7 +63,7 @@ havia alguma diferença que eu não capturei entre os dois.
 
 ## 3 · Detalhamento técnico por item
 
-### Item 1 · Filtro de período com escolha de campo
+### Item 1 · Filtro de período com escolha de campo → ✅ **Implementado**
 
 As páginas têm quantidades diferentes de campos de data — a solução não é idêntica nas
 quatro:
@@ -78,6 +78,22 @@ quatro:
 Ou seja: o "seletor de campo" faz sentido em **Acompanhamento** e **Faturamento**; em
 Visão Geral e Moldagens seria um controle com uma única opção, então proponho um filtro
 simples ali (mesmo padrão visual, sem a complexidade do seletor).
+
+**Implementação:** `templates/partials/filtro_periodo.html` ganhou um parâmetro
+opcional `campo_data_opcoes`/`campo_data_atual` — quando informado, renderiza um
+`<select name="campo_data">` dentro do painel colapsável, ao lado dos campos De/Até;
+quando omitido (Visão Geral, Moldagens, e os 3 usos existentes em `gestao_cme`), o
+comportamento não muda. Um novo helper `_filtrar_por_campo_data()` em
+`gestao_lab/views.py` recorta o queryset pelo campo escolhido, tratando corretamente a
+diferença entre `criado_em` (`DateTimeField`) e os demais campos (`DateField` — comparados
+só pela data, sem hora). `dashboard()` e `moldagens()` usam a versão simples (só
+`criado_em`, sem seletor); `acompanhamento_pedidos()` e `pedidos_faturamento()` passaram a
+ler `?campo_data=` (validado contra as opções válidas, com fallback para "registro") e
+repassam o campo escolhido ao helper. Na Visão Geral, o recorte de período também passou
+a refletir nas métricas dos KPIs e nos links deles para o Acompanhamento/Faturamento
+(`filtro_datas_qs`). Testes novos cobrindo `periodo_ativo`, o filtro por período em cada
+página e o seletor de campo em Acompanhamento/Faturamento (15 testes novos, suíte
+`gestao_lab` com 150 testes verde).
 
 ### Item 2 · "Buscar"/"Limpar tudo" no Acompanhamento → ✅ **Implementado**
 
@@ -202,7 +218,9 @@ Prioridade pela severidade que você atribuiu, agrupando o que é tecnicamente r
    padrão do CME (widget promovido para `templates/partials/`, reusado sem duplicação);
    "Buscar"/"Limpar tudo" alinhados no Acompanhamento e, ao verificar todas as páginas
    com busca (pedido explícito), também em Moldagens e Pacientes.
-6. **Item 1** — Estender período (com seletor de campo) às demais páginas, reaproveitando o widget já ajustado no item 3.
+6. ✅ **Item 1** — **Implementado**. Período estendido (com seletor de campo em
+   Acompanhamento/Faturamento) às 4 páginas, reaproveitando o widget já ajustado no
+   item 3.
 7. **Item 9** — Busca unificada de Pacientes (Alta).
 8. **Item 10** — Sincronização de Alunos (Alta).
 9. **Item 11** — Mini-menu para os botões secundários (Alta, mas é o que mais toca a navegação — deixo por último para não reordenar a sidebar antes das outras mudanças de conteúdo de cada página estarem prontas).
@@ -211,4 +229,4 @@ Cada item segue o fluxo já estabelecido: implementar, rodar a suíte completa (
 partials/testes de `gestao_lab` também tocam `paginacao.html` e o design system
 compartilhado), commitar, enviar e aguardar sua aprovação antes do próximo.
 
-Pronto para seguir com o item 7 (ou outro, se preferir mudar a ordem).
+Pronto para seguir com o item 9 (ou outro, se preferir mudar a ordem).

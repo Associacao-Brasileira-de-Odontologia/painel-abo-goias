@@ -133,20 +133,28 @@ flowchart LR
 ### UC-01 · Consultar a Visão Geral
 
 > **Atualizado em 2026-07-21** — status reformulado para as 4 categorias reais do
-> negócio (ver §5, regra 1, e `plano-correcao-status-tipos-gestao-lab.md`).
+> negócio (ver §5, regra 1, e `plano-correcao-status-tipos-gestao-lab.md`); filtro de
+> período adicionado (item 1).
 
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.dashboard` → `/laboratorio/`
 - **Fluxo principal:**
   1. Usuário acessa a Visão Geral.
-  2. Sistema calcula as 4 métricas oficiais sobre **todo o histórico** (sem filtro de
-     período, diferente do CME): **Em dia**, **Atrasado**, **Entregue — não faturado**,
-     **Concluídos** — as mesmas 4 categorias de `PedidoMaterial.status`.
+  2. Sistema calcula as 4 métricas oficiais sobre o **período selecionado** (padrão: 1º
+     registro → hoje, ou seja, todo o histórico): **Em dia**, **Atrasado**, **Entregue —
+     não faturado**, **Concluídos** — as mesmas 4 categorias de `PedidoMaterial.status`.
   3. Lista até 5 "próximas entregas" (pedidos não entregues, ordenados por
-     `previsao_entrega`) e até 6 "pedidos recentes" (ordenados por `criado_em`).
+     `previsao_entrega`) e até 6 "pedidos recentes" (ordenados por `criado_em`) — ambas
+     também recortadas pelo período selecionado.
   4. Cada card de métrica é um link: Em dia/Atrasado/Concluídos abrem o Acompanhamento
      (UC-02) já filtrado por status; "Entregue — não faturado" abre a fila de
-     Faturamento (UC-09), que contém exatamente esses pedidos.
+     Faturamento (UC-09), que contém exatamente esses pedidos. Os links propagam o
+     mesmo recorte de período usado para contar (`filtro_datas_qs`).
+- **Filtro de período (item 1, resolvido):** widget colapsável (`partials/filtro_periodo.html`),
+  recorta por `criado_em` (único campo de data relevante nesta página — sem seletor de
+  campo, diferente de Acompanhamento/Faturamento). `periodo_ativo` calculado a partir da
+  URL antes do preenchimento do padrão "todo o histórico", mesmo cuidado já aplicado nas
+  demais páginas.
 - **Pós-condição:** nenhuma (somente leitura).
 - **Fonte única de verdade:** as 4 métricas vêm diretamente de
   `qs.filter(status=...)` — mesmo campo `status` usado pelo Acompanhamento (UC-02), pelo
@@ -161,7 +169,8 @@ flowchart LR
 ### UC-02 · Consultar o acompanhamento de pedidos
 
 > **Atualizado em 2026-07-21** — status reformulado (ver UC-01, §5 regra 1); filtro de
-> período e alinhamento de botões padronizados com o CME (itens 2 e 3).
+> período e alinhamento de botões padronizados com o CME (itens 2 e 3); seletor de
+> campo de data adicionado ao filtro de período (item 1).
 
 - **Ator primário:** Coordenador / Superusuário.
 - **View/rota:** `views.acompanhamento_pedidos` → `/laboratorio/pedidos/`
@@ -175,8 +184,9 @@ flowchart LR
      resumo de resultados, não a uma navegação; ver §5, regra 6).
   3. Filtros adicionais: busca textual (paciente, aluno, laboratório, descrição — todos
      acento-insensível via `nome_normalizado`, exceto laboratório/descrição que usam
-     `icontains` puro) e período de registro (`criado_em`), com padrão "1º registro →
-     hoje" (mesmo conceito do CME).
+     `icontains` puro) e período por um campo de data escolhido pelo usuário (Registro,
+     Previsão de entrega, Entrega ou Faturamento), com padrão "1º registro → hoje" (mesmo
+     conceito do CME).
   4. Colunas: Registro, Previsão (com aviso visual `date-overdue` quando vencida e não
      entregue), Entregue, Faturado (com tooltip "Parcial" indicando qual lado já foi
      faturado), Status, Ações.
@@ -195,6 +205,12 @@ flowchart LR
   painel só expande quando há filtro ativo (`periodo_ativo`, calculado a partir do que
   veio na URL **antes** do preenchimento do padrão "todo o histórico" — mesmo cuidado já
   aplicado no CME, para o painel não aparecer sempre "ativo").
+- **Seletor de campo de data (item 1, resolvido):** como esta página tem várias datas
+  relevantes (`criado_em`, `previsao_entrega`, `data_entrega`, `data_faturamento`), o
+  widget de período ganhou um `<select name="campo_data">` (Registro / Previsão de
+  entrega / Entrega / Faturamento — `?campo_data=`, com fallback para "registro" se vier
+  um valor inválido). O helper `_filtrar_por_campo_data()` recorta pelo campo escolhido,
+  tratando `criado_em` (`DateTimeField`) e os demais (`DateField`) corretamente.
 - **"Buscar"/"Limpar tudo" (U-02, resolvido):** os dois ficam agora dentro do mesmo
   `<form class="filter-bar">`, lado a lado (`.filter-actions`), em vez de "Limpar tudo"
   ficar solto no bloco de chips abaixo — mesmo padrão já usado em todo o CME e nas
@@ -305,7 +321,7 @@ flowchart LR
 ### UC-09 · Consultar fila de faturamento
 
 > **Atualizado em 2026-07-21** — filtros por faturamento do paciente/laboratório
-> (item 6/8).
+> (item 6/8); filtro de período com seletor de campo adicionado (item 1).
 
 - **Ator primário:** Coordenador.
 - **View/rota:** `views.pedidos_faturamento` → `/laboratorio/pedidos/faturamento/`
@@ -314,12 +330,13 @@ flowchart LR
      excluindo os que já têm as duas flags), ordenados pela data de entrega mais antiga
      primeiro (fila FIFO) — exatamente os pedidos com
      `status=ENTREGUE_NAO_FATURADO` (ver UC-01, §5 regra 1).
-  2. Filtros: busca textual (paciente, aluno, laboratório) e dois selects
+  2. Filtros: busca textual (paciente, aluno, laboratório), dois selects
      independentes — **Fat. paciente** (Faturado/Não faturado/Todos) e **Fat.
      laboratório** (idem) —, cada um espelhando exatamente uma das duas colunas
-     "Fat. Paciente"/"Fat. Lab" da tabela. Os dois filtros podem ser combinados (ex.:
-     "não faturado pelo paciente" **e** "não faturado pelo laboratório", para achar os
-     pedidos que ainda não tiveram nenhum lado resolvido).
+     "Fat. Paciente"/"Fat. Lab" da tabela, e período por um campo de data escolhido
+     (Registro, Entrega ou Vencimento), com padrão "1º registro → hoje". Os filtros
+     podem ser combinados livremente (ex.: "não faturado pelo paciente" **e** "não
+     faturado pelo laboratório" **e** um recorte de período por vencimento).
   3. Cada linha permite alternar as duas flags de faturamento inline (checkbox-like
      `.toggle-check`, sem sair da tela) e ir ao detalhe para preencher nota fiscal e
      vencimento (UC-07 completo).
@@ -327,6 +344,9 @@ flowchart LR
   ficam verdadeiras (vira `CONCLUIDO` e deixa de casar com o filtro da queryset) — por
   isso filtrar por "Faturado pelo paciente" aqui sempre mostra só quem falta o lado do
   laboratório (o inverso já saiu da fila).
+- **Filtro de período (item 1, resolvido):** mesmo widget colapsável das demais páginas,
+  com seletor de campo (`?campo_data=registro|entrega|vencimento`, fallback "registro"
+  para valor inválido) — recorta pelo campo escolhido via `_filtrar_por_campo_data()`.
 - **Pós-condição:** nenhuma própria (leitura + toggles de UC-07).
 
 ### UC-10 · Gerenciar moldagens
@@ -344,8 +364,10 @@ flowchart LR
   `views.criar_moldagem` (`/laboratorio/moldagens/nova/`).
 - **Inclui:** UC-18 (autocomplete de paciente e aluno, mesmo componente de UC-03).
 - **Fluxo principal:**
-  1. Lista moldagens com busca textual e filtro por situação (`faturado`/`não faturado`/
-     `entregue`/`não entregue`/`convertida`/`não convertida`).
+  1. Lista moldagens com busca textual, filtro por situação (`faturado`/`não faturado`/
+     `entregue`/`não entregue`/`convertida`/`não convertida`) e filtro de período por
+     data de registro (item 1 — `criado_em` é o único campo de data do modelo, então o
+     widget não tem seletor de campo, diferente de Acompanhamento/Faturamento).
   2. Métricas fixas na barra lateral: total, faturadas, entregues (ao laboratório),
      convertidas, pendentes.
   3. Ações inline por linha: alternar faturado/entregue (UC-12), encaminhar (converter em
