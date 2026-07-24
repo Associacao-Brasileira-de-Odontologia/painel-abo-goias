@@ -929,28 +929,41 @@ class EquipesViewTests(TestCase):
 # ---------------------------------------------------------------------------
 
 
-class MiniMenuBotoesSecundariosTests(TestCase):
-    """Botões de cadastro movidos do topo da página para o mini-menu lateral,
-    mesmo padrão de gestao_cme/partials/side_link_group.html."""
+class MenuBotoesSecundariosTests(TestCase):
+    """Botões secundários movidos do topo das páginas para a navegação lateral.
+
+    "Registrar pedido"/"Nova moldagem" viram ações rápidas (ação de fluxo
+    principal, em destaque — mesmo critério do CME para "Registrar
+    entrada"/"Registrar retirada"). "Novo laboratório"/"Nova equipe" são
+    cadastros auxiliares e ficam nos mini-menus
+    (gestao_cme/partials/side_link_group.html)."""
 
     def setUp(self) -> None:
         self.usuario = _usuario()
         self.client.force_login(self.usuario)
 
-    def test_acompanhamento_tem_registrar_pedido_no_mini_menu_e_nao_no_topo(
-        self,
-    ) -> None:
+    def test_acompanhamento_tem_registrar_pedido_como_acao_rapida(self) -> None:
         response = self.client.get(reverse("lab_pedidos"))
         self.assertContains(response, reverse("lab_criar_pedido"))
         self.assertContains(response, "Registrar pedido")
+        self.assertContains(response, "side-quick-actions")
         self.assertNotContains(response, "topbar-actions")
-        self.assertNotContains(response, "side-quick-actions")
+        self.assertNotContains(response, 'id="side-submenu-lab_pedidos"')
 
-    def test_moldagens_tem_nova_moldagem_no_mini_menu_e_nao_no_topo(self) -> None:
+    def test_moldagens_tem_nova_moldagem_como_acao_rapida(self) -> None:
         response = self.client.get(reverse("lab_moldagens"))
         self.assertContains(response, reverse("lab_criar_moldagem"))
         self.assertContains(response, "Nova moldagem")
+        self.assertContains(response, "side-quick-actions")
         self.assertNotContains(response, "topbar-actions")
+        self.assertNotContains(response, 'id="side-submenu-lab_moldagens"')
+
+    def test_acoes_rapidas_aparecem_em_qualquer_pagina_do_menu(self) -> None:
+        # O bloco vive em partials/menu.html, incluído por todas as páginas —
+        # não é algo que só a própria tela de Acompanhamento/Moldagens mostra.
+        response = self.client.get(reverse("lab_laboratorios"))
+        self.assertContains(response, reverse("lab_criar_pedido"))
+        self.assertContains(response, reverse("lab_criar_moldagem"))
 
     def test_laboratorios_tem_novo_laboratorio_no_mini_menu_e_nao_no_topo(
         self,
@@ -966,12 +979,14 @@ class MiniMenuBotoesSecundariosTests(TestCase):
         self.assertContains(response, "Nova equipe")
         self.assertNotContains(response, "topbar-actions")
 
-    def test_mini_menu_expande_automaticamente_na_pagina_de_criacao(self) -> None:
+    def test_mini_menu_de_laboratorios_expande_automaticamente_na_criacao(
+        self,
+    ) -> None:
         # side_link_group marca o submenu como aberto (sem `hidden`) quando a
         # rota atual bate com `match` — aqui, a própria página de criação.
-        response = self.client.get(reverse("lab_criar_moldagem"))
-        self.assertContains(response, 'id="side-submenu-lab_moldagens"')
-        self.assertNotContains(response, 'id="side-submenu-lab_moldagens" hidden')
+        response = self.client.get(reverse("lab_criar_laboratorio"))
+        self.assertContains(response, 'id="side-submenu-lab_laboratorios"')
+        self.assertNotContains(response, 'id="side-submenu-lab_laboratorios" hidden')
 
 
 # ---------------------------------------------------------------------------
