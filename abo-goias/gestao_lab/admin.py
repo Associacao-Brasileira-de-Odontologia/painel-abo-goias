@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import AlunoLab, Equipe, Laboratorio, Moldagem, Paciente, PedidoMaterial
+from .models import (
+    AlunoLab,
+    Equipe,
+    Laboratorio,
+    Moldagem,
+    Paciente,
+    PedidoMaterial,
+    TurmaLab,
+)
 
 
 @admin.register(Equipe)
@@ -18,19 +26,29 @@ class LaboratorioAdmin(admin.ModelAdmin):
     filter_horizontal = ("equipes",)
 
 
+@admin.register(TurmaLab)
+class TurmaLabAdmin(admin.ModelAdmin):
+    list_display = ("nome", "codigo", "origem", "ultima_sincronizacao", "ativo")
+    list_filter = ("ativo", "origem")
+    search_fields = ("nome", "codigo")
+    readonly_fields = ("ultima_sincronizacao",)
+
+
 @admin.register(AlunoLab)
 class AlunoLabAdmin(admin.ModelAdmin):
     list_display = (
         "nome",
         "celular",
-        "id_dental",
+        "matricula",
+        "turma",
         "origem",
         "ultima_sincronizacao",
         "ativo",
     )
-    list_filter = ("ativo", "origem")
-    search_fields = ("nome", "celular", "id_dental")
+    list_filter = ("ativo", "origem", "turma")
+    search_fields = ("nome", "celular", "matricula")
     readonly_fields = ("ultima_sincronizacao",)
+    autocomplete_fields = ("turma",)
 
 
 @admin.register(Paciente)

@@ -37,7 +37,12 @@
             <option value="">Pedido — todos</option>
             <option value="aberto" {% if pedido_filtro == "aberto" %}selected{% endif %}>Com pedido aberto</option>
         </select>
-        <button class="button primary" type="submit">Buscar</button>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or pedido_filtro %}
+                <a class="button secondary compact-button" href="{% url 'lab_pacientes' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
     {% if busca or pedido_filtro %}
@@ -60,7 +65,6 @@
                     <span class="chip-x" aria-hidden="true">×</span>
                 </a>
             {% endif %}
-            <a class="button secondary compact-button" href="{% url 'lab_pacientes' %}">Limpar tudo</a>
         </div>
     {% endif %}
 
@@ -69,8 +73,20 @@
         {% if total_abertos %}
             <a href="?pedido=aberto" title="Filtrar pacientes com pedido aberto"><strong>{{ total_abertos }}</strong> com pedido aberto</a>
         {% endif %}
+        {% if busca and dental_ha_mais %}
+            <span class="cell-muted">Muitos resultados no Dental Office — refine a busca pelo nome completo para ver os demais.</span>
+        {% endif %}
+        {% if busca and erro_dental %}
+            <span class="cell-muted">Não foi possível consultar o Dental Office agora: {{ erro_dental }}</span>
+        {% endif %}
     </div>
 
+    {% comment %}
+    Listagem unificada (base local + Dental Office ao vivo) — mesmo padrão de
+    gestao_contratos/contratos.html: uma única tabela, com selo de origem por
+    linha, em vez de duas tabelas separadas. Quem só existe no Dental Office
+    ganha a ação "Importar" (resolve o achado U-05).
+    {% endcomment %}
     <div class="table-wrap data-table-wrap">
         <table class="data-table">
             <thead>
@@ -80,26 +96,38 @@
                     <th>Pedido</th>
                     <th>Previsão de retorno</th>
                     <th>Atualização</th>
+                    <th class="actions-cell">Ação</th>
                 </tr>
             </thead>
             <tbody>
-                {% for paciente in pacientes %}
+                {% for paciente in pacientes_unificados %}
                     <tr>
-                        <td><strong>{{ paciente.nome }}</strong></td>
+                        <td>
+                            <strong>{{ paciente.nome }}</strong>
+                            {% if paciente.no_sistema %}
+                                <span class="badge badge-local badge-origin">No sistema</span>
+                            {% else %}
+                                <span class="badge badge-dental badge-origin">Dental Office</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if paciente.celular %}
                                 <a href="{{ paciente.celular|whatsapp_url }}" target="_blank" rel="noopener">
                                     {{ paciente.celular }}
                                 </a>
                             {% else %}
-                                —
+                                <span class="cell-muted">—</span>
                             {% endif %}
                         </td>
                         <td>
-                            {% if paciente.tem_pedido_aberto %}
-                                <span class="badge badge-info">Pedido em aberto</span>
+                            {% if paciente.no_sistema %}
+                                {% if paciente.tem_pedido_aberto %}
+                                    <span class="badge badge-info">Pedido em aberto</span>
+                                {% else %}
+                                    <span class="badge badge-neutro">Sem pedido</span>
+                                {% endif %}
                             {% else %}
-                                <span class="badge badge-neutro">Sem pedido</span>
+                                <span class="cell-muted">—</span>
                             {% endif %}
                         </td>
                         <td>
@@ -109,32 +137,48 @@
                                 </strong>
                                 <span class="cell-muted{% if paciente.data_previsao_retorno < hoje %} date-overdue{% endif %}">{{ paciente.data_previsao_retorno|dias_relativos }}</span>
                             {% else %}
-                                —
+                                <span class="cell-muted">—</span>
                             {% endif %}
                         </td>
                         <td>
                             {% if paciente.ultima_sincronizacao %}
                                 <span class="cell-muted">{{ paciente.ultima_sincronizacao|date:"d/m/Y" }}</span>
                             {% else %}
-                                —
+                                <span class="cell-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="actions-cell">
+                            {% if not paciente.no_sistema %}
+                                <form method="post" action="{% url 'lab_importar_paciente' paciente.id_dental %}" class="inline-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="button compact-button primary" type="submit" title="Importar paciente do Dental Office">Importar</button>
+                                </form>
+                            {% else %}
+                                <span class="cell-muted">—</span>
                             {% endif %}
                         </td>
                     </tr>
                 {% empty %}
                     <tr class="empty-row">
-                        <td colspan="5">
+                        <td colspan="6">
                             <div class="empty-state">
-                                <strong>Nenhum paciente no sistema para esta busca.</strong>
-                                <p>
-                                    {% if busca or pedido_filtro %}
-                                        Revise os filtros ou
-                                        <a href="{% url 'lab_pacientes' %}">limpe a busca</a>.
-                                        {% if busca %}Veja abaixo se há resultados no Dental Office.{% endif %}
-                                    {% else %}
+                                {% if erro_dental %}
+                                    <strong>Nenhum paciente no sistema para esta busca.</strong>
+                                    <p>Não foi possível consultar o Dental Office agora: {{ erro_dental }}</p>
+                                {% elif busca %}
+                                    <strong>Nenhum resultado para "{{ busca }}".</strong>
+                                    <p>
+                                        Não foi encontrado no sistema nem no Dental Office. Revise os
+                                        filtros ou <a href="{% url 'lab_pacientes' %}">limpe a busca</a>.
+                                    </p>
+                                {% else %}
+                                    <strong>Nenhum paciente no sistema.</strong>
+                                    <p>
                                         Busque pelo nome do paciente — a consulta inclui a base
                                         do sistema e o Dental Office.
-                                    {% endif %}
-                                </p>
+                                    </p>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -144,42 +188,4 @@
     </div>
 
     {% include "partials/paginacao.html" %}
-
-    {% comment %}
-    Resultados ao vivo do Dental Office (só quem ainda não está na base local).
-    Mesmo conceito da app de contratos: busca sem sincronizar tudo, com aviso
-    para refinar quando há mais páginas do que as exibidas.
-    {% endcomment %}
-    {% if busca %}
-        <div class="dental-results">
-            <p class="section-label">Encontrados no Dental Office</p>
-            {% if erro_dental %}
-                <p class="help-text">Não foi possível consultar o Dental Office agora: {{ erro_dental }}</p>
-            {% elif pacientes_dental %}
-                {% if dental_ha_mais %}
-                    <p class="help-text">Muitos resultados no Dental Office — refine a busca pelo nome completo para ver os demais.</p>
-                {% endif %}
-                <div class="table-wrap data-table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Paciente (Dental Office)</th>
-                                <th>Celular</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for pac in pacientes_dental %}
-                                <tr>
-                                    <td><strong>{{ pac.nome }}</strong></td>
-                                    <td>{{ pac.celular|default:"—" }}</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="help-text">Nenhum resultado adicional no Dental Office para &ldquo;{{ busca }}&rdquo;.</p>
-            {% endif %}
-        </div>
-    {% endif %}
 {% endblock %}

@@ -109,8 +109,8 @@
             {% if pedido.entregue %}
                 <div class="proxima-item">
                     <div>
-                        <strong>Devolução do laboratório</strong>
-                        <span class="cell-muted">Material finalizado devolvido</span>
+                        <strong>Entrega do laboratório</strong>
+                        <span class="cell-muted">Material finalizado entregue</span>
                     </div>
                     <div class="proxima-date">
                         <strong class="mono">{{ pedido.data_entrega|date:"d/m/Y" }}</strong>
@@ -119,8 +119,8 @@
             {% elif pedido.data_envio %}
                 <div class="proxima-item etapa-ativa">
                     <div>
-                        <strong>Devolução do laboratório</strong>
-                        <span class="cell-muted">Material finalizado devolvido</span>
+                        <strong>Entrega do laboratório</strong>
+                        <span class="cell-muted">Material finalizado entregue</span>
                     </div>
                     <form method="post" action="{% url 'lab_marcar_entrega' pedido.pk %}" class="etapa-form">
                         {% csrf_token %}
@@ -132,8 +132,8 @@
             {% else %}
                 <div class="proxima-item etapa-pendente">
                     <div>
-                        <strong>Devolução do laboratório</strong>
-                        <span class="cell-muted">Material finalizado devolvido</span>
+                        <strong>Entrega do laboratório</strong>
+                        <span class="cell-muted">Material finalizado entregue</span>
                     </div>
                     <div class="proxima-date">
                         <span class="cell-muted">Pendente</span>

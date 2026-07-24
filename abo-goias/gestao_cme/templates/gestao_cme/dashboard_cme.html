@@ -20,7 +20,7 @@
     {% endcomment %}
     {% url 'cme_dashboard' as url_limpar_periodo %}
     <form class="filter-bar" method="get">
-        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="dash" url_limpar=url_limpar_periodo %}
+        {% include "partials/filtro_periodo.html" with id_prefix="dash" url_limpar=url_limpar_periodo %}
     </form>
 
     <div class="kpi-section">

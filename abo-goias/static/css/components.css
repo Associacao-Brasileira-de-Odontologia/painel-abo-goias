@@ -1143,7 +1143,7 @@ a.metric-card:hover {
     color: var(--success);
 }
 
-.seg-a-confirmar .seg-count {
+.seg-entregue-pendente .seg-count {
     background: var(--warn-bg);
     color: var(--warn-text);
 }
@@ -1314,7 +1314,7 @@ tbody tr.row-atrasado > td:first-child {
     box-shadow: inset 3px 0 0 rgba(255, 94, 94, 0.6);
 }
 
-tbody tr.row-a-confirmar > td:first-child {
+tbody tr.row-entregue-pendente > td:first-child {
     box-shadow: inset 3px 0 0 rgba(247, 165, 31, 0.55);
 }
 
@@ -1386,7 +1386,7 @@ tbody tr.row-a-confirmar > td:first-child {
     color: var(--success);
 }
 
-.badge-a-confirmar {
+.badge-entregue-pendente {
     background: var(--warn-bg);
     color: var(--warn-text);
 }
@@ -1399,6 +1399,31 @@ tbody tr.row-a-confirmar > td:first-child {
 .badge-info {
     background: var(--blue-soft);
     color: var(--info-text);
+}
+
+/* Selo de origem dos dados (No sistema / Dental Office) — mesmo padrão do
+   selo de gestao_contratos (contratos.css), sem o escopo `body.gestao-*`
+   para ficar disponível em qualquer app que precise (ex.: Pacientes do
+   gestao_lab, listagem unificada local + Dental Office). */
+.badge-origin {
+    display: block;
+    width: fit-content;
+    margin-top: 3px;
+    min-height: auto;
+    padding: 1px 7px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.badge-local {
+    background: var(--blue-soft);
+    color: var(--info-text);
+}
+
+.badge-dental {
+    background: var(--warn-bg);
+    color: var(--warn-text);
 }
 
 .date-overdue {

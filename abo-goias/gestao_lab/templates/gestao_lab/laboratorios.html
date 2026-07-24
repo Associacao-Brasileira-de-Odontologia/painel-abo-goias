@@ -18,11 +18,11 @@
 {% endblock %}
 
 {% block panel_title %}Laboratórios parceiros{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'lab_criar_laboratorio' %}">Novo laboratório</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Novo laboratório" foi movido para o mini-menu do item "Laboratórios" na
+navegação lateral (ver partials/side_link_group.html) — item 11 do plano de
+2026-07.
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">

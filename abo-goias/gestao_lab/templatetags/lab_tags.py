@@ -9,7 +9,7 @@ register = template.Library()
 
 @register.filter
 def dias_relativos(valor) -> str:
-    """Distância em dias até hoje: 'há 3 dias', 'ontem', 'hoje', 'amanhã', 'em 5 dias'."""
+    """Distância em dias até hoje: 'há 3 dias', 'ontem', 'hoje', 'em 5 dias'."""
     if not valor:
         return ""
     if isinstance(valor, datetime):
@@ -53,7 +53,7 @@ def status_badge_class(status: str) -> str:
     """Retorna a classe CSS do badge conforme o status do pedido."""
     mapa = {
         "EM_DIA": "badge-em-dia",
-        "A_CONFIRMAR": "badge-a-confirmar",
+        "ENTREGUE_NAO_FATURADO": "badge-entregue-pendente",
         "ATRASADO": "badge-atrasado",
         "CONCLUIDO": "badge-neutro",
     }
@@ -65,6 +65,6 @@ def status_row_class(status: str) -> str:
     """Retorna a classe CSS de estado da linha da tabela conforme o status."""
     mapa = {
         "ATRASADO": "row-atrasado",
-        "A_CONFIRMAR": "row-a-confirmar",
+        "ENTREGUE_NAO_FATURADO": "row-entregue-pendente",
     }
     return mapa.get(status, "")

@@ -75,7 +75,7 @@
                     {% endfor %}
                 </div>
 
-                <div class="search-control">
+                <div class="search-control turma-search-control">
                     <input type="search" name="q" placeholder="Buscar turma por nome ou código..."
                            autocomplete="off"
                            hx-get="{% url 'identificadores:buscar_turmas' %}"
@@ -83,11 +83,17 @@
                            hx-vals='{"status": "{{ status }}"}'
                            hx-target="#turma-results"
                            hx-swap="innerHTML"
-                           hx-indicator="#turma-search-spin">
-                    <span id="turma-search-spin" class="htmx-indicator turma-inline-spin">Buscando…</span>
+                           hx-indicator="#turma-search-spin"
+                           data-turma-busca>
+                    <button type="button" class="turma-toggle" data-side-toggle
+                            aria-expanded="false" aria-controls="turma-results"
+                            aria-label="Mostrar turmas">
+                        <svg class="turma-toggle-chevron" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron"></use></svg>
+                    </button>
                 </div>
+                <span id="turma-search-spin" class="htmx-indicator turma-inline-spin">Buscando…</span>
 
-                <div id="turma-results" class="turma-results-wrap">
+                <div id="turma-results" class="turma-results-wrap" hidden>
                     {% include "identificadores/partials/_turma_results.html" %}
                 </div>
             </div>
@@ -214,14 +220,45 @@
                 }
             });
 
-            // Realça a turma clicada na lista de resultados.
+            // Lista de turmas: fechada por padrão (ver UX de itens 2/3 da
+            // avaliação) — abre pelo "v" ao lado do campo (data-side-toggle,
+            // mesmo mecanismo dos submenus da barra lateral) ou ao digitar.
+            const turmaBusca = form.querySelector("[data-turma-busca]");
+            const turmaResults = document.getElementById("turma-results");
+            const turmaToggle = form.querySelector('[aria-controls="turma-results"]');
+
+            function abrirTurmaResults() {
+                if (!turmaResults) return;
+                turmaResults.hidden = false;
+                if (turmaToggle) turmaToggle.setAttribute("aria-expanded", "true");
+            }
+            function fecharTurmaResults() {
+                if (!turmaResults) return;
+                turmaResults.hidden = true;
+                if (turmaToggle) turmaToggle.setAttribute("aria-expanded", "false");
+            }
+
+            if (turmaBusca) {
+                turmaBusca.addEventListener("input", abrirTurmaResults);
+            }
+
+            // Realça a turma clicada na lista de resultados e recolhe a lista
+            // — a escolha já foi feita, não precisa continuar ocupando a tela.
             document.body.addEventListener("click", function (event) {
                 const item = event.target.closest(".turma-result");
-                if (!item) return;
-                form.querySelectorAll(".turma-result.selected").forEach((el) =>
-                    el.classList.remove("selected")
-                );
-                item.classList.add("selected");
+                if (item) {
+                    form.querySelectorAll(".turma-result.selected").forEach((el) =>
+                        el.classList.remove("selected")
+                    );
+                    item.classList.add("selected");
+                    fecharTurmaResults();
+                    return;
+                }
+
+                // Clique fora do bloco de busca também fecha a lista aberta.
+                if (turmaResults && !turmaResults.hidden && !event.target.closest(".turma-search-control, #turma-results")) {
+                    fecharTurmaResults();
+                }
             });
 
             // Reavalia o estado após o HTMX trazer o detalhe da turma.
