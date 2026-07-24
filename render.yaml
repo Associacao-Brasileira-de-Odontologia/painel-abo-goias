@@ -1,0 +1,163 @@
+# Blueprint de deploy no Render (https://render.com/docs/infrastructure-as-code).
+#
+# Isolado da configuração do Railway: o Render só lê este arquivo (ignora
+# railway.toml) e o Railway só lê railway.toml (ignora este arquivo) — os
+# dois podem coexistir no mesmo repositório sem conflito enquanto o Railway
+# segue em produção e o Render é usado só para testes.
+#
+# Aponta para a branch "deploy". Build/start commands espelham os mesmos
+# comandos usados no railway.toml, para manter paridade de comportamento
+# entre os dois provedores.
+#
+# Uso: no dashboard do Render, New > Blueprint > selecionar este repositório
+# e a branch "deploy". Variáveis marcadas com "sync: false" precisam ser
+# preenchidas manualmente no dashboard após a criação (não ficam no Git).
+
+envVarGroups:
+  - name: abo-goias-integracoes
+    envVars:
+      - key: DJANGO_EMAIL_HOST
+        sync: false
+      - key: DJANGO_EMAIL_PORT
+        sync: false
+      - key: DJANGO_EMAIL_HOST_USER
+        sync: false
+      - key: DJANGO_EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DJANGO_EMAIL_USE_TLS
+        sync: false
+      - key: DJANGO_DEFAULT_FROM_EMAIL
+        sync: false
+      - key: DJANGO_ADMINS_EMAIL
+        sync: false
+      - key: ZAPI_INSTANCE_ID
+        sync: false
+      - key: ZAPI_TOKEN
+        sync: false
+      - key: ZAPI_CLIENT_TOKEN
+        sync: false
+      - key: CARIMBO_TEMPO_TSA_URL
+        sync: false
+      - key: DENTAL_CLIENT_ID
+        sync: false
+      - key: DENTAL_SECRET
+        sync: false
+      - key: DENTAL_CLINIC_ID
+        sync: false
+      - key: DENTAL_USER_GROUP_ALUNO
+        sync: false
+      - key: DENTAL_SYNC_TOKEN
+        sync: false
+      - key: EDUQ_DOMINIO
+        sync: false
+      - key: EDUQ_USUARIO
+        sync: false
+      - key: EDUQ_SENHA
+        sync: false
+
+databases:
+  # Plano free do Postgres no Render expira após alguns dias de inatividade/
+  # criação (checar prazo vigente no dashboard) — ok para testes, não para
+  # produção. Trocar para um plano pago antes de qualquer uso real.
+  - name: abo-goias-db
+    plan: free
+    region: oregon
+
+services:
+  # Redis/Celery broker. Plano free tem 25MB e não é persistente (dados somem
+  # a cada restart) — suficiente como fila de tarefas em ambiente de teste.
+  - type: keyvalue
+    name: abo-goias-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    name: abo-goias-web
+    runtime: python
+    branch: deploy
+    region: oregon
+    plan: free
+    healthCheckPath: /healthz/
+    buildCommand: pip install -r requirements.txt && python abo-goias/manage.py collectstatic --noinput
+    preDeployCommand: python abo-goias/manage.py migrate --noinput
+    startCommand: gunicorn abo_goias.wsgi:application --chdir abo-goias --bind 0.0.0.0:$PORT --workers 4 --threads 2 --worker-class gthread --timeout 120 --access-logfile - --error-logfile -
+    envVarGroups:
+      - abo-goias-integracoes
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECURE_PROXY_SSL_HEADER
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: abo-goias-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: abo-goias-redis
+          property: connectionString
+
+  # Sem plano free para Background Workers no Render — cobrado à parte
+  # (mínimo "starter") mesmo com o serviço web em plano free. Se o objetivo
+  # for só validar o site (sem assinatura de contrato/sincronização async),
+  # dá para remover os dois serviços abaixo e testar só com o "web" acima.
+  - type: worker
+    name: abo-goias-celery-worker
+    runtime: python
+    branch: deploy
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A abo_goias worker --loglevel=info --concurrency=2
+    envVarGroups:
+      - abo-goias-integracoes
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: abo-goias-web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: abo-goias-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: abo-goias-redis
+          property: connectionString
+
+  - type: worker
+    name: abo-goias-celery-beat
+    runtime: python
+    branch: deploy
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A abo_goias beat --loglevel=info
+    envVarGroups:
+      - abo-goias-integracoes
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: abo-goias-web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: abo-goias-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: abo-goias-redis
+          property: connectionString
