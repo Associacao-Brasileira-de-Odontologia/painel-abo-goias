@@ -482,4 +482,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "gestao_lab.tasks.sincronizar_dental_task",
         "schedule": crontab(hour=4, minute=30),
     },
+    # data_prevista_devolucao e um DateField (granularidade de dia), entao uma
+    # vez por dia basta — a listagem de emprestimos roda a mesma regra a cada
+    # acesso (views.emprestimos), esta tarefa so cobre quem nao visita a tela.
+    "marcar-emprestimos-atrasados": {
+        "task": "gestao_cme.tasks.marcar_emprestimos_atrasados_task",
+        "schedule": crontab(hour=6, minute=0),
+    },
 }

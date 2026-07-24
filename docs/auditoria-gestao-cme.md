@@ -1,5 +1,11 @@
 # Auditoria — Gestão de CME (`gestao_cme`)
 
+> **Documento histórico.** Desde 2026-07-21, o estado atual do módulo `gestao_cme` está
+> consolidado em [`casos-de-uso-gestao-cme.md`](casos-de-uso-gestao-cme.md) (ver §11.0
+> para o resumo do que esta auditoria encontrou e como foi resolvido). Mantido aqui
+> como registro do ambiente e da metodologia da auditoria original — não reflete
+> necessariamente o comportamento atual do sistema.
+
 > Data da auditoria: 2026-07-13 · Ambiente: desenvolvimento (Windows, SQLite local).
 > Integrações validadas ao vivo: **Eduq OK** (43 turmas no `sincronizar_eduq --dry-run`).
 > **Re-auditado após `git pull` (HEAD `8e91a28`):** templates migraram para a base

@@ -52,12 +52,18 @@
 
                 <div class="portal-status-grid">
                     {% if 'cme' in apps_disponiveis %}
-                        <div class="portal-status-item">
+                        {% comment %}
+                        Mesmo tratamento de link dos KPIs da Visão Geral do CME:
+                        o card abre a listagem já filtrada com o mesmo recorte
+                        que ele contou.
+                        {% endcomment %}
+                        <a class="portal-status-item" href="{% url 'cme_home' %}?status=pendente"
+                           title="Ver pacotes aguardando retirada">
                             <span>Pacotes aguardando retirada</span>
                             <strong {% if resumo.pacotes_pendentes %}class="status-warn"{% endif %}>
                                 {{ resumo.pacotes_pendentes }}
                             </strong>
-                        </div>
+                        </a>
                     {% endif %}
                     {% if 'lab' in apps_disponiveis %}
                         <div class="portal-status-item">
@@ -72,18 +78,25 @@
                         </div>
                     {% endif %}
                     {% if 'bancadas' in apps_disponiveis %}
-                        <div class="portal-status-item">
+                        <a class="portal-status-item" href="{% url 'alunos_por_turma' %}"
+                           title="Ver alunos por turma">
                             <span>Turmas cadastradas</span>
                             <strong>{{ resumo.turmas }}</strong>
-                        </div>
+                        </a>
                     {% endif %}
                 </div>
 
-                {# Ações rápidas: administração agora fica no menu do usuário #}
+                {% comment %}
+                Ações rápidas: administração agora fica no menu do usuário.
+                Ordem alinhada ao menu lateral do CME (partials/menu.html):
+                entrada primeiro/primária, retirada depois/secundária —
+                segue o ciclo real do pacote (entra para esterilizar,
+                depois é retirado).
+                {% endcomment %}
                 {% if 'cme' in apps_disponiveis %}
                     <div class="portal-quick-links">
-                        <a class="button primary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
-                        <a class="button secondary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
+                        <a class="button primary" href="{% url 'registrar_entrada' %}">Registrar entrada</a>
+                        <a class="button secondary" href="{% url 'registrar_saida' %}">Registrar retirada</a>
                     </div>
                 {% endif %}
             </div>

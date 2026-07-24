@@ -1,4 +1,6 @@
 ﻿import json
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -31,6 +33,7 @@ from gestao_cme.models import (
     Material,
     Movimentacao,
     OrigemDados,
+    RegistroAuditoriaMovimentacao,
     Turma,
 )
 from gestao_cme.permissoes import GRUPO_GESTAO, GRUPOS_PADRAO, requer_grupo
@@ -229,8 +232,48 @@ class RotasIniciaisTests(TestCase):
 
         response = self.client.get(reverse("alunos_por_turma"))
 
-        self.assertContains(response, "Sincronizar turmas")
-        self.assertContains(response, reverse("sincronizar_turmas_eduq"))
+        # Botão único que busca todas as turmas na API e, em seguida, os
+        # alunos de cada turma (atualizar_alunos_eduq). O botão separado só de
+        # turmas foi removido por ficar redundante.
+        self.assertContains(response, "Sincronizar alunos e turmas")
+        self.assertContains(response, reverse("atualizar_alunos_eduq"))
+
+    def test_alunos_por_turma_sem_filtro_por_turma(self) -> None:
+        """R2-1: o filtro dedicado por turma foi removido — a tela não traz
+        mais o select name="turma"; a busca textual cobre turma por nome e
+        código."""
+
+        turma_a = Turma.objects.create(
+            codigo="TA1", nome="Turma A", origem=OrigemDados.MANUAL
+        )
+        turma_b = Turma.objects.create(
+            codigo="TB2", nome="Turma B", origem=OrigemDados.MANUAL
+        )
+        Aluno.objects.create(
+            matricula="MA1", nome="Ana", turma=turma_a, origem=OrigemDados.MANUAL
+        )
+        Aluno.objects.create(
+            matricula="MB2", nome="Bruno", turma=turma_b, origem=OrigemDados.MANUAL
+        )
+        usuario = get_user_model().objects.create_user(
+            username="coord-turma", password="senha-segura"
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.get(reverse("alunos_por_turma"))
+        self.assertNotContains(response, 'name="turma"')
+
+        # O parâmetro turma na URL não recorta mais a listagem.
+        resposta_param = self.client.get(
+            reverse("alunos_por_turma"), {"turma": turma_a.pk}
+        )
+        self.assertContains(resposta_param, "Ana")
+        self.assertContains(resposta_param, "Bruno")
+
+        # A busca textual continua encontrando alunos pela turma (código).
+        resposta_busca = self.client.get(reverse("alunos_por_turma"), {"q": "TA1"})
+        self.assertContains(resposta_busca, "Ana")
+        self.assertNotContains(resposta_busca, "Bruno")
 
     def test_alunos_por_turma_exibe_ultima_sincronizacao(self) -> None:
         usuario = get_user_model().objects.create_user(
@@ -337,65 +380,6 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "KIT CIRURGICO")
         self.assertContains(response, "KITLEG-1")
         self.assertContains(response, "KIT 1")
-
-    @patch("gestao_cme.views.sincronizar_eduq")
-    def test_botao_sincroniza_turmas_sem_sincronizar_alunos(
-        self, sync_mock: MagicMock
-    ) -> None:
-        sync_mock.return_value = SimpleNamespace(
-            turmas=SimpleNamespace(criados=2, atualizados=3, erros=[]),
-        )
-        usuario = get_user_model().objects.create_user(
-            username="coordenador",
-            password="senha-segura",
-        )
-        self.client.force_login(usuario)
-
-        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
-
-        sync_mock.assert_called_once_with(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-        self.assertRedirects(response, reverse("alunos_por_turma"))
-        self.assertContains(response, "Turmas sincronizadas: 2 criadas, 3 atualizadas")
-
-    @patch("gestao_cme.views.sincronizar_eduq")
-    def test_sincronizacao_de_turmas_exibe_erro_da_api(
-        self, sync_mock: MagicMock
-    ) -> None:
-        sync_mock.side_effect = EduqAPIError("API indisponivel")
-        usuario = get_user_model().objects.create_user(
-            username="coordenador",
-            password="senha-segura",
-            is_staff=True,
-        )
-        self.client.force_login(usuario)
-
-        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
-
-        self.assertContains(response, "Não foi possível sincronizar turmas")
-        self.assertContains(response, "API indisponivel")
-
-    @patch("gestao_cme.views.sincronizar_eduq")
-    def test_usuario_comum_pode_sincronizar_turmas(self, sync_mock: MagicMock) -> None:
-        sync_mock.return_value = SimpleNamespace(
-            turmas=SimpleNamespace(criados=1, atualizados=0, erros=[]),
-        )
-        usuario = get_user_model().objects.create_user(
-            username="coordenador",
-            password="senha-segura",
-        )
-        self.client.force_login(usuario)
-
-        response = self.client.post(reverse("sincronizar_turmas_eduq"), follow=True)
-
-        sync_mock.assert_called_once_with(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-        self.assertRedirects(response, reverse("alunos_por_turma"))
-        self.assertContains(response, "Turmas sincronizadas")
 
 
 class EduqSyncTests(TestCase):
@@ -978,11 +962,15 @@ class MateriaisFase32Tests(TestCase):
             nome="Turma X", codigo="TX", origem=OrigemDados.EDUQ
         )
         self.aluno = Aluno.objects.create(
-            nome="Carlos Andrade", matricula="MAT-1", turma=self.turma,
+            nome="Carlos Andrade",
+            matricula="MAT-1",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
         Aluno.objects.create(
-            nome="Outro Nome", matricula="MAT-2", turma=self.turma,
+            nome="Outro Nome",
+            matricula="MAT-2",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
 
@@ -997,7 +985,9 @@ class MateriaisFase32Tests(TestCase):
         acento — as duas formas precisam encontrar o mesmo conjunto."""
 
         Aluno.objects.create(
-            nome="Ana Júlia Gonçalves", matricula="MAT-9", turma=self.turma,
+            nome="Ana Júlia Gonçalves",
+            matricula="MAT-9",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
 
@@ -1008,7 +998,9 @@ class MateriaisFase32Tests(TestCase):
 
     def test_nome_normalizado_e_derivado_do_nome(self) -> None:
         aluno = Aluno.objects.create(
-            nome="José da Silva Araújo", matricula="MAT-10", turma=self.turma,
+            nome="José da Silva Araújo",
+            matricula="MAT-10",
+            turma=self.turma,
             origem=OrigemDados.EDUQ,
         )
         self.assertEqual(aluno.nome_normalizado, "JOSE DA SILVA ARAUJO")
@@ -1040,9 +1032,15 @@ class MateriaisFase32Tests(TestCase):
         self.assertNotContains(vazio, "Carlos Andrade")
 
         Movimentacao.objects.create(
-            data_hora=timezone.now(), tipo=Movimentacao.Tipo.ENTRADA, aluno=self.aluno,
-            aluno_nome=self.aluno.nome, pacote_codigo="1", retirado=False,
-            arquivo_origem="painel", row_hash="h1", origem=OrigemDados.MANUAL,
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=self.aluno,
+            aluno_nome=self.aluno.nome,
+            pacote_codigo="1",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="h1",
+            origem=OrigemDados.MANUAL,
         )
         com = self.client.get(reverse("buscar_alunos"), {"pendencias": "1"})
         self.assertContains(com, "Carlos Andrade")
@@ -1092,3 +1090,805 @@ class MateriaisFase32Tests(TestCase):
 
         self.assertTrue(mock_sync.called)
         self.assertEqual(response.status_code, 302)
+
+
+class KitCrudTests(TestCase):
+    """Cadastro/edição/exclusão de kit pela interface, com quantidade por
+    material na composição e Kit.quantidade como estoque cadastrado
+    manualmente, independente da disponibilidade dos materiais (decisões de
+    negócio de 2026-07)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-kits", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.material_disponivel = Material.objects.create(
+            nome="Espelho clínico",
+            codigo="KC-001",
+            disponivel=True,
+            origem=OrigemDados.MANUAL,
+        )
+        self.material_indisponivel = Material.objects.create(
+            nome="Sonda exploradora",
+            codigo="KC-002",
+            disponivel=False,
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_cadastrar_kit_define_quantidade_por_material(self) -> None:
+        response = self.client.post(
+            reverse("cadastrar_kit"),
+            {
+                "nome": "Kit Exame",
+                "codigo": "KIT-EXAME",
+                "descricao": "",
+                "quantidade": "1",
+                "materiais": [self.material_disponivel.pk],
+                f"quantidade_{self.material_disponivel.pk}": "4",
+            },
+        )
+
+        self.assertRedirects(response, reverse("kits"))
+        kit = Kit.objects.get(codigo="KIT-EXAME")
+        item = KitMaterial.objects.get(kit=kit, material=self.material_disponivel)
+        self.assertEqual(item.quantidade, 4)
+
+    def test_cadastrar_kit_define_quantidade_em_estoque_manualmente(self) -> None:
+        response = self.client.post(
+            reverse("cadastrar_kit"),
+            {
+                "nome": "Kit Misto",
+                "codigo": "KIT-MISTO",
+                "descricao": "",
+                "quantidade": "7",
+                "materiais": [
+                    self.material_disponivel.pk,
+                    self.material_indisponivel.pk,
+                ],
+                f"quantidade_{self.material_disponivel.pk}": "1",
+                f"quantidade_{self.material_indisponivel.pk}": "1",
+            },
+        )
+
+        self.assertRedirects(response, reverse("kits"))
+        kit = Kit.objects.get(codigo="KIT-MISTO")
+        # Quantidade é o estoque cadastrado, informado manualmente — não
+        # depende de quantos dos 2 materiais vinculados estão disponíveis.
+        self.assertEqual(kit.quantidade, 7)
+
+    def test_editar_kit_atualiza_composicao_sem_alterar_quantidade_automaticamente(
+        self,
+    ) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Ajustável",
+            codigo="KIT-AJUST",
+            quantidade=99,
+            origem=OrigemDados.MANUAL,
+        )
+        KitMaterial.objects.create(
+            kit=kit, material=self.material_disponivel, quantidade=1
+        )
+
+        response = self.client.post(
+            reverse("editar_kit", args=[kit.pk]),
+            {
+                "nome": "Kit Ajustável",
+                "codigo": "KIT-AJUST",
+                "descricao": "",
+                "quantidade": "99",
+                "ativo": "on",
+                "materiais": [self.material_indisponivel.pk],
+                f"quantidade_{self.material_indisponivel.pk}": "2",
+            },
+        )
+
+        self.assertRedirects(response, reverse("kits"))
+        kit.refresh_from_db()
+        # material antigo saiu, novo entrou com quantidade 2 — e o estoque
+        # cadastrado (99) não muda, mesmo o novo material não estando
+        # disponível: são conceitos independentes.
+        self.assertFalse(
+            KitMaterial.objects.filter(
+                kit=kit, material=self.material_disponivel
+            ).exists()
+        )
+        item_novo = KitMaterial.objects.get(
+            kit=kit, material=self.material_indisponivel
+        )
+        self.assertEqual(item_novo.quantidade, 2)
+        self.assertEqual(kit.quantidade, 99)
+
+    def test_excluir_kit_sem_vinculos(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Livre", codigo="KIT-LIVRE", origem=OrigemDados.MANUAL
+        )
+
+        response = self.client.post(reverse("excluir_kit", args=[kit.pk]))
+
+        self.assertRedirects(response, reverse("kits"))
+        self.assertFalse(Kit.objects.filter(pk=kit.pk).exists())
+
+    def test_excluir_kit_com_emprestimo_e_bloqueado(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Vinculado", codigo="KIT-VINC", origem=OrigemDados.MANUAL
+        )
+        turma = Turma.objects.create(
+            nome="Turma K", codigo="TK", origem=OrigemDados.MANUAL
+        )
+        aluno = Aluno.objects.create(
+            nome="Aluno Kit", matricula="MATKIT", turma=turma, origem=OrigemDados.MANUAL
+        )
+        Emprestimo.objects.create(
+            aluno=aluno, kit=kit, status=Emprestimo.Status.EMPRESTADO
+        )
+
+        response = self.client.post(reverse("excluir_kit", args=[kit.pk]))
+
+        self.assertRedirects(response, reverse("editar_kit", args=[kit.pk]))
+        self.assertTrue(Kit.objects.filter(pk=kit.pk).exists())
+
+    def test_editar_kit_expoe_emprestimos_ativos(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Emprestado", codigo="KIT-EMP", origem=OrigemDados.MANUAL
+        )
+        turma = Turma.objects.create(
+            nome="Turma E", codigo="TE", origem=OrigemDados.MANUAL
+        )
+        aluno = Aluno.objects.create(
+            nome="Aluno Emp", matricula="MATEMP", turma=turma, origem=OrigemDados.MANUAL
+        )
+        Emprestimo.objects.create(
+            aluno=aluno, kit=kit, status=Emprestimo.Status.ATRASADO
+        )
+
+        response = self.client.get(reverse("editar_kit", args=[kit.pk]))
+
+        self.assertEqual(response.context["em_emprestimo"], 1)
+
+    def test_kits_listagem_tem_link_de_edicao(self) -> None:
+        kit = Kit.objects.create(
+            nome="Kit Listado", codigo="KIT-LIST", origem=OrigemDados.MANUAL
+        )
+
+        response = self.client.get(reverse("kits"))
+
+        self.assertContains(response, reverse("editar_kit", args=[kit.pk]))
+
+
+class AuditoriaMovimentacaoTests(TestCase):
+    """Trilha mínima (usuário, ação, quando) para edição/exclusão de
+    movimentação — decisão de negócio de 2026-07."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-auditoria", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.mov = Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Auditado",
+            pacote_codigo="9001",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-auditoria-1",
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_editar_movimentacao_grava_auditoria(self) -> None:
+        response = self.client.post(
+            reverse("editar_movimentacao", args=[self.mov.pk]),
+            {
+                "pacote_codigo": "9001-B",
+                "data_hora": "2026-07-20T10:00",
+                "observacoes": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("cme_home"))
+        registro = RegistroAuditoriaMovimentacao.objects.get(movimentacao=self.mov)
+        self.assertEqual(registro.acao, RegistroAuditoriaMovimentacao.Acao.EDICAO)
+        self.assertEqual(registro.usuario, self.usuario)
+        self.assertEqual(registro.pacote_codigo, "9001-B")
+
+    def test_excluir_movimentacao_grava_auditoria_e_sobrevive_ao_delete(self) -> None:
+        response = self.client.post(reverse("excluir_movimentacao", args=[self.mov.pk]))
+
+        self.assertRedirects(response, reverse("cme_home"))
+        self.assertFalse(Movimentacao.objects.filter(pk=self.mov.pk).exists())
+
+        registro = RegistroAuditoriaMovimentacao.objects.get(pacote_codigo="9001")
+        self.assertEqual(registro.acao, RegistroAuditoriaMovimentacao.Acao.EXCLUSAO)
+        self.assertEqual(registro.usuario, self.usuario)
+        self.assertEqual(registro.aluno_nome, "Aluno Auditado")
+        # A movimentacao original foi apagada; a FK acompanha via SET_NULL.
+        self.assertIsNone(registro.movimentacao)
+
+    def test_editar_movimentacao_exibe_historico_de_alteracoes(self) -> None:
+        RegistroAuditoriaMovimentacao.objects.create(
+            movimentacao=self.mov,
+            pacote_codigo=self.mov.pacote_codigo,
+            aluno_nome=self.mov.aluno_nome,
+            acao=RegistroAuditoriaMovimentacao.Acao.EDICAO,
+            usuario=self.usuario,
+        )
+
+        response = self.client.get(reverse("editar_movimentacao", args=[self.mov.pk]))
+
+        self.assertContains(response, "Histórico de alterações")
+        self.assertContains(response, "cme-auditoria")
+
+
+class SincronizarTurmaBuscaTests(TestCase):
+    """Busca de aluno sem resultado oferece sincronizar a turma sob demanda
+    (decisão de negócio: o Eduq não tem busca de aluno por nome)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-sync-busca", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Sync", codigo="TSYNC", origem=OrigemDados.EDUQ
+        )
+
+    def test_busca_sem_resultado_oferece_turmas_para_sincronizar(self) -> None:
+        response = self.client.get(
+            reverse("buscar_alunos"), {"q": "Alguém Que Não Existe"}
+        )
+
+        self.assertContains(response, "Sincronizar turma")
+        self.assertContains(response, "Turma Sync")
+
+    def test_busca_com_resultado_nao_oferece_sincronizar(self) -> None:
+        Aluno.objects.create(
+            nome="Encontrável",
+            matricula="MAT-ENC",
+            turma=self.turma,
+            origem=OrigemDados.EDUQ,
+        )
+
+        response = self.client.get(reverse("buscar_alunos"), {"q": "Encontrável"})
+
+        self.assertNotContains(response, "Sincronizar turma")
+
+    def test_busca_vazia_nao_oferece_sincronizar(self) -> None:
+        response = self.client.get(reverse("buscar_alunos"))
+
+        self.assertNotContains(response, "Sincronizar turma")
+
+    @patch("gestao_cme.views.sincronizar_eduq")
+    def test_sincronizar_turma_busca_chama_sync_e_redireciona_para_next(
+        self, mock_sync
+    ) -> None:
+        mock_sync.return_value = SimpleNamespace(
+            alunos=SimpleNamespace(criados=1, atualizados=0, erros=[]),
+        )
+
+        response = self.client.post(
+            reverse("sincronizar_turma_busca"),
+            {"turma_id": self.turma.pk, "next": "/gestao-cme/nova-entrada/"},
+        )
+
+        mock_sync.assert_called_once_with(
+            sincronizar_turmas=False,
+            sincronizar_alunos=True,
+            turma_codigos=[self.turma.codigo],
+        )
+        self.assertRedirects(
+            response, "/gestao-cme/nova-entrada/", fetch_redirect_response=False
+        )
+
+    def test_sincronizar_turma_busca_sem_selecao_mostra_erro(self) -> None:
+        response = self.client.post(
+            reverse("sincronizar_turma_busca"), {"turma_id": "", "next": ""}
+        )
+
+        self.assertRedirects(response, reverse("alunos_por_turma"))
+
+
+class EmprestimoAtrasoAutomaticoTests(TestCase):
+    """Empréstimo muda para ATRASADO automaticamente ao vencer o prazo
+    (decisão de negócio de 2026-07)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-atraso", password="senha-segura", is_superuser=True
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Atraso", codigo="TATR", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Atraso",
+            matricula="MATATR",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_listagem_marca_emprestimo_vencido_como_atrasado(self) -> None:
+        ontem = timezone.localdate() - timedelta(days=1)
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=ontem,
+        )
+
+        response = self.client.get(reverse("emprestimos"))
+
+        self.assertEqual(response.status_code, 200)
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.ATRASADO)
+        self.assertContains(response, "Atrasado")
+
+    def test_nao_marca_atrasado_sem_prazo_definido(self) -> None:
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=None,
+        )
+
+        self.client.get(reverse("emprestimos"))
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.EMPRESTADO)
+
+    def test_nao_reverte_emprestimo_ja_devolvido(self) -> None:
+        ontem = timezone.localdate() - timedelta(days=1)
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.DEVOLVIDO,
+            data_prevista_devolucao=ontem,
+            data_devolucao=timezone.now(),
+        )
+
+        self.client.get(reverse("emprestimos"))
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.DEVOLVIDO)
+
+    def test_nao_marca_atrasado_antes_do_prazo(self) -> None:
+        amanha = timezone.localdate() + timedelta(days=1)
+        emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=amanha,
+        )
+
+        self.client.get(reverse("emprestimos"))
+
+        emp.refresh_from_db()
+        self.assertEqual(emp.status, Emprestimo.Status.EMPRESTADO)
+
+    def test_servico_retorna_quantidade_marcada(self) -> None:
+        from gestao_cme.services.emprestimos import marcar_emprestimos_atrasados
+
+        ontem = timezone.localdate() - timedelta(days=1)
+        Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=ontem,
+        )
+
+        total = marcar_emprestimos_atrasados()
+
+        self.assertEqual(total, 1)
+
+
+class EmprestimosFiltroPeriodoTests(TestCase):
+    """Filtro de período em Empréstimos (item 11 da avaliação visual) — antes
+    só existia em Movimentações/Visão Geral; recorta por ``data_emprestimo``,
+    mesmo formato ISO do <input type="date"> usado nas outras telas."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-emp-periodo", password="senha-segura", is_superuser=True
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Periodo Emp", codigo="TPEMP", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Periodo Emp",
+            matricula="MATPEMP",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        self.dentro = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_emprestimo=datetime(2026, 3, 10, 10, 0, tzinfo=dt_timezone.utc),
+        )
+        self.fora = Emprestimo.objects.create(
+            aluno=self.aluno,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_emprestimo=datetime(2026, 8, 10, 10, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def test_filtro_periodo_iso_recorta_listagem_e_metricas(self) -> None:
+        response = self.client.get(
+            reverse("emprestimos"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-06-30"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        emprestimos = list(response.context["emprestimos"])
+        self.assertIn(self.dentro, emprestimos)
+        self.assertNotIn(self.fora, emprestimos)
+        self.assertEqual(response.context["metricas"]["total"], 1)
+
+    def test_formulario_usa_input_type_date(self) -> None:
+        response = self.client.get(reverse("emprestimos"))
+
+        self.assertContains(response, 'type="date"')
+
+    def test_data_invalida_e_ignorada_sem_erro(self) -> None:
+        response = self.client.get(
+            reverse("emprestimos"), {"data_inicio": "31/12/2026"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["data_inicio_str"], "")
+
+
+class EditarEmprestimoTests(TestCase):
+    """Edição de empréstimo (item 10 da avaliação visual) — só data prevista
+    de devolução e observações são editáveis, e a visibilidade segue a mesma
+    regra de ``emprestimos_visiveis`` usada na listagem e nas outras ações."""
+
+    def setUp(self) -> None:
+        self.turma = Turma.objects.create(
+            nome="Turma Editar", codigo="TEDIT", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Editar",
+            matricula="MATEDIT",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        self.coordenador = get_user_model().objects.create_user(
+            username="cme-coord-editar", password="senha-segura"
+        )
+        self.outro_coordenador = get_user_model().objects.create_user(
+            username="cme-outro-editar", password="senha-segura"
+        )
+        self.superusuario = get_user_model().objects.create_user(
+            username="cme-super-editar", password="senha-segura", is_superuser=True
+        )
+        self.emp = Emprestimo.objects.create(
+            aluno=self.aluno,
+            coordenador_usuario=self.coordenador,
+            status=Emprestimo.Status.EMPRESTADO,
+            data_prevista_devolucao=timezone.localdate() + timedelta(days=5),
+            observacoes="Observação original",
+        )
+
+    def test_get_exibe_formulario_preenchido(self) -> None:
+        self.client.force_login(self.coordenador)
+
+        response = self.client.get(reverse("editar_emprestimo", args=[self.emp.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Observação original")
+        self.assertContains(response, self.aluno.nome)
+        # input type="date" só aceita ISO (aaaa-mm-dd) — não o "27 de Julho
+        # de 2026" que o template geraria sem a formatação explícita.
+        data_iso = self.emp.data_prevista_devolucao.isoformat()
+        self.assertContains(response, f'value="{data_iso}"')
+
+    def test_post_atualiza_data_e_observacoes(self) -> None:
+        self.client.force_login(self.coordenador)
+        nova_data = timezone.localdate() + timedelta(days=10)
+
+        response = self.client.post(
+            reverse("editar_emprestimo", args=[self.emp.pk]),
+            {
+                "data_prevista_devolucao": nova_data.isoformat(),
+                "observacoes": "Observação atualizada",
+            },
+        )
+
+        self.assertRedirects(response, reverse("emprestimos"))
+        self.emp.refresh_from_db()
+        self.assertEqual(self.emp.data_prevista_devolucao, nova_data)
+        self.assertEqual(self.emp.observacoes, "Observação atualizada")
+
+    def test_coordenador_nao_acessa_emprestimo_de_outro(self) -> None:
+        self.client.force_login(self.outro_coordenador)
+
+        response = self.client.get(reverse("editar_emprestimo", args=[self.emp.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_superusuario_acessa_emprestimo_de_qualquer_coordenador(self) -> None:
+        self.client.force_login(self.superusuario)
+
+        response = self.client.get(reverse("editar_emprestimo", args=[self.emp.pk]))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_listagem_traz_link_de_editar(self) -> None:
+        self.client.force_login(self.coordenador)
+
+        response = self.client.get(reverse("emprestimos"))
+
+        self.assertContains(response, reverse("editar_emprestimo", args=[self.emp.pk]))
+
+
+class CmeDashboardFiltroPeriodoTests(TestCase):
+    """Filtro de período da Visão Geral usa formato ISO (aaaa-mm-dd), o
+    mesmo que <input type="date"> envia — decisão de negócio de 2026-07
+    (calendário nativo em vez de texto livre dd/mm/aaaa)."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-dashboard", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        self.turma = Turma.objects.create(
+            nome="Turma Dashboard", codigo="TDASH", origem=OrigemDados.MANUAL
+        )
+        self.aluno = Aluno.objects.create(
+            nome="Aluno Dashboard",
+            matricula="MATDASH",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=datetime(2026, 3, 10, 10, 0, tzinfo=dt_timezone.utc),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=self.aluno,
+            aluno_nome=self.aluno.nome,
+            pacote_codigo="D-1",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-dash-1",
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=datetime(2026, 8, 10, 10, 0, tzinfo=dt_timezone.utc),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=self.aluno,
+            aluno_nome=self.aluno.nome,
+            pacote_codigo="D-2",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-dash-2",
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_filtro_periodo_iso_recorta_metricas(self) -> None:
+        response = self.client.get(
+            reverse("cme_dashboard"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-06-30"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["metricas_mov"]["total"], 1)
+        self.assertEqual(response.context["data_inicio_str"], "2026-01-01")
+        self.assertEqual(response.context["data_fim_str"], "2026-06-30")
+
+    def test_data_invalida_e_ignorada_sem_erro(self) -> None:
+        response = self.client.get(
+            reverse("cme_dashboard"),
+            {"data_inicio": "31/12/2026", "data_fim": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        # formato dd/mm/aaaa nao e mais aceito (so aaaa-mm-dd) - descartado.
+        self.assertEqual(response.context["data_inicio_str"], "")
+
+    def test_kpi_link_carrega_filtro_em_formato_iso(self) -> None:
+        response = self.client.get(
+            reverse("cme_dashboard"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-12-31"},
+        )
+
+        self.assertContains(response, "data_inicio=2026-01-01")
+        self.assertContains(response, "data_fim=2026-12-31")
+
+    def test_formulario_usa_input_type_date(self) -> None:
+        response = self.client.get(reverse("cme_dashboard"))
+
+        self.assertContains(response, 'type="date"')
+
+
+class MovimentacoesFiltroPeriodoVisivelTests(TestCase):
+    """O filtro de período de Movimentações (item 11 da avaliação visual)
+    virou campo editável na própria tela — antes só chegava como hidden pela
+    URL (ex.: vindo de um KPI da Visão Geral), sem controle direto aqui."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-mov-periodo", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+
+    def test_formulario_traz_campos_de_data_visiveis(self) -> None:
+        response = self.client.get(reverse("cme_home"))
+
+        self.assertContains(response, 'type="date"')
+        self.assertContains(response, 'name="data_inicio"')
+        self.assertContains(response, 'name="data_fim"')
+        self.assertNotContains(response, 'type="hidden" name="data_inicio"')
+        self.assertNotContains(response, 'type="hidden" name="data_fim"')
+
+    def test_campos_preenchidos_quando_filtro_vem_pela_url(self) -> None:
+        response = self.client.get(
+            reverse("cme_home"),
+            {"data_inicio": "2026-01-01", "data_fim": "2026-06-30"},
+        )
+
+        self.assertContains(response, 'value="2026-01-01"')
+        self.assertContains(response, 'value="2026-06-30"')
+        self.assertNotContains(response, "dd/mm/aaaa")
+
+
+class MovimentacoesRotulosContagemTests(TestCase):
+    """Rótulo de contagem ao lado de "N registros" em Movimentações (item 12
+    da avaliação visual) — só faz sentido quando o status selecionado é o
+    mesmo que ele descreve; com "todos" ele não tem relação com a listagem
+    exibida e era só ruído."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Pendente",
+            pacote_codigo="ROT-1",
+            retirado=False,
+            arquivo_origem="painel",
+            row_hash="hash-rotulo-pendente",
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno_nome="Aluno Retirado",
+            pacote_codigo="ROT-2",
+            retirado=True,
+            arquivo_origem="painel",
+            row_hash="hash-rotulo-retirado",
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_status_todos_nao_mostra_nenhum_rotulo(self) -> None:
+        response = self.client.get(reverse("cme_home"))
+
+        self.assertNotContains(response, "aguardando retirada")
+        self.assertNotContains(response, "retirado</span>")
+
+    def test_status_pendente_mostra_aguardando_retirada(self) -> None:
+        response = self.client.get(reverse("cme_home"), {"status": "pendente"})
+
+        self.assertContains(response, "aguardando retirada")
+        self.assertContains(response, "<strong>1</strong> aguardando retirada")
+
+    def test_status_retirado_mostra_rotulo_de_retirado(self) -> None:
+        response = self.client.get(reverse("cme_home"), {"status": "retirado"})
+
+        self.assertNotContains(response, "aguardando retirada")
+        self.assertContains(response, "<strong>1</strong> retirado</span>")
+        # Mesma cor do badge "Retirado" da coluna Status (.badge-devolvido).
+        self.assertContains(response, 'class="meta-success"')
+
+
+class AbrigosRotulosContagemTests(TestCase):
+    """Rótulos "ocupado"/"livre" em Abrigos só aparecem quando o filtro de
+    Ocupação correspondente está selecionado — mesmo conceito do item 12,
+    estendido para Abrigos/Materiais/Kits."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-abrigos-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Abrigo.objects.create(
+            identificador="ROT-OCUPADO", ocupado=True, origem=OrigemDados.MANUAL
+        )
+        Abrigo.objects.create(
+            identificador="ROT-LIVRE", ocupado=False, origem=OrigemDados.MANUAL
+        )
+
+    def test_ocupacao_todos_nao_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("abrigos"))
+
+        self.assertNotContains(response, "ocupado</span>")
+        self.assertNotContains(response, "livre</span>")
+
+    def test_ocupacao_ocupado_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("abrigos"), {"ocupacao": "ocupado"})
+
+        self.assertContains(response, "<strong>1</strong> ocupado</span>")
+        self.assertNotContains(response, "livre</span>")
+
+    def test_ocupacao_livre_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("abrigos"), {"ocupacao": "livre"})
+
+        self.assertContains(response, "<strong>1</strong> livre</span>")
+        self.assertNotContains(response, "ocupado</span>")
+
+
+class MateriaisRotulosContagemTests(TestCase):
+    """Rótulos "disponíveis"/"indisponíveis" em Materiais só aparecem quando
+    o filtro de Disponibilidade correspondente está selecionado."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-materiais-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Material.objects.create(
+            nome="Material Rótulo Disponível",
+            codigo="ROT-DISP",
+            disponivel=True,
+            origem=OrigemDados.MANUAL,
+        )
+        Material.objects.create(
+            nome="Material Rótulo Indisponível",
+            codigo="ROT-INDISP",
+            disponivel=False,
+            origem=OrigemDados.MANUAL,
+        )
+
+    def test_disponibilidade_todos_nao_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("materiais"))
+
+        self.assertNotContains(response, 'class="meta-success"')
+        self.assertNotContains(response, 'class="meta-warn"')
+
+    def test_disponibilidade_disponivel_mostra_rotulo(self) -> None:
+        response = self.client.get(
+            reverse("materiais"), {"disponibilidade": "disponivel"}
+        )
+
+        self.assertContains(response, "<strong>1</strong> de 2 disponível")
+        self.assertNotContains(response, "indisponíve")
+
+    def test_disponibilidade_indisponivel_mostra_rotulo(self) -> None:
+        response = self.client.get(
+            reverse("materiais"), {"disponibilidade": "indisponivel"}
+        )
+
+        self.assertContains(response, "<strong>1</strong> de 2 indisponível")
+
+
+class KitsFiltroStatusTests(TestCase):
+    """Kits ganhou um filtro de Status (Ativo/Inativo), igual Abrigos e
+    Materiais — antes só tinha busca, e o rótulo "N de M ativos" aparecia
+    sempre, sem nenhum filtro correspondente para ligá-lo/desligá-lo."""
+
+    def setUp(self) -> None:
+        self.usuario = get_user_model().objects.create_user(
+            username="cme-kits-rotulos", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+        Kit.objects.create(nome="Kit Ativo Rótulo", codigo="ROT-KIT-ATIVO", ativo=True)
+        Kit.objects.create(
+            nome="Kit Inativo Rótulo", codigo="ROT-KIT-INATIVO", ativo=False
+        )
+
+    def test_status_todos_nao_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("kits"))
+
+        self.assertNotContains(response, 'class="meta-success"')
+        self.assertNotContains(response, 'class="meta-warn"')
+
+    def test_status_ativo_filtra_e_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("kits"), {"status": "ativo"})
+
+        self.assertContains(response, "Kit Ativo Rótulo")
+        self.assertNotContains(response, "Kit Inativo Rótulo")
+        self.assertContains(response, "<strong>1</strong> de 2 ativo</span>")
+
+    def test_status_inativo_filtra_e_mostra_rotulo(self) -> None:
+        response = self.client.get(reverse("kits"), {"status": "inativo"})
+
+        self.assertContains(response, "Kit Inativo Rótulo")
+        self.assertNotContains(response, "Kit Ativo Rótulo")
+        self.assertContains(response, "<strong>1</strong> de 2 inativo</span>")

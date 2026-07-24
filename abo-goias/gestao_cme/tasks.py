@@ -60,3 +60,26 @@ def sincronizar_eduq_task(self) -> dict[str, int]:
         resumo["erros"],
     )
     return resumo
+
+
+@shared_task
+def marcar_emprestimos_atrasados_task() -> int:
+    """Marca como ATRASADO todo empréstimo com prazo vencido, em segundo plano.
+
+    Agendada via Celery Beat (ver CELERY_BEAT_SCHEDULE em settings.py). A
+    listagem de empréstimos já roda a mesma regra a cada acesso (ver
+    views.emprestimos), então esta tarefa cobre o caso de ninguém visitar a
+    tela — por exemplo, para o status já vir correto num alerta futuro no
+    portal, sem depender de alguém abrir a listagem primeiro.
+    """
+
+    from .services.emprestimos import marcar_emprestimos_atrasados
+
+    total = marcar_emprestimos_atrasados()
+    if total:
+        logger.info(
+            "marcar_emprestimos_atrasados_task: %d empréstimo(s) marcado(s) "
+            "como atrasado(s)",
+            total,
+        )
+    return total

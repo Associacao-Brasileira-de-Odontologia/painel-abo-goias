@@ -23,13 +23,14 @@ from .forms import (
     AbrigoForm,
     CadastrarAlunoForm,
     CadastrarTurmaForm,
+    EditarEmprestimoForm,
     EditarMovimentacaoForm,
     EmprestimoForm,
     EntradaForm,
+    KitEditForm,
     KitForm,
     MaterialEditForm,
     MaterialForm,
-    MovimentacaoForm,
 )
 from .integrations.eduq import EduqAPIError
 from .models import (
@@ -41,9 +42,11 @@ from .models import (
     Material,
     Movimentacao,
     OrigemDados,
+    RegistroAuditoriaMovimentacao,
     Turma,
 )
 from .services.eduq_sync import sincronizar_eduq
+from .services.emprestimos import marcar_emprestimos_atrasados
 from .utils import normalizar_texto
 
 REGISTROS_POR_PAGINA = 10
@@ -287,13 +290,14 @@ def linhas_de_pacote() -> QuerySet[Movimentacao]:
     )
 
 
-def _parse_data_br(valor: str, fim_do_dia: bool = False) -> datetime | None:
-    """Converte "dd/mm/aaaa" em datetime aware, ou None se invalido."""
+def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
+    """Converte "aaaa-mm-dd" (formato de ``<input type="date">``) em datetime
+    aware, ou None se invalido."""
 
     if not valor:
         return None
     try:
-        dt = datetime.strptime(valor, "%d/%m/%Y")
+        dt = datetime.strptime(valor, "%Y-%m-%d")
     except ValueError:
         return None
     if fim_do_dia:
@@ -302,16 +306,21 @@ def _parse_data_br(valor: str, fim_do_dia: bool = False) -> datetime | None:
 
 
 def _filtrar_por_intervalo(
-    queryset: QuerySet[Movimentacao],
+    queryset: QuerySet,
     data_inicio: datetime | None,
     data_fim: datetime | None,
-) -> QuerySet[Movimentacao]:
-    """Recorta um queryset de movimentacoes pelo intervalo de datas."""
+    campo: str = "data_hora",
+) -> QuerySet:
+    """Recorta um queryset pelo intervalo de datas, no campo indicado.
+
+    ``campo`` default e "data_hora" (Movimentacao); Emprestimo usa
+    "data_emprestimo" — mesmo helper, campo diferente.
+    """
 
     if data_inicio:
-        queryset = queryset.filter(data_hora__gte=data_inicio)
+        queryset = queryset.filter(**{f"{campo}__gte": data_inicio})
     if data_fim:
-        queryset = queryset.filter(data_hora__lte=data_fim)
+        queryset = queryset.filter(**{f"{campo}__lte": data_fim})
     return queryset
 
 
@@ -386,8 +395,8 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Intervalo de datas — os KPIs da visao geral linkam para ca com o mesmo
     # recorte que usaram para contar; sem isso o link abriria outro conjunto.
-    data_inicio = _parse_data_br(data_inicio_str)
-    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
@@ -446,13 +455,17 @@ def home(request: HttpRequest) -> HttpResponse:
         )
         _preparar_datas_do_pacote(registro)
 
-    # Atalho "N aguardando retirada" — segue o mesmo recorte de datas da
-    # listagem para nao contradizer o que esta na tela.
+    # Rotulo de contagem ao lado de "N registros" — segue o mesmo recorte de
+    # datas da listagem para nao contradizer o que esta na tela. So aparece
+    # quando o status selecionado e o mesmo que o rotulo descreve (pendente/
+    # retirado): mostra-lo com o filtro "todos" sugeria, por engano, que
+    # aquele numero era so mais um dado do conjunto exibido.
     metricas = _filtrar_por_intervalo(
         linhas_de_pacote(), data_inicio, data_fim
     ).aggregate(
         total=Count("id"),
         pendentes=Count("id", filter=Q(retirado=False)),
+        retirados=Count("id", filter=Q(retirado=True)),
     )
 
     return render(
@@ -468,6 +481,7 @@ def home(request: HttpRequest) -> HttpResponse:
             "data_fim_str": data_fim_str,
             "data_inicio": data_inicio,
             "data_fim": data_fim,
+            "periodo_ativo": bool(data_inicio_str or data_fim_str),
             "aluno_filtrado": aluno_filtrado,
             "movimentacoes": page_obj.object_list,
             "metricas": metricas,
@@ -486,7 +500,6 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     """
 
     busca = request.GET.get("q", "").strip()
-    turma_id = request.GET.get("turma", "").strip()
     status_aluno = request.GET.get("status", "ativo").strip()
 
     alunos = (
@@ -507,8 +520,8 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     elif status_aluno == "inativo":
         alunos = alunos.filter(ativo=False)
 
-    if turma_id.isdigit():
-        alunos = alunos.filter(turma_id=turma_id)
+    # O filtro dedicado por turma foi removido (a busca textual já cobre turma,
+    # por nome e código — ver abaixo).
     if busca:
         alunos = alunos.filter(
             Q(nome_normalizado__icontains=normalizar_texto(busca))
@@ -520,17 +533,7 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
 
     page_obj, query_string = paginar_queryset(request, alunos)
 
-    turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
     abrigos = Abrigo.objects.filter(ativo=True).order_by("identificador")
-
-    turma_selecionada = None
-    if turma_id.isdigit():
-        try:
-            turma_selecionada = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).get(
-                pk=turma_id
-            )
-        except Turma.DoesNotExist:
-            pass
 
     alunos_base = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
     turmas_base = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
@@ -554,31 +557,12 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "busca": busca,
-            "turma_id": turma_id,
             "status_aluno": status_aluno,
-            "turmas": turmas,
-            "turma_selecionada": turma_selecionada,
             "abrigos": abrigos,
             "page_obj": page_obj,
             "query_string": query_string,
             "ultima_sincronizacao": ultima_sincronizacao,
-            "total_alunos": alunos_base.count(),
-            "total_turmas": turmas_base.count(),
-            "total_ativos": alunos_base.filter(ativo=True).count(),
             "sem_abrigo": sem_abrigo,
-            "sync_alunos_url": (
-                reverse(
-                    "sincronizar_alunos_turma",
-                    kwargs={"turma_id": turma_selecionada.pk},
-                )
-                if turma_selecionada and turma_selecionada.origem == OrigemDados.EDUQ
-                else None
-            ),
-            "sync_alunos_label": (
-                f"Sincronizar alunos de {turma_selecionada.nome}"
-                if turma_selecionada
-                else None
-            ),
         },
     )
 
@@ -633,35 +617,6 @@ def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
 
     next_url = request.POST.get("next") or reverse("alunos_por_turma")
     return redirect(next_url)
-
-
-@login_required
-@require_POST
-def sincronizar_turmas_eduq(request: HttpRequest) -> HttpResponse:
-    """Executa a sincronizacao manual de turmas com o Eduq.
-
-    Processa apenas turmas, registra mensagens de sucesso ou erro para a
-    interface e redireciona o usuario de volta para a listagem de alunos por
-    turma.
-    """
-
-    try:
-        resultado = sincronizar_eduq(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-    except EduqAPIError as exc:
-        messages.error(request, f"Não foi possível sincronizar turmas: {exc}")
-    else:
-        messages.success(
-            request,
-            "Turmas sincronizadas: "
-            f"{resultado.turmas.criados} criadas, "
-            f"{resultado.turmas.atualizados} atualizadas, "
-            f"{len(resultado.turmas.erros)} erro(s).",
-        )
-
-    return redirect("alunos_por_turma")
 
 
 @login_required
@@ -749,6 +704,7 @@ def materiais(request: HttpRequest) -> HttpResponse:
         "total": materiais_base.count(),
         "ativos": materiais_base.filter(ativo=True).count(),
         "disponiveis": materiais_base.filter(disponivel=True).count(),
+        "indisponiveis": materiais_base.filter(disponivel=False).count(),
         "filtrados": page_obj.paginator.count,
     }
 
@@ -775,18 +731,23 @@ def materiais(request: HttpRequest) -> HttpResponse:
 def kits(request: HttpRequest) -> HttpResponse:
     """Lista kits de materiais com resumo dos itens que os compoem.
 
-    Permite busca por dados do kit e de seus materiais, prepara informacoes de
-    resumo para exibicao no template e calcula metricas gerais de kits ativos e
-    quantidade operacional.
+    Permite busca por dados do kit e de seus materiais, filtro por status
+    (ativo/inativo), prepara informacoes de resumo para exibicao no template
+    e calcula metricas gerais de kits ativos e quantidade operacional.
     """
 
     busca = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
 
     kits_queryset = (
         Kit.objects.exclude(origem=OrigemDados.EXEMPLO)
         .prefetch_related("itens__material")
         .order_by("nome")
     )
+    if status == "ativo":
+        kits_queryset = kits_queryset.filter(ativo=True)
+    elif status == "inativo":
+        kits_queryset = kits_queryset.filter(ativo=False)
     if busca:
         kits_queryset = kits_queryset.filter(
             Q(nome__icontains=busca)
@@ -811,6 +772,7 @@ def kits(request: HttpRequest) -> HttpResponse:
     metricas = {
         "total": kits_base.count(),
         "ativos": kits_base.filter(ativo=True).count(),
+        "inativos": kits_base.filter(ativo=False).count(),
         "quantidade": sum(kit.quantidade for kit in kits_base),
         "filtrados": page_obj.paginator.count,
     }
@@ -821,6 +783,10 @@ def kits(request: HttpRequest) -> HttpResponse:
         {
             "usuario_logado": request.user,
             "busca": busca,
+            "status_atual": status,
+            "status_label": {"ativo": "Ativos", "inativo": "Inativos"}.get(
+                status, "Todos"
+            ),
             "metricas": metricas,
             "kits": page_obj.object_list,
             "page_obj": page_obj,
@@ -834,8 +800,10 @@ def cadastrar_kit(request: HttpRequest) -> HttpResponse:
     """Cria um novo kit manualmente, com composição opcional de materiais.
 
     Habilita o cadastro de kits pela própria tela de kits (antes só era
-    possível pelo Django Admin). A seleção de materiais gera os itens do kit
-    com quantidade 1; ajustes de quantidade por material seguem no Admin.
+    possível pelo Django Admin). Cada material selecionado tem sua própria
+    quantidade, informada já nesta tela (ver ``KitForm``); "Quantidade" do
+    kit é o estoque cadastrado (quantas unidades físicas existem), informado
+    manualmente e independente da disponibilidade dos materiais da composição.
     """
 
     form = KitForm(request.POST or None)
@@ -860,55 +828,66 @@ def cadastrar_kit(request: HttpRequest) -> HttpResponse:
     )
 
 
-def _contexto_movimentacao(
-    request: HttpRequest,
-    tipo: str,
-    form: MovimentacaoForm,
-) -> dict[str, Any]:
-    """Monta o contexto compartilhado entre registrar_saida e registrar_entrada."""
+@login_required
+def editar_kit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Atualiza os dados e a composição de materiais de um kit existente."""
 
-    tipo_label = "Saída" if tipo == Movimentacao.Tipo.SAIDA else "Entrada"
-    return {
-        "usuario_logado": request.user,
-        "tipo": tipo,
-        "tipo_label": tipo_label,
-        "titulo": f"Registrar {tipo_label.lower()}",
-        "subtitulo": (
-            "Registre a entrega de um pacote ao aluno."
-            if tipo == Movimentacao.Tipo.SAIDA
-            else "Registre a devolução de um pacote pelo aluno."
-        ),
-        "submit_label": f"Registrar {tipo_label.lower()}",
-        "alunos": form.fields["aluno"].queryset,
-        "materiais": form.fields["material"].queryset,
-        "form": form,
-    }
+    kit = get_object_or_404(Kit, pk=pk)
+    form = KitEditForm(request.POST or None, instance=kit)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, f"Kit {kit.nome} atualizado com sucesso.")
+        return redirect("kits")
 
+    # Empréstimos ativos com este kit — avisa antes da exclusão irreversível,
+    # mesmo padrão de "em_emprestimo" usado em editar_material.
+    em_emprestimo = Emprestimo.objects.filter(
+        kit=kit,
+        status__in=[Emprestimo.Status.EMPRESTADO, Emprestimo.Status.ATRASADO],
+    ).count()
+    quantidades_atuais = {item.material_id: item.quantidade for item in kit.itens.all()}
 
-def _salvar_movimentacao(
-    form: MovimentacaoForm,
-    tipo: str,
-    retirado: bool | None,
-) -> Movimentacao:
-    """Persiste uma movimentacao a partir de um form já validado."""
-
-    aluno: Aluno = form.cleaned_data["aluno"]
-    return Movimentacao.objects.create(
-        data_hora=form.cleaned_data["data_hora"],
-        tipo=tipo,
-        aluno=aluno,
-        turma=aluno.turma,
-        material=form.cleaned_data.get("material"),
-        aluno_nome=aluno.nome,
-        aluno_codigo_externo=aluno.matricula,
-        turma_nome=aluno.turma.nome if aluno.turma else "",
-        pacote_codigo=form.cleaned_data["pacote_codigo"],
-        retirado=retirado,
-        arquivo_origem="painel",
-        row_hash=_gerar_row_hash(),
-        origem=OrigemDados.MANUAL,
-        observacoes=form.cleaned_data.get("observacoes", ""),
+    return render(
+        request,
+        "gestao_cme/form_kit.html",
+        {
+            "usuario_logado": request.user,
+            "titulo": f"Editar {kit.nome}",
+            "is_edit": True,
+            "objeto": kit,
+            "form": form,
+            "em_emprestimo": em_emprestimo,
+            "quantidades_atuais": quantidades_atuais,
+        },
     )
+
+
+@login_required
+@require_POST
+def excluir_kit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exclui um kit permanentemente.
+
+    Quando o kit está referenciado por algum empréstimo (``Emprestimo.kit`` é
+    ``PROTECT``), a exclusão é bloqueada e a view orienta a inativar o kit em
+    vez de excluir — mesmo tratamento de ``excluir_material``.
+    """
+
+    kit = get_object_or_404(Kit, pk=pk)
+    nome = kit.nome
+    try:
+        kit.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            (
+                f"Não foi possível excluir o kit {nome}: há empréstimos "
+                "vinculados. Marque-o como inativo em vez de excluir."
+            ),
+        )
+        return redirect("editar_kit", pk=pk)
+
+    messages.success(request, f"Kit {nome} excluído permanentemente.")
+    return redirect("kits")
 
 
 @login_required
@@ -1136,6 +1115,17 @@ def excluir_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
     pacote = mov.pacote_codigo
     tipo = mov.tipo
 
+    # Gravado antes do delete(): a FK de auditoria é SET_NULL, então o
+    # registro sobrevive à exclusão da movimentação (com a cópia textual do
+    # pacote/aluno feita acima, já que o vínculo vai desaparecer).
+    RegistroAuditoriaMovimentacao.objects.create(
+        movimentacao=mov,
+        pacote_codigo=pacote,
+        aluno_nome=nome,
+        acao=RegistroAuditoriaMovimentacao.Acao.EXCLUSAO,
+        usuario=request.user,
+    )
+
     if tipo == Movimentacao.Tipo.SAIDA:
         # Restaura entradas correspondentes para "nao retirado"
         restauradas = Movimentacao.objects.filter(
@@ -1171,6 +1161,13 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
         form = EditarMovimentacaoForm(request.POST, instance=mov)
         if form.is_valid():
             form.save()
+            RegistroAuditoriaMovimentacao.objects.create(
+                movimentacao=mov,
+                pacote_codigo=mov.pacote_codigo,
+                aluno_nome=mov.aluno_nome,
+                acao=RegistroAuditoriaMovimentacao.Acao.EDICAO,
+                usuario=request.user,
+            )
             messages.success(
                 request,
                 f"Registro do pacote {mov.pacote_codigo} atualizado.",
@@ -1186,6 +1183,8 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
     else:
         status_label, status_classe = "Sem status", "emprestado"
 
+    historico_auditoria = mov.auditorias.select_related("usuario").all()
+
     return render(
         request,
         "gestao_cme/editar_movimentacao.html",
@@ -1195,6 +1194,7 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
             "mov": mov,
             "status_label": status_label,
             "status_classe": status_classe,
+            "historico_auditoria": historico_auditoria,
             "breadcrumbs": [
                 {"label": "Movimentações", "url": reverse("cme_home")},
                 {"label": "Editar registro", "url": None},
@@ -1206,16 +1206,12 @@ def editar_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
 # ── Fase 2: cadastros manuais e sincronização por turma ──────────────────────
 
 
-@login_required
-@require_POST
-def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpResponse:
-    """Sincroniza alunos de uma turma especifica com o Eduq."""
+def _sincronizar_alunos_da_turma(request: HttpRequest, turma: Turma) -> None:
+    """Sincroniza os alunos de uma turma com o Eduq e registra a mensagem do resultado.
 
-    try:
-        turma = Turma.objects.get(pk=turma_id)
-    except Turma.DoesNotExist:
-        messages.error(request, "Turma não encontrada.")
-        return redirect("alunos_por_turma")
+    Usado por ``sincronizar_turma_busca`` (turma escolhida a partir do estado
+    vazio da busca de aluno).
+    """
 
     try:
         resultado = sincronizar_eduq(
@@ -1237,10 +1233,35 @@ def sincronizar_alunos_turma(request: HttpRequest, turma_id: int) -> HttpRespons
             + (f", {erros} erro(s)." if erros else "."),
         )
 
+
+@login_required
+@require_POST
+def sincronizar_turma_busca(request: HttpRequest) -> HttpResponse:
+    """Sincroniza a turma escolhida a partir do estado vazio da busca de aluno.
+
+    Decisão de negócio: como o Eduq não oferece busca de aluno por nome (só
+    ``listar_alunos`` por turma — ver docstring de ``buscar_alunos``), quando a
+    busca de autocomplete não encontra ninguém a saída é sincronizar a turma
+    do aluno sob demanda, ali mesmo, em vez de mandar o operador para outra
+    tela para depois voltar e tentar buscar de novo.
+    """
+
+    turma_id = request.POST.get("turma_id", "").strip()
     next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect(f"{reverse('alunos_por_turma')}?turma={turma_id}")
+    destino = next_url if next_url.startswith("/") else reverse("alunos_por_turma")
+
+    if not turma_id.isdigit():
+        messages.error(request, "Selecione uma turma para sincronizar.")
+        return redirect(destino)
+
+    try:
+        turma = Turma.objects.get(pk=turma_id)
+    except Turma.DoesNotExist:
+        messages.error(request, "Turma não encontrada.")
+        return redirect(destino)
+
+    _sincronizar_alunos_da_turma(request, turma)
+    return redirect(destino)
 
 
 @login_required
@@ -1475,6 +1496,15 @@ def buscar_alunos(request: HttpRequest) -> HttpResponse:
     encontrados = list(alunos[: LIMITE_RESULTADOS_BUSCA + 1])
     ha_mais = len(encontrados) > LIMITE_RESULTADOS_BUSCA
 
+    # Busca sem resultado: como o Eduq não tem busca de aluno por nome (só
+    # listagem por turma), a saída oferecida é sincronizar a turma do aluno
+    # sob demanda, ali mesmo — ver sincronizar_turma_busca.
+    turmas_para_sincronizar = None
+    if q and not encontrados:
+        turmas_para_sincronizar = Turma.objects.exclude(
+            origem=OrigemDados.EXEMPLO
+        ).order_by("nome")
+
     return render(
         request,
         "gestao_cme/partials/_aluno_results.html",
@@ -1482,6 +1512,8 @@ def buscar_alunos(request: HttpRequest) -> HttpResponse:
             "alunos": encontrados[:LIMITE_RESULTADOS_BUSCA],
             "busca": q,
             "ha_mais": ha_mais,
+            "turmas_para_sincronizar": turmas_para_sincronizar,
+            "origem_busca": request.headers.get("HX-Current-URL", ""),
         },
     )
 
@@ -1510,37 +1542,6 @@ def atualizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
     if next_url.startswith("/"):
         return HttpResponseRedirect(next_url)
     return redirect("registrar_entrada")
-
-
-@login_required
-@require_POST
-def atualizar_turmas_eduq(request: HttpRequest) -> HttpResponse:
-    """Sincroniza somente as turmas com o Eduq e volta para a tela de origem.
-
-    Complementa ``atualizar_alunos_eduq`` (que traz turmas e alunos, e e mais
-    demorado): aqui o alvo e so o cadastro de turmas, usado quando uma turma nova
-    ainda nao aparece na tela.
-    """
-
-    try:
-        resultado = sincronizar_eduq(
-            sincronizar_turmas=True,
-            sincronizar_alunos=False,
-        )
-    except EduqAPIError as exc:
-        messages.error(request, f"Não foi possível atualizar as turmas: {exc}")
-    else:
-        messages.success(
-            request,
-            "Turmas atualizadas: "
-            f"{resultado.turmas.criados} nova(s), "
-            f"{resultado.turmas.atualizados} atualizada(s).",
-        )
-
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("criar_emprestimo")
 
 
 @login_required
@@ -1582,15 +1583,34 @@ _STATUS_EMPRESTIMO_OPCOES = (
 
 @login_required
 def emprestimos(request: HttpRequest) -> HttpResponse:
-    """Lista emprestimos com filtros de status e busca."""
+    """Lista emprestimos com filtros de status, busca e periodo.
+
+    Antes de montar a listagem, atualiza o status dos empréstimos vencidos
+    para ATRASADO — a tarefa periódica (ver tasks.py) cobre quem não visita a
+    tela, mas a listagem precisa estar correta mesmo entre execuções dela.
+    """
+
+    marcar_emprestimos_atrasados()
 
     busca = request.GET.get("q", "").strip()
     status_filtro = request.GET.get("status", "").strip()
+    data_inicio_str = request.GET.get("data_inicio", "").strip()
+    data_fim_str = request.GET.get("data_fim", "").strip()
+
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    if data_inicio_str and data_inicio is None:
+        data_inicio_str = ""
+    if data_fim_str and data_fim is None:
+        data_fim_str = ""
 
     queryset = (
         emprestimos_visiveis(request)
         .select_related("aluno", "aluno__turma", "kit", "coordenador_usuario")
         .prefetch_related("itens")
+    )
+    queryset = _filtrar_por_intervalo(
+        queryset, data_inicio, data_fim, campo="data_emprestimo"
     )
 
     if status_filtro in Emprestimo.Status.values:
@@ -1608,7 +1628,9 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
 
     page_obj, query_string = paginar_queryset(request, queryset)
 
-    base = emprestimos_visiveis(request)
+    base = _filtrar_por_intervalo(
+        emprestimos_visiveis(request), data_inicio, data_fim, campo="data_emprestimo"
+    )
     metricas = base.aggregate(
         total=Count("id"),
         emprestados=Count("id", filter=Q(status=Emprestimo.Status.EMPRESTADO)),
@@ -1625,6 +1647,11 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
             "status_filtro": status_filtro,
             "status_opcoes": _STATUS_EMPRESTIMO_OPCOES,
             "status_label": dict(_STATUS_EMPRESTIMO_OPCOES).get(status_filtro, "Todos"),
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "data_inicio_str": data_inicio_str,
+            "data_fim_str": data_fim_str,
+            "periodo_ativo": bool(data_inicio_str or data_fim_str),
             "emprestimos": page_obj.object_list,
             "metricas": metricas,
             "page_obj": page_obj,
@@ -1685,6 +1712,44 @@ def criar_emprestimo(request: HttpRequest) -> HttpResponse:
             "kits": form.fields["kit"].queryset,
             "form": form,
             "aluno_selecionado": aluno_selecionado,
+        },
+    )
+
+
+@login_required
+def editar_emprestimo(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exibe e processa o formulario de edicao de um emprestimo existente."""
+
+    emp = get_object_or_404(
+        emprestimos_visiveis(request).select_related(
+            "aluno", "aluno__turma", "kit", "coordenador_usuario"
+        ),
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        form = EditarEmprestimoForm(request.POST, instance=emp)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Empréstimo #{emp.pk} de {emp.aluno.nome} atualizado.",
+            )
+            return redirect("emprestimos")
+    else:
+        form = EditarEmprestimoForm(instance=emp)
+
+    return render(
+        request,
+        "gestao_cme/editar_emprestimo.html",
+        {
+            "usuario_logado": request.user,
+            "form": form,
+            "emp": emp,
+            "breadcrumbs": [
+                {"label": "Empréstimos", "url": reverse("emprestimos")},
+                {"label": "Editar empréstimo", "url": None},
+            ],
         },
     )
 
@@ -1756,6 +1821,11 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
 
     data_inicio_str = request.GET.get("data_inicio", "").strip()
     data_fim_str = request.GET.get("data_fim", "").strip()
+    # Guardado antes do preenchimento do padrão abaixo — diferente de
+    # Movimentações/Empréstimos, aqui data_inicio_str/data_fim_str NUNCA
+    # ficam vazias (sempre caem no padrão "todo o histórico"), então não dá
+    # pra usá-las para saber se foi o usuário quem pediu um recorte.
+    periodo_ativo = bool(data_inicio_str or data_fim_str)
 
     # Padrão: do primeiro registro do banco até hoje — abre mostrando todo o
     # histórico, em vez de recortar no mês atual (que escondia o passado sem o
@@ -1763,11 +1833,11 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
     if not data_inicio_str and not data_fim_str:
         primeiro = linhas_de_pacote().aggregate(Min("data_hora"))["data_hora__min"]
         inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
-        data_inicio_str = inicio_padrao.strftime("%d/%m/%Y")
-        data_fim_str = hoje.strftime("%d/%m/%Y")
+        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
+        data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_br(data_inicio_str)
-    data_fim = _parse_data_br(data_fim_str, fim_do_dia=True)
+    data_inicio = _parse_data_iso(data_inicio_str)
+    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
@@ -1855,9 +1925,7 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
             "data_fim_str": data_fim_str,
             "data_inicio": data_inicio,
             "data_fim": data_fim,
-            "filtro_ativo": bool(
-                request.GET.get("data_inicio") or request.GET.get("data_fim")
-            ),
+            "periodo_ativo": periodo_ativo,
             "filtro_datas_qs": filtro_datas_qs,
             "metricas_mov": metricas_mov,
             "pacotes_aguardando": pacotes_aguardando,

@@ -7,53 +7,21 @@
 {% block sidebar_copy %}Métricas de movimentações de esterilização registradas na CME.{% endblock %}
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
-{% block sidebar_extra %}
-    <form class="form-stack" method="get">
-        <div class="field">
-            <label for="data_inicio">De</label>
-            <input type="text" id="data_inicio" name="data_inicio"
-                   value="{{ data_inicio_str }}"
-                   placeholder="dd/mm/aaaa"
-                   maxlength="10"
-                   pattern="\d{2}/\d{2}/\d{4}">
-        </div>
-        <div class="field">
-            <label for="data_fim">Até</label>
-            <input type="text" id="data_fim" name="data_fim"
-                   value="{{ data_fim_str }}"
-                   placeholder="dd/mm/aaaa"
-                   maxlength="10"
-                   pattern="\d{2}/\d{2}/\d{4}">
-        </div>
-        <button class="button primary" type="submit">Aplicar</button>
-        {% if filtro_ativo %}
-            {# O padrão passou a ser "todo o histórico" (1º registro → hoje). #}
-            <a class="button secondary" href="{% url 'cme_dashboard' %}">Todo o período</a>
-        {% endif %}
-    </form>
-{% endblock %}
-
 {% block panel_title %}Visão geral da CME{% endblock %}
 
 {% block panel %}
-    <div class="selection-summary">
-        {% if data_inicio %}
-            <div class="info-chip">
-                <span>De</span>
-                <strong>{{ data_inicio|date:"d/m/Y" }}</strong>
-            </div>
-        {% endif %}
-        {% if data_fim %}
-            <div class="info-chip">
-                <span>Até</span>
-                <strong>{{ data_fim|date:"d/m/Y" }}</strong>
-            </div>
-        {% endif %}
-        <div class="info-chip">
-            <span>Total no período</span>
-            <strong>{{ metricas_mov.total }} pacote{{ metricas_mov.total|pluralize }}</strong>
-        </div>
-    </div>
+    {% comment %}
+    Filtro de período no topo do conteúdo principal (antes ficava na barra
+    lateral, com o recorte atual repetido em chips somente leitura logo
+    abaixo — dois lugares para a mesma informação). Calendário nativo
+    (input type="date") em vez de texto livre "dd/mm/aaaa". Virou um painel
+    expansível (ver partials/filtro_periodo.html) para não ocupar espaço
+    fixo no topo da tela.
+    {% endcomment %}
+    {% url 'cme_dashboard' as url_limpar_periodo %}
+    <form class="filter-bar" method="get">
+        {% include "gestao_cme/partials/filtro_periodo.html" with id_prefix="dash" url_limpar=url_limpar_periodo %}
+    </form>
 
     <div class="kpi-section">
         <p class="section-label">Pacotes no período</p>

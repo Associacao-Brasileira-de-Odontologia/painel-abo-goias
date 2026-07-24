@@ -8,33 +8,65 @@
 {% block sidebar_nav %}{% include "gestao_cme/partials/menu.html" %}{% endblock %}
 
 {% block panel_title %}Kits cadastrados{% endblock %}
-{% block panel_actions %}
-    <div class="topbar-actions">
-        <a class="button primary" href="{% url 'cadastrar_kit' %}">Cadastrar kit</a>
-    </div>
-{% endblock %}
+{% comment %}
+"Cadastrar kit" foi movido para o mini-menu do item "Kits" na navegação
+lateral (ver partials/side_link_group.html) — não fica mais duplicado aqui.
+{% endcomment %}
 
 {% block panel %}
     <form class="filter-bar" method="get">
         <div class="search-control">
             <input id="results-q-kits" type="search" name="q" autofocus value="{{ busca }}" placeholder="Buscar por kit, código ou material..." aria-label="Buscar na listagem">
         </div>
-        <button class="button primary" type="submit">Buscar</button>
+        <select name="status" aria-label="Filtrar por status" onchange="this.form.submit()">
+            <option value="">Status — todos</option>
+            <option value="ativo" {% if status_atual == "ativo" %}selected{% endif %}>Ativos</option>
+            <option value="inativo" {% if status_atual == "inativo" %}selected{% endif %}>Inativos</option>
+        </select>
+        <div class="filter-actions">
+            <button class="button primary" type="submit">Buscar</button>
+            {% if busca or status_atual %}
+                {# Ao lado de "Buscar", na mesma linha — não mais numa linha própria abaixo dos chips. #}
+                <a class="button secondary compact-button" href="{% url 'kits' %}">Limpar tudo</a>
+            {% endif %}
+        </div>
     </form>
 
-    {% if busca %}
+    {% if busca or status_atual %}
         <div class="selection-summary">
-            <a class="info-chip info-chip--removable" href="{% url 'kits' %}" title="Remover busca">
-                <span>Busca</span>
-                <strong>{{ busca }}</strong>
-                <span class="chip-x" aria-hidden="true">×</span>
-            </a>
+            {% if busca %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if status_atual %}status={{ status_atual }}{% endif %}"
+                   title="Remover busca">
+                    <span>Busca</span>
+                    <strong>{{ busca }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
+            {% if status_atual %}
+                <a class="info-chip info-chip--removable"
+                   href="?{% if busca %}q={{ busca|urlencode }}{% endif %}"
+                   title="Remover filtro de status">
+                    <span>Status</span>
+                    <strong>{{ status_label }}</strong>
+                    <span class="chip-x" aria-hidden="true">×</span>
+                </a>
+            {% endif %}
         </div>
     {% endif %}
 
     <div class="results-meta">
         <span><strong>{{ page_obj.paginator.count }}</strong> resultado{{ page_obj.paginator.count|pluralize }}</span>
-        <span><strong>{{ metricas.ativos }}</strong> de {{ metricas.total }} ativo{{ metricas.ativos|pluralize }}</span>
+        {% comment %}
+        Só aparece quando o filtro de Status correspondente está selecionado
+        — mesmo conceito aplicado em Movimentações/Abrigos/Materiais. Cores
+        iguais às do badge da coluna Status (badge-devolvido/badge-atrasado).
+        {% endcomment %}
+        {% if status_atual == "ativo" and metricas.ativos %}
+            <span class="meta-success"><strong>{{ metricas.ativos }}</strong> de {{ metricas.total }} ativo{{ metricas.ativos|pluralize }}</span>
+        {% elif status_atual == "inativo" and metricas.inativos %}
+            <span class="meta-warn"><strong>{{ metricas.inativos }}</strong> de {{ metricas.total }} inativo{{ metricas.inativos|pluralize }}</span>
+        {% endif %}
     </div>
 
     <div class="table-wrap data-table-wrap">
@@ -42,11 +74,39 @@
             <thead>
                 <tr>
                     <th>Kit</th>
-                    <th>Quantidade</th>
-                    <th>Materiais</th>
-                    <th>Disponíveis</th>
+                    <th>
+                        <span class="th-with-hint">
+                            Quantidade
+                            <span class="th-hint" tabindex="0" role="img"
+                                  aria-label="O que significa o campo Quantidade"
+                                  title="Quantas unidades físicas deste kit estão cadastradas no sistema (estoque) — independente da disponibilidade dos materiais que o compõem.">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alerta"></use></svg>
+                            </span>
+                        </span>
+                    </th>
+                    <th>
+                        <span class="th-with-hint">
+                            Materiais
+                            <span class="th-hint" tabindex="0" role="img"
+                                  aria-label="O que significa o campo Materiais"
+                                  title="Total de materiais cadastrados na composição deste kit.">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alerta"></use></svg>
+                            </span>
+                        </span>
+                    </th>
+                    <th>
+                        <span class="th-with-hint">
+                            Disponíveis
+                            <span class="th-hint" tabindex="0" role="img"
+                                  aria-label="O que significa o campo Disponíveis"
+                                  title="Quantos materiais da composição deste kit estão disponíveis para empréstimo agora.">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alerta"></use></svg>
+                            </span>
+                        </span>
+                    </th>
                     <th>Resumo</th>
                     <th>Status</th>
+                    <th class="actions-cell">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -67,14 +127,20 @@
                                 <span class="badge badge-atrasado">Inativo</span>
                             {% endif %}
                         </td>
+                        <td class="actions-cell">
+                            <a class="icon-action" href="{% url 'editar_kit' kit.pk %}"
+                               title="Editar" aria-label="Editar kit">
+                                <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
+                            </a>
+                        </td>
                     </tr>
                 {% empty %}
                     <tr class="empty-row">
-                        <td colspan="6">
+                        <td colspan="7">
                             <div class="empty-state">
                                 <strong>Nenhum kit encontrado.</strong>
-                                <p>Revise o termo pesquisado ou limpe a busca para visualizar todos os kits cadastrados.</p>
-                                <a class="button secondary compact-button" href="{% url 'kits' %}">Limpar busca</a>
+                                <p>Revise o termo pesquisado ou limpe os filtros para visualizar todos os kits cadastrados.</p>
+                                <a class="button secondary compact-button" href="{% url 'kits' %}">Limpar filtros</a>
                             </div>
                         </td>
                     </tr>
