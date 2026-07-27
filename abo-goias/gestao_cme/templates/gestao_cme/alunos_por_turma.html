@@ -29,25 +29,66 @@
             <button class="button secondary" type="submit">Sincronizar alunos e turmas</button>
         </form>
         {% comment %}
-        Controle à parte do filtro de busca/status da tela (que não tem
-        seletor de turma dedicado — ver R2-1): o coordenador escolhe a turma
-        aqui e baixa o relatório de cobrança dela — status de envio/retirada
-        por aluno, inclusive quem ainda não enviou nada.
+        O relatório por turma NÃO fica aqui: com nomes de turma longos, um
+        <select> nesta barra estica sem trava de largura (a de .filter-bar
+        não vale aqui) e espreme o título do painel. Virou painel expansível
+        próprio, logo abaixo — ver .report-panel no bloco panel.
         {% endcomment %}
-        <form class="report-form" method="get">
-            <input type="hidden" name="formato" value="csv">
-            <select class="select-compact" name="turma" aria-label="Turma para o relatório" required>
-                <option value="">Selecione a turma...</option>
-                {% for turma in turmas %}
-                    <option value="{{ turma.pk }}">{{ turma.codigo }} — {{ turma.nome }}</option>
-                {% endfor %}
-            </select>
-            <button class="button secondary" type="submit">Baixar relatório (CSV)</button>
-        </form>
     </div>
 {% endblock %}
 
 {% block panel %}
+    {% comment %}
+    Relatório de cobrança de material, por turma. Fechado por padrão para não
+    competir com a listagem — o coordenador abre quando vai montar o relatório.
+    É um formulário à parte do filtro da listagem: aqui a turma é obrigatória
+    (a listagem não tem seletor de turma — ver R2-1), e o período recorta as
+    movimentações, não os alunos.
+    {% endcomment %}
+    <details class="report-panel">
+        <summary>
+            {% comment %}
+            Título e dica agrupados para o chevron (::after) não cair numa
+            linha própria quando a dica quebra — ver .report-panel summary.
+            {% endcomment %}
+            <span class="report-panel-heading">
+                <span class="report-panel-title">Relatório de movimentações por turma</span>
+                <span class="report-panel-hint">Quem enviou, quem retirou e quem ainda não enviou material</span>
+            </span>
+        </summary>
+        <form class="report-form" method="get" autocomplete="off">
+            <input type="hidden" name="formato" value="csv">
+
+            <div class="field report-field-turma">
+                <label for="relatorio-turma">Turma</label>
+                <select id="relatorio-turma" name="turma" required>
+                    <option value="">Selecione a turma...</option>
+                    {% for turma in turmas %}
+                        <option value="{{ turma.pk }}">{{ turma.codigo }} — {{ turma.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="relatorio-aluno">Aluno <span class="field-optional">(opcional)</span></label>
+                <input type="search" id="relatorio-aluno" name="q"
+                       placeholder="Nome/matrícula">
+            </div>
+
+            <div class="field">
+                <label for="relatorio-data-inicio">Movimentações de <span class="field-optional">(opcional)</span></label>
+                <input type="date" id="relatorio-data-inicio" name="data_inicio">
+            </div>
+
+            <div class="field">
+                <label for="relatorio-data-fim">Até <span class="field-optional">(opcional)</span></label>
+                <input type="date" id="relatorio-data-fim" name="data_fim">
+            </div>
+
+            <button class="button primary" type="submit">Baixar CSV</button>
+        </form>
+    </details>
+
     {# Barra de filtros única #}
     <form class="filter-bar" method="get" autocomplete="off">
         <div class="search-control">

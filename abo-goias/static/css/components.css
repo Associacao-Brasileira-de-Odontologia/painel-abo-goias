@@ -28,11 +28,111 @@
     margin: 0;
 }
 
-.report-form {
+/* ── Painel de relatório (Alunos por turma) ─────────────────────── */
+
+/* O relatório nasceu como select + botão dentro de .topbar-actions, mas ali
+   não vale a trava de largura que .filter-bar aplica aos selects — com nomes
+   de turma longos ("...ESPECIALIZAÇÃO EM IMPLANTODONTIA – 5º PERÍODO") o
+   campo esticava, espremia o <h2> do painel e quebrava o topo da tela. Virou
+   painel expansível próprio, mesmo caminho já adotado pelo filtro de período
+   (ver .filter-period): fechado por padrão, abre no fluxo normal empurrando o
+   conteúdo abaixo — sem sobrepor nem escapar da borda do painel. */
+.report-panel {
+    margin-bottom: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.report-panel summary {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    list-style: none;
+    transition: color 0.15s ease;
+}
+
+/* Título + dica quebram entre si; o chevron fica fora deste bloco para
+   permanecer centralizado à direita em vez de descer para uma linha só dele. */
+.report-panel-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+}
+
+.report-panel summary::marker,
+.report-panel summary::-webkit-details-marker {
+    display: none;
+    content: "";
+}
+
+.report-panel summary::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-top: -3px;
+    margin-left: auto;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    opacity: 0.6;
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+}
+
+.report-panel[open] summary::after {
+    margin-top: 3px;
+    transform: rotate(-135deg);
+}
+
+.report-panel summary:hover,
+.report-panel[open] summary {
+    color: var(--info-text);
+}
+
+.report-panel-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.report-panel-hint {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+/* Grade fluida: os campos se acomodam em 1..4 colunas conforme a largura
+   disponível, e a turma ocupa a linha inteira porque é o rótulo mais longo. */
+.report-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    align-items: end;
+    gap: 12px;
     margin: 0;
+    padding: 14px;
+    border-top: 1px solid var(--line);
+}
+
+.report-form .report-field-turma {
+    grid-column: 1 / -1;
+}
+
+.report-form label {
+    font-size: 0.7rem;
+}
+
+.report-form .field-optional {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+/* Compacta os campos (base é 50px) — mesmo ajuste do .filter-period-panel,
+   para o painel não ficar mais alto que a barra de filtros logo abaixo. */
+.report-form input,
+.report-form select {
+    min-height: 40px;
+    font-size: 13px;
 }
 
 /* ── Formulários ────────────────────────────────────────────────── */
@@ -2262,6 +2362,13 @@ tbody tr.row-entregue-pendente > td:first-child {
     .filter-bar select {
         width: 100%;
         max-width: none;
+    }
+
+    /* Título e dica do painel de relatório lado a lado só cabem em telas
+       largas; aqui cada um espremia o outro em três linhas. */
+    .report-panel-heading {
+        flex-direction: column;
+        gap: 2px;
     }
 
     .proxima-item.etapa-ativa {

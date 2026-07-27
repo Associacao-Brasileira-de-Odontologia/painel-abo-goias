@@ -575,18 +575,31 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
 
 def _status_envio_aluno(
     movimentacoes: list[Movimentacao],
+    data_inicio: datetime | None = None,
+    data_fim: datetime | None = None,
 ) -> tuple[str, datetime | None, datetime | None]:
     """Deriva o status de envio/retirada de um aluno a partir de suas movimentacoes.
 
     ``movimentacoes`` já vem ordenada por ``-data_hora`` (ver Prefetch em
-    ``_exportar_relatorio_alunos_turma``). Sem nenhuma ENTRADA, o aluno ainda
+    ``_gerar_csv_relatorio_turma``). Sem nenhuma ENTRADA, o aluno ainda
     não enviou material para esterilização — é justamente quem o coordenador
     precisa cobrar. Com a ENTRADA mais recente ainda não retirada, o aluno já
     enviou mas não retirou. Só quando a mais recente estiver retirada o ciclo
     está completo, e a SAIDA vinculada (via ``entrada_origem``) informa a data.
+
+    O período recorta apenas as ENTRADAs — "quem enviou material nesta janela".
+    A SAIDA vinculada é procurada sem esse recorte de propósito: um pacote
+    enviado dentro do período e retirado depois dele continua mostrando a data
+    real da retirada, em vez de parecer que nunca foi retirado.
     """
 
-    entradas = [m for m in movimentacoes if m.tipo == Movimentacao.Tipo.ENTRADA]
+    entradas = [
+        m
+        for m in movimentacoes
+        if m.tipo == Movimentacao.Tipo.ENTRADA
+        and (data_inicio is None or m.data_hora >= data_inicio)
+        and (data_fim is None or m.data_hora <= data_fim)
+    ]
     if not entradas:
         return "Não enviou material", None, None
 
@@ -611,13 +624,13 @@ def _status_envio_aluno(
 
 
 def _exportar_relatorio_alunos_turma(request: HttpRequest) -> HttpResponse:
-    """Valida a turma escolhida no controle de relatório e gera o CSV dela.
+    """Valida os filtros do painel de relatório e gera o CSV da turma escolhida.
 
-    É um controle à parte do filtro de busca/status da listagem (que não tem
-    seletor de turma dedicado — ver R2-1): o coordenador precisa escolher
-    uma turma especifica com facilidade para baixar o relatório dela, então
-    aqui a turma é sempre obrigatoria, via seletor proprio (ver
-    ``panel_actions`` em alunos_por_turma.html).
+    É um controle à parte dos filtros da listagem (que não tem seletor de
+    turma dedicado — ver R2-1): o coordenador precisa escolher uma turma
+    específica com facilidade para baixar o relatório dela, então aqui a
+    turma é sempre obrigatória. Busca por aluno e período são opcionais —
+    ver o painel de relatório em alunos_por_turma.html.
     """
 
     turma_id = request.GET.get("turma", "").strip()
@@ -626,9 +639,7 @@ def _exportar_relatorio_alunos_turma(request: HttpRequest) -> HttpResponse:
         return redirect("alunos_por_turma")
 
     turma = (
-        Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
-        .filter(pk=turma_id)
-        .first()
+        Turma.objects.exclude(origem=OrigemDados.EXEMPLO).filter(pk=turma_id).first()
     )
     if turma is None:
         messages.error(request, "Turma não encontrada.")
@@ -640,10 +651,26 @@ def _exportar_relatorio_alunos_turma(request: HttpRequest) -> HttpResponse:
         .select_related("turma", "abrigo")
         .order_by("nome")
     )
-    return _gerar_csv_relatorio_turma(turma, alunos)
+
+    busca = request.GET.get("q", "").strip()
+    if busca:
+        alunos = alunos.filter(
+            Q(nome_normalizado__icontains=normalizar_texto(busca))
+            | Q(matricula__icontains=busca)
+        )
+
+    data_inicio = _parse_data_iso(request.GET.get("data_inicio", "").strip())
+    data_fim = _parse_data_iso(request.GET.get("data_fim", "").strip(), fim_do_dia=True)
+
+    return _gerar_csv_relatorio_turma(turma, alunos, data_inicio, data_fim)
 
 
-def _gerar_csv_relatorio_turma(turma: Turma, alunos: QuerySet[Aluno]) -> HttpResponse:
+def _gerar_csv_relatorio_turma(
+    turma: Turma,
+    alunos: QuerySet[Aluno],
+    data_inicio: datetime | None = None,
+    data_fim: datetime | None = None,
+) -> HttpResponse:
     """Gera o CSV de cobrança de material de uma turma, uma linha por aluno.
 
     Ao contrário da listagem de Movimentações (uma linha por pacote já
@@ -651,6 +678,10 @@ def _gerar_csv_relatorio_turma(turma: Turma, alunos: QuerySet[Aluno]) -> HttpRes
     não enviou nada aparece do mesmo jeito, com o status "Não enviou
     material", que é o caso que o coordenador mais precisa enxergar para
     cobrar o envio.
+
+    O prefetch traz as movimentações sem recorte de data: o período é aplicado
+    em ``_status_envio_aluno``, que precisa enxergar a SAIDA mesmo quando ela
+    cai fora da janela pedida (ver a docstring de lá).
     """
 
     alunos = alunos.prefetch_related(
@@ -679,7 +710,7 @@ def _gerar_csv_relatorio_turma(turma: Turma, alunos: QuerySet[Aluno]) -> HttpRes
     )
     for aluno in alunos:
         status, data_envio, data_retirada = _status_envio_aluno(
-            aluno.movimentacoes_ordenadas
+            aluno.movimentacoes_ordenadas, data_inicio, data_fim
         )
         writer.writerow(
             [

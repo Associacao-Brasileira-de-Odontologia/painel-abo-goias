@@ -239,9 +239,14 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, reverse("atualizar_alunos_eduq"))
 
     def test_alunos_por_turma_sem_filtro_por_turma(self) -> None:
-        """R2-1: o filtro dedicado por turma foi removido — a tela não traz
-        mais o select name="turma"; a busca textual cobre turma por nome e
-        código."""
+        """R2-1: o filtro dedicado por turma foi removido da barra de filtros
+        da listagem; a busca textual cobre turma por nome e código.
+
+        A verificação de markup é escopada à ``.filter-bar`` de propósito: o
+        painel de relatório tem um seletor de turma próprio (obrigatório lá,
+        porque o CSV é sempre de uma turma), que não é o filtro da listagem
+        de que este teste trata.
+        """
 
         turma_a = Turma.objects.create(
             codigo="TA1", nome="Turma A", origem=OrigemDados.MANUAL
@@ -261,7 +266,11 @@ class RotasIniciaisTests(TestCase):
         self.client.force_login(usuario)
 
         response = self.client.get(reverse("alunos_por_turma"))
-        self.assertNotContains(response, 'name="turma"')
+        html = response.content.decode()
+        barra_de_filtros = html.split('<form class="filter-bar"', 1)[1].split(
+            "</form>", 1
+        )[0]
+        self.assertNotIn('name="turma"', barra_de_filtros)
 
         # O parâmetro turma na URL não recorta mais a listagem.
         resposta_param = self.client.get(
@@ -402,14 +411,13 @@ class RelatorioAlunosTurmaCsvTests(TestCase):
         )
         self.client.force_login(self.usuario)
 
-    def _baixar_csv(self, turma: Turma | None = None) -> list[list[str]]:
+    def _baixar_csv(self, **extra: object) -> list[list[str]]:
         import csv
         import io
 
-        turma = turma or self.turma
-        response = self.client.get(
-            reverse("alunos_por_turma"), {"formato": "csv", "turma": turma.pk}
-        )
+        params: dict[str, object] = {"formato": "csv", "turma": self.turma.pk}
+        params.update(extra)
+        response = self.client.get(reverse("alunos_por_turma"), params)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
         conteudo = response.content.decode("utf-8-sig")
@@ -549,6 +557,104 @@ class RelatorioAlunosTurmaCsvTests(TestCase):
         conteudo = self._baixar_csv()
 
         self.assertFalse(any("Aluno Inativo" in linha for linha in conteudo))
+
+    def test_busca_por_aluno_recorta_o_relatorio_da_turma(self) -> None:
+        Aluno.objects.create(
+            matricula="M-MARIA",
+            nome="Maria Silva",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        Aluno.objects.create(
+            matricula="M-JOAO",
+            nome="João Souza",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+
+        conteudo = self._baixar_csv(q="maria")
+
+        self.assertTrue(any("Maria Silva" in linha for linha in conteudo))
+        self.assertFalse(any("João Souza" in linha for linha in conteudo))
+
+    def test_periodo_recorta_as_entradas_consideradas(self) -> None:
+        """Uma entrada fora da janela pedida não conta como envio no período —
+        o aluno volta a aparecer como quem o coordenador precisa cobrar."""
+
+        aluno = Aluno.objects.create(
+            matricula="M-ANTIGO",
+            nome="Aluno Envio Antigo",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now() - timedelta(days=90),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=aluno,
+            turma=self.turma,
+            aluno_nome=aluno.nome,
+            turma_nome=self.turma.nome,
+            pacote_codigo="9003",
+            retirado=False,
+            arquivo_origem="teste.csv",
+            row_hash="hash-relatorio-antigo",
+            origem=OrigemDados.MANUAL,
+        )
+
+        # Sem recorte, o envio antigo conta.
+        linha = next(l for l in self._baixar_csv() if l[2] == "Aluno Envio Antigo")
+        self.assertEqual(linha[5], "Não retirado")
+
+        # Recortando só os últimos 7 dias, aquele envio fica de fora.
+        inicio = (timezone.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        linhas = self._baixar_csv(data_inicio=inicio)
+        linha = next(l for l in linhas if l[2] == "Aluno Envio Antigo")
+        self.assertEqual(linha[5], "Não enviou material")
+
+    def test_saida_fora_do_periodo_ainda_informa_a_data_de_retirada(self) -> None:
+        """O período recorta as ENTRADAs, não as SAIDAs: um pacote enviado
+        dentro da janela e retirado depois dela mantém a data real."""
+
+        aluno = Aluno.objects.create(
+            matricula="M-TARDE",
+            nome="Aluno Retirou Depois",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        entrada = Movimentacao.objects.create(
+            data_hora=timezone.now() - timedelta(days=10),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=aluno,
+            turma=self.turma,
+            aluno_nome=aluno.nome,
+            turma_nome=self.turma.nome,
+            pacote_codigo="9004",
+            retirado=True,
+            arquivo_origem="teste.csv",
+            row_hash="hash-relatorio-entrada-tarde",
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.SAIDA,
+            aluno=aluno,
+            turma=self.turma,
+            aluno_nome=aluno.nome,
+            turma_nome=self.turma.nome,
+            pacote_codigo="9004",
+            entrada_origem=entrada,
+            arquivo_origem="teste.csv",
+            row_hash="hash-relatorio-saida-tarde",
+            origem=OrigemDados.MANUAL,
+        )
+
+        # Janela que termina antes da retirada, mas contém a entrada.
+        fim = (timezone.now() - timedelta(days=5)).strftime("%Y-%m-%d")
+        linhas = self._baixar_csv(data_fim=fim)
+
+        linha = next(l for l in linhas if l[2] == "Aluno Retirou Depois")
+        self.assertEqual(linha[5], "Retirado")
+        self.assertNotEqual(linha[7], "")
 
 
 class EduqSyncTests(TestCase):
