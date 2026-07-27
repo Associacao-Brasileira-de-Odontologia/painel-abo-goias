@@ -26,7 +26,14 @@
         <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <button class="button secondary" type="submit">Sincronizar alunos e turmas</button>
+            {% comment %}
+            Só ícone: o rótulo vira balão no hover/foco em telas com mouse e
+            volta a texto no mobile — ver .icon-button em components.css.
+            {% endcomment %}
+            <button class="button secondary icon-button" type="submit">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sincronizar"></use></svg>
+                <span class="icon-button-label">Sincronizar alunos e turmas</span>
+            </button>
         </form>
         {% comment %}
         O relatório por turma NÃO fica aqui: com nomes de turma longos, um
