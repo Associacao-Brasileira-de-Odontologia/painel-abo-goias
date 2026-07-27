@@ -347,6 +347,11 @@ if "https://healthcheck.railway.app" not in CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS.append("https://healthcheck.railway.app")
 
 SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+# O healthcheck da plataforma de deploy bate direto no container pela rede
+# interna (nao passa pelo proxy que termina o HTTPS), entao chega sempre como
+# HTTP puro - sem isso, cai num loop de redirect e o healthcheck nunca recebe
+# o 200 esperado.
+SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]
 SESSION_COOKIE_SECURE = _env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = _env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
 SECURE_HSTS_SECONDS = _env_int("DJANGO_SECURE_HSTS_SECONDS", 0 if DEBUG else 31536000)
