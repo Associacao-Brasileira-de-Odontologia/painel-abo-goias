@@ -28,57 +28,6 @@
     margin: 0;
 }
 
-/* ── Botão de ícone com rótulo revelado no hover ────────────────── */
-
-/* Ações utilitárias de rótulo longo (ex.: "Sincronizar alunos e turmas")
-   ocupam espaço demais ao lado do título do painel. O rótulo continua no
-   DOM — leitores de tela o leem normalmente, sem aria-label duplicando o
-   texto — mas vira um balão revelado no hover e também no foco por
-   teclado, que o title nativo não cobre (e cujo visual do sistema
-   destoaria do tema escuro). */
-.icon-button {
-    position: relative;
-    width: 50px;
-    padding: 0;
-}
-
-.icon-button svg {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.icon-button-label {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    z-index: 30;
-    padding: 6px 10px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--panel);
-    box-shadow: var(--shadow);
-    color: var(--text);
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-4px);
-    transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.icon-button:hover .icon-button-label,
-.icon-button:focus-visible .icon-button-label {
-    opacity: 1;
-    transform: translateY(0);
-}
-
 /* ── Painel de relatório (Alunos por turma) ─────────────────────── */
 
 /* O relatório nasceu como select + botão dentro de .topbar-actions, mas ali
@@ -171,11 +120,6 @@
 
 .report-form label {
     font-size: 0.7rem;
-}
-
-.report-form .field-optional {
-    color: var(--muted);
-    font-weight: 400;
 }
 
 /* Compacta os campos (base é 50px) — mesmo ajuste do .filter-period-panel,
@@ -691,6 +635,62 @@ select option {
     min-height: 40px;
     border-radius: var(--radius-control);
     padding: 0 14px;
+}
+
+/* ── Botão de ícone com rótulo revelado no hover ────────────────── */
+
+/* Ações utilitárias de rótulo longo (ex.: "Sincronizar alunos e turmas")
+   ocupam espaço demais ao lado do título do painel. O rótulo continua no
+   DOM — leitores de tela o leem normalmente, sem aria-label duplicando o
+   texto — mas vira um balão revelado no hover e também no foco por
+   teclado, que o title nativo não cobre (e cujo visual do sistema
+   destoaria do tema escuro). */
+/* Quadrado por aspect-ratio, não por largura fixa: a altura vem de .button
+   (50px) ou de .compact-button (40px) conforme a tela, e a largura
+   acompanha — senão o botão sairia retangular onde o modificador compacto
+   é usado (registrar entrada/saída, novo empréstimo). */
+.icon-button {
+    position: relative;
+    width: auto;
+    aspect-ratio: 1;
+    padding: 0;
+}
+
+.icon-button svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.icon-button-label {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 30;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.icon-button:hover .icon-button-label,
+.icon-button:focus-visible .icon-button-label {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .danger-button {

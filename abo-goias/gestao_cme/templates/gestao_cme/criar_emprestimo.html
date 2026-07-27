@@ -19,7 +19,14 @@
     <form class="sync-form" method="post" action="{% url 'atualizar_alunos_eduq' %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{% url 'criar_emprestimo' %}">
-        <button class="button secondary compact-button" type="submit">Atualizar lista de alunos</button>
+        {% comment %}
+        Só ícone, com o rótulo revelado no hover/foco — mesmo componente
+        usado em Alunos por turma (ver .icon-button em components.css).
+        {% endcomment %}
+        <button class="button secondary compact-button icon-button" type="submit">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sincronizar"></use></svg>
+            <span class="icon-button-label">Atualizar lista de alunos</span>
+        </button>
     </form>
 {% endblock %}
 {% block panel %}
