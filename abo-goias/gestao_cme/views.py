@@ -1643,7 +1643,7 @@ def buscar_alunos(request: HttpRequest) -> HttpResponse:
     do Dental Office; aqui a busca e **so local**, porque o Eduq nao oferece
     consulta de aluno por nome (so ``listar_alunos`` por turma) — nao ha o que
     consultar ao vivo nem o que materializar no clique. A base local e alimentada
-    pela sincronizacao do Eduq (rotina diaria + botao "Atualizar lista de alunos").
+    pela sincronizacao do Eduq (rotina diaria + botao "Sincronizar alunos e turmas").
 
     Usado nos registros de entrada, retirada e emprestimo. Com ``pendencias=1``
     restringe aos alunos que possuem pacotes de entrada aguardando retirada

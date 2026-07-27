@@ -11,7 +11,7 @@
 {% block panel_title %}Registrar empréstimo{% endblock %}
 {% block panel_actions %}
     {% comment %}
-    Mesmo botão de "Atualizar lista de alunos" usado em registrar_entrada/
+    Mesmo botão de "Sincronizar alunos e turmas" usado em registrar_entrada/
     registrar_saida (sincroniza turmas e alunos) — o campo de aluno desta
     tela usa o mesmo autocomplete local, que depende dessa sincronização
     para encontrar alunos recém-matriculados.
@@ -25,7 +25,7 @@
         {% endcomment %}
         <button class="button secondary compact-button icon-button" type="submit">
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sincronizar"></use></svg>
-            <span class="icon-button-label">Atualizar lista de alunos</span>
+            <span class="icon-button-label">Sincronizar alunos e turmas</span>
         </button>
     </form>
 {% endblock %}

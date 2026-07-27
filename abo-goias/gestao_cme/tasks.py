@@ -31,7 +31,7 @@ def sincronizar_eduq_task(self) -> dict[str, int]:
     mantém a base de alunos completa: o Eduq não oferece busca de aluno por
     nome (só ``listar_alunos`` por turma), então as telas do CME pesquisam
     apenas o que já está no banco — sem esta rotina, um aluno recém-matriculado
-    só apareceria se alguém apertasse "Atualizar lista de alunos" na mão.
+    só apareceria se alguém apertasse "Sincronizar alunos e turmas" na mão.
 
     Tem retry com backoff porque a janela é diária: sem ele, uma falha pontual
     de rede deixaria a base parada por 24h. Uma falha definitiva é registrada no

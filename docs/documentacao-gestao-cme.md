@@ -283,9 +283,10 @@ ajustes visuais aplicados (histórico resumido em §7).
 - **Ator primário:** Coordenador / Superusuário (acionamento manual); Celery Beat
   (acionamento automático diário às 04:00).
 - **Views/rotas acionadas por botão hoje:**
-  - `atualizar_alunos_eduq` (POST, turmas e alunos) — botão em `alunos_por_turma`
-    ("Sincronizar alunos e turmas", UC-09), `registrar_entrada` e `registrar_saida`
-    ("Atualizar lista de alunos").
+  - `atualizar_alunos_eduq` (POST, turmas e alunos) — botão "Sincronizar alunos e
+    turmas" em `alunos_por_turma` (UC-09), `registrar_entrada`, `registrar_saida` e
+    `criar_emprestimo`. Nas quatro telas é o mesmo botão de ícone (`.icon-button`),
+    com o rótulo revelado no hover/foco.
   - `gestao_cme/tasks.py::sincronizar_eduq_task` (Celery Beat, 04:00 diária).
 - **Fluxo principal:** chama `services.eduq_sync.sincronizar_eduq(...)`, que busca todas
   as turmas na API e, para cada turma, busca seus alunos, fazendo `update_or_create` e
@@ -527,7 +528,6 @@ pode fazer o quê.
 | Após gerar N pacotes (UC-03), não há indicação de progresso de etiquetagem física | Risco de trocar/pular etiqueta em lotes grandes (até 50) | Checklist interativo opcional na tela de confirmação |
 | Alternar status de retirada manualmente (UC-08) não avisa que isso pode descolar o registro do vínculo `entrada_origem` real | Divergência de dados sem o operador perceber a causa | Tooltip/confirmação explicando a consequência antes de aplicar |
 | Não há histórico de ocupação de um abrigo (UC-14), só a ocupação atual | Perda de contexto para investigar trocas de abrigo | Tela ou seção de histórico de ocupação |
-| Botão "Atualizar lista de alunos" em `registrar_entrada`/`registrar_saida`/`criar_emprestimo` também sincroniza turmas — nome impreciso | Confunde o operador sobre o que o botão faz | Renomear para "Atualizar alunos e turmas" (já feito em Alunos por turma) |
 | Nenhuma ação de escrita rápida (alternar retirado, atribuir abrigo) desabilita o botão/mostra spinner | Cliques duplos podem gerar ações repetidas em conexões lentas | Aplicar o mesmo padrão `.js-loading-submit` já usado nos formulários |
 
 ### 8.3 Melhorias sistêmicas (arquitetura, dados, integrações)
@@ -556,6 +556,12 @@ autocomplete como overlay, ordem de botões, filtro de período sem sobreposiç�
 do filtro redundante por turma, atalhos de paginação, entre outros). Todos os itens das
 cinco rodadas foram implementados, testados e enviados — nenhum ficou pendente. A suíte
 completa do projeto permaneceu verde (581 → 634 testes) ao longo de todas elas.
+
+Em 2026-07-27 o botão de sincronização virou botão de ícone (`.icon-button`, rótulo
+revelado no hover/foco e de volta a texto abaixo de 620px, onde não há hover) e teve o
+rótulo padronizado em "Sincronizar alunos e turmas" nas quatro telas que o exibem —
+fechando o item de usabilidade que apontava o nome impreciso em §8.2. Ver a ressalva
+sobre linguagem operacional em `documentacao-portal-contas.md` §2.2.
 
 ## 10. Documentos substituídos por este arquivo
 

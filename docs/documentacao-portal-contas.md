@@ -64,6 +64,15 @@ aplicada em todas as telas operacionais (menu, busca, listagens, mensagens de er
   "Última atualização"; "Histórico de sincronizações" → "Histórico de atualizações".
 - Mensagens de erro neutralizadas para o operador ("Erro na API Dental Office: X" → "Não
   foi possível atualizar a lista agora: X"), mantendo o detalhe técnico nos logs.
+
+**Exceção em aberto — o botão de sincronização do Eduq.** A regra acima troca
+"sincronizar" por "atualizar", mas o rótulo em uso é "Sincronizar alunos e turmas": já
+era assim em Alunos por turma (CME) e nas duas seções de sidebar do Laboratório, e em
+2026-07-27 foi padronizado assim também em Registrar entrada, Registrar saída e Novo
+empréstimo, unificando as quatro telas do CME. O nome do provedor segue fora da tela —
+que é o ponto central da regra; o que destoa é só o verbo. Fica em aberto decidir se a
+regra passa a admitir "sincronizar" para esta ação específica ou se os rótulos migram
+para "Atualizar alunos e turmas".
 - Mantido como está, deliberadamente: `/admin/` (área técnica) e os *docstrings* do
   código — ali nomear Eduq/Dental Office é correto e necessário para quem dá manutenção.
 
