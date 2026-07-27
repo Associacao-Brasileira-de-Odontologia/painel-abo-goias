@@ -499,6 +499,9 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     (editavel inline) e o total de movimentacoes registradas.
     """
 
+    if request.GET.get("formato") == "csv":
+        return _exportar_relatorio_alunos_turma(request)
+
     busca = request.GET.get("q", "").strip()
     status_aluno = request.GET.get("status", "ativo").strip()
 
@@ -520,8 +523,9 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
     elif status_aluno == "inativo":
         alunos = alunos.filter(ativo=False)
 
-    # O filtro dedicado por turma foi removido (a busca textual já cobre turma,
-    # por nome e código — ver abaixo).
+    # O filtro dedicado por turma foi removido daqui (a busca textual já cobre
+    # turma, por nome e código — ver abaixo). O relatório em CSV (acima) é um
+    # controle à parte, com sua própria seleção de turma — ver panel_actions.
     if busca:
         alunos = alunos.filter(
             Q(nome_normalizado__icontains=normalizar_texto(busca))
@@ -531,12 +535,10 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             | Q(turma__codigo__icontains=busca)
         )
 
-    if request.GET.get("formato") == "csv":
-        return _exportar_relatorio_alunos_turma(alunos)
-
     page_obj, query_string = paginar_queryset(request, alunos)
 
     abrigos = Abrigo.objects.filter(ativo=True).order_by("identificador")
+    turmas = Turma.objects.exclude(origem=OrigemDados.EXEMPLO).order_by("nome")
 
     alunos_base = Aluno.objects.exclude(origem=OrigemDados.EXEMPLO)
     turmas_base = Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
@@ -562,6 +564,7 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             "busca": busca,
             "status_aluno": status_aluno,
             "abrigos": abrigos,
+            "turmas": turmas,
             "page_obj": page_obj,
             "query_string": query_string,
             "ultima_sincronizacao": ultima_sincronizacao,
@@ -607,14 +610,47 @@ def _status_envio_aluno(
     return "Retirado", ultima_entrada.data_hora, saida.data_hora if saida else None
 
 
-def _exportar_relatorio_alunos_turma(alunos: QuerySet[Aluno]) -> HttpResponse:
-    """Gera o CSV de cobrança de material por turma, uma linha por aluno.
+def _exportar_relatorio_alunos_turma(request: HttpRequest) -> HttpResponse:
+    """Valida a turma escolhida no controle de relatório e gera o CSV dela.
+
+    É um controle à parte do filtro de busca/status da listagem (que não tem
+    seletor de turma dedicado — ver R2-1): o coordenador precisa escolher
+    uma turma especifica com facilidade para baixar o relatório dela, então
+    aqui a turma é sempre obrigatoria, via seletor proprio (ver
+    ``panel_actions`` em alunos_por_turma.html).
+    """
+
+    turma_id = request.GET.get("turma", "").strip()
+    if not turma_id.isdigit():
+        messages.error(request, "Selecione uma turma para baixar o relatório.")
+        return redirect("alunos_por_turma")
+
+    turma = (
+        Turma.objects.exclude(origem=OrigemDados.EXEMPLO)
+        .filter(pk=turma_id)
+        .first()
+    )
+    if turma is None:
+        messages.error(request, "Turma não encontrada.")
+        return redirect("alunos_por_turma")
+
+    alunos = (
+        Aluno.objects.filter(turma=turma, ativo=True)
+        .exclude(origem=OrigemDados.EXEMPLO)
+        .select_related("turma", "abrigo")
+        .order_by("nome")
+    )
+    return _gerar_csv_relatorio_turma(turma, alunos)
+
+
+def _gerar_csv_relatorio_turma(turma: Turma, alunos: QuerySet[Aluno]) -> HttpResponse:
+    """Gera o CSV de cobrança de material de uma turma, uma linha por aluno.
 
     Ao contrário da listagem de Movimentações (uma linha por pacote já
-    enviado), este relatório parte dos alunos filtrados na tela — um aluno
-    que ainda não enviou nada aparece do mesmo jeito, com o status "Não
-    enviou material", que é o caso que o coordenador mais precisa enxergar
-    para cobrar o envio.
+    enviado), este relatório parte dos alunos da turma — um aluno que ainda
+    não enviou nada aparece do mesmo jeito, com o status "Não enviou
+    material", que é o caso que o coordenador mais precisa enxergar para
+    cobrar o envio.
     """
 
     alunos = alunos.prefetch_related(
@@ -658,7 +694,12 @@ def _exportar_relatorio_alunos_turma(alunos: QuerySet[Aluno]) -> HttpResponse:
             ]
         )
 
-    nome_arquivo = f"relatorio-movimentacoes-{timezone.now():%Y%m%d-%H%M}.csv"
+    codigo_arquivo = "".join(
+        c if c.isalnum() else "-" for c in turma.codigo
+    ).strip("-")
+    nome_arquivo = (
+        f"relatorio-movimentacoes-{codigo_arquivo}-{timezone.now():%Y%m%d-%H%M}.csv"
+    )
     response = HttpResponse(
         buffer.getvalue().encode("utf-8-sig"),
         content_type="text/csv; charset=utf-8",

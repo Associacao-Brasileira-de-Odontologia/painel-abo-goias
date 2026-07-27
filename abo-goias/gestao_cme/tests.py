@@ -383,11 +383,14 @@ class RotasIniciaisTests(TestCase):
 
 
 class RelatorioAlunosTurmaCsvTests(TestCase):
-    """Cobre o botão "Baixar relatório (CSV)" da tela Alunos por turma.
+    """Cobre o relatório em CSV por turma, na tela Alunos por turma.
 
-    Diferente da listagem de Movimentações (uma linha por pacote), esse
-    relatório precisa incluir o aluno que ainda não enviou nada — é
-    justamente o caso que o coordenador precisa enxergar para cobrar.
+    É um controle à parte do filtro de busca/status da listagem (que não tem
+    seletor de turma dedicado — ver R2-1): o coordenador escolhe a turma num
+    seletor próprio e baixa só o relatório dela. Diferente da listagem de
+    Movimentações (uma linha por pacote), esse relatório precisa incluir o
+    aluno que ainda não enviou nada — é justamente o caso que o coordenador
+    precisa enxergar para cobrar.
     """
 
     def setUp(self) -> None:
@@ -399,17 +402,34 @@ class RelatorioAlunosTurmaCsvTests(TestCase):
         )
         self.client.force_login(self.usuario)
 
-    def _baixar_csv(self) -> list[list[str]]:
+    def _baixar_csv(self, turma: Turma | None = None) -> list[list[str]]:
         import csv
         import io
 
+        turma = turma or self.turma
         response = self.client.get(
-            reverse("alunos_por_turma"), {"formato": "csv"}
+            reverse("alunos_por_turma"), {"formato": "csv", "turma": turma.pk}
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
         conteudo = response.content.decode("utf-8-sig")
         return list(csv.reader(io.StringIO(conteudo), delimiter=";"))
+
+    def test_sem_turma_selecionada_redireciona_com_mensagem(self) -> None:
+        response = self.client.get(
+            reverse("alunos_por_turma"), {"formato": "csv"}, follow=True
+        )
+
+        self.assertRedirects(response, reverse("alunos_por_turma"))
+        self.assertContains(response, "Selecione uma turma para baixar o relatório.")
+
+    def test_turma_inexistente_redireciona_com_mensagem(self) -> None:
+        response = self.client.get(
+            reverse("alunos_por_turma"), {"formato": "csv", "turma": 999999}, follow=True
+        )
+
+        self.assertRedirects(response, reverse("alunos_por_turma"))
+        self.assertContains(response, "Turma não encontrada.")
 
     def test_aluno_sem_movimentacao_aparece_como_nao_enviou(self) -> None:
         Aluno.objects.create(
@@ -495,7 +515,7 @@ class RelatorioAlunosTurmaCsvTests(TestCase):
         self.assertNotEqual(linha[6], "")
         self.assertNotEqual(linha[7], "")
 
-    def test_csv_respeita_filtro_de_busca_da_tela(self) -> None:
+    def test_csv_traz_apenas_alunos_da_turma_selecionada(self) -> None:
         outra_turma = Turma.objects.create(
             codigo="TOUTRA", nome="Outra Turma", origem=OrigemDados.MANUAL
         )
@@ -512,13 +532,23 @@ class RelatorioAlunosTurmaCsvTests(TestCase):
             origem=OrigemDados.MANUAL,
         )
 
-        response = self.client.get(
-            reverse("alunos_por_turma"), {"formato": "csv", "q": "TCSV"}
-        )
-        conteudo = response.content.decode("utf-8-sig")
+        conteudo = self._baixar_csv()
 
-        self.assertIn("Aluno Da Turma Csv", conteudo)
-        self.assertNotIn("Aluno De Outra Turma", conteudo)
+        self.assertTrue(any("Aluno Da Turma Csv" in linha for linha in conteudo))
+        self.assertFalse(any("Aluno De Outra Turma" in linha for linha in conteudo))
+
+    def test_csv_nao_traz_aluno_inativo(self) -> None:
+        Aluno.objects.create(
+            matricula="M-INATIVO",
+            nome="Aluno Inativo",
+            turma=self.turma,
+            ativo=False,
+            origem=OrigemDados.MANUAL,
+        )
+
+        conteudo = self._baixar_csv()
+
+        self.assertFalse(any("Aluno Inativo" in linha for linha in conteudo))
 
 
 class EduqSyncTests(TestCase):

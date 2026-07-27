@@ -29,14 +29,21 @@
             <button class="button secondary" type="submit">Sincronizar alunos e turmas</button>
         </form>
         {% comment %}
-        Exporta os mesmos alunos filtrados na tela (busca/status) como CSV,
-        com o status de envio/retirada derivado das movimentações de cada um
-        — inclusive quem ainda não enviou nada, para o coordenador cobrar.
+        Controle à parte do filtro de busca/status da tela (que não tem
+        seletor de turma dedicado — ver R2-1): o coordenador escolhe a turma
+        aqui e baixa o relatório de cobrança dela — status de envio/retirada
+        por aluno, inclusive quem ainda não enviou nada.
         {% endcomment %}
-        <a class="button secondary"
-           href="?{% if query_string %}{{ query_string }}&{% endif %}formato=csv">
-            Baixar relatório (CSV)
-        </a>
+        <form class="report-form" method="get">
+            <input type="hidden" name="formato" value="csv">
+            <select class="select-compact" name="turma" aria-label="Turma para o relatório" required>
+                <option value="">Selecione a turma...</option>
+                {% for turma in turmas %}
+                    <option value="{{ turma.pk }}">{{ turma.codigo }} — {{ turma.nome }}</option>
+                {% endfor %}
+            </select>
+            <button class="button secondary" type="submit">Baixar relatório (CSV)</button>
+        </form>
     </div>
 {% endblock %}
 
