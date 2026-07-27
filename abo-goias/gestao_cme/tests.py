@@ -382,6 +382,145 @@ class RotasIniciaisTests(TestCase):
         self.assertContains(response, "KIT 1")
 
 
+class RelatorioAlunosTurmaCsvTests(TestCase):
+    """Cobre o botão "Baixar relatório (CSV)" da tela Alunos por turma.
+
+    Diferente da listagem de Movimentações (uma linha por pacote), esse
+    relatório precisa incluir o aluno que ainda não enviou nada — é
+    justamente o caso que o coordenador precisa enxergar para cobrar.
+    """
+
+    def setUp(self) -> None:
+        self.turma = Turma.objects.create(
+            codigo="TCSV", nome="Turma CSV", origem=OrigemDados.MANUAL
+        )
+        self.usuario = get_user_model().objects.create_user(
+            username="coordenador-csv", password="senha-segura"
+        )
+        self.client.force_login(self.usuario)
+
+    def _baixar_csv(self) -> list[list[str]]:
+        import csv
+        import io
+
+        response = self.client.get(
+            reverse("alunos_por_turma"), {"formato": "csv"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        conteudo = response.content.decode("utf-8-sig")
+        return list(csv.reader(io.StringIO(conteudo), delimiter=";"))
+
+    def test_aluno_sem_movimentacao_aparece_como_nao_enviou(self) -> None:
+        Aluno.objects.create(
+            matricula="M-SEM",
+            nome="Aluno Sem Envio",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+
+        linhas = self._baixar_csv()
+
+        linha = next(l for l in linhas if l[2] == "Aluno Sem Envio")
+        self.assertEqual(linha[5], "Não enviou material")
+        self.assertEqual(linha[6], "")
+        self.assertEqual(linha[7], "")
+
+    def test_aluno_com_entrada_nao_retirada_aparece_como_nao_retirado(self) -> None:
+        aluno = Aluno.objects.create(
+            matricula="M-PEND",
+            nome="Aluno Pendente",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=aluno,
+            turma=self.turma,
+            aluno_nome=aluno.nome,
+            turma_nome=self.turma.nome,
+            pacote_codigo="9001",
+            retirado=False,
+            arquivo_origem="teste.csv",
+            row_hash="hash-relatorio-pendente",
+            origem=OrigemDados.MANUAL,
+        )
+
+        linhas = self._baixar_csv()
+
+        linha = next(l for l in linhas if l[2] == "Aluno Pendente")
+        self.assertEqual(linha[5], "Não retirado")
+        self.assertNotEqual(linha[6], "")
+        self.assertEqual(linha[7], "")
+
+    def test_aluno_com_ciclo_completo_aparece_como_retirado_com_data(self) -> None:
+        aluno = Aluno.objects.create(
+            matricula="M-OK",
+            nome="Aluno Completo",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        entrada = Movimentacao.objects.create(
+            data_hora=timezone.now() - timedelta(days=2),
+            tipo=Movimentacao.Tipo.ENTRADA,
+            aluno=aluno,
+            turma=self.turma,
+            aluno_nome=aluno.nome,
+            turma_nome=self.turma.nome,
+            pacote_codigo="9002",
+            retirado=True,
+            arquivo_origem="teste.csv",
+            row_hash="hash-relatorio-entrada",
+            origem=OrigemDados.MANUAL,
+        )
+        Movimentacao.objects.create(
+            data_hora=timezone.now(),
+            tipo=Movimentacao.Tipo.SAIDA,
+            aluno=aluno,
+            turma=self.turma,
+            aluno_nome=aluno.nome,
+            turma_nome=self.turma.nome,
+            pacote_codigo="9002",
+            entrada_origem=entrada,
+            arquivo_origem="teste.csv",
+            row_hash="hash-relatorio-saida",
+            origem=OrigemDados.MANUAL,
+        )
+
+        linhas = self._baixar_csv()
+
+        linha = next(l for l in linhas if l[2] == "Aluno Completo")
+        self.assertEqual(linha[5], "Retirado")
+        self.assertNotEqual(linha[6], "")
+        self.assertNotEqual(linha[7], "")
+
+    def test_csv_respeita_filtro_de_busca_da_tela(self) -> None:
+        outra_turma = Turma.objects.create(
+            codigo="TOUTRA", nome="Outra Turma", origem=OrigemDados.MANUAL
+        )
+        Aluno.objects.create(
+            matricula="M-A",
+            nome="Aluno Da Turma Csv",
+            turma=self.turma,
+            origem=OrigemDados.MANUAL,
+        )
+        Aluno.objects.create(
+            matricula="M-B",
+            nome="Aluno De Outra Turma",
+            turma=outra_turma,
+            origem=OrigemDados.MANUAL,
+        )
+
+        response = self.client.get(
+            reverse("alunos_por_turma"), {"formato": "csv", "q": "TCSV"}
+        )
+        conteudo = response.content.decode("utf-8-sig")
+
+        self.assertIn("Aluno Da Turma Csv", conteudo)
+        self.assertNotIn("Aluno De Outra Turma", conteudo)
+
+
 class EduqSyncTests(TestCase):
     def test_sincroniza_turmas_e_alunos_do_payload_eduq(self) -> None:
         turmas = [

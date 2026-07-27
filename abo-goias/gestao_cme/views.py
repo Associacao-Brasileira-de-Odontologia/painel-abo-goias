@@ -1,6 +1,8 @@
 ﻿from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import uuid
 from datetime import datetime
 from typing import Any
@@ -10,7 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db import transaction
-from django.db.models import Count, Max, Min, ProtectedError, Q, Sum
+from django.db.models import Count, Max, Min, Prefetch, ProtectedError, Q, Sum
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -529,6 +531,9 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             | Q(turma__codigo__icontains=busca)
         )
 
+    if request.GET.get("formato") == "csv":
+        return _exportar_relatorio_alunos_turma(alunos)
+
     page_obj, query_string = paginar_queryset(request, alunos)
 
     abrigos = Abrigo.objects.filter(ativo=True).order_by("identificador")
@@ -563,6 +568,103 @@ def alunos_por_turma(request: HttpRequest) -> HttpResponse:
             "sem_abrigo": sem_abrigo,
         },
     )
+
+
+def _status_envio_aluno(
+    movimentacoes: list[Movimentacao],
+) -> tuple[str, datetime | None, datetime | None]:
+    """Deriva o status de envio/retirada de um aluno a partir de suas movimentacoes.
+
+    ``movimentacoes`` já vem ordenada por ``-data_hora`` (ver Prefetch em
+    ``_exportar_relatorio_alunos_turma``). Sem nenhuma ENTRADA, o aluno ainda
+    não enviou material para esterilização — é justamente quem o coordenador
+    precisa cobrar. Com a ENTRADA mais recente ainda não retirada, o aluno já
+    enviou mas não retirou. Só quando a mais recente estiver retirada o ciclo
+    está completo, e a SAIDA vinculada (via ``entrada_origem``) informa a data.
+    """
+
+    entradas = [m for m in movimentacoes if m.tipo == Movimentacao.Tipo.ENTRADA]
+    if not entradas:
+        return "Não enviou material", None, None
+
+    ultima_entrada = entradas[0]
+    if ultima_entrada.retirado is None:
+        # Dado legado sem essa informacao registrada (ver Movimentacao.retirado)
+        # - mesmo rotulo "Sem status" usado na listagem de Movimentacoes.
+        return "Sem status", ultima_entrada.data_hora, None
+    if not ultima_entrada.retirado:
+        return "Não retirado", ultima_entrada.data_hora, None
+
+    saida = next(
+        (
+            m
+            for m in movimentacoes
+            if m.tipo == Movimentacao.Tipo.SAIDA
+            and m.entrada_origem_id == ultima_entrada.pk
+        ),
+        None,
+    )
+    return "Retirado", ultima_entrada.data_hora, saida.data_hora if saida else None
+
+
+def _exportar_relatorio_alunos_turma(alunos: QuerySet[Aluno]) -> HttpResponse:
+    """Gera o CSV de cobrança de material por turma, uma linha por aluno.
+
+    Ao contrário da listagem de Movimentações (uma linha por pacote já
+    enviado), este relatório parte dos alunos filtrados na tela — um aluno
+    que ainda não enviou nada aparece do mesmo jeito, com o status "Não
+    enviou material", que é o caso que o coordenador mais precisa enxergar
+    para cobrar o envio.
+    """
+
+    alunos = alunos.prefetch_related(
+        Prefetch(
+            "movimentacoes",
+            queryset=Movimentacao.objects.exclude(
+                origem=OrigemDados.EXEMPLO
+            ).order_by("-data_hora"),
+            to_attr="movimentacoes_ordenadas",
+        )
+    )
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow(
+        [
+            "Turma",
+            "Código da turma",
+            "Aluno",
+            "Matrícula",
+            "Abrigo",
+            "Status do envio",
+            "Data do envio",
+            "Data da retirada",
+        ]
+    )
+    for aluno in alunos:
+        status, data_envio, data_retirada = _status_envio_aluno(
+            aluno.movimentacoes_ordenadas
+        )
+        writer.writerow(
+            [
+                aluno.turma.nome if aluno.turma else "Sem turma",
+                aluno.turma.codigo if aluno.turma else "",
+                aluno.nome,
+                aluno.matricula,
+                aluno.abrigo.identificador if aluno.abrigo else "",
+                status,
+                data_envio.strftime("%d/%m/%Y %H:%M") if data_envio else "",
+                data_retirada.strftime("%d/%m/%Y %H:%M") if data_retirada else "",
+            ]
+        )
+
+    nome_arquivo = f"relatorio-movimentacoes-{timezone.now():%Y%m%d-%H%M}.csv"
+    response = HttpResponse(
+        buffer.getvalue().encode("utf-8-sig"),
+        content_type="text/csv; charset=utf-8",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
+    return response
 
 
 def _sincronizar_ocupacao_abrigo(abrigo: Abrigo | None) -> None:
