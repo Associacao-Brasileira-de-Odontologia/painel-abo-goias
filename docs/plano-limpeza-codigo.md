@@ -272,6 +272,34 @@ conceitualmente não é dele. Duas opções, para decidir com o time antes de me
 Não hesitei em não decidir isso sozinho porque envolve uma escolha de arquitetura, não
 uma refatoração mecânica.
 
+### 11.1 Decisão tomada (2026-07-28) — opção 1, registro neutro
+
+`comum/portal.py` mantém um **registro de fontes** e não conhece nenhuma app. Cada
+app declara a sua em `services/portal.py` e a inscreve no `ready()` do próprio
+`AppConfig`. A direção da dependência se inverteu: o Portal não busca dados nas
+apps, as apps se oferecem ao Portal. Uma app nova entra no resumo sem tocar no
+CME; uma app removida some junto com o registro.
+
+Cada fonte entrega três coisas: `resumo` (números dos cartões), `tarefas`
+(pendências) e `eventos` (atividade recente).
+
+Dois detalhes de desenho que valem registro:
+
+- **`tarefas` recebe o resumo já calculado**, em vez de consultar o banco de
+  novo. As pendências são frases sobre números que o resumo acabou de contar
+  ("N pacotes aguardando retirada"); recontar custaria quatro `COUNT` a mais por
+  carga do Portal. Com isso a contagem de queries ficou **idêntica à de antes:
+  13**, medida com `CaptureQueriesContext`.
+- **A ordem das fontes é um campo explícito (`ordem`)**, não a ordem de
+  `INSTALLED_APPS`. O feed é ordenado por data e a ordenação do Python é estável,
+  então dois eventos com a mesma data saem na ordem em que as fontes foram lidas
+  — deixar isso implícito faria o resultado depender de algo que ninguém espera
+  que seja significativo.
+
+Os limites por app (CME 6, Lab 5, Contratos 4 eventos, com corte final em 8)
+foram preservados como estavam: as apps contribuem com quantidades diferentes de
+propósito, e o corte acontece depois, sobre o conjunto já ordenado.
+
 ---
 
 ## 12. Performance
@@ -404,7 +432,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 | **4** | ✅ **Concluída** — `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` unificados em `comum/datas.py` e `comum/paginacao.py` | Baixo — comportamento idêntico, só muda onde mora | Sim |
 | **5** | Extrair mixin de validação `clean_codigo` em `gestao_cme/forms.py` | Baixo | Sim |
 | **6** | ✅ **Concluída** — CME (`home`, `cme_dashboard`) e Lab (`pacientes`, `acompanhamento_pedidos`) extraídos para `services/consultas.py` de cada app | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
-| **7** | Decidir e implementar o destino da agregação cross-app do Portal | Médio — depende de decisão de arquitetura (§11) | Sim |
+| **7** | ✅ **Concluída** — agregação do Portal virou um registro neutro (`comum/portal.py`) que as três apps alimentam | Médio — depende de decisão de arquitetura (§11) | Sim |
 | **8** | ✅ **Concluída** — BOM removido de 39 arquivos (não 12) + `.editorconfig` para não voltar | Muito baixo — mas não era só cosmético, ver abaixo | Sim |
 | **9** | ✅ **Concluída** — Auditoria visual dedicada de padronização de front-end (screenshots), ver `avaliacao-visual-padronizacao-frontend.md` | — | — |
 | **10** *(opcional, sob demanda)* | Auditoria de performance com contagem de queries nas listagens ainda não verificadas | — | — |
@@ -564,5 +592,16 @@ URLs (cada status, busca, os quatro campos de data do período, campo inválido,
 segunda página, e Pacientes com e sem filtro de pedido em aberto). **Idêntico
 byte a byte** (439.241 bytes).
 
-Restam a **Etapa 7** (decisão de arquitetura sua sobre o Portal, §11) e a
-**Etapa 10** (auditoria de performance), opcional.
+A **Etapa 7 foi concluída em 2026-07-28**, pela opção 1 (registro neutro) —
+detalhes e justificativas em §11.1. A view `portal` caiu de 153 para 32 linhas e
+deixou de importar models de `gestao_lab` e `gestao_contratos`: hoje ela só
+chama `comum.portal` e não sabe quais apps existem.
+
+Mesmo critério de aceite das etapas anteriores, com um acréscimo: além do HTML
+renderizado (idêntico, 20.225 bytes), a **contagem de queries também foi
+comparada** — 13 antes, 13 depois. Isso importava porque a separação entre
+`resumo` e `tarefas` poderia facilmente ter introduzido consultas duplicadas.
+
+Com isso, **todas as etapas do plano estão concluídas**, exceto a **Etapa 10**
+(auditoria de performance com contagem de queries nas listagens), que sempre foi
+opcional e sob demanda.

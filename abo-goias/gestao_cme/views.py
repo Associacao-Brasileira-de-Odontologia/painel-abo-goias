@@ -20,6 +20,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from comum import portal as portal_service
 from comum.datas import filtrar_por_intervalo, parse_data_iso
 from comum.http import destino_seguro
 from comum.paginacao import paginar
@@ -117,143 +118,17 @@ def emprestimos_visiveis(request: HttpRequest) -> QuerySet[Emprestimo]:
 
 @login_required
 def portal(request: HttpRequest) -> HttpResponse:
-    """Renderiza o painel inicial com atividade recente e tarefas pendentes."""
+    """Renderiza o painel inicial com atividade recente e tarefas pendentes.
 
-    from gestao_contratos.models import ContratoGerado
-    from gestao_lab.models import Moldagem, PedidoMaterial
+    O conteúdo vem de `comum.portal`, que junta o que cada app registrou. Esta
+    view não sabe quais apps existem: antes ela importava models de `gestao_lab`
+    e `gestao_contratos` diretamente, o que fazia do CME o agregador de todo o
+    sistema (ver Etapa 7 do plano de limpeza).
+    """
 
-    movimentacoes_base = Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO)
-
-    pacotes_pendentes = movimentacoes_base.filter(
-        tipo=Movimentacao.Tipo.ENTRADA, retirado=False
-    ).count()
-    lab_pedidos_ativos = PedidoMaterial.objects.exclude(
-        status=PedidoMaterial.Status.CONCLUIDO
-    ).count()
-    lab_faturamento_pendente = PedidoMaterial.objects.filter(
-        status=PedidoMaterial.Status.ENTREGUE_NAO_FATURADO
-    ).count()
-    lab_moldagens_pendentes = Moldagem.objects.filter(
-        ativo=True, pedido_material=None
-    ).count()
-    contratos_gerados = ContratoGerado.objects.count()
-    # Documentos assinados que não chegaram ao Dental Office (falha ou pendente)
-    # — precisam de atenção para não se perderem por falha de integração.
-    contratos_envio_dental_pendente = (
-        ContratoGerado.objects.filter(status="assinado")
-        .filter(Q(status_envio_dental="erro") | Q(status_envio_dental="nao_enviado"))
-        .count()
-    )
-
-    resumo = {
-        "pacotes_pendentes": pacotes_pendentes,
-        "materiais": Material.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
-        "turmas": Turma.objects.exclude(origem=OrigemDados.EXEMPLO).count(),
-        "lab_pedidos_ativos": lab_pedidos_ativos,
-        "lab_pendentes_faturamento": lab_faturamento_pendente,
-        "lab_moldagens_pendentes": lab_moldagens_pendentes,
-        "contratos_gerados": contratos_gerados,
-    }
-
-    # Tarefas que requerem atenção imediata
-    tarefas_pendentes = []
-    if pacotes_pendentes:
-        tarefas_pendentes.append(
-            {
-                "texto": f"{pacotes_pendentes} pacote(s) aguardando retirada",
-                "url_name": "registrar_saida",
-                "urgente": False,
-            }
-        )
-    if lab_faturamento_pendente:
-        tarefas_pendentes.append(
-            {
-                "texto": (
-                    f"{lab_faturamento_pendente} pedido(s) de lab"
-                    " aguardando faturamento"
-                ),
-                "url_name": "lab_pedidos_faturamento",
-                "urgente": False,
-            }
-        )
-    if lab_moldagens_pendentes:
-        tarefas_pendentes.append(
-            {
-                "texto": (
-                    f"{lab_moldagens_pendentes} moldagem(ns) sem"
-                    " pedido de lab vinculado"
-                ),
-                "url_name": "lab_moldagens",
-                "urgente": False,
-            }
-        )
-    if contratos_envio_dental_pendente:
-        tarefas_pendentes.append(
-            {
-                "texto": (
-                    f"{contratos_envio_dental_pendente} contrato(s) assinado(s)"
-                    " sem envio ao Dental Office"
-                ),
-                "url_name": "contrato_envios_dental",
-                "urgente": True,
-            }
-        )
-
-    # Atividade recente — agrega dados de todos os módulos
-    atividade_recente: list[dict] = []
-
-    for mov in movimentacoes_base.select_related("material").order_by(
-        "-data_hora", "-id"
-    )[:6]:
-        material = mov.material.nome if mov.material else f"pacote {mov.pacote_codigo}"
-        aluno = mov.aluno_nome or "Aluno não informado"
-        if mov.tipo == Movimentacao.Tipo.ENTRADA:
-            categoria, titulo = "devolucao", "Devolução registrada"
-            descricao = f"{aluno} devolveu {material}."
-        elif mov.retirado is False:
-            categoria, titulo = "alerta", "Retirada pendente"
-            descricao = f"{aluno} ainda não retirou {material}."
-        else:
-            categoria, titulo = "alerta", "Saída de material"
-            descricao = f"{material} separado para {aluno}."
-        atividade_recente.append(
-            {
-                "categoria": categoria,
-                "titulo": titulo,
-                "descricao": descricao,
-                "data": mov.data_hora,
-            }
-        )
-
-    for pedido in PedidoMaterial.objects.select_related(
-        "paciente", "laboratorio"
-    ).order_by("-criado_em")[:5]:
-        atividade_recente.append(
-            {
-                "categoria": "exportacao",
-                "titulo": "Pedido de laboratório",
-                "descricao": (f"{pedido.paciente.nome} → {pedido.laboratorio.nome}."),
-                "data": pedido.criado_em,
-            }
-        )
-
-    for contrato in ContratoGerado.objects.select_related("paciente").order_by(
-        "-criado_em"
-    )[:4]:
-        atividade_recente.append(
-            {
-                "categoria": "devolucao",
-                "titulo": "Contrato gerado",
-                "descricao": (
-                    f"{contrato.get_tipo_display()} — {contrato.paciente.nome}."
-                ),
-                "data": contrato.criado_em,
-            }
-        )
-
-    atividade_recente = sorted(
-        atividade_recente, key=lambda a: a["data"], reverse=True
-    )[:8]
+    resumo = portal_service.montar_resumo()
+    tarefas_pendentes = portal_service.montar_tarefas(resumo)
+    atividade_recente = portal_service.montar_atividade()
 
     # Ponto único de controle de visibilidade dos apps no portal.
     # Quando grupos de permissão forem implementados, basta filtrar este set

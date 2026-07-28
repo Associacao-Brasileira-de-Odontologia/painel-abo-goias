@@ -7,6 +7,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from comum import portal
 from comum.datas import filtrar_por_intervalo, parse_data_iso
 from comum.http import destino_seguro
 from comum.paginacao import paginar
@@ -209,3 +210,130 @@ class PaginarTests(TestCase):
         self.assertIn("q=ana", query_string)
         self.assertIn("status=ativo", query_string)
         self.assertNotIn("page=", query_string)
+
+
+class RegistroDoPortalTests(TestCase):
+    """Cobre o agregador neutro do Portal (`comum.portal`).
+
+    Os testes mexem no registro global, então guardam e restauram o estado —
+    as fontes reais são inscritas no `ready()` de cada app e valem para o
+    processo inteiro.
+    """
+
+    def setUp(self) -> None:
+        self.original = dict(portal._FONTES)
+        portal._FONTES.clear()
+
+    def tearDown(self) -> None:
+        portal._FONTES.clear()
+        portal._FONTES.update(self.original)
+
+    def _fonte(self, nome: str, ordem: int, **kwargs) -> portal.FontePortal:
+        fonte = portal.FontePortal(nome=nome, ordem=ordem, **kwargs)
+        portal.registrar(fonte)
+        return fonte
+
+    def test_fontes_saem_na_ordem_declarada(self) -> None:
+        self._fonte("z", 30)
+        self._fonte("a", 10)
+        self._fonte("m", 20)
+
+        self.assertEqual([f.nome for f in portal.fontes()], ["a", "m", "z"])
+
+    def test_registrar_a_mesma_fonte_substitui_em_vez_de_duplicar(self) -> None:
+        self._fonte("cme", 10, resumo=lambda: {"x": 1})
+        self._fonte("cme", 10, resumo=lambda: {"x": 2})
+
+        self.assertEqual(len(portal.fontes()), 1)
+        self.assertEqual(portal.montar_resumo(), {"x": 2})
+
+    def test_resumo_junta_as_chaves_de_todas_as_fontes(self) -> None:
+        self._fonte("a", 10, resumo=lambda: {"um": 1})
+        self._fonte("b", 20, resumo=lambda: {"dois": 2})
+
+        self.assertEqual(portal.montar_resumo(), {"um": 1, "dois": 2})
+
+    def test_tarefas_leem_os_numeros_do_resumo(self) -> None:
+        """O contrato que evita recontar: a tarefa descreve o que já foi contado."""
+
+        self._fonte(
+            "a",
+            10,
+            resumo=lambda: {"pendentes": 3},
+            tarefas=lambda resumo: [
+                portal.Tarefa(f"{resumo['pendentes']} pendente(s)", "registrar_saida")
+            ],
+        )
+
+        resumo = portal.montar_resumo()
+        self.assertEqual(
+            portal.montar_tarefas(resumo)[0].texto, "3 pendente(s)"
+        )
+
+    def test_tarefas_seguem_a_ordem_das_fontes(self) -> None:
+        self._fonte("b", 20, tarefas=lambda r: [portal.Tarefa("segunda", "u")])
+        self._fonte("a", 10, tarefas=lambda r: [portal.Tarefa("primeira", "u")])
+
+        self.assertEqual(
+            [t.texto for t in portal.montar_tarefas({})], ["primeira", "segunda"]
+        )
+
+    def test_atividade_ordena_por_data_e_corta_no_limite(self) -> None:
+        agora = timezone.now()
+
+        def evento(rotulo: str, dias: int) -> portal.Evento:
+            return portal.Evento("cat", rotulo, "d", agora - timedelta(days=dias))
+
+        self._fonte("a", 10, eventos=lambda: [evento("velho", 10), evento("novo", 1)])
+        self._fonte("b", 20, eventos=lambda: [evento("meio", 5)])
+
+        recentes = portal.montar_atividade(limite=2)
+
+        self.assertEqual([e.titulo for e in recentes], ["novo", "meio"])
+
+    def test_empate_de_data_respeita_a_ordem_declarada(self) -> None:
+        """Sem isso, o feed dependeria da ordem de INSTALLED_APPS."""
+
+        instante = timezone.now()
+        self._fonte(
+            "segunda", 20, eventos=lambda: [portal.Evento("c", "B", "d", instante)]
+        )
+        self._fonte(
+            "primeira", 10, eventos=lambda: [portal.Evento("c", "A", "d", instante)]
+        )
+
+        self.assertEqual(
+            [e.titulo for e in portal.montar_atividade()], ["A", "B"]
+        )
+
+    def test_fonte_sem_contribuicao_nao_quebra_o_portal(self) -> None:
+        """Uma app pode registrar só uma das três coisas."""
+
+        self._fonte("so_resumo", 10, resumo=lambda: {"x": 1})
+
+        self.assertEqual(portal.montar_resumo(), {"x": 1})
+        self.assertEqual(portal.montar_tarefas({"x": 1}), [])
+        self.assertEqual(portal.montar_atividade(), [])
+
+
+class FontesReaisDoPortalTests(TestCase):
+    """As três apps se inscrevem sozinhas, pelo `ready()` do AppConfig."""
+
+    def test_as_tres_apps_estao_registradas_e_em_ordem(self) -> None:
+        self.assertEqual(
+            [f.nome for f in portal.fontes()], ["cme", "lab", "contratos"]
+        )
+
+    def test_resumo_real_traz_as_chaves_que_o_template_usa(self) -> None:
+        resumo = portal.montar_resumo()
+
+        for chave in (
+            "pacotes_pendentes",
+            "materiais",
+            "turmas",
+            "lab_pedidos_ativos",
+            "lab_pendentes_faturamento",
+            "lab_moldagens_pendentes",
+            "contratos_gerados",
+        ):
+            self.assertIn(chave, resumo)
