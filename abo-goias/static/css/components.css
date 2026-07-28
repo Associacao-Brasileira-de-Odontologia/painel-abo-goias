@@ -653,7 +653,6 @@ select option {
     position: relative;
     width: auto;
     aspect-ratio: 1;
-    padding: 0;
 }
 
 .icon-button svg {
@@ -665,6 +664,20 @@ select option {
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+}
+
+/* Estas duas vencem por especificidade, não por posição no arquivo:
+   .compact-button (padding lateral) e .button svg (margem de 7px à direita
+   e -2px no topo, para separar ícone de texto) aparecem depois daqui e, com
+   a mesma especificidade, ganhariam na cascata. Aqui não há texto ao lado
+   do ícone — o rótulo é o balão flutuante —, então essas sobras só tiram o
+   ícone do centro da caixa. */
+.button.icon-button {
+    padding: 0;
+}
+
+.button.icon-button svg {
+    margin: 0;
 }
 
 .icon-button-label {
