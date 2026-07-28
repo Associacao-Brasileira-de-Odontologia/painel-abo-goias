@@ -13,6 +13,8 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+
+from comum.http import destino_seguro
 from gestao_lab.integrations.dental import (
     DentalAPIError,
     DentalClient,
@@ -634,10 +636,8 @@ def enviar_ao_dental_view(request: HttpRequest, contrato_pk: int) -> HttpRespons
             f"Falha ao enviar o contrato ao Dental Office: {erro}",
         )
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return redirect(next_url)
-    return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+    padrao = reverse("contrato_pos_geracao", kwargs={"contrato_pk": contrato_pk})
+    return redirect(destino_seguro(request, padrao))
 
 
 def _contratos_envio_dental_pendentes() -> "list[ContratoGerado]":

@@ -17,6 +17,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from comum.http import destino_seguro
+
 from .models import ContratoGerado, TerminalAssinatura, expirar_terminais_vencidos
 from .services.assinatura import (
     LIMITE_TENTATIVAS_IDENTIDADE,
@@ -405,10 +407,8 @@ def cancelar_assinatura_view(request: HttpRequest, contrato_pk: int) -> HttpResp
         ),
     )
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return redirect(next_url)
-    return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
+    padrao = reverse("contrato_pos_geracao", kwargs={"contrato_pk": contrato_pk})
+    return redirect(destino_seguro(request, padrao))
 
 
 @login_required

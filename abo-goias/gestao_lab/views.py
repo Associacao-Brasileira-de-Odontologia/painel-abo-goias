@@ -13,18 +13,14 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page, Paginator
 from django.db.models import Min, Q
 from django.db.models.query import QuerySet
-from django.http import (
-    HttpRequest,
-    HttpResponse,
-    HttpResponseRedirect,
-    JsonResponse,
-)
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from comum.http import destino_seguro
 from gestao_cme.utils import normalizar_texto
 
 from .forms import (
@@ -430,8 +426,7 @@ def marcar_envio(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"Envio do pedido #{pedido.pk} registrado.")
     else:
         messages.error(request, "Data de envio inválida.")
-    next_url = request.POST.get("next") or "lab_pedidos"
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "lab_pedidos"))
 
 
 @login_required
@@ -446,8 +441,7 @@ def marcar_entrega(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"Entrega do pedido #{pedido.pk} registrada.")
     else:
         messages.error(request, "Data de entrega inválida.")
-    next_url = request.POST.get("next") or "lab_pedidos"
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "lab_pedidos"))
 
 
 @login_required
@@ -460,8 +454,7 @@ def atualizar_faturamento(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"Faturamento do pedido #{pedido.pk} atualizado.")
     else:
         messages.error(request, "Erro ao salvar informações financeiras.")
-    next_url = request.POST.get("next") or "lab_pedidos_faturamento"
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "lab_pedidos_faturamento"))
 
 
 @login_required
@@ -477,8 +470,7 @@ def alternar_faturado_paciente(request: HttpRequest, pk: int) -> HttpResponse:
             "atualizado_em",
         ]
     )
-    next_url = request.POST.get("next") or "lab_pedidos_faturamento"
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "lab_pedidos_faturamento"))
 
 
 @login_required
@@ -494,8 +486,7 @@ def alternar_faturado_lab(request: HttpRequest, pk: int) -> HttpResponse:
             "atualizado_em",
         ]
     )
-    next_url = request.POST.get("next") or "lab_pedidos_faturamento"
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "lab_pedidos_faturamento"))
 
 
 @login_required
@@ -517,10 +508,7 @@ def excluir_pedido(request: HttpRequest, pk: int) -> HttpResponse:
         msg += " A moldagem de origem voltou para 'não convertida'."
     messages.success(request, msg)
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("lab_pedidos")
+    return redirect(destino_seguro(request, "lab_pedidos"))
 
 
 # ---------------------------------------------------------------------------
@@ -761,8 +749,7 @@ def alternar_faturado_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
     moldagem.save(update_fields=["faturado", "atualizado_em"])
     estado = "faturada" if moldagem.faturado else "não faturada"
     messages.success(request, f"Moldagem #{pk} marcada como {estado}.")
-    next_url = request.POST.get("next") or "lab_moldagens"
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "lab_moldagens"))
 
 
 @login_required
@@ -773,8 +760,7 @@ def alternar_entregue_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
     moldagem.save(update_fields=["entregue", "atualizado_em"])
     estado = "entregue" if moldagem.entregue else "não entregue"
     messages.success(request, f"Moldagem #{pk} marcada como {estado}.")
-    next_url = request.POST.get("next") or "lab_moldagens"
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "lab_moldagens"))
 
 
 # ---------------------------------------------------------------------------
@@ -920,10 +906,7 @@ def excluir_moldagem(request: HttpRequest, pk: int) -> HttpResponse:
     moldagem.delete()
     messages.success(request, f"Moldagem {identificacao} excluída permanentemente.")
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("lab_moldagens")
+    return redirect(destino_seguro(request, "lab_moldagens"))
 
 
 # ---------------------------------------------------------------------------
@@ -1134,8 +1117,7 @@ def sincronizar_turma_aluno_busca(request: HttpRequest) -> HttpResponse:
     from gestao_lab.services.eduq_lab_sync import EduqAPIError, sincronizar_turma_eduq
 
     turma_id = request.POST.get("turma_id", "").strip()
-    next_url = request.POST.get("next", "")
-    destino = next_url if next_url.startswith("/") else reverse("lab_alunos")
+    destino = destino_seguro(request, "lab_alunos")
 
     if not turma_id.isdigit():
         messages.error(request, "Selecione uma turma para sincronizar.")
@@ -1343,12 +1325,7 @@ def importar_paciente_dental(request: HttpRequest, id_dental: str) -> HttpRespon
     from gestao_lab.integrations.dental import DentalAPIError
     from gestao_lab.services.dental_sync import materializar_paciente
 
-    next_url = request.POST.get("next", "")
-    destino = (
-        HttpResponseRedirect(next_url)
-        if next_url.startswith("/")
-        else redirect("lab_pacientes")
-    )
+    destino = redirect(destino_seguro(request, "lab_pacientes"))
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
     if not clinic_id:
@@ -1391,12 +1368,7 @@ def sincronizar_dental(request: HttpRequest) -> HttpResponse:
 
     clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
 
-    next_url = request.POST.get("next", "")
-    destino = (
-        HttpResponseRedirect(next_url)
-        if next_url.startswith("/")
-        else redirect("lab_pacientes")
-    )
+    destino = redirect(destino_seguro(request, "lab_pacientes"))
 
     if not clinic_id:
         messages.error(
@@ -1440,12 +1412,7 @@ def sincronizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
         executar_sync_alunos_e_registrar,
     )
 
-    next_url = request.POST.get("next", "")
-    destino = (
-        HttpResponseRedirect(next_url)
-        if next_url.startswith("/")
-        else redirect("lab_criar_pedido")
-    )
+    destino = redirect(destino_seguro(request, "lab_criar_pedido"))
 
     try:
         registro = executar_sync_alunos_e_registrar(

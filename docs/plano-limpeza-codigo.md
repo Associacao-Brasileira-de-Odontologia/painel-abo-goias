@@ -386,7 +386,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 
 | Etapa | Conteúdo | Risco | Reversível |
 |---|---|---|---|
-| **1** | Corrigir o redirect inseguro nos 22 pontos com um helper único (`url_has_allowed_host_and_scheme`) | Baixo — mesma assinatura de função, só passa a validar antes de redirecionar | Sim |
+| **1** | ✅ **Concluída** — redirect inseguro corrigido nos 22 pontos com `comum.http.destino_seguro` | Baixo — mesma assinatura de função, só passa a validar antes de redirecionar | Sim |
 | **2** | Corrigir C-01 (PDF sem checagem de identidade) e A-02 (IP forjável) em `gestao_contratos` | Baixo — 1 `if` e 1 ajuste de leitura de header | Sim |
 | **3** | Remover código morto confirmado (após sua validação do item 1 da lista de pendências): `alternar_retirado`, `baixar_contrato_pdf_view`, `buscar_paciente_dental`, `contrato_baixar_carimbo_tempo` | Baixo, mas depende de confirmação prévia | Sim (git) |
 | **4** | Unificar `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` entre CME e Lab num módulo compartilhado | Baixo — comportamento idêntico, só muda onde mora | Sim |
@@ -404,9 +404,23 @@ listagem não se adaptam bem a telas estreitas (achado comum, não uma inconsist
 navegação lateral agrupa itens por seção só no Laboratório. Detalhes e evidências em
 `avaliacao-visual-padronizacao-frontend.md`.
 
-Recomendo seguir agora pela **Etapa 1** (redirect inseguro) — é o item de maior risco real
-(segurança, ativo em produção) e menor esforço de correção, cobrindo de uma vez a
-duplicação mais espalhada do projeto.
+A **Etapa 1** foi concluída em 2026-07-28. Os 22 pontos passaram a usar
+`comum.http.destino_seguro`, que valida o `next` com
+`url_has_allowed_host_and_scheme` (a mesma checagem que o `LoginView` do Django
+aplica ao `next` dele) antes de redirecionar. A checagem anterior mais comum,
+`next.startswith("/")`, deixava passar `//host-externo` — uma URL
+protocol-relative, que o navegador resolve como endereço externo; era por ali que
+o open redirect entrava. Oito dos 22 pontos não validavam nada.
 
-Quer que eu comece por ela, ou prefere resolver primeiro alguma das pendências de decisão
-da Etapa 9 (achados 1, 2, 4 e 5)?
+Nenhuma view mudou de comportamento para um `next` legítimo: o destino interno
+continua sendo respeitado, e o fallback de cada view é o mesmo de antes. O que
+mudou é que um `next` apontando para fora do site agora cai no fallback em vez de
+levar o operador para outro domínio.
+
+O pacote `comum/` criado aqui é o destino natural dos helpers de data e paginação
+da **Etapa 4**.
+
+Próxima recomendada: **Etapa 2** (C-01, PDF sem checagem de identidade, e A-02, IP
+forjável) — os dois achados de segurança restantes, ambos em `gestao_contratos`.
+Alternativamente, a **Etapa 3** (remoção de código morto) depende de uma
+confirmação sua sobre as quatro views listadas.

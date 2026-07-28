@@ -14,11 +14,13 @@ from django.core.paginator import Page, Paginator
 from django.db import transaction
 from django.db.models import Count, Max, Min, Prefetch, ProtectedError, Q, Sum
 from django.db.models.query import QuerySet
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+
+from comum.http import destino_seguro
 
 from .forms import (
     AbrigoEditForm,
@@ -787,8 +789,7 @@ def atribuir_abrigo(request: HttpRequest, aluno_id: int) -> HttpResponse:
         _sincronizar_ocupacao_abrigo(abrigo_anterior)
         _sincronizar_ocupacao_abrigo(aluno.abrigo)
 
-    next_url = request.POST.get("next") or reverse("alunos_por_turma")
-    return redirect(next_url)
+    return redirect(destino_seguro(request, "alunos_por_turma"))
 
 
 @login_required
@@ -1261,10 +1262,7 @@ def alternar_retirado(request: HttpRequest, pk: int) -> HttpResponse:
         mov.retirado = None
     mov.save()
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("cme_home")
+    return redirect(destino_seguro(request, "cme_home"))
 
 
 @login_required
@@ -1315,10 +1313,7 @@ def excluir_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
         mov.delete()
         messages.success(request, f"Registro do pacote {pacote} de {nome} excluído.")
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("cme_home")
+    return redirect(destino_seguro(request, "cme_home"))
 
 
 @login_required
@@ -1419,8 +1414,7 @@ def sincronizar_turma_busca(request: HttpRequest) -> HttpResponse:
     """
 
     turma_id = request.POST.get("turma_id", "").strip()
-    next_url = request.POST.get("next", "")
-    destino = next_url if next_url.startswith("/") else reverse("alunos_por_turma")
+    destino = destino_seguro(request, "alunos_por_turma")
 
     if not turma_id.isdigit():
         messages.error(request, "Selecione uma turma para sincronizar.")
@@ -1710,10 +1704,7 @@ def atualizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
             f"{resultado.alunos.atualizados} atualizado(s).",
         )
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("registrar_entrada")
+    return redirect(destino_seguro(request, "registrar_entrada"))
 
 
 @login_required
@@ -1948,10 +1939,7 @@ def devolver_emprestimo(request: HttpRequest, pk: int) -> HttpResponse:
         request, f"Devolução do empréstimo #{emp.pk} de {emp.aluno.nome} registrada."
     )
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("emprestimos")
+    return redirect(destino_seguro(request, "emprestimos"))
 
 
 @login_required
@@ -1979,10 +1967,7 @@ def marcar_emprestimo_atrasado(request: HttpRequest, pk: int) -> HttpResponse:
         request, f"Empréstimo #{emp.pk} de {emp.aluno.nome} marcado como atrasado."
     )
 
-    next_url = request.POST.get("next", "")
-    if next_url.startswith("/"):
-        return HttpResponseRedirect(next_url)
-    return redirect("emprestimos")
+    return redirect(destino_seguro(request, "emprestimos"))
 
 
 @login_required
