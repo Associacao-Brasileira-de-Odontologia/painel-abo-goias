@@ -43,6 +43,7 @@ from .models import (
     RegistroSync,
     TurmaLab,
 )
+from .services import consultas
 
 logger = logging.getLogger(__name__)
 
@@ -198,13 +199,6 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
     hoje = date_type.today()
 
-    # Antes só os pedidos em aberto apareciam. Agora os concluídos também entram
-    # (default → todos), senão as novas colunas de entrega/faturamento nunca
-    # teriam conteúdo: o pedido some da tela no instante em que é faturado.
-    qs = PedidoMaterial.objects.select_related(
-        "paciente", "aluno", "laboratorio", "equipe"
-    ).order_by("-criado_em")
-
     busca = request.GET.get("q", "").strip()
     status_filtro = request.GET.get("status", "").strip()
     data_inicio_str = request.GET.get("data_inicio", "").strip()
@@ -218,25 +212,8 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
     # (cme_dashboard), senão o filtro apareceria sempre "ativo".
     periodo_ativo = bool(data_inicio_str or data_fim_str)
 
-    if busca:
-        qs = qs.filter(
-            Q(paciente__nome_normalizado__icontains=normalizar_texto(busca))
-            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
-            | Q(laboratorio__nome__icontains=busca)
-            | Q(descricao_servico__icontains=busca)
-        )
-
-    if status_filtro:
-        qs = qs.filter(status=status_filtro)
-
-    # Filtro de período (mesmo comportamento do CME) — recorta pelo campo de
-    # data escolhido pelo usuário. Default: 1º registro → hoje (todo o
-    # histórico).
     if not data_inicio_str and not data_fim_str:
-        primeiro = PedidoMaterial.objects.aggregate(Min("criado_em"))["criado_em__min"]
-        inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
-        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
-        data_fim_str = hoje.strftime("%Y-%m-%d")
+        data_inicio_str, data_fim_str = consultas.periodo_padrao(hoje)
 
     data_inicio = parse_data_iso(data_inicio_str)
     data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
@@ -244,25 +221,17 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-    qs = filtrar_por_intervalo(
-        qs, CAMPO_DATA_ACOMPANHAMENTO_MODELO[campo_data], data_inicio, data_fim
+
+    qs = consultas.filtrar_pedidos(
+        consultas.listagem_de_pedidos(),
+        busca=busca,
+        status=status_filtro,
+        campo_data=CAMPO_DATA_ACOMPANHAMENTO_MODELO[campo_data],
+        data_inicio=data_inicio,
+        data_fim=data_fim,
     )
 
-    metricas = {
-        "em_dia": PedidoMaterial.objects.filter(
-            status=PedidoMaterial.Status.EM_DIA
-        ).count(),
-        "atrasado": PedidoMaterial.objects.filter(
-            status=PedidoMaterial.Status.ATRASADO
-        ).count(),
-        "entregue_nao_faturado": PedidoMaterial.objects.filter(
-            status=PedidoMaterial.Status.ENTREGUE_NAO_FATURADO
-        ).count(),
-    }
-    metricas["total"] = (
-        metricas["em_dia"] + metricas["atrasado"] + metricas["entregue_nao_faturado"]
-    )
-
+    metricas = consultas.metricas_de_pedidos()
     page_obj, query_string = _paginar(request, qs)
     status_label = STATUS_LABELS.get(status_filtro, "Todos")
 
@@ -1160,87 +1129,29 @@ def pacientes(request: HttpRequest) -> HttpResponse:
     PedidoMaterial.Status).
     """
 
-    from django.conf import settings
-    from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import procurar_pacientes
-
     busca = request.GET.get("q", "").strip()
     pedido_filtro = request.GET.get("pedido", "").strip()
 
-    qs = Paciente.objects.filter(ativo=True).order_by("nome")
-    if busca:
-        qs = qs.filter(
-            Q(nome_normalizado__icontains=normalizar_texto(busca))
-            | Q(celular__icontains=busca)
-        )
-
-    # "Pedido em aberto" = existe pedido do paciente que não está concluído.
-    pacientes_com_pedido_aberto = set(
-        PedidoMaterial.objects.exclude(
-            status=PedidoMaterial.Status.CONCLUIDO
-        ).values_list("paciente_id", flat=True)
-    )
-    if pedido_filtro == "aberto":
-        qs = qs.filter(pk__in=pacientes_com_pedido_aberto)
+    abertos = consultas.ids_com_pedido_aberto()
+    qs = consultas.filtrar_pacientes(busca, pedido_filtro, abertos)
 
     total = Paciente.objects.filter(ativo=True).count()
-    total_abertos = len(pacientes_com_pedido_aberto)
+    total_abertos = len(abertos)
 
     page_obj, query_string = _paginar(request, qs)
 
-    # ── Listagem unificada ────────────────────────────────────────────
     # Uma única lista para o template, em vez de duas tabelas separadas
     # (local + Dental Office) — mesmo padrão de gestao_contratos.views.contratos.
-    pacientes_unificados: list[dict] = []
-    for paciente in page_obj.object_list:
-        pacientes_unificados.append(
-            {
-                "nome": paciente.nome,
-                "celular": paciente.celular,
-                "no_sistema": True,
-                "tem_pedido_aberto": paciente.pk in pacientes_com_pedido_aberto,
-                "data_previsao_retorno": paciente.data_previsao_retorno,
-                "ultima_sincronizacao": paciente.ultima_sincronizacao,
-                "id_dental": None,
-            }
-        )
+    pacientes_unificados = consultas.linhas_locais(page_obj.object_list, abertos)
 
-    # Busca ao vivo no Dental Office (só na 1ª página, só com termo) — traz quem
-    # ainda não está na base local, sem gravar nada. Ver contratos.views.
+    # Busca ao vivo no Dental Office: só na 1ª página e só com termo, para não
+    # bater na API a cada navegação de página.
     erro_dental = ""
     dental_ha_mais = False
     primeira_pagina = request.GET.get("page") in (None, "", "1")
     if busca and primeira_pagina:
-        clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
-        if clinic_id:
-            try:
-                remotos, total_paginas = procurar_pacientes(
-                    q=busca, clinic_id=clinic_id
-                )
-                dental_ha_mais = total_paginas > 1
-                ids_locais = set(
-                    Paciente.objects.filter(ativo=True).values_list(
-                        "id_dental", flat=True
-                    )
-                )
-                for pac in remotos:
-                    if str(pac.id) in ids_locais:
-                        continue
-                    pacientes_unificados.append(
-                        {
-                            "nome": pac.nome,
-                            "celular": pac.celular,
-                            "no_sistema": False,
-                            "tem_pedido_aberto": False,
-                            "data_previsao_retorno": None,
-                            "ultima_sincronizacao": None,
-                            "id_dental": str(pac.id),
-                        }
-                    )
-            except DentalAPIError as exc:
-                erro_dental = str(exc)
-        else:
-            erro_dental = "A busca no Dental Office não está configurada."
+        remotos, dental_ha_mais, erro_dental = consultas.linhas_do_dental(busca)
+        pacientes_unificados.extend(remotos)
 
     return render(
         request,

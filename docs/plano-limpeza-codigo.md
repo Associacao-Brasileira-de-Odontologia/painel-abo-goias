@@ -403,7 +403,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 | **3** | ✅ **Concluída** — removidas `alternar_retirado`, `baixar_contrato_pdf_view` e `buscar_paciente_dental`; `contrato_baixar_carimbo_tempo` mantida (ver §2.1) | Baixo, mas depende de confirmação prévia | Sim (git) |
 | **4** | ✅ **Concluída** — `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` unificados em `comum/datas.py` e `comum/paginacao.py` | Baixo — comportamento idêntico, só muda onde mora | Sim |
 | **5** | Extrair mixin de validação `clean_codigo` em `gestao_cme/forms.py` | Baixo | Sim |
-| **6** | 🔸 **Parcial** — CME concluído (`home`, `cme_dashboard` → `gestao_cme/services/consultas.py`); falta o Lab (`pacientes`, `acompanhamento_pedidos`) | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
+| **6** | ✅ **Concluída** — CME (`home`, `cme_dashboard`) e Lab (`pacientes`, `acompanhamento_pedidos`) extraídos para `services/consultas.py` de cada app | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
 | **7** | Decidir e implementar o destino da agregação cross-app do Portal | Médio — depende de decisão de arquitetura (§11) | Sim |
 | **8** | ✅ **Concluída** — BOM removido de 39 arquivos (não 12) + `.editorconfig` para não voltar | Muito baixo — mas não era só cosmético, ver abaixo | Sim |
 | **9** | ✅ **Concluída** — Auditoria visual dedicada de padronização de front-end (screenshots), ver `avaliacao-visual-padronizacao-frontend.md` | — | — |
@@ -544,5 +544,25 @@ CSRF normalizado. O resultado saiu **idêntico byte a byte** (244.928 bytes) —
 evidência mais forte do que a suíte sozinha para uma mudança que não deveria
 alterar nada.
 
-Restam: a **Etapa 6 no Laboratório**, a **Etapa 7** (decisão de arquitetura sua
-sobre o Portal, §11) e a **Etapa 10** (auditoria de performance), opcional.
+O **Laboratório foi feito na sequência**, fechando a Etapa 6.
+`gestao_lab/services/consultas.py` recebeu a base e os filtros do
+Acompanhamento, o período padrão, as métricas por status, e — no lado de
+Pacientes — a listagem local, o conjunto de quem tem pedido em aberto e a busca
+ao vivo no Dental Office. `acompanhamento_pedidos` caiu de 91 para ~50 linhas e
+`pacientes` de 114 para ~45.
+
+Um detalhe que a extração exigiu: `procurar_pacientes` é substituída nos testes
+por `@patch("gestao_lab.services.dental_sync.procurar_pacientes")`. Na view o
+import era feito dentro da função, então a busca do nome acontecia na hora da
+chamada e o patch pegava. No módulo de serviço isso passou a ser
+`from gestao_lab.services import dental_sync` (o módulo, não o nome) pelo mesmo
+motivo — um `from ... import procurar_pacientes` no topo ficaria preso à função
+original e quebraria seis testes de forma nada óbvia.
+
+Mesmo critério de aceite do CME: HTML renderizado antes e depois, agora em 14
+URLs (cada status, busca, os quatro campos de data do período, campo inválido,
+segunda página, e Pacientes com e sem filtro de pedido em aberto). **Idêntico
+byte a byte** (439.241 bytes).
+
+Restam a **Etapa 7** (decisão de arquitetura sua sobre o Portal, §11) e a
+**Etapa 10** (auditoria de performance), opcional.
