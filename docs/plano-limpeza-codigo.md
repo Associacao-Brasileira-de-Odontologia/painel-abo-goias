@@ -403,7 +403,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 | **3** | ✅ **Concluída** — removidas `alternar_retirado`, `baixar_contrato_pdf_view` e `buscar_paciente_dental`; `contrato_baixar_carimbo_tempo` mantida (ver §2.1) | Baixo, mas depende de confirmação prévia | Sim (git) |
 | **4** | ✅ **Concluída** — `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` unificados em `comum/datas.py` e `comum/paginacao.py` | Baixo — comportamento idêntico, só muda onde mora | Sim |
 | **5** | Extrair mixin de validação `clean_codigo` em `gestao_cme/forms.py` | Baixo | Sim |
-| **6** | Extrair lógica de consulta das views mais extensas (`home`, `cme_dashboard`, `pacientes`, `acompanhamento_pedidos`) para `services/` em cada app | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
+| **6** | 🔸 **Parcial** — CME concluído (`home`, `cme_dashboard` → `gestao_cme/services/consultas.py`); falta o Lab (`pacientes`, `acompanhamento_pedidos`) | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
 | **7** | Decidir e implementar o destino da agregação cross-app do Portal | Médio — depende de decisão de arquitetura (§11) | Sim |
 | **8** | ✅ **Concluída** — BOM removido de 39 arquivos (não 12) + `.editorconfig` para não voltar | Muito baixo — mas não era só cosmético, ver abaixo | Sim |
 | **9** | ✅ **Concluída** — Auditoria visual dedicada de padronização de front-end (screenshots), ver `avaliacao-visual-padronizacao-frontend.md` | — | — |
@@ -522,8 +522,27 @@ ele, o próximo salvamento pelo editor que gravou os BOMs desfaria a limpeza.
 Regras de formatação ficaram deliberadamente de fora para não provocar
 reformatação de arquivos alheios a essa correção.
 
-Restam duas etapas: a **Etapa 6** (extrair consultas das views extensas para
-`services/`) — a de maior esforço e o único risco médio do plano, que pede a
-suíte completa a cada app — e a **Etapa 7**, que depende de uma decisão de
-arquitetura sua sobre o Portal (§11). A **Etapa 10** (auditoria de performance
-com contagem de queries) segue opcional, sob demanda.
+A **Etapa 6 foi iniciada em 2026-07-28 pelo CME**, deixando o Laboratório para
+uma rodada seguinte (a etapa foi quebrada por app justamente para caber numa
+revisão de cada vez).
+
+`gestao_cme/services/consultas.py` passou a concentrar o que monta e recorta
+querysets das duas telas mais extensas do app. `home` caiu de 126 para ~60 linhas
+e `cme_dashboard` de 116 para ~40; as duas agora leem o request, chamam o serviço
+e entregam ao template.
+
+Ficaram **de propósito** nas views: a leitura de `request.GET` (parsing de
+request) e os rótulos/classes de CSS de cada linha (`status_label`,
+`status_classe`, `material_resumo`) — texto de interface não é consulta, e
+empurrá-lo para o serviço só trocaria um acoplamento por outro.
+
+**Verificação além dos testes.** Como é refatoração pura, o critério de aceite
+foi comparar o HTML renderizado antes e depois: 11 URLs (listagem sem filtro,
+cada valor de status, busca textual, recorte de período, filtro por aluno,
+segunda página, e a Visão Geral com e sem período), com massa de dados fixa e
+CSRF normalizado. O resultado saiu **idêntico byte a byte** (244.928 bytes) —
+evidência mais forte do que a suíte sozinha para uma mudança que não deveria
+alterar nada.
+
+Restam: a **Etapa 6 no Laboratório**, a **Etapa 7** (decisão de arquitetura sua
+sobre o Portal, §11) e a **Etapa 10** (auditoria de performance), opcional.

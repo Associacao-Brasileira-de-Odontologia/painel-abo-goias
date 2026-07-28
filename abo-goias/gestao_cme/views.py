@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Page
 from django.db import transaction
-from django.db.models import Count, Max, Min, Prefetch, ProtectedError, Q, Sum
+from django.db.models import Count, Max, Prefetch, ProtectedError, Q, Sum
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -51,6 +51,7 @@ from .models import (
     RegistroAuditoriaMovimentacao,
     Turma,
 )
+from .services import consultas
 from .services.eduq_sync import sincronizar_eduq
 from .services.emprestimos import marcar_emprestimos_atrasados
 from .utils import normalizar_texto
@@ -272,59 +273,6 @@ def portal(request: HttpRequest) -> HttpResponse:
     )
 
 
-def linhas_de_pacote() -> QuerySet[Movimentacao]:
-    """Queryset base da listagem de movimentacoes: uma linha por pacote.
-
-    Fonte unica da verdade compartilhada entre a listagem (``home``) e os KPIs da
-    visao geral (``cme_dashboard``) — os KPIs sao links para esta listagem, entao
-    os dois PRECISAM contar exatamente o mesmo conjunto. Calcular em cada lugar
-    faria o numero do card divergir da tela que ele abre.
-
-    Exclui as SAIDAs ja vinculadas a uma ENTRADA: elas nao sao linha, sao a
-    coluna "Saida" da linha da entrada (ver ``_preparar_datas_do_pacote``).
-    """
-
-    return Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO).exclude(
-        tipo=Movimentacao.Tipo.SAIDA, entrada_origem__isnull=False
-    )
-
-
-def _preparar_datas_do_pacote(registro: Movimentacao) -> None:
-    """Define, para uma linha da listagem, as datas de entrada e de saida.
-
-    Anota no proprio objeto (usado so na renderizacao):
-      ``data_entrada``      — data da ENTRADA, ou None numa saida legada solta.
-      ``data_saida``        — data da retirada, quando conhecida.
-      ``saida_sem_registro``— True quando a entrada esta marcada como retirada
-                              mas nao existe SAIDA vinculada. Acontece em dados
-                              LEGADO (onde o par nao e reconstituivel) e em
-                              entradas marcadas manualmente pela edicao. A
-                              retirada aconteceu; a data e que nao foi guardada —
-                              a tabela mostra isso em vez de fingir uma data.
-      ``entrada_sem_registro`` — True numa SAIDA legada sem entrada vinculada.
-    """
-
-    registro.saida_sem_registro = False
-    registro.entrada_sem_registro = False
-
-    if registro.tipo == Movimentacao.Tipo.SAIDA:
-        # Só chega aqui a saída sem vínculo (as vinculadas viram coluna da
-        # entrada). Sem entrada conhecida, a linha carrega apenas a saída.
-        registro.data_entrada = None
-        registro.data_saida = registro.data_hora
-        registro.entrada_sem_registro = True
-        return
-
-    registro.data_entrada = registro.data_hora
-    # `saidas` vem do prefetch; ordena em Python para nao disparar nova query.
-    saidas = sorted(registro.saidas.all(), key=lambda s: s.data_hora)
-    if saidas:
-        registro.data_saida = saidas[0].data_hora
-    else:
-        registro.data_saida = None
-        registro.saida_sem_registro = registro.retirado is True
-
-
 @login_required
 def home(request: HttpRequest) -> HttpResponse:
     """Lista o ciclo de vida dos pacotes: uma linha por pacote, com entrada e saida.
@@ -349,15 +297,6 @@ def home(request: HttpRequest) -> HttpResponse:
     data_inicio_str = request.GET.get("data_inicio", "").strip()
     data_fim_str = request.GET.get("data_fim", "").strip()
 
-    # Linhas = ENTRADAs + SAIDAs sem vinculo (legado). As SAIDAs vinculadas sao
-    # absorvidas pela linha da sua entrada, via prefetch de `saidas`.
-    movimentacoes = (
-        linhas_de_pacote()
-        .select_related("aluno", "turma", "material")
-        .prefetch_related("saidas")
-        .order_by("-data_hora", "-id")
-    )
-
     # Intervalo de datas — os KPIs da visao geral linkam para ca com o mesmo
     # recorte que usaram para contar; sem isso o link abriria outro conjunto.
     data_inicio = parse_data_iso(data_inicio_str)
@@ -366,41 +305,23 @@ def home(request: HttpRequest) -> HttpResponse:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-    movimentacoes = filtrar_por_intervalo(movimentacoes, "data_hora", data_inicio, data_fim)
 
     # Filtro por aluno específico — usado ao clicar no total de movimentações
-    # de um aluno na tela de alunos por turma. Precede a busca textual porque é
-    # um vínculo exato (FK), não um termo aproximado.
+    # de um aluno na tela de alunos por turma.
     aluno_filtrado = None
     if aluno_id.isdigit():
         aluno_filtrado = (
             Aluno.objects.select_related("turma").filter(pk=aluno_id).first()
         )
-        if aluno_filtrado:
-            movimentacoes = movimentacoes.filter(aluno=aluno_filtrado)
 
-    if status == "retirado":
-        movimentacoes = movimentacoes.filter(retirado=True)
-    elif status == "pendente":
-        movimentacoes = movimentacoes.filter(retirado=False)
-    elif status == "sem_status":
-        movimentacoes = movimentacoes.filter(retirado__isnull=True)
-
-    if busca:
-        movimentacoes = movimentacoes.filter(
-            # `aluno_nome`/`turma_nome` sao copias textuais do momento do
-            # registro (podem existir sem FK, ex.: dados legados); o campo
-            # normalizado do aluno cobre a busca sem acento quando ha vinculo.
-            Q(aluno_nome__icontains=busca)
-            | Q(aluno__nome_normalizado__icontains=normalizar_texto(busca))
-            | Q(aluno_codigo_externo__icontains=busca)
-            | Q(turma_nome__icontains=busca)
-            | Q(pacote_codigo__icontains=busca)
-            | Q(arquivo_origem__icontains=busca)
-            | Q(material__nome__icontains=busca)
-            | Q(material__codigo__icontains=busca)
-            | Q(aluno__matricula__icontains=busca)
-        ).distinct()
+    movimentacoes = consultas.filtrar_pacotes(
+        consultas.listagem_de_pacotes(),
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        aluno=aluno_filtrado,
+        status=status,
+        busca=busca,
+    )
 
     page_obj, query_string = paginar_queryset(request, movimentacoes)
     status_label = dict(STATUS_MOVIMENTACAO_OPCOES).get(status, "Todos")
@@ -418,20 +339,14 @@ def home(request: HttpRequest) -> HttpResponse:
         registro.material_resumo = (
             registro.material.nome if registro.material else "Pacote"
         )
-        _preparar_datas_do_pacote(registro)
+        consultas.preparar_datas_do_pacote(registro)
 
     # Rotulo de contagem ao lado de "N registros" — segue o mesmo recorte de
     # datas da listagem para nao contradizer o que esta na tela. So aparece
     # quando o status selecionado e o mesmo que o rotulo descreve (pendente/
     # retirado): mostra-lo com o filtro "todos" sugeria, por engano, que
     # aquele numero era so mais um dado do conjunto exibido.
-    metricas = filtrar_por_intervalo(
-        linhas_de_pacote(), "data_hora", data_inicio, data_fim
-    ).aggregate(
-        total=Count("id"),
-        pendentes=Count("id", filter=Q(retirado=False)),
-        retirados=Count("id", filter=Q(retirado=True)),
-    )
+    metricas = consultas.contar_pacotes(data_inicio, data_fim)
 
     return render(
         request,
@@ -1925,14 +1840,8 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
     # pra usá-las para saber se foi o usuário quem pediu um recorte.
     periodo_ativo = bool(data_inicio_str or data_fim_str)
 
-    # Padrão: do primeiro registro do banco até hoje — abre mostrando todo o
-    # histórico, em vez de recortar no mês atual (que escondia o passado sem o
-    # usuário pedir). Banco vazio: cai para hoje→hoje.
     if not data_inicio_str and not data_fim_str:
-        primeiro = linhas_de_pacote().aggregate(Min("data_hora"))["data_hora__min"]
-        inicio_padrao = timezone.localtime(primeiro).date() if primeiro else hoje
-        data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
-        data_fim_str = hoje.strftime("%Y-%m-%d")
+        data_inicio_str, data_fim_str = consultas.periodo_padrao(hoje)
 
     data_inicio = parse_data_iso(data_inicio_str)
     data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
@@ -1940,17 +1849,6 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-
-    # Mesma base da listagem (uma linha por pacote) para que cada KPI abra
-    # exatamente os registros que contou — ver linhas_de_pacote().
-    mov_base = filtrar_por_intervalo(linhas_de_pacote(), "data_hora", data_inicio, data_fim)
-
-    metricas_mov = mov_base.aggregate(
-        total=Count("id"),
-        retirados=Count("id", filter=Q(retirado=True)),
-        pendentes=Count("id", filter=Q(retirado=False)),
-        sem_status=Count("id", filter=Q(retirado__isnull=True)),
-    )
 
     # Query string do período, reaproveitada nos links dos KPIs.
     filtro_datas_qs = urlencode(
@@ -1964,56 +1862,6 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
         }
     )
 
-    pacotes_aguardando = list(
-        mov_base.filter(
-            tipo=Movimentacao.Tipo.ENTRADA,
-            retirado=False,
-        )
-        .select_related("aluno", "aluno__turma", "aluno__abrigo")
-        .order_by("data_hora")[:10]
-    )
-
-    # A atividade recente e um feed de EVENTOS, nao de pacotes: usa todos os
-    # registros (inclusive as SAIDAs que a listagem absorve na linha da
-    # entrada), senao a retirada apareceria datada pela data de entrada.
-    eventos_base = filtrar_por_intervalo(
-        Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO),
-        "data_hora",
-        data_inicio,
-        data_fim,
-    )
-
-    atividade_recente: list[dict] = []
-    for mov in eventos_base.select_related("material").order_by("-data_hora", "-id")[
-        :12
-    ]:
-        material = mov.material.nome if mov.material else f"pacote {mov.pacote_codigo}"
-        aluno = mov.aluno_nome or "Aluno não informado"
-        if mov.tipo == Movimentacao.Tipo.ENTRADA and mov.retirado is False:
-            categoria, titulo = "alerta", "Entrada para esterilização"
-            descricao = f"{aluno} entregou {material} para esterilização."
-        elif mov.tipo == Movimentacao.Tipo.ENTRADA and mov.retirado is True:
-            categoria, titulo = "devolucao", "Material retirado"
-            descricao = f"{aluno} retirou {material}."
-        elif mov.tipo == Movimentacao.Tipo.SAIDA:
-            categoria, titulo = "exportacao", "Saída registrada"
-            descricao = f"{material} saiu para {aluno}."
-        else:
-            categoria, titulo = "alerta", "Movimentação"
-            descricao = f"{material} — {aluno}."
-        atividade_recente.append(
-            {
-                "categoria": categoria,
-                "titulo": titulo,
-                "descricao": descricao,
-                "data": mov.data_hora,
-            }
-        )
-
-    atividade_recente = sorted(
-        atividade_recente, key=lambda x: x["data"], reverse=True
-    )[:12]
-
     return render(
         request,
         "gestao_cme/dashboard_cme.html",
@@ -2026,8 +1874,8 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
             "data_fim": data_fim,
             "periodo_ativo": periodo_ativo,
             "filtro_datas_qs": filtro_datas_qs,
-            "metricas_mov": metricas_mov,
-            "pacotes_aguardando": pacotes_aguardando,
-            "atividade_recente": atividade_recente,
+            "metricas_mov": consultas.metricas_por_status(data_inicio, data_fim),
+            "pacotes_aguardando": consultas.pacotes_aguardando(data_inicio, data_fim),
+            "atividade_recente": consultas.eventos_recentes(data_inicio, data_fim),
         },
     )
