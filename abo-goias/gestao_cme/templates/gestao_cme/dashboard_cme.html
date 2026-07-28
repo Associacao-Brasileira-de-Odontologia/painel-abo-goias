@@ -32,22 +32,22 @@
         Total = Retirados + Aguardando + Sem status.
         {% endcomment %}
         <div class="kpi-grid">
-            <a class="metric-card metric-card--link" href="{% url 'cme_home' %}?{{ filtro_datas_qs }}">
+            <a class="metric-card metric-card--link metric-blue" href="{% url 'cme_home' %}?{{ filtro_datas_qs }}">
                 <span class="metric-label">Total</span>
                 <strong>{{ metricas_mov.total }}</strong>
                 <span class="metric-secondary">pacotes registrados</span>
             </a>
-            <a class="metric-card metric-card--link" href="{% url 'cme_home' %}?status=retirado{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
+            <a class="metric-card metric-card--link metric-success" href="{% url 'cme_home' %}?status=retirado{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
                 <span class="metric-label">Retirados</span>
                 <strong>{{ metricas_mov.retirados }}</strong>
                 <span class="metric-secondary">materiais retirados</span>
             </a>
-            <a class="metric-card metric-card--link danger-metric" href="{% url 'cme_home' %}?status=pendente{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
+            <a class="metric-card metric-card--link metric-warn" href="{% url 'cme_home' %}?status=pendente{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
                 <span class="metric-label">Aguardando</span>
                 <strong>{{ metricas_mov.pendentes }}</strong>
                 <span class="metric-secondary">pacotes não retirados</span>
             </a>
-            <a class="metric-card metric-card--link" href="{% url 'cme_home' %}?status=sem_status{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
+            <a class="metric-card metric-card--link metric-neutral" href="{% url 'cme_home' %}?status=sem_status{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}">
                 <span class="metric-label">Sem status</span>
                 <strong>{{ metricas_mov.sem_status }}</strong>
                 <span class="metric-secondary">registros antigos</span>

@@ -1,11 +1,11 @@
 {% extends "layouts/painel.html" %}
 
 {% comment %}
-Base da Gestão de Laboratório: aplica o acento visual da app (app-lab)
-sobre o layout padrão de painel. As páginas definem os blocos do painel
-e incluem gestao_lab/partials/menu.html na sidebar.
+Base da Gestão de Laboratório sobre o layout padrão de painel. As páginas
+definem os blocos do painel e incluem gestao_lab/partials/menu.html na
+sidebar. O acento visual (--accent-*) é o padrão institucional em
+tokens.css, comum a todas as apps.
 {% endcomment %}
 
-{% block body_class %}app-lab{% endblock %}
 {% block header_eyebrow %}ABO Goiás{% endblock %}
 {% block header_title %}Gestão de Laboratório{% endblock %}

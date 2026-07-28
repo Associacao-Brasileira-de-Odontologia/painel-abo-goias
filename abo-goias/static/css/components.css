@@ -1916,9 +1916,12 @@ tbody tr.row-entregue-pendente > td:first-child {
     box-shadow: 0 0 0 5px rgba(18, 227, 199, 0.12);
 }
 
+/* Cor fixa (azul), não var(--accent-text): o acento passou a ser o
+   turquesa institucional, igual ao usado por .activity-devolucao — usar
+   o token aqui faria os dois tipos de atividade ficarem indistinguíveis. */
 .activity-exportacao .activity-dot,
 .activity-entrada .activity-dot {
-    background: var(--accent-text);
+    background: var(--blue);
     box-shadow: 0 0 0 5px rgba(29, 110, 238, 0.14);
 }
 

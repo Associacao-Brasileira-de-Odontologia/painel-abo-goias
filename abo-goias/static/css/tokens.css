@@ -33,11 +33,11 @@
     --gold: #f7a51f;
 
     /* ── Acento da aplicação (wayfinding entre sistemas) ────────── */
-    --accent-text: #27baff;
-    --accent-soft: rgba(29, 110, 238, 0.16);
-    --accent-strong: #d9ecff;
-    --accent-focus: rgba(29, 110, 238, 0.82);
-    --accent-ring: rgba(29, 110, 238, 0.13);
+    --accent-text: #67f9e0;
+    --accent-soft: rgba(18, 227, 199, 0.14);
+    --accent-strong: #d9fdf6;
+    --accent-focus: rgba(18, 227, 199, 0.7);
+    --accent-ring: rgba(18, 227, 199, 0.12);
 
     /* ── Estados semânticos ─────────────────────────────────────── */
     --success: #67f9e0;
@@ -68,14 +68,4 @@
     --font-body: "DM Sans", "Segoe UI", Arial, sans-serif;
     --font-display: "Syne", "Segoe UI", Arial, sans-serif;
     --mono: "Spline Sans Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-}
-
-/* ── Acento por aplicação (wayfinding entre sistemas) ───────────── */
-
-.app-lab {
-    --accent-text: #67f9e0;
-    --accent-soft: rgba(18, 227, 199, 0.14);
-    --accent-strong: #d9fdf6;
-    --accent-focus: rgba(18, 227, 199, 0.7);
-    --accent-ring: rgba(18, 227, 199, 0.12);
 }
