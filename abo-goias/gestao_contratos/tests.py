@@ -1,4 +1,4 @@
-﻿"""Testes da aplicação de gestão de contratos.
+"""Testes da aplicação de gestão de contratos.
 
 Cobre views, serviço de checklist e integração com o Dental Office.
 Prioridade: views e integração Dental → checklist service → models.

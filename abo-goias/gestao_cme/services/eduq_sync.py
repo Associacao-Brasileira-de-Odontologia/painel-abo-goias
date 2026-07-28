@@ -1,4 +1,4 @@
-﻿"""Servicos de sincronizacao entre a CME e a API Eduq.
+"""Servicos de sincronizacao entre a CME e a API Eduq.
 
 Este modulo orquestra consultas ao cliente Eduq, normaliza dados recebidos e
 grava turmas, alunos e localizacoes no banco local.

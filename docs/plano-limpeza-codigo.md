@@ -405,7 +405,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 | **5** | Extrair mixin de validação `clean_codigo` em `gestao_cme/forms.py` | Baixo | Sim |
 | **6** | Extrair lógica de consulta das views mais extensas (`home`, `cme_dashboard`, `pacientes`, `acompanhamento_pedidos`) para `services/` em cada app | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
 | **7** | Decidir e implementar o destino da agregação cross-app do Portal | Médio — depende de decisão de arquitetura (§11) | Sim |
-| **8** | Normalizar encoding (remover BOM dos 12 arquivos) | Muito baixo, cosmético | Sim |
+| **8** | ✅ **Concluída** — BOM removido de 39 arquivos (não 12) + `.editorconfig` para não voltar | Muito baixo — mas não era só cosmético, ver abaixo | Sim |
 | **9** | ✅ **Concluída** — Auditoria visual dedicada de padronização de front-end (screenshots), ver `avaliacao-visual-padronizacao-frontend.md` | — | — |
 | **10** *(opcional, sob demanda)* | Auditoria de performance com contagem de queries nas listagens ainda não verificadas | — | — |
 
@@ -504,7 +504,26 @@ cobrir "o caso que exige o `.date()`", mas continuou passando com a lógica
 sabotada de propósito — porque não havia o que discriminar. O teste foi mantido
 (a fronteira do último dia é contrato que vale fixar), com a descrição corrigida.
 
-Próxima recomendada: **Etapa 8** (remover o BOM de 12 arquivos) — cosmética e de
-risco mínimo, boa para fechar o bloco mecânico. Depois dela sobram a **Etapa 6**
-(extrair consultas das views extensas para `services/`, a de maior esforço) e a
-**Etapa 7**, que depende de uma decisão de arquitetura sobre o Portal (§11).
+A **Etapa 8** foi concluída em 2026-07-28, com duas correções ao que este plano
+dizia:
+
+- **Eram 39 arquivos, não 12.** A contagem original só considerou os `.py`; havia
+  outros 27 templates `.html` na mesma situação.
+- **Não era cosmético.** Nos templates, o BOM saía no corpo da resposta HTTP,
+  antes do `<!doctype html>`. Medido antes e depois nas páginas servidas: as
+  respostas começavam com `ef bb bf 0a 3c 21` e passaram a começar em
+  `0a 3c 21` (`\n<!`). Nos `.py` não havia efeito — o Python 3 já lida com BOM
+  em código-fonte —, mas os templates serviam um caractere invisível em toda
+  página. O diff foi conferido arquivo a arquivo: nenhum tem mais de uma linha
+  alterada, e a única mudança é o próprio BOM.
+
+Foi acrescentado um `.editorconfig` mínimo (só `charset` e `end_of_line`): sem
+ele, o próximo salvamento pelo editor que gravou os BOMs desfaria a limpeza.
+Regras de formatação ficaram deliberadamente de fora para não provocar
+reformatação de arquivos alheios a essa correção.
+
+Restam duas etapas: a **Etapa 6** (extrair consultas das views extensas para
+`services/`) — a de maior esforço e o único risco médio do plano, que pede a
+suíte completa a cada app — e a **Etapa 7**, que depende de uma decisão de
+arquitetura sua sobre o Portal (§11). A **Etapa 10** (auditoria de performance
+com contagem de queries) segue opcional, sob demanda.

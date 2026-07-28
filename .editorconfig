@@ -1,0 +1,17 @@
+# Impede que o BOM (UTF-8 com assinatura) volte a entrar nos arquivos.
+#
+# 39 arquivos do projeto começavam com \xef\xbb\xbf, gravado por algum editor
+# configurado para "UTF-8 com BOM". Nos templates isso não era só cosmético: o
+# BOM saía no corpo da resposta, antes do <!doctype html> de toda página servida
+# por eles. Foram limpos na Etapa 8 do plano de limpeza; este arquivo existe
+# para não voltarem no próximo salvamento.
+#
+# Deliberadamente mínimo: só encoding e fim de linha. Regras de formatação
+# (indentação, espaços no fim da linha) ficam de fora para não provocar
+# reformatação de arquivos que não têm nada a ver com essa correção.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf

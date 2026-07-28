@@ -1,4 +1,4 @@
-﻿import json
+import json
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from pathlib import Path

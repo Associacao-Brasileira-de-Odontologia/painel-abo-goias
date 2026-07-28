@@ -1,4 +1,4 @@
-﻿"""Servicos para migrar dados operacionais de planilhas legadas.
+"""Servicos para migrar dados operacionais de planilhas legadas.
 
 O modulo importa CSVs historicos de abrigos, kits, materiais e movimentacoes,
 normalizando os valores antes de persisti-los nos modelos da CME.
