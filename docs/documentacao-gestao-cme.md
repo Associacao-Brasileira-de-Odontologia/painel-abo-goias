@@ -60,7 +60,6 @@ flowchart LR
         UC05(("UC-05 Consultar movimentações"))
         UC06(("UC-06 Editar movimentação"))
         UC07(("UC-07 Excluir movimentação"))
-        UC08(("UC-08 Alternar status retirada"))
         UC09(("UC-09 Gerenciar alunos por turma"))
         UC10(("UC-10 Cadastrar aluno"))
         UC11(("UC-11 Cadastrar turma"))
@@ -76,7 +75,7 @@ flowchart LR
         UC21(("UC-21 Editar empréstimo"))
     end
 
-    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC08 & UC09 & UC10 & UC11 & UC13 & UC14 & UC15 & UC16 & UC17 & UC18 & UC19 & UC21
+    Coord --> UC01 & UC02 & UC03 & UC04 & UC05 & UC06 & UC07 & UC09 & UC10 & UC11 & UC13 & UC14 & UC15 & UC16 & UC17 & UC18 & UC19 & UC21
     Super --> UC12
     Coord --> UC12
     Beat --> UC12
@@ -198,8 +197,8 @@ ajustes visuais aplicados (histórico resumido em §7).
      retirado / Sem status), aluno específico (vindo de UC-09), e período.
   4. O resumo de resultados mostra "N aguardando retirada"/"N retirados" apenas quando o
      filtro de Status correspondente está selecionado, na cor do badge.
-  5. Cada linha permite: alternar status de retirada (UC-08), editar (UC-06), excluir
-     (UC-07).
+  5. Cada linha permite: editar (UC-06) e excluir (UC-07). O status de retirada é
+     alterado pela edição, não por uma ação de linha própria.
   6. A paginação oferece atalhos textuais "« Primeira" e "Última »", além de
      Anterior/Próxima e números de página.
 - **Regra de negócio:** filtro de "Movimentação" (Entrada/Saída) foi removido
@@ -232,16 +231,21 @@ ajustes visuais aplicados (histórico resumido em §7).
 - **Trilha de auditoria mínima (usuário, ação, timestamp):** implementada — não inclui,
   por decisão de escopo, o valor anterior do campo editado (versionamento completo).
 
-### UC-08 · Alternar status de retirada manualmente
+### UC-08 · Alternar status de retirada manualmente *(removido em 2026-07-28)*
 
-- **Ator primário:** Coordenador.
-- **View/rota:** `views.alternar_retirado` (POST) → `/gestao-cme/<pk>/alternar-retirado/`
-- **Fluxo principal:** cicla o campo `retirado` em três estados: `None → True → False →
-  None`. Usado como correção manual pontual, fora do fluxo padrão de UC-03/UC-04.
-- **Risco:** alternar o status não cria/edita o vínculo `entrada_origem` nem a
-  `Movimentacao` de SAIDA correspondente — pode gerar uma ENTRADA marcada como
-  `retirado=True` sem uma SAIDA real. Não há aviso na UI sobre essa consequência (ver §5,
-  U-03).
+Este caso de uso descrevia a view `alternar_retirado` (POST →
+`/gestao-cme/<pk>/alternar-retirado/`), que ciclava o campo `retirado` em três
+estados (`None → True → False → None`).
+
+**A rota nunca chegou a ser exposta na interface.** O histórico do repositório
+confirma que o caminho `alternar-retirado` só apareceu em `urls.py`, `views.py` e
+nesta documentação — nenhum template jamais a referenciou, e nenhum teste a
+cobria. Foi removida na Etapa 3 do plano de limpeza.
+
+A correção manual do status continua possível pela **edição da movimentação
+(UC-06)**, que é a ação de linha realmente oferecida na listagem. O risco que
+estava descrito aqui — marcar `retirado=True` sem uma SAIDA correspondente — vale
+igualmente para a edição, e segue registrado em §5 (U-03).
 
 ### UC-09 · Gerenciar alunos por turma
 
@@ -475,7 +479,6 @@ ajustes visuais aplicados (histórico resumido em §7).
 | UC-05 | `home` | `home.html` |
 | UC-06 | `editar_movimentacao` | `editar_movimentacao.html` |
 | UC-07 | `excluir_movimentacao` | — (ação POST a partir de `home.html`) |
-| UC-08 | `alternar_retirado` | — (ação POST a partir de `home.html`) |
 | UC-09 | `alunos_por_turma` | `alunos_por_turma.html` |
 | UC-10 | `cadastrar_aluno` | `cadastrar_aluno.html` |
 | UC-11 | `cadastrar_turma` | `cadastrar_turma.html` |
@@ -526,7 +529,7 @@ pode fazer o quê.
 | Problema | Impacto | Sugestão |
 |---|---|---|
 | Após gerar N pacotes (UC-03), não há indicação de progresso de etiquetagem física | Risco de trocar/pular etiqueta em lotes grandes (até 50) | Checklist interativo opcional na tela de confirmação |
-| Alternar status de retirada manualmente (UC-08) não avisa que isso pode descolar o registro do vínculo `entrada_origem` real | Divergência de dados sem o operador perceber a causa | Tooltip/confirmação explicando a consequência antes de aplicar |
+| Alterar o status de retirada pela edição (UC-06) não avisa que isso pode descolar o registro do vínculo `entrada_origem` real | Divergência de dados sem o operador perceber a causa | Tooltip/confirmação explicando a consequência antes de aplicar |
 | Não há histórico de ocupação de um abrigo (UC-14), só a ocupação atual | Perda de contexto para investigar trocas de abrigo | Tela ou seção de histórico de ocupação |
 | Nenhuma ação de escrita rápida (alternar retirado, atribuir abrigo) desabilita o botão/mostra spinner | Cliques duplos podem gerar ações repetidas em conexões lentas | Aplicar o mesmo padrão `.js-loading-submit` já usado nos formulários |
 

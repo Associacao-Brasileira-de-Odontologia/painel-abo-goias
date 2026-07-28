@@ -45,11 +45,6 @@ urlpatterns = [
     path("gestao-cme/nova-saida/", views.registrar_saida, name="registrar_saida"),
     path("gestao-cme/nova-entrada/", views.registrar_entrada, name="registrar_entrada"),
     path(
-        "gestao-cme/<int:pk>/alternar-retirado/",
-        views.alternar_retirado,
-        name="alternar_retirado",
-    ),
-    path(
         "gestao-cme/<int:pk>/excluir/",
         views.excluir_movimentacao,
         name="excluir_movimentacao",

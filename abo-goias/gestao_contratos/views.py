@@ -513,30 +513,6 @@ def baixar_contrato_view(request: HttpRequest, contrato_pk: int) -> HttpResponse
 
 
 @login_required
-def baixar_contrato_pdf_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
-    """Retorna o PDF do contrato como download."""
-
-    contrato = get_object_or_404(ContratoGerado, pk=contrato_pk)
-    paciente = contrato.paciente
-
-    if not contrato.arquivo_pdf:
-        messages.error(request, "PDF do contrato não disponível. Baixe a versão DOCX.")
-        return redirect("contrato_pos_geracao", contrato_pk=contrato_pk)
-
-    contrato.arquivo_pdf.open("rb")
-    conteudo = contrato.arquivo_pdf.read()
-    contrato.arquivo_pdf.close()
-
-    nome_arquivo = (
-        f"termo_{contrato.tipo}_{paciente.nome.split()[0].lower()}"
-        f"_{paciente.id_dental}.pdf"
-    )
-    response = HttpResponse(conteudo, content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
-    return response
-
-
-@login_required
 def enviar_email_view(request: HttpRequest, contrato_pk: int) -> HttpResponse:
     """Envia o contrato por e-mail ao destinatário informado no formulário."""
 

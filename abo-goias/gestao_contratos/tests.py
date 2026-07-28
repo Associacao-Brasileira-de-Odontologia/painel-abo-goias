@@ -2659,27 +2659,6 @@ class PosGeracaoActionViewsTests(AssinaturaBaseTests):
             fetch_redirect_response=False,
         )
 
-    def test_baixar_pdf(self) -> None:
-        response = self.client.get(
-            reverse("contrato_baixar_pdf", args=[self.contrato.pk])
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "application/pdf")
-
-    def test_baixar_pdf_sem_arquivo_redireciona(self) -> None:
-        self.contrato.arquivo_pdf = None
-        self.contrato.save(update_fields=["arquivo_pdf"])
-
-        response = self.client.get(
-            reverse("contrato_baixar_pdf", args=[self.contrato.pk])
-        )
-
-        self.assertRedirects(
-            response,
-            reverse("contrato_pos_geracao", args=[self.contrato.pk]),
-            fetch_redirect_response=False,
-        )
-
     def test_enviar_email_sucesso(self) -> None:
         response = self.client.post(
             reverse("contrato_enviar_email", args=[self.contrato.pk]),

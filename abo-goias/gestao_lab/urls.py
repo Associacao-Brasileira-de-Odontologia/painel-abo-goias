@@ -99,8 +99,6 @@ urlpatterns = [
         views.sincronizar_alunos_eduq,
         name="lab_sincronizar_alunos",
     ),
-    # Busca direcionada Dental Office (importação pontual)
-    path("buscar-paciente/", views.buscar_paciente_dental, name="lab_buscar_paciente"),
     # Sincronização agendada — autenticada por token (Railway Cron)
     path(
         "sincronizar-agendado/",

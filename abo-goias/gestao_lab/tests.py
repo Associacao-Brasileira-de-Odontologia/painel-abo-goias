@@ -1252,38 +1252,6 @@ class SincronizarDentalViewTests(TestCase):
         self.assertContains(response, "não está configurada")
         self.assertContains(response, "suporte técnico")
 
-    @override_settings(DENTAL_CLINIC_ID="clinic-test")
-    @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
-    def test_busca_paciente_dental_importa_e_exibe_mensagem(
-        self, mock_buscar: MagicMock
-    ) -> None:
-        mock_buscar.return_value = {"criados": 1, "atualizados": 0}
-
-        response = self.client.get(
-            reverse("lab_buscar_paciente"),
-            {"q": "Carlos", "next": "lab_criar_pedido"},
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "importado")
-
-    @override_settings(DENTAL_CLINIC_ID="clinic-test")
-    @patch("gestao_lab.services.dental_sync.buscar_e_importar_pacientes")
-    def test_busca_paciente_dental_sem_resultado_exibe_aviso(
-        self, mock_buscar: MagicMock
-    ) -> None:
-        mock_buscar.return_value = {"criados": 0, "atualizados": 0}
-
-        response = self.client.get(
-            reverse("lab_buscar_paciente"),
-            {"q": "Inexistente", "next": "lab_criar_pedido"},
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Nenhum paciente encontrado")
-
 
 # ---------------------------------------------------------------------------
 # Testes de serviço — eduq_lab_sync (upsert de TurmaLab/AlunoLab)

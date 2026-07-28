@@ -54,17 +54,29 @@ anteriores já fizeram esse trabalho de base.
 
 ### 2.1 Funções/rotas nunca chamadas (verificado, candidatos à remoção)
 
-| Função/rota | App | Evidência |
-|---|---|---|
-| `alternar_retirado` (`/gestao-cme/<pk>/alternar-retirado/`) | `gestao_cme` | Nenhum template menciona a rota nem a palavra "alternar"; nenhum teste cobre a view |
-| `baixar_contrato_pdf_view` (`contrato_baixar_pdf`) | `gestao_contratos` | Só aparece em testes (`reverse(...)`); nenhum `redirect()` ou template usa. A versão DOCX é a única linkada na tela |
-| `buscar_paciente_dental` (`lab_buscar_paciente`, singular) | `gestao_lab` | Já documentado (achado S-02); confirmado que só a versão unificada (`lab_buscar_pacientes`) é usada |
-| `contrato_baixar_carimbo_tempo` | `gestao_contratos` | Já documentado (CT-02); download avulso removido de propósito da tela, rota/view continuam existindo |
+| Função/rota | App | Evidência | Desfecho (Etapa 3) |
+|---|---|---|---|
+| `alternar_retirado` (`/gestao-cme/<pk>/alternar-retirado/`) | `gestao_cme` | Nenhum template menciona a rota nem a palavra "alternar"; nenhum teste cobre a view | **Removida** — o histórico do repositório confirma que nunca esteve em template nenhum |
+| `baixar_contrato_pdf_view` (`contrato_baixar_pdf`) | `gestao_contratos` | Só aparece em testes (`reverse(...)`); nenhum `redirect()` ou template usa | **Removida** (com seus 2 testes) |
+| `buscar_paciente_dental` (`lab_buscar_paciente`, singular) | `gestao_lab` | Já documentado (achado S-02); confirmado que só a versão unificada (`lab_buscar_pacientes`) é usada | **Removida** (com seus 2 testes e a constante `_DESTINOS_VALIDOS`, que só ela usava) |
+| `contrato_baixar_carimbo_tempo` | `gestao_contratos` | Já documentado (CT-02); download avulso removido de propósito da tela, rota/view continuam existindo | **Mantida** — ver justificativa abaixo |
 
-**Marcado para revisão manual, não remoção automática:** os quatro itens acima têm
-comportamento bem definido e testado — antes de excluir, confirmar com o time se algum
-deles é usado por integração externa (bookmark, script, chamada direta) que não aparece
-no grep do código.
+**Correção de uma evidência deste levantamento:** a linha do `contrato_baixar_pdf` dizia
+que "a versão DOCX é a única linkada na tela". Isso está errado — o que a tela linka é
+`contrato_baixar_assinado` (o contrato **assinado**). A rota da DOCX
+(`contrato_baixar`) está tão órfã quanto a do PDF: também só aparece em testes. Ela
+**não** foi removida por não constar da lista aprovada; fica como candidata para a
+próxima rodada, junto com a decisão de manter ou não um caminho de download do documento
+original (pré-assinatura), hoje inacessível pela interface em ambos os formatos.
+
+**Por que `contrato_baixar_carimbo_tempo` ficou:** o botão saiu da tela em `7098d8f` com
+uma justificativa específica — "o colaborador da recepção não tem como avaliar a
+validade/uso desse arquivo isoladamente". Isso é um argumento para tirar da recepção, não
+necessariamente do sistema. E o achado **CT-02 segue aberto**: a falha ao embutir o
+carimbo no PDF é silenciosa, e é exatamente nesse cenário que o `.tsr` avulso passa a ser
+a única evidência do carimbo. Como o arquivo é material probatório de um contrato
+assinado, manter a rota (17 linhas já testadas) custa pouco perto de perder o acesso
+prático a ele. Reavaliar depois que CT-02 for corrigido.
 
 ### 2.2 Duplicação de lógica entre apps (verificado)
 
@@ -388,7 +400,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 |---|---|---|---|
 | **1** | ✅ **Concluída** — redirect inseguro corrigido nos 22 pontos com `comum.http.destino_seguro` | Baixo — mesma assinatura de função, só passa a validar antes de redirecionar | Sim |
 | **2** | ✅ **Concluída** — C-01 (PDF sem checagem de identidade) e A-02 (IP forjável) corrigidos em `gestao_contratos` | Baixo — 1 `if` e 1 ajuste de leitura de header | Sim |
-| **3** | Remover código morto confirmado (após sua validação do item 1 da lista de pendências): `alternar_retirado`, `baixar_contrato_pdf_view`, `buscar_paciente_dental`, `contrato_baixar_carimbo_tempo` | Baixo, mas depende de confirmação prévia | Sim (git) |
+| **3** | ✅ **Concluída** — removidas `alternar_retirado`, `baixar_contrato_pdf_view` e `buscar_paciente_dental`; `contrato_baixar_carimbo_tempo` mantida (ver §2.1) | Baixo, mas depende de confirmação prévia | Sim (git) |
 | **4** | Unificar `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` entre CME e Lab num módulo compartilhado | Baixo — comportamento idêntico, só muda onde mora | Sim |
 | **5** | Extrair mixin de validação `clean_codigo` em `gestao_cme/forms.py` | Baixo | Sim |
 | **6** | Extrair lógica de consulta das views mais extensas (`home`, `cme_dashboard`, `pacientes`, `acompanhamento_pedidos`) para `services/` em cada app | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
@@ -442,7 +454,28 @@ de tempo. Um teste que existia (`test_pdf_publico_acessivel`) codificava o
 comportamento vulnerável e foi ajustado para confirmar a identidade antes de
 esperar o PDF.
 
-Próxima recomendada: **Etapa 4** (unificar os helpers de data e paginação
-duplicados entre CME e Lab no pacote `comum/` criado na Etapa 1) — é mecânica e de
-baixo risco. A **Etapa 3** (remoção de código morto) vem antes na ordem original,
-mas depende de uma confirmação sua sobre as quatro views listadas.
+A **Etapa 3** foi concluída em 2026-07-28. Três das quatro rotas candidatas saíram
+(view + rota + testes); a quarta ficou, com a justificativa registrada em §2.1.
+
+Sobre a ressalva original de "confirmar com o time se algum deles é usado por
+integração externa": as três removidas eram rotas de staff (`@login_required`), o
+que limita o risco a um bookmark interno ou script com credenciais. Nenhuma delas
+tinha link na interface, e a remoção é reversível por git — os commits estão
+isolados justamente para permitir voltar atrás caso alguém reclame de um atalho
+que usava.
+
+Dois desvios entre a documentação e o código apareceram no caminho e foram
+corrigidos:
+
+- **UC-08** (`documentacao-gestao-cme.md`) descrevia a alternância manual de status
+  como ação de linha da listagem, e o UC-05 a listava entre as ações disponíveis —
+  mas o histórico mostra que a rota nunca esteve em template nenhum. A seção virou
+  um registro histórico e as referências (diagrama, matriz de rastreabilidade,
+  backlog de usabilidade) passaram a apontar para a edição (UC-06), que é o caminho
+  real.
+- A evidência da linha do `contrato_baixar_pdf` estava incorreta neste próprio
+  documento (ver §2.1).
+
+Próxima recomendada: **Etapa 4** — unificar os helpers de data e paginação
+duplicados entre CME e Lab no pacote `comum/` criado na Etapa 1. É mecânica, de
+baixo risco e já tem onde morar.

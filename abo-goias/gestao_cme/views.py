@@ -1245,28 +1245,6 @@ def registrar_saida(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
-def alternar_retirado(request: HttpRequest, pk: int) -> HttpResponse:
-    """Alterna o campo retirado de uma movimentacao entre os tres estados possiveis."""
-
-    try:
-        mov = Movimentacao.objects.get(pk=pk)
-    except Movimentacao.DoesNotExist:
-        messages.error(request, "Movimentação não encontrada.")
-        return redirect("cme_home")
-
-    if mov.retirado is None:
-        mov.retirado = True
-    elif mov.retirado is True:
-        mov.retirado = False
-    else:
-        mov.retirado = None
-    mov.save()
-
-    return redirect(destino_seguro(request, "cme_home"))
-
-
-@login_required
-@require_POST
 def excluir_movimentacao(request: HttpRequest, pk: int) -> HttpResponse:
     """Remove permanentemente uma movimentacao do sistema.
 

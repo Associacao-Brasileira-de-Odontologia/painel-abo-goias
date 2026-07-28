@@ -109,11 +109,6 @@ urlpatterns = [
         name="contrato_baixar",
     ),
     path(
-        "contrato/<int:contrato_pk>/baixar-pdf/",
-        views.baixar_contrato_pdf_view,
-        name="contrato_baixar_pdf",
-    ),
-    path(
         "contrato/<int:contrato_pk>/enviar-email/",
         views.enviar_email_view,
         name="contrato_enviar_email",

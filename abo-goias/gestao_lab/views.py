@@ -1433,58 +1433,6 @@ def sincronizar_alunos_eduq(request: HttpRequest) -> HttpResponse:
 
 
 # ---------------------------------------------------------------------------
-# Busca direcionada Dental Office (importação pontual durante cadastro)
-# ---------------------------------------------------------------------------
-
-_DESTINOS_VALIDOS = frozenset(
-    {"lab_criar_pedido", "lab_criar_moldagem", "lab_pacientes", "lab_alunos"}
-)
-
-
-@login_required
-def buscar_paciente_dental(request: HttpRequest) -> HttpResponse:
-    from django.conf import settings
-    from gestao_lab.integrations.dental import DentalAPIError
-    from gestao_lab.services.dental_sync import buscar_e_importar_pacientes
-
-    q = request.GET.get("q", "").strip()
-    next_name = request.GET.get("next", "lab_criar_pedido")
-    if next_name not in _DESTINOS_VALIDOS:
-        next_name = "lab_criar_pedido"
-
-    if not q:
-        messages.warning(request, "Informe um nome para buscar o paciente.")
-        return redirect(next_name)
-
-    clinic_id = getattr(settings, "DENTAL_CLINIC_ID", None)
-    if not clinic_id:
-        messages.error(
-            request,
-            "A atualização da lista não está configurada. Avise o suporte técnico.",
-        )
-        return redirect(next_name)
-
-    try:
-        resultado = buscar_e_importar_pacientes(q=q, clinic_id=clinic_id)
-        total = resultado["criados"] + resultado["atualizados"]
-        if total == 0:
-            messages.warning(
-                request,
-                f'Nenhum paciente encontrado para "{q}" no Dental Office.',
-            )
-        else:
-            messages.success(
-                request,
-                f'{resultado["criados"]} novo(s) paciente(s) importado(s) para "{q}". '
-                "Selecione o paciente na lista abaixo.",
-            )
-    except DentalAPIError as exc:
-        messages.error(request, f"Não foi possível atualizar a lista agora: {exc}")
-
-    return redirect(next_name)
-
-
-# ---------------------------------------------------------------------------
 # Sincronização agendada — endpoint com token (Railway Cron / GitHub Actions)
 # ---------------------------------------------------------------------------
 
