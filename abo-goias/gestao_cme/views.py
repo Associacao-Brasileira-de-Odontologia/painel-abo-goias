@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Page, Paginator
+from django.core.paginator import Page
 from django.db import transaction
 from django.db.models import Count, Max, Min, Prefetch, ProtectedError, Q, Sum
 from django.db.models.query import QuerySet
@@ -20,7 +20,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from comum.datas import filtrar_por_intervalo, parse_data_iso
 from comum.http import destino_seguro
+from comum.paginacao import paginar
 
 from .forms import (
     AbrigoEditForm,
@@ -92,12 +94,7 @@ def paginar_queryset(
     navegar entre paginas.
     """
 
-    query_params = request.GET.copy()
-    query_params.pop("page", None)
-    paginator = Paginator(queryset, REGISTROS_POR_PAGINA)
-    page_obj = paginator.get_page(request.GET.get("page"))
-
-    return page_obj, query_params.urlencode()
+    return paginar(request, queryset, REGISTROS_POR_PAGINA)
 
 
 def emprestimos_visiveis(request: HttpRequest) -> QuerySet[Emprestimo]:
@@ -292,40 +289,6 @@ def linhas_de_pacote() -> QuerySet[Movimentacao]:
     )
 
 
-def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
-    """Converte "aaaa-mm-dd" (formato de ``<input type="date">``) em datetime
-    aware, ou None se invalido."""
-
-    if not valor:
-        return None
-    try:
-        dt = datetime.strptime(valor, "%Y-%m-%d")
-    except ValueError:
-        return None
-    if fim_do_dia:
-        dt = dt.replace(hour=23, minute=59, second=59)
-    return timezone.make_aware(dt)
-
-
-def _filtrar_por_intervalo(
-    queryset: QuerySet,
-    data_inicio: datetime | None,
-    data_fim: datetime | None,
-    campo: str = "data_hora",
-) -> QuerySet:
-    """Recorta um queryset pelo intervalo de datas, no campo indicado.
-
-    ``campo`` default e "data_hora" (Movimentacao); Emprestimo usa
-    "data_emprestimo" — mesmo helper, campo diferente.
-    """
-
-    if data_inicio:
-        queryset = queryset.filter(**{f"{campo}__gte": data_inicio})
-    if data_fim:
-        queryset = queryset.filter(**{f"{campo}__lte": data_fim})
-    return queryset
-
-
 def _preparar_datas_do_pacote(registro: Movimentacao) -> None:
     """Define, para uma linha da listagem, as datas de entrada e de saida.
 
@@ -397,13 +360,13 @@ def home(request: HttpRequest) -> HttpResponse:
 
     # Intervalo de datas — os KPIs da visao geral linkam para ca com o mesmo
     # recorte que usaram para contar; sem isso o link abriria outro conjunto.
-    data_inicio = _parse_data_iso(data_inicio_str)
-    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    data_inicio = parse_data_iso(data_inicio_str)
+    data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-    movimentacoes = _filtrar_por_intervalo(movimentacoes, data_inicio, data_fim)
+    movimentacoes = filtrar_por_intervalo(movimentacoes, "data_hora", data_inicio, data_fim)
 
     # Filtro por aluno específico — usado ao clicar no total de movimentações
     # de um aluno na tela de alunos por turma. Precede a busca textual porque é
@@ -462,8 +425,8 @@ def home(request: HttpRequest) -> HttpResponse:
     # quando o status selecionado e o mesmo que o rotulo descreve (pendente/
     # retirado): mostra-lo com o filtro "todos" sugeria, por engano, que
     # aquele numero era so mais um dado do conjunto exibido.
-    metricas = _filtrar_por_intervalo(
-        linhas_de_pacote(), data_inicio, data_fim
+    metricas = filtrar_por_intervalo(
+        linhas_de_pacote(), "data_hora", data_inicio, data_fim
     ).aggregate(
         total=Count("id"),
         pendentes=Count("id", filter=Q(retirado=False)),
@@ -661,8 +624,8 @@ def _exportar_relatorio_alunos_turma(request: HttpRequest) -> HttpResponse:
             | Q(matricula__icontains=busca)
         )
 
-    data_inicio = _parse_data_iso(request.GET.get("data_inicio", "").strip())
-    data_fim = _parse_data_iso(request.GET.get("data_fim", "").strip(), fim_do_dia=True)
+    data_inicio = parse_data_iso(request.GET.get("data_inicio", "").strip())
+    data_fim = parse_data_iso(request.GET.get("data_fim", "").strip(), fim_do_dia=True)
 
     return _gerar_csv_relatorio_turma(turma, alunos, data_inicio, data_fim)
 
@@ -1738,8 +1701,8 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
     data_inicio_str = request.GET.get("data_inicio", "").strip()
     data_fim_str = request.GET.get("data_fim", "").strip()
 
-    data_inicio = _parse_data_iso(data_inicio_str)
-    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    data_inicio = parse_data_iso(data_inicio_str)
+    data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
@@ -1750,8 +1713,8 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
         .select_related("aluno", "aluno__turma", "kit", "coordenador_usuario")
         .prefetch_related("itens")
     )
-    queryset = _filtrar_por_intervalo(
-        queryset, data_inicio, data_fim, campo="data_emprestimo"
+    queryset = filtrar_por_intervalo(
+        queryset, "data_emprestimo", data_inicio, data_fim
     )
 
     if status_filtro in Emprestimo.Status.values:
@@ -1769,8 +1732,8 @@ def emprestimos(request: HttpRequest) -> HttpResponse:
 
     page_obj, query_string = paginar_queryset(request, queryset)
 
-    base = _filtrar_por_intervalo(
-        emprestimos_visiveis(request), data_inicio, data_fim, campo="data_emprestimo"
+    base = filtrar_por_intervalo(
+        emprestimos_visiveis(request), "data_emprestimo", data_inicio, data_fim
     )
     metricas = base.aggregate(
         total=Count("id"),
@@ -1971,8 +1934,8 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
         data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
         data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_iso(data_inicio_str)
-    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    data_inicio = parse_data_iso(data_inicio_str)
+    data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
@@ -1980,7 +1943,7 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
 
     # Mesma base da listagem (uma linha por pacote) para que cada KPI abra
     # exatamente os registros que contou — ver linhas_de_pacote().
-    mov_base = _filtrar_por_intervalo(linhas_de_pacote(), data_inicio, data_fim)
+    mov_base = filtrar_por_intervalo(linhas_de_pacote(), "data_hora", data_inicio, data_fim)
 
     metricas_mov = mov_base.aggregate(
         total=Count("id"),
@@ -2013,8 +1976,9 @@ def cme_dashboard(request: HttpRequest) -> HttpResponse:
     # A atividade recente e um feed de EVENTOS, nao de pacotes: usa todos os
     # registros (inclusive as SAIDAs que a listagem absorve na linha da
     # entrada), senao a retirada apareceria datada pela data de entrada.
-    eventos_base = _filtrar_por_intervalo(
+    eventos_base = filtrar_por_intervalo(
         Movimentacao.objects.exclude(origem=OrigemDados.EXEMPLO),
+        "data_hora",
         data_inicio,
         data_fim,
     )

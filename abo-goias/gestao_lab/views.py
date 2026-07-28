@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 import secrets as _secrets
 from datetime import date as date_type
-from datetime import datetime
 from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Page, Paginator
+from django.core.paginator import Page
 from django.db.models import Min, Q
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -20,7 +19,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from comum.datas import filtrar_por_intervalo, parse_data_iso
 from comum.http import destino_seguro
+from comum.paginacao import paginar
 from gestao_cme.utils import normalizar_texto
 
 from .forms import (
@@ -73,37 +74,10 @@ def _selecionado(form, campo: str, model):
 
 
 def _paginar(request: HttpRequest, queryset: QuerySet) -> tuple[Page, str]:
-    params = request.GET.copy()
-    params.pop("page", None)
-    paginator = Paginator(queryset, REGISTROS_POR_PAGINA)
-    return paginator.get_page(request.GET.get("page")), params.urlencode()
+    """Pagina com a densidade de listagem desta app (ver comum.paginacao)."""
 
+    return paginar(request, queryset, REGISTROS_POR_PAGINA)
 
-def _parse_data_iso(valor: str, fim_do_dia: bool = False) -> datetime | None:
-    """Converte "aaaa-mm-dd" (formato de ``<input type="date">``) em datetime
-    aware, ou None se invalido.
-
-    Mesmo contrato do helper homonimo em gestao_cme.views — o filtro de periodo
-    do acompanhamento reusa o mesmo widget colapsável do CME
-    (``partials/filtro_periodo.html``).
-    """
-
-    if not valor:
-        return None
-    try:
-        dt = datetime.strptime(valor, "%Y-%m-%d")
-    except ValueError:
-        return None
-    if fim_do_dia:
-        dt = dt.replace(hour=23, minute=59, second=59)
-    return timezone.make_aware(dt)
-
-
-# Campos de data que aceitam filtro de período — ``criado_em`` é DateTimeField
-# (ModeloBase); os demais sao DateField do proprio PedidoMaterial. A distincao
-# importa porque um DateField comparado com um datetime completo (com hora)
-# nao compara como o esperado — precisa do ``.date()``.
-_CAMPOS_DATA_DATETIME = {"criado_em"}
 
 CAMPO_DATA_ACOMPANHAMENTO_OPCOES = [
     ("registro", "Registro"),
@@ -132,30 +106,6 @@ CAMPO_DATA_FATURAMENTO_MODELO = {
 CAMPO_DATA_FATURAMENTO_LABELS = dict(CAMPO_DATA_FATURAMENTO_OPCOES)
 
 
-def _filtrar_por_campo_data(
-    queryset: QuerySet,
-    campo: str,
-    data_inicio: datetime | None,
-    data_fim: datetime | None,
-) -> QuerySet:
-    """Recorta um queryset pelo intervalo de datas, no campo do modelo indicado.
-
-    ``campo`` pode ser um DateTimeField (``criado_em``) ou um DateField
-    (``previsao_entrega``, ``data_envio``, ``data_entrega``,
-    ``data_faturamento``, ``data_vencimento``) — os DateField são comparados
-    só pela data (``.date()``), sem a parte de hora.
-    """
-
-    e_datetime = campo in _CAMPOS_DATA_DATETIME
-    if data_inicio:
-        valor = data_inicio if e_datetime else data_inicio.date()
-        queryset = queryset.filter(**{f"{campo}__gte": valor})
-    if data_fim:
-        valor = data_fim if e_datetime else data_fim.date()
-        queryset = queryset.filter(**{f"{campo}__lte": valor})
-    return queryset
-
-
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
@@ -179,14 +129,14 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
         data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_iso(data_inicio_str)
-    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    data_inicio = parse_data_iso(data_inicio_str)
+    data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
 
-    qs = _filtrar_por_campo_data(
+    qs = filtrar_por_intervalo(
         PedidoMaterial.objects.all(), "criado_em", data_inicio, data_fim
     )
 
@@ -288,13 +238,13 @@ def acompanhamento_pedidos(request: HttpRequest) -> HttpResponse:
         data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
         data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_iso(data_inicio_str)
-    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    data_inicio = parse_data_iso(data_inicio_str)
+    data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-    qs = _filtrar_por_campo_data(
+    qs = filtrar_por_intervalo(
         qs, CAMPO_DATA_ACOMPANHAMENTO_MODELO[campo_data], data_inicio, data_fim
     )
 
@@ -571,13 +521,13 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
         data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
         data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_iso(data_inicio_str)
-    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    data_inicio = parse_data_iso(data_inicio_str)
+    data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-    qs = _filtrar_por_campo_data(
+    qs = filtrar_por_intervalo(
         qs, CAMPO_DATA_FATURAMENTO_MODELO[campo_data], data_inicio, data_fim
     )
 
@@ -666,13 +616,13 @@ def moldagens(request: HttpRequest) -> HttpResponse:
         data_inicio_str = inicio_padrao.strftime("%Y-%m-%d")
         data_fim_str = hoje.strftime("%Y-%m-%d")
 
-    data_inicio = _parse_data_iso(data_inicio_str)
-    data_fim = _parse_data_iso(data_fim_str, fim_do_dia=True)
+    data_inicio = parse_data_iso(data_inicio_str)
+    data_fim = parse_data_iso(data_fim_str, fim_do_dia=True)
     if data_inicio_str and data_inicio is None:
         data_inicio_str = ""
     if data_fim_str and data_fim is None:
         data_fim_str = ""
-    qs = _filtrar_por_campo_data(qs, "criado_em", data_inicio, data_fim)
+    qs = filtrar_por_intervalo(qs, "criado_em", data_inicio, data_fim)
 
     metricas = {
         "total": Moldagem.objects.filter(ativo=True).count(),

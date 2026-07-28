@@ -401,7 +401,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 | **1** | ✅ **Concluída** — redirect inseguro corrigido nos 22 pontos com `comum.http.destino_seguro` | Baixo — mesma assinatura de função, só passa a validar antes de redirecionar | Sim |
 | **2** | ✅ **Concluída** — C-01 (PDF sem checagem de identidade) e A-02 (IP forjável) corrigidos em `gestao_contratos` | Baixo — 1 `if` e 1 ajuste de leitura de header | Sim |
 | **3** | ✅ **Concluída** — removidas `alternar_retirado`, `baixar_contrato_pdf_view` e `buscar_paciente_dental`; `contrato_baixar_carimbo_tempo` mantida (ver §2.1) | Baixo, mas depende de confirmação prévia | Sim (git) |
-| **4** | Unificar `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` entre CME e Lab num módulo compartilhado | Baixo — comportamento idêntico, só muda onde mora | Sim |
+| **4** | ✅ **Concluída** — `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` unificados em `comum/datas.py` e `comum/paginacao.py` | Baixo — comportamento idêntico, só muda onde mora | Sim |
 | **5** | Extrair mixin de validação `clean_codigo` em `gestao_cme/forms.py` | Baixo | Sim |
 | **6** | Extrair lógica de consulta das views mais extensas (`home`, `cme_dashboard`, `pacientes`, `acompanhamento_pedidos`) para `services/` em cada app | Médio — mexe em várias views, precisa rodar a suíte completa a cada app | Sim |
 | **7** | Decidir e implementar o destino da agregação cross-app do Portal | Médio — depende de decisão de arquitetura (§11) | Sim |
@@ -476,6 +476,35 @@ corrigidos:
 - A evidência da linha do `contrato_baixar_pdf` estava incorreta neste próprio
   documento (ver §2.1).
 
-Próxima recomendada: **Etapa 4** — unificar os helpers de data e paginação
-duplicados entre CME e Lab no pacote `comum/` criado na Etapa 1. É mecânica, de
-baixo risco e já tem onde morar.
+A **Etapa 4** foi concluída em 2026-07-28. Os três helpers duplicados passaram
+para `comum/datas.py` (`parse_data_iso`, `filtrar_por_intervalo`) e
+`comum/paginacao.py` (`paginar`). As duas apps chamam os mesmos.
+
+Duas decisões de forma:
+
+- **A paginação continua com um adaptador de uma linha em cada app**
+  (`paginar_queryset` no CME, `_paginar` no Lab). O algoritmo mora num lugar só;
+  o adaptador existe apenas para amarrar o `REGISTROS_POR_PAGINA` da app, que é
+  legitimamente uma decisão de cada listagem (hoje 10 nas duas, mas nada obriga
+  a continuar assim).
+- **O filtro de data foi chamado direto**, sem adaptador: era o único cuja
+  assinatura divergia entre as apps (o `campo` vinha por último no CME e em
+  segundo no Lab), então convergir os pontos de chamada era o próprio objetivo.
+
+**Achado no caminho — uma lista que nunca precisou existir.** O Lab mantinha
+`_CAMPOS_DATA_DATETIME` para saber quando comparar com `.date()` em vez do
+datetime completo. Comparando o SQL gerado nos dois casos, ele sai **idêntico**:
+o `DateField.to_python` do Django já converte um datetime aware para o fuso local
+e reduz à data antes de montar a query. A lista e o ramo condicional foram
+removidos em vez de reproduzidos no módulo compartilhado, com o motivo registrado
+na docstring de `filtrar_por_intervalo` para ninguém trazê-los de volta.
+
+Isso também derrubou uma afirmação do primeiro teste que escrevi aqui: ele dizia
+cobrir "o caso que exige o `.date()`", mas continuou passando com a lógica
+sabotada de propósito — porque não havia o que discriminar. O teste foi mantido
+(a fronteira do último dia é contrato que vale fixar), com a descrição corrigida.
+
+Próxima recomendada: **Etapa 8** (remover o BOM de 12 arquivos) — cosmética e de
+risco mínimo, boa para fechar o bloco mecânico. Depois dela sobram a **Etapa 6**
+(extrair consultas das views extensas para `services/`, a de maior esforço) e a
+**Etapa 7**, que depende de uma decisão de arquitetura sobre o Portal (§11).
