@@ -30,22 +30,22 @@ o mesmo botão.
     <div class="kpi-section">
         <p class="section-label">Pedidos por status{% if periodo_ativo %} no período{% endif %}</p>
         <div class="kpi-grid">
-            <a class="metric-card metric-success" href="{% url 'lab_pedidos' %}?status=EM_DIA{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos em dia">
+            <a class="metric-card metric-card--link metric-success" href="{% url 'lab_pedidos' %}?status=EM_DIA{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos em dia">
                 <span class="metric-label">Em dia</span>
                 <strong>{{ metricas.em_dia }}</strong>
                 <span class="metric-secondary">dentro do prazo</span>
             </a>
-            <a class="metric-card danger-metric" href="{% url 'lab_pedidos' %}?status=ATRASADO{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos atrasados">
+            <a class="metric-card metric-card--link danger-metric" href="{% url 'lab_pedidos' %}?status=ATRASADO{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos atrasados">
                 <span class="metric-label">Atrasados</span>
                 <strong>{{ metricas.atrasado }}</strong>
                 <span class="metric-secondary">fora do prazo</span>
             </a>
-            <a class="metric-card metric-warn" href="{% url 'lab_pedidos_faturamento' %}?{{ filtro_datas_qs }}" title="Ver pedidos entregues aguardando faturamento">
+            <a class="metric-card metric-card--link metric-warn" href="{% url 'lab_pedidos_faturamento' %}?{{ filtro_datas_qs }}" title="Ver pedidos entregues aguardando faturamento">
                 <span class="metric-label">Entregue — não faturado</span>
                 <strong>{{ metricas.entregue_nao_faturado }}</strong>
                 <span class="metric-secondary">falta faturar</span>
             </a>
-            <a class="metric-card metric-neutral" href="{% url 'lab_pedidos' %}?status=CONCLUIDO{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos concluídos">
+            <a class="metric-card metric-card--link metric-neutral" href="{% url 'lab_pedidos' %}?status=CONCLUIDO{% if filtro_datas_qs %}&{{ filtro_datas_qs }}{% endif %}" title="Ver pedidos concluídos">
                 <span class="metric-label">Concluídos</span>
                 <strong>{{ metricas.concluidos }}</strong>
                 <span class="metric-secondary">entregues e faturados</span>
