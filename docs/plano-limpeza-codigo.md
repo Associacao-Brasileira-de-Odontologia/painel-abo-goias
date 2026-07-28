@@ -387,7 +387,7 @@ só correção de segurança, remoção de código morto confirmado, e reorganiz
 | Etapa | Conteúdo | Risco | Reversível |
 |---|---|---|---|
 | **1** | ✅ **Concluída** — redirect inseguro corrigido nos 22 pontos com `comum.http.destino_seguro` | Baixo — mesma assinatura de função, só passa a validar antes de redirecionar | Sim |
-| **2** | Corrigir C-01 (PDF sem checagem de identidade) e A-02 (IP forjável) em `gestao_contratos` | Baixo — 1 `if` e 1 ajuste de leitura de header | Sim |
+| **2** | ✅ **Concluída** — C-01 (PDF sem checagem de identidade) e A-02 (IP forjável) corrigidos em `gestao_contratos` | Baixo — 1 `if` e 1 ajuste de leitura de header | Sim |
 | **3** | Remover código morto confirmado (após sua validação do item 1 da lista de pendências): `alternar_retirado`, `baixar_contrato_pdf_view`, `buscar_paciente_dental`, `contrato_baixar_carimbo_tempo` | Baixo, mas depende de confirmação prévia | Sim (git) |
 | **4** | Unificar `_parse_data_iso`/`_filtrar_por_intervalo`/`paginar_queryset` entre CME e Lab num módulo compartilhado | Baixo — comportamento idêntico, só muda onde mora | Sim |
 | **5** | Extrair mixin de validação `clean_codigo` em `gestao_cme/forms.py` | Baixo | Sim |
@@ -420,7 +420,29 @@ levar o operador para outro domínio.
 O pacote `comum/` criado aqui é o destino natural dos helpers de data e paginação
 da **Etapa 4**.
 
-Próxima recomendada: **Etapa 2** (C-01, PDF sem checagem de identidade, e A-02, IP
-forjável) — os dois achados de segurança restantes, ambos em `gestao_contratos`.
-Alternativamente, a **Etapa 3** (remoção de código morto) depende de uma
-confirmação sua sobre as quatro views listadas.
+A **Etapa 2** foi concluída em 2026-07-28, fechando os dois achados de segurança
+restantes de `gestao_contratos`:
+
+- **C-01** — `assinar_pdf_view` entregava o PDF completo (CPF, RG, endereço, dados
+  de saúde) a quem tivesse o link ou fotografasse o QR Code, sem passar pela
+  verificação de identidade — o que anulava, na prática, a tela que `assinar_view`
+  impõe. Passa a exigir `identidade_confirmada_em`, o mesmo gate da tela de
+  assinatura, e responde 404 (não 403) para não revelar que o token é válido. O
+  link para essa rota só existe dentro de `assinar.html`, renderizado apenas
+  depois da confirmação, então nenhum acesso legítimo é afetado.
+- **A-02** — `_ip_do_request` lia a primeira entrada do `X-Forwarded-For`, que é
+  justamente a que o cliente envia. Qualquer um escolhia o IP gravado no rodapé do
+  PDF assinado e na trilha de auditoria — e também furava o rate-limit das rotas
+  públicas, que usa o mesmo IP como chave. Passa a ler a entrada acrescentada pelo
+  último proxy confiável, com a contagem em `PROXIES_CONFIAVEIS` (padrão 1, que
+  vale para o Railway; 0 ignora o cabeçalho, para conexões diretas).
+
+Com isso, dos achados priorizados pela auditoria original só restam os do carimbo
+de tempo. Um teste que existia (`test_pdf_publico_acessivel`) codificava o
+comportamento vulnerável e foi ajustado para confirmar a identidade antes de
+esperar o PDF.
+
+Próxima recomendada: **Etapa 4** (unificar os helpers de data e paginação
+duplicados entre CME e Lab no pacote `comum/` criado na Etapa 1) — é mecânica e de
+baixo risco. A **Etapa 3** (remoção de código morto) vem antes na ordem original,
+mas depende de uma confirmação sua sobre as quatro views listadas.

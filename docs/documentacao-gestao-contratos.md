@@ -60,15 +60,17 @@ depender de `collectstatic` (mesma correção aplicada em todas as apps do Paine
 
 ### 3.1 Achados de segurança do backend (auditoria de 2026-07-15)
 
-A auditoria de backend classificou os achados por severidade; **todos seguem
-pendentes hoje, exceto o carimbo de tempo (CT-01), confirmado corrigido em 2.2** — a
-verificação abaixo foi feita lendo o código atual, não apenas o documento original.
+A auditoria de backend classificou os achados por severidade. Além do carimbo de
+tempo (CT-01, confirmado corrigido em 2.2), **C-01, A-01 e A-02 foram corrigidos em
+2026-07-28** nas etapas 1 e 2 do plano de limpeza (ver `plano-limpeza-codigo.md`);
+os demais seguem pendentes. A verificação abaixo foi feita lendo o código atual, não
+apenas o documento original.
 
 | # | Achado | Severidade | Status verificado |
 |---|---|---|---|
-| C-01 | PDF do contrato (`assinar/<token>/pdf/`) é entregue **sem checar identidade confirmada** — quem obtém o link/QR Code baixa o termo completo (CPF, RG, endereço, dados de saúde) sem passar pela verificação | Crítico | **Pendente** — `assinar_pdf_view` continua sem a checagem |
-| A-01 | Open redirect pelo parâmetro `next` em 10 pontos (3 apps): um sem validação nenhuma, os demais só checam `startswith("/")` — que aceita `//host` (URL protocolo-relativa) | Alto | **Pendente** — nenhum uso de `url_has_allowed_host_and_scheme` no projeto |
-| A-02 | IP gravado no PDF assinado (rodapé + auditoria) é forjável: `_ip_do_request` usa o **primeiro** valor de `X-Forwarded-For`, que é enviado pelo próprio cliente | Alto | **Pendente** — mesma implementação hoje |
+| C-01 | PDF do contrato (`assinar/<token>/pdf/`) é entregue **sem checar identidade confirmada** — quem obtém o link/QR Code baixa o termo completo (CPF, RG, endereço, dados de saúde) sem passar pela verificação | Crítico | **Corrigido** (2026-07-28) — `assinar_pdf_view` exige `identidade_confirmada_em` e responde 404 sem ela |
+| A-01 | Open redirect pelo parâmetro `next` (22 pontos no levantamento completo, 3 apps): oito sem validação nenhuma, os demais só checam `startswith("/")` — que aceita `//host` (URL protocolo-relativa) | Alto | **Corrigido** (2026-07-28) — `comum.http.destino_seguro` valida com `url_has_allowed_host_and_scheme` nos 22 pontos |
+| A-02 | IP gravado no PDF assinado (rodapé + auditoria) é forjável: `_ip_do_request` usa o **primeiro** valor de `X-Forwarded-For`, que é enviado pelo próprio cliente | Alto | **Corrigido** (2026-07-28) — passa a ler a entrada acrescentada pelo último proxy confiável (`PROXIES_CONFIAVEIS`) |
 | CT-01 | Cópia arquivada no Dental Office/WhatsApp podia sair sem o carimbo de tempo (ordenação assíncrona) | — | **Corrigido** (ver 2.2) |
 | CT-02 | Falha ao embutir o carimbo é silenciosa — o status marca "concluído" mesmo sem o carimbo entrar no PDF, e a UI não oferece botão de retentar nesse caso | Médio/Alto | **Pendente** |
 | CT-03 | Re-carimbar um contrato já carimbado invalida a cópia anterior já distribuída (ela passa a ser reportada como não autêntica na validação pública) | Médio/Alto | **Pendente** |
@@ -82,7 +84,9 @@ verificação abaixo foi feita lendo o código atual, não apenas o documento or
 
 **Prioridade sugerida pela auditoria original** (mantida): C-01 e A-01 primeiro (baixo
 esforço, cobrem os impactos mais sérios — exposição de dados pessoais e phishing),
-seguidos por CT-03, CT-02, CT-01 (já corrigido), A-02, M-02, M-01, M-04.
+seguidos por CT-03, CT-02, CT-01 (já corrigido), A-02, M-02, M-01, M-04. Desses,
+C-01, A-01, A-02 e CT-01 já estão corrigidos — **a fila agora começa em CT-03 e
+CT-02** (carimbo de tempo), os de maior severidade ainda abertos.
 
 ### 3.2 Decisões de negócio pendentes
 

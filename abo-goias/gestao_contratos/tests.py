@@ -1343,12 +1343,24 @@ class AssinaturaPublicaViewTests(AssinaturaBaseTests):
         )
         self.assertEqual(response.status_code, 410)
 
-    def test_pdf_publico_acessivel(self) -> None:
+    def test_pdf_publico_acessivel_apos_confirmar_identidade(self) -> None:
         self.client.logout()
+        _confirmar_identidade_sessao(self.sessao)
         response = self.client.get(reverse("assinatura_publica_pdf", args=[self.token]))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_pdf_publico_negado_sem_confirmar_identidade(self) -> None:
+        """C-01: só ter o link/QR Code não basta para baixar o termo.
+
+        O PDF traz CPF, RG, endereço e dados de saúde — entregá-lo antes da
+        verificação anulava, na prática, a tela de identidade.
+        """
+
+        self.client.logout()
+        response = self.client.get(reverse("assinatura_publica_pdf", args=[self.token]))
+        self.assertEqual(response.status_code, 404)
 
     def test_post_assina_e_exibe_confirmacao(self) -> None:
         self.client.logout()
@@ -3388,6 +3400,77 @@ class ViewsAssinaturaEdgeCasesTests(AssinaturaBaseTests):
         )
 
         self.assertEqual(response.status_code, 410)
+
+
+class IpDoRequestTests(TestCase):
+    """A-02: o IP gravado no PDF e na auditoria não pode ser escolhido pelo cliente.
+
+    O ``X-Forwarded-For`` cresce da esquerda para a direita e cada proxy
+    acrescenta o endereço de quem falou com ele — então a entrada mais à
+    esquerda é a que o cliente mandou, e a mais à direita é a que o proxy de
+    borda (confiável) acrescentou.
+    """
+
+    def setUp(self) -> None:
+        from django.test import RequestFactory
+
+        self.factory = RequestFactory()
+
+    def _ip(self, **meta: str) -> str | None:
+        from gestao_contratos.views_assinatura import _ip_do_request
+
+        return _ip_do_request(self.factory.get("/", **meta))
+
+    def test_sem_cabecalho_usa_o_endereco_da_conexao(self) -> None:
+        self.assertEqual(self._ip(REMOTE_ADDR="203.0.113.9"), "203.0.113.9")
+
+    @override_settings(PROXIES_CONFIAVEIS=1)
+    def test_ignora_o_valor_forjado_pelo_cliente(self) -> None:
+        # "9.9.9.9" é o que o cliente enviou; "203.0.113.9" foi acrescentado
+        # pelo proxy de borda e é o endereço real.
+        self.assertEqual(
+            self._ip(
+                HTTP_X_FORWARDED_FOR="9.9.9.9, 203.0.113.9",
+                REMOTE_ADDR="10.0.0.1",
+            ),
+            "203.0.113.9",
+        )
+
+    @override_settings(PROXIES_CONFIAVEIS=1)
+    def test_cabecalho_com_um_valor_so(self) -> None:
+        self.assertEqual(
+            self._ip(HTTP_X_FORWARDED_FOR="203.0.113.9", REMOTE_ADDR="10.0.0.1"),
+            "203.0.113.9",
+        )
+
+    @override_settings(PROXIES_CONFIAVEIS=2)
+    def test_respeita_a_quantidade_de_proxies_declarada(self) -> None:
+        self.assertEqual(
+            self._ip(
+                HTTP_X_FORWARDED_FOR="9.9.9.9, 203.0.113.9, 10.0.0.2",
+                REMOTE_ADDR="10.0.0.1",
+            ),
+            "203.0.113.9",
+        )
+
+    @override_settings(PROXIES_CONFIAVEIS=2)
+    def test_entradas_de_menos_caem_no_endereco_da_conexao(self) -> None:
+        # Menos saltos do que o esperado: a requisição não veio pelo caminho
+        # previsto, então o cabeçalho não é confiável.
+        self.assertEqual(
+            self._ip(HTTP_X_FORWARDED_FOR="9.9.9.9", REMOTE_ADDR="10.0.0.1"),
+            "10.0.0.1",
+        )
+
+    @override_settings(PROXIES_CONFIAVEIS=0)
+    def test_sem_proxy_confiavel_o_cabecalho_e_ignorado(self) -> None:
+        self.assertEqual(
+            self._ip(
+                HTTP_X_FORWARDED_FOR="9.9.9.9, 203.0.113.9",
+                REMOTE_ADDR="10.0.0.1",
+            ),
+            "10.0.0.1",
+        )
 
 
 # ---------------------------------------------------------------------------

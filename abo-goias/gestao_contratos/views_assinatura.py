@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
@@ -41,11 +42,33 @@ _RATE_LIMIT_JANELA_SEGUNDOS = 60
 
 
 def _ip_do_request(request: HttpRequest) -> str | None:
-    """Extrai o IP real considerando o proxy do Railway (X-Forwarded-For)."""
+    """Extrai o IP de origem considerando os proxies confiáveis à frente da app.
 
+    O ``X-Forwarded-For`` cresce da esquerda para a direita: cada proxy
+    *acrescenta* o endereço de quem falou com ele. Logo, a entrada mais à
+    esquerda é a que o próprio cliente mandou — e um cliente pode mandar o
+    que quiser. Ler o primeiro valor, como era feito antes, deixava qualquer
+    um escolher o IP que ficaria gravado no rodapé do PDF assinado e na
+    trilha de auditoria (achado A-02), além de permitir furar o rate-limit
+    abaixo trocando o valor a cada requisição.
+
+    O valor confiável é o que o *último proxy confiável* acrescentou: com um
+    proxy na frente (o caso do Railway), é a entrada mais à direita. Por isso
+    a contagem vem de ``PROXIES_CONFIAVEIS`` — em outra topologia, com dois
+    proxies, o endereço do cliente passa a ser o penúltimo, e assim por
+    diante.
+
+    Sem cabeçalho, ou com menos entradas do que proxies declarados (sinal de
+    que a requisição não veio pelo caminho esperado), cai no ``REMOTE_ADDR``,
+    que é a conexão real e não pode ser forjada.
+    """
+
+    proxies = getattr(settings, "PROXIES_CONFIAVEIS", 1)
     encadeado = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if encadeado:
-        return encadeado.split(",")[0].strip()
+    if proxies > 0 and encadeado:
+        enderecos = [parte.strip() for parte in encadeado.split(",") if parte.strip()]
+        if len(enderecos) >= proxies:
+            return enderecos[-proxies]
     return request.META.get("REMOTE_ADDR")
 
 
@@ -230,7 +253,21 @@ def _tela_verificar_identidade(
 
 
 def assinar_pdf_view(request: HttpRequest, token: str) -> HttpResponse:
-    """Serve o PDF do contrato para visualização na página pública."""
+    """Serve o PDF do contrato para visualização na página pública.
+
+    Exige a mesma confirmação de identidade que ``assinar_view`` exige antes
+    de mostrar o contrato. Sem isso, quem obtivesse o link ou fotografasse o
+    QR Code baixaria o termo inteiro — com CPF, RG, endereço e dados de saúde
+    do paciente — sem nunca provar ser a pessoa certa, o que anulava na
+    prática a verificação da tela de assinatura (achado C-01).
+
+    O link para cá só existe dentro de ``assinar.html``, que por sua vez só é
+    renderizado depois da confirmação — nenhum acesso legítimo passa por aqui
+    antes disso.
+
+    Responde 404 (e não 403) para não revelar que o token existe e é válido,
+    mesma resposta dada a um token inválido logo abaixo.
+    """
 
     if _excedeu_rate_limit(request, "pdf"):
         return HttpResponse("Muitas requisições. Aguarde um instante.", status=429)
@@ -238,6 +275,9 @@ def assinar_pdf_view(request: HttpRequest, token: str) -> HttpResponse:
     try:
         sessao = resolver_token(token)
     except SessaoInvalida:
+        raise Http404
+
+    if not sessao.identidade_confirmada_em:
         raise Http404
 
     from .services.assinatura import _obter_pdf_original

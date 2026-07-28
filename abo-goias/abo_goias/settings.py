@@ -360,6 +360,15 @@ SECURE_PROXY_SSL_HEADER = (
     else None
 )
 
+# Quantos proxies confiaveis existem entre o cliente e a aplicacao. Define
+# qual entrada do X-Forwarded-For e o IP de origem real: o cabecalho cresce da
+# esquerda para a direita e so as entradas acrescentadas pelos proxies
+# confiaveis nao podem ser forjadas pelo cliente (ver _ip_do_request em
+# gestao_contratos/views_assinatura.py). O padrao 1 vale para o Railway e para
+# qualquer PaaS com um unico proxy de borda; use 0 quando a aplicacao receber
+# conexoes diretas, para ignorar o cabecalho por completo.
+PROXIES_CONFIAVEIS = _env_int("DJANGO_PROXIES_CONFIAVEIS", 1)
+
 # Credenciais e parametros de todas as integracoes externas (WhatsApp, carimbo
 # de tempo, Dental Office, Eduq) sao lidos aqui, centralizados num unico ponto
 # de configuracao, em vez de cada servico ler os.environ (e recarregar o
