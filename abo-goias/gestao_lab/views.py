@@ -463,12 +463,7 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
             | Q(laboratorio__nome__icontains=busca)
         )
 
-    faturado_paciente_filtro = request.GET.get("faturado_paciente", "").strip()
     faturado_lab_filtro = request.GET.get("faturado_lab", "").strip()
-
-    valor_paciente = _bool_filtro(faturado_paciente_filtro)
-    if valor_paciente is not None:
-        qs = qs.filter(faturado_paciente=valor_paciente)
 
     valor_lab = _bool_filtro(faturado_lab_filtro)
     if valor_lab is not None:
@@ -510,7 +505,6 @@ def pedidos_faturamento(request: HttpRequest) -> HttpResponse:
             "page_obj": page_obj,
             "query_string": query_string,
             "busca": busca,
-            "faturado_paciente_filtro": faturado_paciente_filtro,
             "faturado_lab_filtro": faturado_lab_filtro,
             "data_inicio_str": data_inicio_str,
             "data_fim_str": data_fim_str,
