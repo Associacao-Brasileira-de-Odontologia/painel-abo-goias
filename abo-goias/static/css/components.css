@@ -1424,6 +1424,20 @@ tbody td:last-child {
     background: var(--panel-strong);
 }
 
+/* Variante compacta: para tabelas com poucas colunas, onde o min-width
+   padrão (920px) força rolagem horizontal desnecessária mesmo em telas de
+   desktop comuns. Reduz a largura mínima e a fonte — dado tabular denso,
+   não precisa do mesmo tamanho do corpo de texto. */
+.data-table--compacta {
+    min-width: 620px;
+    font-size: 0.86rem;
+}
+
+.data-table--compacta td,
+.data-table--compacta th {
+    padding: 10px 12px;
+}
+
 .cell-muted {
     display: block;
     margin-top: 2px;

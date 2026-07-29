@@ -64,8 +64,7 @@ body.gestao-contratos .info-chip strong,
 body.gestao-contratos .checklist-valor,
 body.gestao-contratos .checklist-mensagem,
 body.gestao-contratos .cell-muted,
-body.gestao-contratos .sync-date,
-body.gestao-contratos td {
+body.gestao-contratos .sync-date {
     font-family: var(--gc-mono);
 }
 
@@ -584,19 +583,10 @@ body.gestao-contratos .checklist-list .checklist-item:nth-child(n+6) { animation
     animation: gc-qr-pulse 2.6s ease-in-out infinite;
 }
 
-/* ══ Largura da tabela de pacientes ══════════════════════════════ */
-/* .data-table (components.css) tem min-width:920px — pensado para
-   tabelas com mais colunas em outras apps. Com só 4 colunas aqui
-   (Paciente, Nascimento, Celular, Ação de 172px fixos), isso força
-   rolagem horizontal mesmo em telas de desktop padrão (~1280-1366px),
-   já que sobra bem menos que 920px para a tabela depois da barra
-   lateral. Reduz a largura mínima e a fonte das células — dado
-   tabular denso, não precisa do mesmo tamanho do corpo de texto. */
-body.gestao-contratos .gc-tabela-pacientes {
-    min-width: 620px;
-    font-size: 0.86rem;
-}
-
+/* ══ Larguras de coluna da tabela de pacientes ═══════════════════ */
+/* A largura mínima e o padding compactos vêm de .data-table--compacta
+   (components.css) — modificador global, não mais exclusivo desta app.
+   Aqui ficam só as proporções de coluna específicas desta listagem. */
 body.gestao-contratos .gc-tabela-pacientes .gc-col-paciente {
     width: 46%;
 }
@@ -607,11 +597,6 @@ body.gestao-contratos .gc-tabela-pacientes .gc-col-nascimento {
 
 body.gestao-contratos .gc-tabela-pacientes .gc-col-celular {
     width: 19%;
-}
-
-body.gestao-contratos .gc-tabela-pacientes td,
-body.gestao-contratos .gc-tabela-pacientes th {
-    padding: 10px 12px;
 }
 
 /* ══ Selo de origem dos dados (No sistema / Dental Office) ════════ */
