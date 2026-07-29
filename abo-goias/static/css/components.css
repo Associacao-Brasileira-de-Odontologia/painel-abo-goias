@@ -723,13 +723,16 @@ select option {
     margin-top: -2px;
 }
 
-/* Ação de ícone sem texto — botão circular compacto */
+/* Ação de ícone sem texto — botão circular compacto. Usado tanto em <a>
+   quanto em <button type="submit"> de formulários inline; o padding:0 zera
+   o espaçamento nativo de <button> (em <a> já é zero por padrão). */
 .icon-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 34px;
     height: 34px;
+    padding: 0;
     border-radius: 8px;
     border: 1px solid var(--line);
     background: transparent;
@@ -744,6 +747,16 @@ select option {
     background: rgba(29, 110, 238, 0.1);
     border-color: rgba(29, 110, 238, 0.4);
     color: var(--info-text);
+}
+
+/* Variante para ações destrutivas (excluir) — neutra em repouso, só
+   sinaliza vermelho no hover/foco, já que em tabelas densas várias linhas
+   têm este botão visível ao mesmo tempo. */
+.icon-action.icon-action--danger:hover,
+.icon-action.icon-action--danger:focus-visible {
+    background: var(--danger-bg-strong);
+    border-color: var(--danger-border);
+    color: var(--danger-text);
 }
 
 /* Os símbolos de partials/icons.html são só traço e não carregam stroke

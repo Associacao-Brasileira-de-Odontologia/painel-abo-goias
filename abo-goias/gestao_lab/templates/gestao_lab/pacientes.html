@@ -152,7 +152,9 @@
                                 <form method="post" action="{% url 'lab_importar_paciente' paciente.id_dental %}" class="inline-form">
                                     {% csrf_token %}
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button class="button compact-button primary" type="submit" title="Importar paciente do Dental Office">Importar</button>
+                                    <button class="icon-action" type="submit" title="Importar paciente do Dental Office" aria-label="Importar paciente do Dental Office">
+                                        <svg viewBox="0 0 24 24"><use href="#i-importar"></use></svg>
+                                    </button>
                                 </form>
                             {% else %}
                                 <span class="cell-muted">—</span>

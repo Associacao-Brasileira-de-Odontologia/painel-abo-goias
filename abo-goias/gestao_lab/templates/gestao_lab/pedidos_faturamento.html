@@ -142,15 +142,20 @@
                         <td class="mono">{{ pedido.data_vencimento|date:"d/m/Y"|default:"—" }}</td>
 
                         <td class="actions-cell">
-                            {% if pedido.laboratorio.whatsapp %}
-                                <a class="button compact-button secondary"
-                                   href="{{ pedido.laboratorio.whatsapp|whatsapp_url_msg:pedido.laboratorio.nome }}"
-                                   target="_blank" rel="noopener"
-                                   title="Enviar mensagem ao laboratório">
-                                    WhatsApp
+                            <div class="actions-group">
+                                {% if pedido.laboratorio.whatsapp %}
+                                    <a class="icon-action"
+                                       href="{{ pedido.laboratorio.whatsapp|whatsapp_url_msg:pedido.laboratorio.nome }}"
+                                       target="_blank" rel="noopener"
+                                       title="Enviar mensagem ao laboratório"
+                                       aria-label="Enviar mensagem ao laboratório">
+                                        <svg viewBox="0 0 24 24"><use href="#i-whatsapp"></use></svg>
+                                    </a>
+                                {% endif %}
+                                <a class="icon-action" href="{% url 'lab_detalhe_pedido' pedido.pk %}" title="Preencher faturamento" aria-label="Preencher faturamento">
+                                    <svg viewBox="0 0 24 24"><use href="#i-editar"></use></svg>
                                 </a>
-                            {% endif %}
-                            <a class="button compact-button secondary" href="{% url 'lab_detalhe_pedido' pedido.pk %}">Preencher</a>
+                            </div>
                         </td>
                     </tr>
                 {% empty %}
