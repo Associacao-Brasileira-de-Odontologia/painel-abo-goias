@@ -163,28 +163,31 @@ um bloco extra aqui duplicaria o mesmo botão.
 
                         {# Ações #}
                         <td class="actions-cell">
-                            {% if not moldagem.convertida %}
-                                <form method="post" action="{% url 'lab_converter_moldagem' moldagem.pk %}" class="inline-form">
+                            <div class="actions-group">
+                                {% if not moldagem.convertida %}
+                                    <form method="post" action="{% url 'lab_converter_moldagem' moldagem.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <button class="icon-action" type="submit" title="Converter em pedido de material" aria-label="Converter moldagem em pedido de material">
+                                            <svg viewBox="0 0 24 24"><use href="#i-converter"></use></svg>
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <span class="badge badge-neutro">Convertida</span>
+                                {% endif %}
+                                <form method="post" action="{% url 'lab_excluir_moldagem' moldagem.pk %}" class="inline-form">
                                     {% csrf_token %}
-                                    <button class="button compact-button primary" type="submit" title="Converter em pedido de material">
-                                        Encaminhar
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="icon-action icon-action--danger" type="submit"
+                                            title="Excluir moldagem"
+                                            aria-label="Excluir moldagem"
+                                            data-confirm="Excluir a moldagem #{{ moldagem.pk }} de {{ moldagem.paciente.nome }}?{% if moldagem.convertida %} O pedido #{{ moldagem.pedido_material.pk }} gerado a partir dela não será afetado.{% endif %} Esta ação é irreversível."
+                                            data-confirm-title="Excluir moldagem"
+                                            data-confirm-label="Excluir moldagem"
+                                            data-confirm-danger="true">
+                                        <svg viewBox="0 0 24 24"><use href="#i-excluir"></use></svg>
                                     </button>
                                 </form>
-                            {% else %}
-                                <span class="badge badge-neutro">Convertida</span>
-                            {% endif %}
-                            <form method="post" action="{% url 'lab_excluir_moldagem' moldagem.pk %}" class="inline-form">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <button class="button compact-button danger-button" type="submit"
-                                        title="Excluir moldagem"
-                                        data-confirm="Excluir a moldagem #{{ moldagem.pk }} de {{ moldagem.paciente.nome }}?{% if moldagem.convertida %} O pedido #{{ moldagem.pedido_material.pk }} gerado a partir dela não será afetado.{% endif %} Esta ação é irreversível."
-                                        data-confirm-title="Excluir moldagem"
-                                        data-confirm-label="Excluir moldagem"
-                                        data-confirm-danger="true">
-                                    Excluir
-                                </button>
-                            </form>
+                            </div>
                         </td>
                     </tr>
                 {% empty %}

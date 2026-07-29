@@ -156,43 +156,53 @@ redundante.
                             </span>
                         </td>
                         <td class="actions-cell">
-                            {% if not pedido.data_envio %}
-                                <form method="post" action="{% url 'lab_marcar_envio' pedido.pk %}" class="inline-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <input type="hidden" name="data_envio" value="{{ hoje|date:'Y-m-d' }}">
-                                    <button class="button compact-button secondary" type="submit" title="Registrar envio ao laboratório">Registrar envio</button>
-                                </form>
-                            {% elif not pedido.entregue %}
-                                <form method="post" action="{% url 'lab_marcar_entrega' pedido.pk %}" class="inline-form">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <input type="hidden" name="data_entrega" value="{{ hoje|date:'Y-m-d' }}">
-                                    <button class="button compact-button primary" type="submit" title="Registrar entrega do laboratório">Registrar entrega</button>
-                                </form>
-                            {% endif %}
-                            {% if pedido.laboratorio.whatsapp %}
-                                <a class="button compact-button secondary"
-                                   href="{{ pedido.laboratorio.whatsapp|whatsapp_url_msg:pedido.laboratorio.nome }}"
-                                   target="_blank"
-                                   rel="noopener"
-                                   title="Enviar mensagem via WhatsApp">
-                                    WhatsApp
+                            <div class="actions-group">
+                                {% if not pedido.data_envio %}
+                                    <form method="post" action="{% url 'lab_marcar_envio' pedido.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <input type="hidden" name="data_envio" value="{{ hoje|date:'Y-m-d' }}">
+                                        <button class="icon-action" type="submit" title="Registrar envio ao laboratório" aria-label="Registrar envio ao laboratório">
+                                            <svg viewBox="0 0 24 24"><use href="#i-enviar"></use></svg>
+                                        </button>
+                                    </form>
+                                {% elif not pedido.entregue %}
+                                    <form method="post" action="{% url 'lab_marcar_entrega' pedido.pk %}" class="inline-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <input type="hidden" name="data_entrega" value="{{ hoje|date:'Y-m-d' }}">
+                                        <button class="icon-action" type="submit" title="Registrar entrega do laboratório" aria-label="Registrar entrega do laboratório">
+                                            <svg viewBox="0 0 24 24"><use href="#i-entregar"></use></svg>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                                {% if pedido.laboratorio.whatsapp %}
+                                    <a class="icon-action"
+                                       href="{{ pedido.laboratorio.whatsapp|whatsapp_url_msg:pedido.laboratorio.nome }}"
+                                       target="_blank"
+                                       rel="noopener"
+                                       title="Enviar mensagem via WhatsApp"
+                                       aria-label="Enviar mensagem via WhatsApp">
+                                        <svg viewBox="0 0 24 24"><use href="#i-whatsapp"></use></svg>
+                                    </a>
+                                {% endif %}
+                                <a class="icon-action" href="{% url 'lab_detalhe_pedido' pedido.pk %}" title="Ver pedido" aria-label="Ver pedido">
+                                    <svg viewBox="0 0 24 24"><use href="#i-ver"></use></svg>
                                 </a>
-                            {% endif %}
-                            <a class="button compact-button secondary" href="{% url 'lab_detalhe_pedido' pedido.pk %}">Ver</a>
-                            <form method="post" action="{% url 'lab_excluir_pedido' pedido.pk %}" class="inline-form">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                <button class="button compact-button danger-button" type="submit"
-                                        title="Excluir pedido"
-                                        data-confirm="Excluir o pedido #{{ pedido.pk }} de {{ pedido.paciente.nome }} ({{ pedido.laboratorio.nome }})? Se veio de uma moldagem, ela volta para 'não convertida'. Esta ação é irreversível."
-                                        data-confirm-title="Excluir pedido"
-                                        data-confirm-label="Excluir pedido"
-                                        data-confirm-danger="true">
-                                    Excluir
-                                </button>
-                            </form>
+                                <form method="post" action="{% url 'lab_excluir_pedido' pedido.pk %}" class="inline-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="icon-action icon-action--danger" type="submit"
+                                            title="Excluir pedido"
+                                            aria-label="Excluir pedido"
+                                            data-confirm="Excluir o pedido #{{ pedido.pk }} de {{ pedido.paciente.nome }} ({{ pedido.laboratorio.nome }})? Se veio de uma moldagem, ela volta para 'não convertida'. Esta ação é irreversível."
+                                            data-confirm-title="Excluir pedido"
+                                            data-confirm-label="Excluir pedido"
+                                            data-confirm-danger="true">
+                                        <svg viewBox="0 0 24 24"><use href="#i-excluir"></use></svg>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 {% empty %}
