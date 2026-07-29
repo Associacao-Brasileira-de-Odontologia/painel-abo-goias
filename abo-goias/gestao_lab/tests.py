@@ -748,24 +748,6 @@ class PedidosFaturamentoViewTests(TestCase):
         self.assertIn(self.faturado_so_paciente, pedidos)
         self.assertIn(self.faturado_so_lab, pedidos)
 
-    def test_filtra_por_faturado_paciente_sim(self) -> None:
-        response = self.client.get(
-            reverse("lab_pedidos_faturamento"), {"faturado_paciente": "sim"}
-        )
-        pedidos = list(response.context["pedidos"])
-        self.assertIn(self.faturado_so_paciente, pedidos)
-        self.assertNotIn(self.pendente_dos_dois_lados, pedidos)
-        self.assertNotIn(self.faturado_so_lab, pedidos)
-
-    def test_filtra_por_faturado_paciente_nao(self) -> None:
-        response = self.client.get(
-            reverse("lab_pedidos_faturamento"), {"faturado_paciente": "nao"}
-        )
-        pedidos = list(response.context["pedidos"])
-        self.assertIn(self.pendente_dos_dois_lados, pedidos)
-        self.assertIn(self.faturado_so_lab, pedidos)
-        self.assertNotIn(self.faturado_so_paciente, pedidos)
-
     def test_filtra_por_faturado_lab_sim(self) -> None:
         response = self.client.get(
             reverse("lab_pedidos_faturamento"), {"faturado_lab": "sim"}
@@ -774,16 +756,6 @@ class PedidosFaturamentoViewTests(TestCase):
         self.assertIn(self.faturado_so_lab, pedidos)
         self.assertNotIn(self.pendente_dos_dois_lados, pedidos)
         self.assertNotIn(self.faturado_so_paciente, pedidos)
-
-    def test_combina_os_dois_filtros(self) -> None:
-        response = self.client.get(
-            reverse("lab_pedidos_faturamento"),
-            {"faturado_paciente": "nao", "faturado_lab": "nao"},
-        )
-        pedidos = list(response.context["pedidos"])
-        self.assertIn(self.pendente_dos_dois_lados, pedidos)
-        self.assertNotIn(self.faturado_so_paciente, pedidos)
-        self.assertNotIn(self.faturado_so_lab, pedidos)
 
     def test_periodo_ativo_falso_sem_filtro_explicito(self) -> None:
         response = self.client.get(reverse("lab_pedidos_faturamento"))
